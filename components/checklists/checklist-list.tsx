@@ -11,8 +11,8 @@ interface ChecklistListProps {
 }
 
 export function ChecklistList({ onSelect, selectedId }: ChecklistListProps) {
-    const restaurantId = useRestaurantStore((state) => state.restaurant?.id);
-    const { data: checklists, isLoading, error } = useChecklists(restaurantId);
+    const restaurantId = useRestaurantStore((state) => state.restaurantId);
+    const { data: checklists, isLoading, error } = useChecklists(restaurantId || undefined);
     const [searchTerm, setSearchTerm] = useState("");
     const [activeFilter, setActiveFilter] = useState("Todos");
 
@@ -55,8 +55,8 @@ export function ChecklistList({ onSelect, selectedId }: ChecklistListProps) {
                                 key={filter}
                                 onClick={() => setActiveFilter(filter)}
                                 className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${isActive
-                                        ? "bg-[#13b6ec]/20 text-[#13b6ec] border border-[#13b6ec]/30"
-                                        : "bg-[#16262c] text-[#92bbc9] border border-[#233f48] hover:bg-[#1a2c32] hover:text-white"
+                                    ? "bg-[#13b6ec]/20 text-[#13b6ec] border border-[#13b6ec]/30"
+                                    : "bg-[#16262c] text-[#92bbc9] border border-[#233f48] hover:bg-[#1a2c32] hover:text-white"
                                     }`}
                             >
                                 {filter}

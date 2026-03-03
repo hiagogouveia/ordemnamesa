@@ -24,7 +24,7 @@ const SHIFTS = [
 ];
 
 export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormProps) {
-    const restaurantId = useRestaurantStore((state) => state.restaurant?.id);
+    const restaurantId = useRestaurantStore((state) => state.restaurantId);
 
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
@@ -42,7 +42,6 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
             setDescription(checklist.description || "");
             setShift(checklist.shift);
             setCategory(checklist.category || "");
-            setStatus(checklist.status);
             setTasks(
                 (checklist.tasks || []).map((t) => ({ ...t, tempId: t.id }))
             );
@@ -51,7 +50,6 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
             setDescription("");
             setShift("any");
             setCategory("");
-            setStatus("draft");
             setTasks([]);
         }
     }, [checklist]);
@@ -61,9 +59,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
         useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
     );
 
-    const handleDragEnd = (event: { active: { id: string }; over: { id: string } }) => {
+    const handleDragEnd = (event: { active: { id: string | number }; over: { id: string | number } | null }) => {
         const { active, over } = event;
-        if (active.id !== over.id) {
+        if (over && active.id !== over.id) {
             setTasks((items) => {
                 const oldIndex = items.findIndex((i) => i.tempId === active.id);
                 const newIndex = items.findIndex((i) => i.tempId === over.id);
@@ -91,9 +89,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
             restaurant_id: restaurantId,
             name,
             description,
-            shift,
+            shift: shift as "morning" | "afternoon" | "evening" | "any",
             category,
-            status: isPublishing ? 'active' : 'draft',
+            status: (isPublishing ? 'active' : 'draft') as "active" | "draft" | "archived",
             tasks: tasks.map(t => ({
                 title: t.title,
                 description: t.description,
@@ -104,9 +102,11 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
 
         try {
             if (checklist?.id) {
-                await updateMutation.mutateAsync({ id: checklist.id, ...payload });
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                await updateMutation.mutateAsync({ id: checklist.id, ...payload } as any);
             } else {
-                await createMutation.mutateAsync(payload);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                await createMutation.mutateAsync(payload as any);
             }
             onSaved();
         } catch (e) {

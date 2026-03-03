@@ -26,9 +26,9 @@ const getAuthSupabase = async () => {
     );
 };
 
-export async function PUT(request: Request, context: { params: { id: string } }) {
+export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
     try {
-        const id = context.params.id; // Corrected params extraction
+        const { id } = await context.params; // Corrected params extraction
 
         const authSupabase = await getAuthSupabase();
         const { data: { user } } = await authSupabase.auth.getUser();
@@ -77,7 +77,7 @@ export async function PUT(request: Request, context: { params: { id: string } })
 
         let insertedTasks = [];
         if (tasks && tasks.length > 0) {
-            const tasksToInsert = tasks.map((task: unknown, index: number) => ({
+            const tasksToInsert = tasks.map((task: { title: string; description?: string; requires_photo?: boolean; is_critical?: boolean }, index: number) => ({
                 checklist_id: id,
                 restaurant_id,
                 title: task.title,
@@ -98,13 +98,13 @@ export async function PUT(request: Request, context: { params: { id: string } })
 
         return NextResponse.json({ success: true, tasks: insertedTasks });
     } catch (error: unknown) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: (error as Error).message }, { status: 500 });
     }
 }
 
-export async function DELETE(request: Request, context: { params: { id: string } }) {
+export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
     try {
-        const id = context.params.id; // Corrected params extraction
+        const { id } = await context.params; // Corrected params extraction
         const { searchParams } = new URL(request.url);
         const restaurant_id = searchParams.get('restaurant_id');
 
@@ -141,6 +141,6 @@ export async function DELETE(request: Request, context: { params: { id: string }
 
         return NextResponse.json({ success: true });
     } catch (error: unknown) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: (error as Error).message }, { status: 500 });
     }
 }

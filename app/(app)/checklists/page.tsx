@@ -12,7 +12,7 @@ function ChecklistsContent() {
 
     const searchParams = useSearchParams();
     const router = useRouter();
-    const role = useRestaurantStore((state) => state.restaurant?.role);
+    const role = useRestaurantStore((state) => state.userRole);
     const isNew = searchParams.get('new') === 'true';
 
     useEffect(() => {

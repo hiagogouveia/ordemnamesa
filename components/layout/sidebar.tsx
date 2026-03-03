@@ -16,7 +16,8 @@ const navigation = [
 
 export function Sidebar() {
     const pathname = usePathname();
-    const restaurant = useRestaurantStore((state) => state.restaurant);
+    const restaurantName = useRestaurantStore((state) => state.restaurantName);
+    const userRole = useRestaurantStore((state) => state.userRole);
     const [userEmail, setUserEmail] = useState("");
 
     useEffect(() => {
@@ -44,11 +45,11 @@ export function Sidebar() {
                     </div>
                 </div>
 
-                {restaurant && (
+                {restaurantName && (
                     <div className="w-full bg-[#16262c] rounded-lg p-3 border border-[#233f48] flex items-center justify-between group cursor-pointer hover:border-[#13b6ec]/50 transition-colors">
                         <div className="flex flex-col min-w-0">
                             <span className="text-xs text-[#92bbc9] mb-0.5">Restaurante Atual</span>
-                            <span className="text-sm text-white font-semibold truncate">{restaurant.name}</span>
+                            <span className="text-sm text-white font-semibold truncate">{restaurantName}</span>
                         </div>
                         <span className="material-symbols-outlined text-[#325a67] text-sm group-hover:text-[#13b6ec]">unfold_more</span>
                     </div>
@@ -65,8 +66,8 @@ export function Sidebar() {
                             key={item.name}
                             href={item.href}
                             className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isActive
-                                    ? "bg-[#233f48] text-white"
-                                    : "text-[#92bbc9] hover:bg-[#1a2c32] hover:text-white"
+                                ? "bg-[#233f48] text-white"
+                                : "text-[#92bbc9] hover:bg-[#1a2c32] hover:text-white"
                                 }`}
                         >
                             <span className={`material-symbols-outlined text-[20px] ${isActive ? "text-[#13b6ec]" : ""}`}>
@@ -89,7 +90,7 @@ export function Sidebar() {
                             {userEmail ? userEmail.split('@')[0] : 'Usuário'}
                         </span>
                         <span className="text-xs text-[#92bbc9] truncate">
-                            {restaurant?.role === 'owner' ? 'Proprietário' : restaurant?.role === 'manager' ? 'Gerente' : 'Colaborador'}
+                            {userRole === 'owner' ? 'Proprietário' : userRole === 'manager' ? 'Gerente' : 'Colaborador'}
                         </span>
                     </div>
                 </div>

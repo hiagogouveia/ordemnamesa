@@ -75,12 +75,12 @@ export async function GET(request: Request) {
         // Ordenar as tasks por "order"
         const formattedChecklists = checklists?.map(checklist => ({
             ...checklist,
-            tasks: checklist.tasks?.sort((a: unknown, b: unknown) => a.order - b.order) || []
+            tasks: checklist.tasks?.sort((a: { order: number }, b: { order: number }) => a.order - b.order) || []
         }));
 
         return NextResponse.json(formattedChecklists || []);
     } catch (error: unknown) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: (error as Error).message }, { status: 500 });
     }
 }
 
@@ -135,7 +135,7 @@ export async function POST(request: Request) {
         // 2. Inserir Tasks se existirem
         let insertedTasks = [];
         if (tasks && tasks.length > 0) {
-            const tasksToInsert = tasks.map((task: unknown, index: number) => ({
+            const tasksToInsert = tasks.map((task: { title: string; description?: string; requires_photo?: boolean; is_critical?: boolean }, index: number) => ({
                 checklist_id: newChecklist.id,
                 restaurant_id,
                 title: task.title,
@@ -156,6 +156,6 @@ export async function POST(request: Request) {
 
         return NextResponse.json({ ...newChecklist, tasks: insertedTasks }, { status: 201 });
     } catch (error: unknown) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: (error as Error).message }, { status: 500 });
     }
 }
