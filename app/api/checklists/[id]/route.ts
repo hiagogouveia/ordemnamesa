@@ -36,7 +36,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
         const body = await request.json();
-        const { restaurant_id, name, description, shift, status, tasks } = body;
+        const { restaurant_id, name, description, shift, status, tasks, category } = body;
 
         if (!restaurant_id) return NextResponse.json({ error: 'restaurant_id faltando' }, { status: 400 });
 
@@ -58,7 +58,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         // 1. Atualizar Checklist
         const { error: updateError } = await adminSupabase
             .from('checklists')
-            .update({ name, description, shift, status })
+            .update({ name, description, shift, status, category })
             .eq('id', id)
             .eq('restaurant_id', restaurant_id);
 

@@ -10,7 +10,7 @@ const TITLES: Record<string, string> = {
     "/configuracoes": "Configurações do Sistema",
 };
 
-export function Header() {
+export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
     const pathname = usePathname();
     const router = useRouter();
 
@@ -24,7 +24,10 @@ export function Header() {
         <header className="sticky top-0 z-10 w-full h-[72px] bg-[#111e22]/80 backdrop-blur-md border-b border-[#233f48] px-6 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-4">
                 {/* Hamburger pro mobile */}
-                <button className="lg:hidden p-2 -ml-2 text-[#92bbc9] hover:text-white rounded-lg hover:bg-[#1a2c32] transition-colors">
+                <button
+                    onClick={onMenuClick}
+                    className="lg:hidden p-2 -ml-2 text-[#92bbc9] hover:text-white rounded-lg hover:bg-[#1a2c32] transition-colors"
+                >
                     <span className="material-symbols-outlined">menu</span>
                 </button>
 

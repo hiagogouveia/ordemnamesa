@@ -94,7 +94,7 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json();
-        const { restaurant_id, name, description, shift, status, tasks } = body;
+        const { restaurant_id, name, description, shift, status, tasks, category } = body;
 
         if (!restaurant_id || !name || !shift) {
             return NextResponse.json({ error: 'Campos obrigatórios faltando' }, { status: 400 });
@@ -123,6 +123,7 @@ export async function POST(request: Request) {
                 name,
                 description,
                 shift,
+                category,
                 status,
                 active: true,
                 created_by: user.id

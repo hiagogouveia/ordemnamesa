@@ -14,7 +14,7 @@ const navigation = [
     { name: "Configurações", href: "/configuracoes", icon: "settings" },
 ];
 
-export function Sidebar() {
+export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
     const pathname = usePathname();
     const restaurantName = useRestaurantStore((state) => state.restaurantName);
     const userRole = useRestaurantStore((state) => state.userRole);
@@ -32,20 +32,21 @@ export function Sidebar() {
     }, []);
 
     return (
-        <aside className="hidden lg:flex flex-col w-64 bg-[#111e22] border-r border-[#233f48] h-full shrink-0">
-            {/* Header Sidebar */}
-            <div className="flex flex-col items-start gap-4 p-6 border-b border-[#233f48]/50">
+        <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#111e22] border-r border-[#233f48] flex flex-col items-center py-6 h-full shrink-0 transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+            <div className="w-full px-6 flex items-center justify-between mb-8">
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-[#13b6ec] text-[#111e22] shadow-[0_0_15px_rgba(19,182,236,0.2)]">
-                        <span className="material-symbols-outlined text-[24px]">restaurant</span>
+                    <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#13b6ec] text-[#111e22] shadow-sm shadow-[#13b6ec]/20">
+                        <span className="material-symbols-outlined text-[20px]">restaurant</span>
                     </div>
-                    <div>
-                        <h1 className="text-white text-lg font-bold tracking-tight leading-tight">Ordem na Mesa</h1>
-                        <span className="text-xs text-[#13b6ec] font-semibold tracking-wider font-mono">ADMIN PANEL</span>
-                    </div>
+                    <h1 className="text-white text-lg font-bold tracking-tight">OnMesa</h1>
                 </div>
+                <button onClick={onClose} className="lg:hidden p-1 text-[#92bbc9] hover:text-white rounded-lg hover:bg-[#1a2c32] transition-colors">
+                    <span className="material-symbols-outlined text-[20px]">close</span>
+                </button>
+            </div>
 
-                {restaurantName && (
+            {restaurantName && (
+                <div className="w-full px-6 mb-8">
                     <div className="w-full bg-[#16262c] rounded-lg p-3 border border-[#233f48] flex items-center justify-between group cursor-pointer hover:border-[#13b6ec]/50 transition-colors">
                         <div className="flex flex-col min-w-0">
                             <span className="text-xs text-[#92bbc9] mb-0.5">Restaurante Atual</span>
@@ -53,8 +54,8 @@ export function Sidebar() {
                         </div>
                         <span className="material-symbols-outlined text-[#325a67] text-sm group-hover:text-[#13b6ec]">unfold_more</span>
                     </div>
-                )}
-            </div>
+                </div>
+            )}
 
             {/* Navegação */}
             <nav className="flex-1 overflow-y-auto px-4 py-6 flex flex-col gap-1.5">
