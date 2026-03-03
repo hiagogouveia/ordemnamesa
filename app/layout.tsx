@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-
+import QueryProvider from "@/components/providers/query-provider";
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
@@ -26,7 +26,9 @@ export default function RootLayout({
         />
       </head>
       <body className={`${inter.variable} font-sans antialiased bg-[#101d22] text-white selection:bg-[#13b6ec]/30 selection:text-[#13b6ec]`}>
-        {children}
+        <QueryProvider>
+          {children}
+        </QueryProvider>
       </body>
     </html>
   );

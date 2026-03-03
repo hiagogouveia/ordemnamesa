@@ -34,7 +34,7 @@ export default function SelecionarRestaurantePage() {
 
             // Buscar restaurantes onde o usuário está ativo
             // O RLS já filtra `restaurant_users` por auth.uid()
-            const { data, error } = await supabase
+            const { data } = await supabase
                 .from('restaurant_users')
                 .select(`
           restaurant_id,
@@ -50,10 +50,12 @@ export default function SelecionarRestaurantePage() {
 
             if (data) {
                 // Formatar os dados para corresponder à interface
-                const formattedData = data.map((item: any) => ({
+                const formattedData = data.map((item) => ({
                     restaurant_id: item.restaurant_id,
-                    role: item.role,
-                    restaurants: Array.isArray(item.restaurants) ? item.restaurants[0] : item.restaurants
+                    role: item.role as 'owner' | 'manager' | 'staff',
+                    restaurants: Array.isArray(item.restaurants)
+                        ? (item.restaurants as unknown as { id: string; name: string; logo_url: string | null; slug: string }[])[0]
+                        : item.restaurants as { id: string; name: string; logo_url: string | null; slug: string }
                 }));
                 setRestaurants(formattedData as RestaurantData[]);
             }

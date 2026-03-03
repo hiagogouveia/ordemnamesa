@@ -8,7 +8,7 @@
 
 | | |
 |---|---|
-| **Sprint atual** | S2 — Auth + Multi-tenant |
+| **Sprint atual** | S3 — Gestão de Checklists |
 | **Atualizado em** | 2026-03-03 |
 | **Ambiente ativo** | develop → Supabase NONPROD |
 
@@ -32,13 +32,18 @@
 
 ## Em Andamento
 
+- [x] Layout do Painel com Sidebar e Header
+- [x] CRUD de checklists (API e Views)
+- [x] Gestão de tarefas (Drag and Drop)
+- [x] Publicar checklists
+
 ---
 
-## Próximo (Sprint 3)
+## Em Andamento
 
-- [ ] CRUD de checklists
-- [ ] Gestão de tarefas
-- [ ] Publicar checklists
+---
+
+- [ ] Gestão da Equipe (Convidar e gerenciar cargos)
 
 ---
 
