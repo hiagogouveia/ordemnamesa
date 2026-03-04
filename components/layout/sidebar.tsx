@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -16,9 +16,25 @@ const navigation = [
 
 export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
     const pathname = usePathname();
+    const router = useRouter();
     const restaurantName = useRestaurantStore((state) => state.restaurantName);
     const userRole = useRestaurantStore((state) => state.userRole);
+    const clearRestaurant = useRestaurantStore((state) => state.clearRestaurant);
     const [userEmail, setUserEmail] = useState("");
+    const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+    const handleSignOut = async () => {
+        setIsLoggingOut(true);
+        try {
+            await fetch('/api/auth/signout', { method: 'POST' });
+            clearRestaurant();
+            router.push('/login');
+            router.refresh();
+        } catch (error) {
+            console.error('Erro ao fazer logout', error);
+            setIsLoggingOut(false);
+        }
+    };
 
     useEffect(() => {
         async function getUser() {
@@ -95,6 +111,16 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
                         </span>
                     </div>
                 </div>
+                <button
+                    onClick={handleSignOut}
+                    disabled={isLoggingOut}
+                    className="mt-4 w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium text-red-400 hover:text-white hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all disabled:opacity-50"
+                >
+                    <span className="material-symbols-outlined text-[18px]">
+                        {isLoggingOut ? 'hourglass_empty' : 'logout'}
+                    </span>
+                    {isLoggingOut ? 'Saindo...' : 'Sair da conta'}
+                </button>
             </div>
         </aside>
     );
