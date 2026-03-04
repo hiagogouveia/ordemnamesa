@@ -26,12 +26,13 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
     const handleSignOut = async () => {
         setIsLoggingOut(true);
         try {
-            await fetch('/api/auth/signout', { method: 'POST' });
+            const supabase = createClient();
+            await supabase.auth.signOut();
             clearRestaurant();
             router.push('/login');
             router.refresh();
         } catch (error) {
-            console.error('Erro ao fazer logout', error);
+            console.error('[Sidebar] Erro ao fazer logout', error);
             setIsLoggingOut(false);
         }
     };
