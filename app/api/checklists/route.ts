@@ -39,8 +39,8 @@ export async function GET(request: Request) {
             .eq('active', true)
             .single();
 
-        if (!userRole || userRole.role === 'staff') {
-            return NextResponse.json({ error: 'Permissão negada' }, { status: 403 });
+        if (!userRole) {
+            return NextResponse.json({ error: 'Permissões do restaurante não encontradas' }, { status: 403 });
         }
 
         const { data: checklists, error } = await adminSupabase

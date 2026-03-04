@@ -8,8 +8,8 @@
 
 | | |
 |---|---|
-| **Sprint atual** | S3 — Gestão de Checklists |
-| **Atualizado em** | 2026-03-03 |
+| **Sprint atual** | S4 — Gestão de Execuções e Staff Mobile |
+| **Atualizado em** | Hoje |
 | **Ambiente ativo** | develop → Supabase NONPROD |
 
 ---
@@ -30,7 +30,7 @@
 
 ---
 
-## Em Andamento
+## Em Andamento / Concluídos Recentes
 
 - [x] Layout do Painel com Sidebar e Header
 - [x] CRUD de checklists (API e Views)
@@ -39,16 +39,29 @@
 
 ---
 
-## Em Andamento
+### Sprint 4: Execução de Checklists (STAFF no navegador mobile)
+**Status:** 🟩 CONCLUÍDO (100%)
+**Objetivo:** STAFF acessa o sistema pelo celular, vê os checklists do turno, executa cada tarefa, tira foto como evidência nas tarefas críticas, e conclui.
+**Entregáveis:**
+- ✅ View `app/(app)/turno/page.tsx` com Cards e Barra de Progresso Circular/Linear animada
+- ✅ View `app/(app)/turno/tarefa/[id]/page.tsx` com input the foto blob/HTML5 p/ Bukcet 'photos' e Enums críticos.
+- ✅ View `app/(app)/turno/tarefa/[id]/confirmacao/page.tsx` estornando ou firmando no cache React Query.
+- ✅ View `app/(app)/historico/page.tsx` exibindo últimas execuções formatadas.
+- ✅ Server Actions (GET, POST, DELETE Execucoes) integradas ao Storage (Supabase).
+- ✅ Bloqueio das Rotas Mobile se Role != staff | Bloqueio das Rotas WebAdmin se Role == staff.
 
 ---
+
+## A Fazer (Próximos)
 
 - [ ] Gestão da Equipe (Convidar e gerenciar cargos)
 
 ---
 
 ## Decisões Tomadas
-*(preencher conforme o projeto avança)*
+- App Server Migration: Vercel deploy integrado via Github
+- Imagens do app/Staff: Supabase Storage Bucket com validação `png|jpg`.
+- Front-end Cache: Utilizado `useMutation` no novo model de React Query com Invalidate cache em substituição ao router refresh bruto primitivo do NextJS.
 
 ---
 
