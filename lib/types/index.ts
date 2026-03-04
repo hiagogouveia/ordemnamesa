@@ -12,6 +12,7 @@ export interface Checklist {
     active: boolean
     created_by: string
     created_at: string
+    category?: string
     tasks?: ChecklistTask[]
 }
 

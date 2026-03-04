@@ -32,8 +32,8 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
     }, []);
 
     return (
-        <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#111e22] border-r border-[#233f48] flex flex-col items-center py-6 h-full shrink-0 transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-            <div className="w-full px-6 flex items-center justify-between mb-8">
+        <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#111e22] border-r border-[#233f48] flex flex-col h-full shrink-0 transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+            <div className="w-full px-6 flex items-center justify-between mb-8 pt-6">
                 <div className="flex items-center gap-3">
                     <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#13b6ec] text-[#111e22] shadow-sm shadow-[#13b6ec]/20">
                         <span className="material-symbols-outlined text-[20px]">restaurant</span>
