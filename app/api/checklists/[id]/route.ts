@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 
 const getAdminSupabase = () => {
     return createClient(
@@ -10,37 +8,30 @@ const getAdminSupabase = () => {
     );
 };
 
-const getAuthSupabase = async () => {
-    const cookieStore = await cookies();
-    return createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-            cookies: {
-                getAll() {
-                    return cookieStore.getAll();
-                },
-                setAll() { }
-            },
-        }
-    );
-};
-
 export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
     try {
-        const { id } = await context.params; // Corrected params extraction
+        const { id } = await context.params;
 
-        const authSupabase = await getAuthSupabase();
-        const { data: { user } } = await authSupabase.auth.getUser();
+        const authHeader = request.headers.get('Authorization');
+        if (!authHeader) {
+            return NextResponse.json({ error: 'Não autorizado. Token Ausente.' }, { status: 401 });
+        }
+        const token = authHeader.replace('Bearer ', '');
 
-        if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+        const adminSupabase = getAdminSupabase();
+        const { data: { user }, error: userError } = await adminSupabase.auth.getUser(token);
+
+        if (userError || !user) {
+            console.error('[PUT /api/checklists/[id]] Auth error:', userError);
+            return NextResponse.json({ error: 'Não autorizado ou Token inválido.' }, { status: 401 });
+        }
 
         const body = await request.json();
         const { restaurant_id, name, description, shift, status, tasks, category } = body;
 
-        if (!restaurant_id) return NextResponse.json({ error: 'restaurant_id faltando' }, { status: 400 });
-
-        const adminSupabase = getAdminSupabase();
+        if (!restaurant_id || !name) {
+            return NextResponse.json({ error: 'restaurant_id e name são obrigatórios.' }, { status: 400 });
+        }
 
         // Permissão
         const { data: userRole } = await adminSupabase
@@ -52,7 +43,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
             .single();
 
         if (!userRole || userRole.role === 'staff') {
-            return NextResponse.json({ error: 'Permissão negada' }, { status: 403 });
+            return NextResponse.json({ error: 'Permissões insuficientes.' }, { status: 403 });
         }
 
         // 1. Atualizar Checklist
@@ -62,22 +53,26 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
             .eq('id', id)
             .eq('restaurant_id', restaurant_id);
 
-        if (updateError) throw updateError;
+        if (updateError) {
+            console.error('[PUT /api/checklists/[id]] Erro no update do checklist:', updateError);
+            return NextResponse.json({ error: updateError.message }, { status: 500 });
+        }
 
-        // 2. Atualizar Tasks (Deletar as que saíram e Inserir as novas/atualizadas)
-        // O Supabase tem um recurso de upsert, mas como podemos deletar tasks, o fluxo mais simples
-        // na API é apagar as atuais do checklist e inserir as novas com a nova ordem.
-
+        // 2. Atualizar Tasks
         const { error: deleteTasksError } = await adminSupabase
             .from('checklist_tasks')
             .delete()
             .eq('checklist_id', id);
 
-        if (deleteTasksError) throw deleteTasksError;
+        if (deleteTasksError) {
+            console.error('[PUT /api/checklists/[id]] Erro ao deletar tasks antigas:', deleteTasksError);
+            return NextResponse.json({ error: deleteTasksError.message }, { status: 500 });
+        }
 
         let insertedTasks = [];
         if (tasks && tasks.length > 0) {
-            const tasksToInsert = tasks.map((task: { title: string; description?: string; requires_photo?: boolean; is_critical?: boolean }, index: number) => ({
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const tasksToInsert = tasks.map((task: any, index: number) => ({
                 checklist_id: id,
                 restaurant_id,
                 title: task.title,
@@ -92,30 +87,41 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
                 .insert(tasksToInsert)
                 .select();
 
-            if (tasksError) throw tasksError;
+            if (tasksError) {
+                console.error('[PUT /api/checklists/[id]] Erro ao recriar tasks:', tasksError);
+                return NextResponse.json({ error: tasksError.message }, { status: 500 });
+            }
             insertedTasks = newTasks.sort((a, b) => a.order - b.order);
         }
 
         return NextResponse.json({ success: true, tasks: insertedTasks });
     } catch (error: unknown) {
+        console.error('[PUT /api/checklists/[id]] Erro Inesperado:', error);
         return NextResponse.json({ error: (error as Error).message }, { status: 500 });
     }
 }
 
 export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
     try {
-        const { id } = await context.params; // Corrected params extraction
+        const { id } = await context.params;
         const { searchParams } = new URL(request.url);
         const restaurant_id = searchParams.get('restaurant_id');
 
         if (!restaurant_id) return NextResponse.json({ error: 'restaurant_id faltando' }, { status: 400 });
 
-        const authSupabase = await getAuthSupabase();
-        const { data: { user } } = await authSupabase.auth.getUser();
-
-        if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+        const authHeader = request.headers.get('Authorization');
+        if (!authHeader) {
+            return NextResponse.json({ error: 'Não autorizado. Token Ausente.' }, { status: 401 });
+        }
+        const token = authHeader.replace('Bearer ', '');
 
         const adminSupabase = getAdminSupabase();
+        const { data: { user }, error: userError } = await adminSupabase.auth.getUser(token);
+
+        if (userError || !user) {
+            console.error('[DELETE /api/checklists/[id]] Auth error:', userError);
+            return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
+        }
 
         // Permissão
         const { data: userRole } = await adminSupabase
@@ -127,7 +133,7 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
             .single();
 
         if (!userRole || userRole.role === 'staff') {
-            return NextResponse.json({ error: 'Permissão negada' }, { status: 403 });
+            return NextResponse.json({ error: 'Permissões insuficientes' }, { status: 403 });
         }
 
         // Soft Delete
@@ -137,10 +143,14 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
             .eq('id', id)
             .eq('restaurant_id', restaurant_id);
 
-        if (error) throw error;
+        if (error) {
+            console.error('[DELETE /api/checklists/[id]] Erro ao soft-delete:', error);
+            return NextResponse.json({ error: error.message }, { status: 500 });
+        }
 
         return NextResponse.json({ success: true });
     } catch (error: unknown) {
+        console.error('[DELETE /api/checklists/[id]] Erro Inesperado:', error);
         return NextResponse.json({ error: (error as Error).message }, { status: 500 });
     }
 }

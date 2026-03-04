@@ -31,6 +31,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
     const [shift, setShift] = useState("any");
     const [category, setCategory] = useState("");
     const [tasks, setTasks] = useState<(Partial<ChecklistTask> & { tempId: string })[]>([]);
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
     const createMutation = useCreateChecklist();
     const updateMutation = useUpdateChecklist();
@@ -51,6 +52,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
             setShift("any");
             setCategory("");
             setTasks([]);
+            setErrorMsg(null);
         }
     }, [checklist]);
 
@@ -101,6 +103,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
         };
 
         try {
+            setErrorMsg(null);
             if (checklist?.id) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 await updateMutation.mutateAsync({ id: checklist.id, ...payload } as any);
@@ -111,7 +114,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
             onSaved();
         } catch (e) {
             console.error(e);
-            alert("Erro ao salvar checklist!");
+            setErrorMsg(e instanceof Error ? e.message : "Erro inesperado ao salvar a rotina!");
         }
     };
 
@@ -174,6 +177,13 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
             {/* Formulário Content */}
             <div className="flex-1 overflow-y-auto px-6 py-8">
                 <div className="max-w-3xl mx-auto space-y-8">
+
+                    {errorMsg && (
+                        <div className="bg-red-500/10 border border-red-500/20 text-red-500 px-4 py-3 rounded-xl flex items-center gap-3">
+                            <span className="material-symbols-outlined shrink-0 text-xl">error</span>
+                            <p className="text-sm font-medium">{errorMsg}</p>
+                        </div>
+                    )}
 
                     {/* Card Detalhes Básico */}
                     <div className="bg-[#101d22] border border-[#233f48] rounded-2xl p-6 space-y-5">
