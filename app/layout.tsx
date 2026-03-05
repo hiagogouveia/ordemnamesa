@@ -25,7 +25,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className={`${inter.variable} font-sans antialiased bg-[#101d22] text-white selection:bg-[#13b6ec]/30 selection:text-[#13b6ec]`}>
+      <body className={`${inter.variable} font-display antialiased bg-background-light dark:bg-background-dark text-slate-900 dark:text-white selection:bg-primary/30 selection:text-primary`}>
         <QueryProvider>
           {children}
         </QueryProvider>

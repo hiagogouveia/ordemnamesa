@@ -32,6 +32,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
     const [category, setCategory] = useState("");
     const [tasks, setTasks] = useState<(Partial<ChecklistTask> & { tempId: string })[]>([]);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
 
     const createMutation = useCreateChecklist();
     const updateMutation = useUpdateChecklist();
@@ -53,6 +54,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
             setCategory("");
             setTasks([]);
             setErrorMsg(null);
+            setShowDeleteModal(false);
         }
     }, [checklist]);
 
@@ -120,9 +122,15 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
 
     const handleDelete = async () => {
         if (!checklist?.id || !restaurantId) return;
-        if (confirm("Tem certeza que deseja deletar este checklist?")) {
+        try {
             await deleteMutation.mutateAsync({ id: checklist.id, restaurantId });
+            setShowDeleteModal(false);
             onSaved();
+            // Adicionalmente aqui pode ser add um toast se for importado
+        } catch (e) {
+            console.error(e);
+            setErrorMsg("Erro ao arquivar a rotina.");
+            setShowDeleteModal(false);
         }
     };
 
@@ -144,7 +152,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
                 <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end w-full sm:w-auto">
                     {checklist && (
                         <button
-                            onClick={handleDelete}
+                            onClick={() => setShowDeleteModal(true)}
                             className="p-2 text-[#92bbc9] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
                             title="Excluir"
                         >
@@ -273,6 +281,38 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
 
                 </div>
             </div>
+
+            {/* Modal de Arquivamento */}
+            {showDeleteModal && (
+                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+                    <div className="bg-[#16262c] border border-[#233f48] rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-fade-in">
+                        <div className="flex items-center gap-3 mb-2 text-white">
+                            <span className="material-symbols-outlined text-red-500">archive</span>
+                            <h3 className="text-xl font-bold tracking-tight">Arquivar rotina?</h3>
+                        </div>
+                        <p className="text-[#92bbc9] text-sm mb-6 mt-2 leading-relaxed">
+                            Esta ação desativará a lista para futuros turnos. Ela não será completamente deletada,
+                            mantendo o histórico existente.
+                        </p>
+                        <div className="flex gap-3 justify-end mt-4">
+                            <button
+                                onClick={() => setShowDeleteModal(false)}
+                                className="px-4 py-2 rounded-lg font-bold text-sm text-[#92bbc9] hover:bg-[#1a2c32] hover:text-white transition-colors"
+                                disabled={deleteMutation.isPending}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleDelete}
+                                disabled={deleteMutation.isPending}
+                                className="px-4 py-2 rounded-lg font-bold text-sm bg-red-500/10 text-red-500 border border-red-500/30 hover:bg-red-500 hover:text-white transition-colors disabled:opacity-50"
+                            >
+                                {deleteMutation.isPending ? "Arquivando..." : "Confirmar Arquivamento"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

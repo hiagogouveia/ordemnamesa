@@ -72,7 +72,14 @@ export default function SelecionarRestaurantePage() {
             slug: restaurant.restaurants.slug,
             role: restaurant.role,
         });
-        router.push("/dashboard");
+
+        console.log('[RestaurantStore] set:', { id: restaurant.restaurants.id, role: restaurant.role });
+
+        if (restaurant.role === 'staff') {
+            router.push("/turno");
+        } else {
+            router.push("/dashboard");
+        }
     };
 
     const getRoleBadgeColor = (role: string) => {

@@ -1,4 +1,18 @@
+"use client";
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useRestaurantStore } from '@/lib/store/restaurant-store';
+
 export default function DashboardPage() {
+    const router = useRouter();
+    const userRole = useRestaurantStore((state) => state.userRole);
+
+    useEffect(() => {
+        if (userRole === 'staff') {
+            router.replace('/turno');
+        }
+    }, [userRole, router]);
     const metrics = [
         { title: "Conclusão Diária", value: "85%", change: "+5% vs ontem", changeType: "positive", icon: "task_alt" },
         { title: "Alertas Abertos", value: "3", change: "Ação necessária", changeType: "negative", icon: "warning" },
@@ -31,8 +45,8 @@ export default function DashboardPage() {
                             <div className="flex justify-between items-start mb-4">
                                 <div className="w-10 h-10 rounded-lg bg-[#101d22] border border-[#233f48] flex items-center justify-center shrink-0 group-hover:bg-[#233f48] transition-colors">
                                     <span className={`material-symbols-outlined text-[20px] ${metric.changeType === 'positive' ? 'text-emerald-400' :
-                                            metric.changeType === 'negative' ? 'text-amber-400' :
-                                                'text-[#13b6ec]'
+                                        metric.changeType === 'negative' ? 'text-amber-400' :
+                                            'text-[#13b6ec]'
                                         }`}>
                                         {metric.icon}
                                     </span>
@@ -43,8 +57,8 @@ export default function DashboardPage() {
                                 <h4 className="text-sm font-medium text-[#92bbc9]">{metric.title}</h4>
                                 <div className="text-3xl font-bold text-white tracking-tight">{metric.value}</div>
                                 <div className={`text-xs font-semibold mt-2 ${metric.changeType === 'positive' ? 'text-emerald-400' :
-                                        metric.changeType === 'negative' ? 'text-amber-400' :
-                                            'text-[#92bbc9]'
+                                    metric.changeType === 'negative' ? 'text-amber-400' :
+                                        'text-[#92bbc9]'
                                     }`}>
                                     {metric.change}
                                 </div>

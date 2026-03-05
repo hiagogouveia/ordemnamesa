@@ -48,10 +48,10 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(url)
     }
 
-    // Redirect user away from Root to login or select restaurant
-    if (request.nextUrl.pathname === '/') {
+    // Redirect logged-in user away from Root
+    if (user && request.nextUrl.pathname === '/') {
         const url = request.nextUrl.clone()
-        url.pathname = user ? '/selecionar-restaurante' : '/login'
+        url.pathname = '/selecionar-restaurante'
         return NextResponse.redirect(url)
     }
 
