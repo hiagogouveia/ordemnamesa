@@ -1,6 +1,20 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+interface RegistroRecente {
+    id: string;
+    task_name: string;
+    status: string;
+    executor_name: string;
+    executor_avatar: string | null;
+    executed_at: string;
+}
+
+interface ExecUserInfo {
+    name?: string | null;
+    avatar_url?: string | null;
+}
+
 const getAdminSupabase = () => {
     return createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -73,7 +87,7 @@ export async function GET(request: Request) {
 
         let totalTasksDaily = 0;
         if (checklists) {
-            checklists.forEach((list: any) => { totalTasksDaily += (list.tasks?.length || 0); });
+            checklists.forEach((list: { tasks?: { id: string }[] }) => { totalTasksDaily += (list.tasks?.length || 0); });
         }
 
         // Estimativa do range de dias -> totalExpectedTasks no Periodo baseando-se por dia ativo?
@@ -93,8 +107,8 @@ export async function GET(request: Request) {
         let doneCount = 0;
         let flaggedCount = 0;
 
-        const topPerformersMap: Record<string, { name: string; avatar: string; total_done: number }> = {};
-        const registrosRecentes: any[] = [];
+        const topPerformersMap: Record<string, { name: string; avatar: string | null; total_done: number }> = {};
+        const registrosRecentes: RegistroRecente[] = [];
 
         let validExecutions = 0;
 
@@ -107,7 +121,7 @@ export async function GET(request: Request) {
                 if (isDone) doneCount++;
                 if (isFlagged) flaggedCount++;
 
-                const nameInfo = (ex.user as any)?.user;
+                const nameInfo = (ex.user as unknown as { user?: ExecUserInfo })?.user;
                 const exName = (nameInfo?.name || 'Colaborador');
                 const exAvatar = nameInfo?.avatar_url || null;
 
@@ -122,7 +136,7 @@ export async function GET(request: Request) {
                 if (idx < 50) {
                     registrosRecentes.push({
                         id: ex.id,
-                        task_name: (ex.checklist_tasks as any)?.title || 'Relatório de Turno',
+                        task_name: (ex.checklist_tasks as unknown as { title?: string })?.title || 'Relatório de Turno',
                         status: ex.status,
                         executor_name: exName,
                         executor_avatar: exAvatar,
@@ -177,7 +191,7 @@ export async function GET(request: Request) {
             registros_recentes: registrosRecentes
         });
 
-    } catch (err: any) {
-        return NextResponse.json({ error: err.message }, { status: 500 });
+    } catch (err: unknown) {
+        return NextResponse.json({ error: (err as Error).message }, { status: 500 });
     }
 }

@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+interface PublicUser {
+    name?: string | null;
+    email?: string | null;
+    avatar_url?: string | null;
+}
+
 const getAdminSupabase = () => {
     return createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -73,7 +79,7 @@ export async function GET(request: Request) {
         // O mais simples de performance rate inter-staffs é pegar as tasks que eles concluiram como done e dividir por total que mexeram, ou só número absoluto.
         // O layout pede "% de desempenho", que poderia ser (tarefas done / todas as execs que ele consta)? Ou total tasks do restaurante.
         // Vamos usar tasks_done / total de execucoes no qual estão associados nas últimas 1 semanas.
-        let performanceMap: Record<string, { done: number, total: number }> = {};
+        const performanceMap: Record<string, { done: number, total: number }> = {};
         let totalDoneGlobal = 0;
         let totalExecsGlobal = 0;
 
@@ -100,7 +106,7 @@ export async function GET(request: Request) {
         const turnosAtivos = Math.floor(activeMembers.length * 0.4); // Mock: approx at working shifts
 
         const equipeFormated = members?.map(m => {
-            const u = m.user as any;
+            const u = m.user as unknown as PublicUser | null;
             const pmId = m.user_id || m.id; // se por algum motivo for nulo o user_id, usa uuid de vinculo
             const pStats = performanceMap[pmId] || { done: 0, total: 0 };
 
@@ -134,9 +140,9 @@ export async function GET(request: Request) {
             equipe: equipeFormated || []
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('API Equipe Error:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: (error as Error).message }, { status: 500 });
     }
 }
 
@@ -153,7 +159,7 @@ export async function PUT(request: Request) {
 
         const adminSupabase = getAdminSupabase();
 
-        const updates: any = {};
+        const updates: Record<string, boolean | string> = {};
         if (active !== undefined) updates.active = active;
         if (role !== undefined) updates.role = role;
 
@@ -169,7 +175,7 @@ export async function PUT(request: Request) {
 
         return NextResponse.json({ success: true, data });
 
-    } catch (err: any) {
-        return NextResponse.json({ error: err.message }, { status: 500 });
+    } catch (err: unknown) {
+        return NextResponse.json({ error: (err as Error).message }, { status: 500 });
     }
 }

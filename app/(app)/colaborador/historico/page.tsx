@@ -1,7 +1,5 @@
 "use client";
 
-import { Logo } from "@/components/ui/Logo";
-
 export default function ColaboradorHistorico() {
     return (
         <div className="flex flex-col gap-6 animate-fade-in pb-20 md:pb-6">

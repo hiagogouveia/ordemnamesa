@@ -1,5 +1,24 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+
+interface ExecUserInfo {
+    name?: string | null;
+    avatar_url?: string | null;
+}
+
+interface AlertaRecente {
+    id: string;
+    title: string;
+    time_ago: string;
+    notes: string;
+    severity: string;
+}
+
+interface StaffAvatar {
+    id: string;
+    nome: string;
+    avatar: string | null;
+}
 // helper para distance
 const formatDistanceToNowPT = (dateMs: number) => {
     const diffInMinutes = Math.floor((new Date().getTime() - dateMs) / 60000);
@@ -66,11 +85,9 @@ export async function GET(request: Request) {
         const sevenDaysAgo = new Date(today);
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6); // Hoje + 6 últimos
 
-        const startStringDay = today.toISOString();
         const endStringDay = endOfDay.toISOString();
 
         const startStringYest = yesterday.toISOString();
-        const endStringYest = endOfYesterday.toISOString();
 
         // 1. Checklists Ativos para percentuais
         const { data: checklists } = await adminSupabase
@@ -108,7 +125,7 @@ export async function GET(request: Request) {
         let responseTimeSumYest = 0;
         let responseCountYest = 0;
 
-        const alertasRecentes: any[] = [];
+        const alertasRecentes: AlertaRecente[] = [];
         const todayPerformers: Record<string, { total_done: number; name: string; avatar: string | null; role: string }> = {};
 
         if (execucoes) {
@@ -133,7 +150,7 @@ export async function GET(request: Request) {
 
                         // Performers
                         if (exec.executor_id && exec.user) {
-                            const nameInfo = (Array.isArray(exec.user) ? exec.user[0] : exec.user)?.user as any;
+                            const nameInfo = ((Array.isArray(exec.user) ? exec.user[0] : exec.user) as unknown as { user?: ExecUserInfo })?.user;
                             if (!todayPerformers[exec.executor_id]) {
                                 todayPerformers[exec.executor_id] = {
                                     total_done: 0,
@@ -148,8 +165,8 @@ export async function GET(request: Request) {
                     if (exec.status === 'flagged') {
                         flaggedToday++;
                         alertasRecentes.push({
-                            id: (exec.checklist_tasks as any)?.id || String(Math.random()),
-                            title: (exec.checklist_tasks as any)?.title || 'Relatório de Incidente',
+                            id: (exec.checklist_tasks as unknown as { id?: string })?.id || String(Math.random()),
+                            title: (exec.checklist_tasks as unknown as { title?: string })?.title || 'Relatório de Incidente',
                             time_ago: formatDistanceToNowPT(ts),
                             notes: exec.execution_notes || 'Requer revisão imediata.',
                             severity: 'critical' // Poderiamos avaliar dinâmico
@@ -182,14 +199,14 @@ export async function GET(request: Request) {
             .eq('role', 'staff');
 
         let staffActiveToday = 0;
-        let staffAvatars: any[] = [];
+        const staffAvatars: StaffAvatar[] = [];
 
         // Simplificado, vamos assumir os ativos atuais como 'hoje'
         if (staffData) {
             staffData.forEach((s) => {
                 if (s.active) {
                     staffActiveToday++;
-                    const userInfo = s.user as any;
+                    const userInfo = s.user as unknown as ExecUserInfo & { id?: string };
                     if (staffAvatars.length < 3) {
                         staffAvatars.push({
                             id: userInfo?.id || s.id,

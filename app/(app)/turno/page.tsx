@@ -118,14 +118,13 @@ function Avatar({ name, url, size = 'md' }: { name: string; url?: string | null;
 
 export default function HomeTurnoPage() {
     const router = useRouter();
-    const { restaurantId, restaurantName, userRole } = useRestaurantStore();
+    const { restaurantId, userRole } = useRestaurantStore();
 
     const { data: checklists, isLoading: isLoadingChecklists, error: checklistsError, refetch: refetchChecklists } = useChecklists(restaurantId || undefined);
     const { data: execucoes, isLoading: isLoadingExecucoes, error: execucoesError, refetch: refetchExecucoes } = useTurnoAtual(restaurantId || null);
     const createExecucao = useCreateExecucao();
 
     const [userName, setUserName] = useState('');
-    const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
     const [showEndModal, setShowEndModal] = useState(false);
     const [toasts, setToasts] = useState<ToastState[]>([]);
     const [isMounted, setIsMounted] = useState(false);
@@ -144,7 +143,6 @@ export default function HomeTurnoPage() {
     useEffect(() => {
         createClient().auth.getUser().then(({ data }) => {
             if (data.user?.user_metadata?.name) setUserName(data.user.user_metadata.name);
-            if (data.user?.user_metadata?.avatar_url) setUserAvatarUrl(data.user.user_metadata.avatar_url);
         });
     }, []);
 
@@ -238,7 +236,6 @@ export default function HomeTurnoPage() {
     }, [checklists, execucoes, currentShift]);
 
     const progress = allTasks.length > 0 ? Math.round((completedTasks.length / allTasks.length) * 100) : 0;
-    const nonUrgentPending = pendingTasks.filter(t => !t.is_critical);
 
     // ── Checkbox handler ──
     const handleCheckbox = useCallback((task: TaskWithMeta, e: React.MouseEvent) => {

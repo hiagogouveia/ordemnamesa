@@ -18,7 +18,7 @@ export default function RelatoriosPage() {
         d.setDate(d.getDate() - 30);
         return d.toISOString();
     });
-    const [endDate, setEndDate] = useState(() => new Date().toISOString());
+    const [endDate] = useState(() => new Date().toISOString());
 
     const { data: relData, isLoading, error } = useRelatorios(restaurantId, startDate, endDate);
 

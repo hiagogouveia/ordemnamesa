@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useRestaurantStore } from '@/lib/store/restaurant-store';
 import { useEquipe, useUpdateEquipeMember } from '@/lib/hooks/use-equipe';
@@ -74,8 +74,8 @@ export default function EquipePage() {
             setLoadingAction(id);
             try {
                 await updateMember.mutateAsync({ id, active: false });
-            } catch (err: any) {
-                alert(err.message || 'Erro ao desativar membro');
+            } catch (err: unknown) {
+                alert((err as Error).message || 'Erro ao desativar membro');
             } finally {
                 setLoadingAction(null);
             }
@@ -91,8 +91,8 @@ export default function EquipePage() {
         try {
             await updateMember.mutateAsync({ id: editModeMember.id, role: newRole });
             setEditModeMember(null);
-        } catch (err: any) {
-            alert(err.message || 'Erro ao atualizar cargo');
+        } catch (err: unknown) {
+            alert((err as Error).message || 'Erro ao atualizar cargo');
         } finally {
             setLoadingAction(null);
         }

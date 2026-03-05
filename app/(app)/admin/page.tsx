@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 
 export default function AdminDashboard() {
@@ -221,7 +220,7 @@ export default function AdminDashboard() {
                                     <span className="text-sm font-bold text-slate-900 dark:text-white">Foto Adicionada</span>
                                     <span className="text-[10px] font-medium text-slate-500 dark:text-[#93adc8]">Há 5m</span>
                                 </div>
-                                <p className="text-xs text-slate-600 dark:text-[#5a7b88]">Carlos fez upload p/ "Limpeza do Chão"</p>
+                                <p className="text-xs text-slate-600 dark:text-[#5a7b88]">Carlos fez upload p/ &quot;Limpeza do Chão&quot;</p>
                             </div>
                         </div>
 

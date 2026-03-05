@@ -122,7 +122,7 @@ export default function TarefaDetailsPage({ params }: { params: Promise<{ id: st
 
         setIsReporting(true);
         try {
-            const res = await createExecution({
+            await createExecution({
                 task_id: id,
                 checklist_id: checklistId!,
                 restaurant_id: restaurantId!,
