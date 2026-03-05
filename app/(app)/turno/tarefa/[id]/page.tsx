@@ -4,7 +4,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { useChecklists } from '@/lib/hooks/use-checklists';
 import { useRestaurantStore } from '@/lib/store/restaurant-store';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCreateExecucao } from '@/lib/hooks/use-execucoes';
+import { useCreateExecucao, useTurnoAtual } from '@/lib/hooks/use-execucoes';
 import { uploadEvidencePhoto } from '@/lib/supabase/storage';
 import Link from 'next/link';
 
@@ -16,7 +16,12 @@ export default function TarefaDetailsPage({ params }: { params: Promise<{ id: st
     const router = useRouter();
     const { restaurantId } = useRestaurantStore();
     const { data: checklists, isLoading } = useChecklists(restaurantId || undefined);
+    const { data: execucoes } = useTurnoAtual(restaurantId || null);
     const { mutateAsync: createExecution, isPending } = useCreateExecucao();
+
+    // Verifica se esta tarefa já foi executada hoje
+    const alreadyDoneToday = !!(execucoes as Array<{ task_id: string; status: string }> | null | undefined)
+        ?.find(e => e.task_id === id && e.status === 'done');
 
     const [isUploading, setIsUploading] = useState(false);
     const [file, setFile] = useState<File | null>(null);
@@ -212,10 +217,15 @@ export default function TarefaDetailsPage({ params }: { params: Promise<{ id: st
             <div className="fixed bottom-0 left-0 right-0 w-full bg-white dark:bg-[#111e22] border-t border-gray-200 dark:border-[#233f48] p-6 flex flex-col gap-3 max-w-[500px] mx-auto z-40 pb-safe">
                 <button
                     onClick={handleSubmit}
-                    disabled={!isReadyToSubmit || isPending || isUploading}
+                    disabled={!isReadyToSubmit || isPending || isUploading || alreadyDoneToday}
                     className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-[#111e22] text-lg font-bold py-4 rounded-xl shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2"
                 >
-                    {(isUploading || isPending) ? (
+                    {alreadyDoneToday ? (
+                        <>
+                            <span className="material-symbols-outlined text-[24px]">task_alt</span>
+                            Já concluída hoje
+                        </>
+                    ) : (isUploading || isPending) ? (
                         <>
                             <span className="material-symbols-outlined animate-spin text-[20px]">refresh</span>
                             Enviando...

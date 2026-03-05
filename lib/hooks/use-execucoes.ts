@@ -70,7 +70,32 @@ export const useCreateExecucao = () => {
 
             return response.json();
         },
-        onSuccess: (_, variables) => {
+        onMutate: async (variables) => {
+            // Cancela qualquer re-fetch em andamento para não sobrescrever o optimistic update
+            await queryClient.cancelQueries({ queryKey: ['execucoes', 'turnoData', variables.restaurant_id] });
+
+            // Snapshot do estado anterior (para rollback em caso de erro)
+            const previous = queryClient.getQueryData(['execucoes', 'turnoData', variables.restaurant_id]);
+
+            // Adiciona a execução fake ao cache imediatamente
+            queryClient.setQueryData(
+                ['execucoes', 'turnoData', variables.restaurant_id],
+                (old: Array<{ task_id: string; status: string }> | null) => {
+                    const fakeEntry = { task_id: variables.task_id, status: variables.status, id: 'optimistic-' + variables.task_id };
+                    return old ? [...old, fakeEntry] : [fakeEntry];
+                }
+            );
+
+            return { previous };
+        },
+        onError: (_err, variables, context) => {
+            // Rollback se a API falhar
+            if (context?.previous !== undefined) {
+                queryClient.setQueryData(['execucoes', 'turnoData', variables.restaurant_id], context.previous);
+            }
+        },
+        onSettled: (_data, _err, variables) => {
+            // Sincroniza com o servidor após a mutação (sucesso ou erro)
             queryClient.invalidateQueries({ queryKey: ['execucoes', 'turnoData', variables.restaurant_id] });
             queryClient.invalidateQueries({ queryKey: ['execucoes', 'historico'] });
         },

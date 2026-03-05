@@ -110,6 +110,29 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Permissão negada no restaurante selecionado' }, { status: 403 });
         }
 
+        // Verificação de duplicata: impede registrar a mesma task duas vezes no mesmo dia
+        const today = new Date();
+        const startOfDay = new Date(today);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(today);
+        endOfDay.setHours(23, 59, 59, 999);
+
+        const { data: existing } = await adminSupabase
+            .from('task_executions')
+            .select('id')
+            .eq('task_id', task_id)
+            .eq('user_id', user.id)
+            .gte('executed_at', startOfDay.toISOString())
+            .lte('executed_at', endOfDay.toISOString())
+            .maybeSingle();
+
+        if (existing) {
+            return NextResponse.json(
+                { error: 'Esta tarefa já foi registrada hoje.' },
+                { status: 409 }
+            );
+        }
+
         // Criar o log
         const { data: newExecution, error: execError } = await adminSupabase
             .from('task_executions')
