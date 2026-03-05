@@ -1,6 +1,8 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 const TITLES: Record<string, string> = {
     "/dashboard": "Dashboard Geral",
@@ -8,11 +10,25 @@ const TITLES: Record<string, string> = {
     "/equipe": "Gestão da Equipe",
     "/relatorios": "Relatórios e Análises",
     "/configuracoes": "Configurações do Sistema",
+    "/turno": "Home do Turno",
+    "/historico": "Histórico de Tarefas",
 };
 
 export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
     const pathname = usePathname();
     const router = useRouter();
+    const [userInitial, setUserInitial] = useState("U");
+
+    useEffect(() => {
+        async function getUser() {
+            const supabase = createClient();
+            const { data } = await supabase.auth.getUser();
+            if (data?.user?.email) {
+                setUserInitial(data.user.email.charAt(0).toUpperCase());
+            }
+        }
+        getUser();
+    }, []);
 
     // Buscar o título baseando-se no path. Se for uma rota aninhada, pega a principal
     const getHeaderTitle = () => {
@@ -31,8 +47,11 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
                     <span className="material-symbols-outlined">menu</span>
                 </button>
 
-                <div>
-                    <h2 className="text-xl font-bold text-white tracking-tight">{getHeaderTitle()}</h2>
+                <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#13b6ec] text-[#111e22] shadow-sm shadow-[#13b6ec]/20 lg:hidden">
+                        <span className="material-symbols-outlined text-[20px]">restaurant</span>
+                    </div>
+                    <h2 className="text-xl font-bold text-white tracking-tight hidden sm:block">{getHeaderTitle()}</h2>
                 </div>
             </div>
 
@@ -41,6 +60,9 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
                     <span className="material-symbols-outlined">notifications</span>
                     <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 border-2 border-[#111e22]"></span>
                 </button>
+                <div className="lg:hidden flex items-center justify-center w-8 h-8 rounded-full bg-[#16262c] border border-[#233f48] text-white text-sm font-bold shadow-sm">
+                    {userInitial}
+                </div>
 
                 {pathname.startsWith("/checklists") && (
                     <button
