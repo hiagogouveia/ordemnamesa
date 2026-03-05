@@ -45,10 +45,10 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
                 {pathname.startsWith("/checklists") && (
                     <button
                         onClick={() => router.push('/checklists?new=true')}
-                        className="hidden sm:flex h-9 items-center gap-2 px-4 bg-[#13b6ec] hover:bg-[#10a0d0] text-[#111e22] rounded-lg font-bold text-sm transition-colors shadow-[0_4px_14px_0_rgba(19,182,236,0.39)]"
+                        className="flex h-9 items-center gap-2 px-3 sm:px-4 bg-[#13b6ec] hover:bg-[#10a0d0] text-[#111e22] rounded-lg font-bold text-sm transition-colors shadow-[0_4px_14px_0_rgba(19,182,236,0.39)]"
                     >
                         <span className="material-symbols-outlined text-[18px]">add</span>
-                        Nova Lista
+                        <span className="hidden sm:inline">Nova Lista</span>
                     </button>
                 )}
             </div>

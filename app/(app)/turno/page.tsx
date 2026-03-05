@@ -73,6 +73,9 @@ export default function HomeTurnoPage() {
     const completedTasks = renderTasks.filter(t => t.status === 'done').length;
     const progressPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
+    // Filtro para a lista mostrar apenas não concluídos
+    const pendingTasks = renderTasks.filter(task => task.status !== 'done');
+
     const isLoading = isLoadingChecklists || isLoadingExecucoes;
 
     if (isLoading) {
@@ -130,32 +133,24 @@ export default function HomeTurnoPage() {
                         <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-white">Lista de Tarefas</h3>
                     </div>
 
-                    {renderTasks.length === 0 ? (
+                    {pendingTasks.length === 0 ? (
                         <div className="p-8 text-center text-slate-500 dark:text-[#92bbc9] bg-white dark:bg-[#16262c] rounded-xl border border-dashed border-gray-200 dark:border-[#233f48]">
-                            Não há tarefas cadastradas para o seu turno atual.
+                            {totalTasks === 0 ? "Não há tarefas cadastradas para o seu turno atual." : "Todas as tarefas pendentes foram concluídas!"}
                         </div>
                     ) : (
-                        renderTasks.map((task) => (
+                        pendingTasks.map((task) => (
                             <Link
                                 href={`/turno/tarefa/${task.id}?c=${task.checklist_id}`}
                                 key={task.id}
-                                className={`group flex flex-col p-4 rounded-xl transition-all border
-                                    ${task.status === 'done'
-                                        ? 'bg-gray-50/50 dark:bg-[#111e22]/50 border-transparent opacity-60 hover:opacity-100'
-                                        : 'bg-white dark:bg-[#16262c] border-gray-200 dark:border-[#233f48] shadow-sm hover:border-primary/50'
-                                    }
-                                `}
+                                className="group flex flex-col p-4 rounded-xl transition-all border bg-white dark:bg-[#16262c] border-gray-200 dark:border-[#233f48] shadow-sm hover:border-primary/50"
                             >
                                 <div className="flex items-start gap-4">
                                     {/* Checkbox Icon Mock */}
-                                    <div className={`mt-0.5 shrink-0 flex items-center justify-center size-6 rounded-full border-2 
-                                         ${task.status === 'done' ? 'bg-primary border-primary text-[#101d22]' : 'border-gray-300 dark:border-[#233f48] group-hover:border-primary/50'}
-                                     `}>
-                                        {task.status === 'done' && <span className="material-symbols-outlined text-[16px] font-bold">check</span>}
+                                    <div className="mt-0.5 shrink-0 flex items-center justify-center size-6 rounded-full border-2 border-gray-300 dark:border-[#233f48] group-hover:border-primary/50">
                                     </div>
 
                                     <div className="flex-1 flex flex-col gap-1">
-                                        <h4 className={`text-sm font-bold ${task.status === 'done' ? 'line-through text-slate-400 dark:text-[#92bbc9]' : 'text-slate-900 dark:text-white'}`}>
+                                        <h4 className="text-sm font-bold text-slate-900 dark:text-white">
                                             {task.title}
                                         </h4>
                                         <p className="text-xs text-slate-500 dark:text-[#92bbc9] line-clamp-1">{task.checklist?.name} • {task.checklist?.category}</p>

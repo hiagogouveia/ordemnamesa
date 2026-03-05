@@ -1,23 +1,50 @@
-"use client";
-
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useRestaurantStore } from '@/lib/store/restaurant-store';
+import { useDashboard } from '@/lib/hooks/use-dashboard';
 
 export default function DashboardPage() {
     const router = useRouter();
-    const userRole = useRestaurantStore((state) => state.userRole);
+    const { userRole, restaurantId } = useRestaurantStore();
+    const [isMounted, setIsMounted] = useState(false);
+
+    const { data: dashboardData, isLoading } = useDashboard(restaurantId);
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
 
     useEffect(() => {
         if (userRole === 'staff') {
             router.replace('/turno');
         }
     }, [userRole, router]);
+
+    // Previne SSR mismatch e Flash do dashboard na navegação de staff
+    if (!isMounted || !userRole || userRole === 'staff' || isLoading) {
+        return (
+            <div className="flex h-screen items-center justify-center bg-[#0a1215]">
+                <div className="animate-spin text-[#13b6ec]">
+                    <span className="material-symbols-outlined text-4xl">refresh</span>
+                </div>
+            </div>
+        );
+    }
+
+    const {
+        conclusao_diaria_percent = 0,
+        alertas_abertos = 0,
+        equipe_ativa = 0,
+        progresso_geral = 0,
+        total_tasks = 0,
+        done_tasks = 0
+    } = dashboardData || {};
+
     const metrics = [
-        { title: "Conclusão Diária", value: "85%", change: "+5% vs ontem", changeType: "positive", icon: "task_alt" },
-        { title: "Alertas Abertos", value: "3", change: "Ação necessária", changeType: "negative", icon: "warning" },
-        { title: "Equipe Ativa", value: "12/15", change: "Turno atual", changeType: "neutral", icon: "group" },
-        { title: "Tempo Médio", value: "12m", change: "-2m vs média", changeType: "positive", icon: "timer" },
+        { title: "Conclusão Diária", value: `${conclusao_diaria_percent}%`, change: `${done_tasks} de ${total_tasks} concluídas`, changeType: "neutral", icon: "task_alt" },
+        { title: "Alertas Abertos", value: alertas_abertos.toString(), change: alertas_abertos > 0 ? "Ação necessária" : "Tudo sob controle", changeType: alertas_abertos > 0 ? "negative" : "positive", icon: "warning" },
+        { title: "Equipe Ativa", value: equipe_ativa.toString(), change: "Turno atual (Staffs viculados)", changeType: "neutral", icon: "group" },
+        { title: "Progresso Geral", value: `${progresso_geral}%`, change: "Desempenho da unidade", changeType: progresso_geral > 80 ? "positive" : "neutral", icon: "timer" },
     ];
 
     return (

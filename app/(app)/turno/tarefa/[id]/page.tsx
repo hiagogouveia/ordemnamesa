@@ -23,6 +23,11 @@ export default function TarefaDetailsPage({ params }: { params: Promise<{ id: st
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // Report Issue states
+    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [reportNotes, setReportNotes] = useState('');
+    const [isReporting, setIsReporting] = useState(false);
+
     const taskData = useMemo(() => {
         if (!checklists || !id || !checklistId) return null;
         const cl = checklists.find(c => c.id === checklistId);
@@ -101,6 +106,35 @@ export default function TarefaDetailsPage({ params }: { params: Promise<{ id: st
             alert((e as Error).message || 'Houve um erro indesejado ao concluir. Tente novamente.');
         } finally {
             setIsUploading(false);
+        }
+    };
+
+    const handleReportIssue = async () => {
+        if (!reportNotes.trim()) {
+            alert('Por favor, descreva o problema.');
+            return;
+        }
+
+        setIsReporting(true);
+        try {
+            const res = await createExecution({
+                task_id: id,
+                checklist_id: checklistId!,
+                restaurant_id: restaurantId!,
+                status: 'flagged',
+                notes: reportNotes,
+                photo_url: ''
+            });
+
+            setIsReportModalOpen(false);
+            setReportNotes('');
+            alert('Problema reportado com sucesso!'); // Feedback visual provisório (toast fake)
+            router.push('/turno'); // Volta ao painel pós report
+        } catch (e: unknown) {
+            console.error('[Submit Report Erro]:', e);
+            alert((e as Error).message || 'Houve um erro ao enviar o relatório.');
+        } finally {
+            setIsReporting(false);
         }
     };
 
@@ -193,11 +227,53 @@ export default function TarefaDetailsPage({ params }: { params: Promise<{ id: st
                         </>
                     )}
                 </button>
-                <button className="w-full bg-transparent hover:bg-gray-50 dark:hover:bg-white/5 text-slate-500 dark:text-[#92bbc9] hover:text-slate-700 dark:hover:text-white text-base font-medium py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
+                <button
+                    onClick={() => setIsReportModalOpen(true)}
+                    className="w-full bg-transparent hover:bg-gray-50 dark:hover:bg-white/5 text-slate-500 dark:text-[#92bbc9] hover:text-slate-700 dark:hover:text-white text-base font-medium py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+                >
                     <span className="material-symbols-outlined text-[20px]">report</span>
                     Reportar Problema
                 </button>
             </div>
+
+            {/* Modal de Report */}
+            {isReportModalOpen && (
+                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+                    <div className="bg-[#16262c] border border-[#233f48] rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-fade-in flex flex-col gap-4">
+                        <div className="flex items-center gap-3 text-white">
+                            <span className="material-symbols-outlined text-amber-500">warning</span>
+                            <h3 className="text-xl font-bold tracking-tight">Reportar um problema</h3>
+                        </div>
+
+                        <textarea
+                            className="w-full bg-[#101d22] border border-[#233f48] rounded-xl p-4 text-white text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition-all placeholder:text-[#325a67] resize-none"
+                            rows={4}
+                            placeholder="Descreva o problema encontrado..."
+                            value={reportNotes}
+                            onChange={(e) => setReportNotes(e.target.value)}
+                        />
+
+                        <div className="flex gap-3 justify-end mt-2">
+                            <button
+                                onClick={() => setIsReportModalOpen(false)}
+                                disabled={isReporting}
+                                className="px-4 py-2 rounded-lg font-bold text-sm text-[#92bbc9] hover:bg-[#1a2c32] hover:text-white transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleReportIssue}
+                                disabled={isReporting || !reportNotes.trim()}
+                                className="px-4 py-2 rounded-lg font-bold text-sm bg-amber-500/10 text-amber-500 border border-amber-500/30 hover:bg-amber-500 hover:text-[#111e22] transition-colors disabled:opacity-50 flex items-center justify-center"
+                            >
+                                {isReporting ? (
+                                    <span className="material-symbols-outlined animate-spin text-[18px]">refresh</span>
+                                ) : "Enviar Relatório"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
