@@ -10,6 +10,7 @@ const managerNavigation = [
     { name: "Dashboard", href: "/dashboard", icon: "dashboard" },
     { name: "Checklists", href: "/checklists", icon: "checklist" },
     { name: "Equipe", href: "/equipe", icon: "group" },
+    { name: "Compras", href: "/compras", icon: "shopping_cart" },
     { name: "Relatórios", href: "/relatorios", icon: "bar_chart" },
     { name: "Configurações", href: "/configuracoes", icon: "settings" },
 ];

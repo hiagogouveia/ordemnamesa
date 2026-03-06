@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useRestaurantStore } from '@/lib/store/restaurant-store';
 import { useEquipe, useUpdateEquipeMember } from '@/lib/hooks/use-equipe';
+import { TeamDrawer } from './_components/team-drawer';
 
 export default function EquipePage() {
     const router = useRouter();
@@ -21,6 +22,9 @@ export default function EquipePage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editModeMember, setEditModeMember] = useState<{ id: string; name: string; role: string; email: string } | null>(null);
     const [loadingAction, setLoadingAction] = useState<string | null>(null);
+
+    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+    const [selectedMember, setSelectedMember] = useState<{ id: string; user_id: string; name: string; email: string; avatar?: string } | null>(null);
 
     const { data: equipeData, isLoading, error } = useEquipe(restaurantId);
     const updateMember = useUpdateEquipeMember(restaurantId);
@@ -219,7 +223,14 @@ export default function EquipePage() {
                                             <td colSpan={5} className="p-8 text-center text-[#92bbc9]">Nenhum colaborador encontrado com estes filtros.</td>
                                         </tr>
                                     ) : paginatedEquipe.map((member) => (
-                                        <tr key={member.id} className="group hover:bg-[#233f48]/50 transition-colors">
+                                        <tr
+                                            key={member.id}
+                                            className="group hover:bg-[#233f48]/50 cursor-pointer transition-colors"
+                                            onClick={() => {
+                                                setSelectedMember({ id: member.id, user_id: member.user_id, name: member.name, email: member.email, avatar: member.avatar ?? undefined });
+                                                setIsDrawerOpen(true);
+                                            }}
+                                        >
                                             <td className="p-4">
                                                 <div className="flex items-center gap-3">
                                                     {member.avatar ? (
@@ -284,14 +295,14 @@ export default function EquipePage() {
                                             </td>
                                             <td className="p-4 text-right">
                                                 <div className="flex items-center justify-end gap-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button onClick={() => router.push(`/historico?user_id=${member.user_id}`)} className="p-1.5 text-[#92bbc9] hover:text-white hover:bg-white/10 rounded-md transition-colors" title="Ver Histórico">
+                                                    <button onClick={(e) => { e.stopPropagation(); router.push(`/historico?user_id=${member.user_id}`); }} className="p-1.5 text-[#92bbc9] hover:text-white hover:bg-white/10 rounded-md transition-colors" title="Ver Histórico">
                                                         <span className="material-symbols-outlined text-[20px]">history</span>
                                                     </button>
-                                                    <button onClick={() => setEditModeMember({ id: member.id, name: member.name, role: member.role, email: member.email })} className="p-1.5 text-[#92bbc9] hover:text-primary hover:bg-primary/10 rounded-md transition-colors" title="Alterar Cargo">
+                                                    <button onClick={(e) => { e.stopPropagation(); setEditModeMember({ id: member.id, name: member.name, role: member.role, email: member.email }); }} className="p-1.5 text-[#92bbc9] hover:text-primary hover:bg-primary/10 rounded-md transition-colors" title="Alterar Cargo">
                                                         <span className="material-symbols-outlined text-[20px]">edit</span>
                                                     </button>
                                                     {member.active && (
-                                                        <button onClick={() => handleDeactivate(member.id, member.name)} disabled={loadingAction === member.id} className="p-1.5 text-[#92bbc9] hover:text-red-400 hover:bg-red-400/10 rounded-md transition-colors disabled:opacity-50" title="Desativar Acesso">
+                                                        <button onClick={(e) => { e.stopPropagation(); handleDeactivate(member.id, member.name); }} disabled={loadingAction === member.id} className="p-1.5 text-[#92bbc9] hover:text-red-400 hover:bg-red-400/10 rounded-md transition-colors disabled:opacity-50" title="Desativar Acesso">
                                                             <span className="material-symbols-outlined text-[20px]">{loadingAction === member.id ? 'hourglass_empty' : 'block'}</span>
                                                         </button>
                                                     )}
@@ -387,6 +398,8 @@ export default function EquipePage() {
                     </div>
                 </div>
             )}
+            {/* Drawer */}
+            <TeamDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} member={selectedMember} />
         </div>
     );
 }
