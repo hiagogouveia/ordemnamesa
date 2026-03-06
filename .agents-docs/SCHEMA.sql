@@ -108,15 +108,20 @@ create policy "checklists: owner/manager gerencia" on public.checklists for all
 
 -- ── CHECKLIST_TASKS ───────────────────────────────────────
 create table public.checklist_tasks (
-  id             uuid primary key default uuid_generate_v4(),
-  checklist_id   uuid not null references public.checklists(id) on delete cascade,
-  restaurant_id  uuid not null references public.restaurants(id),
-  title          text not null,
-  description    text,
-  requires_photo boolean default false,
-  is_critical    boolean default false,
-  "order"        integer default 0,
-  created_at     timestamptz default now()
+  id                   uuid primary key default uuid_generate_v4(),
+  checklist_id         uuid not null references public.checklists(id) on delete cascade,
+  restaurant_id        uuid not null references public.restaurants(id),
+  title                text not null,
+  description          text,
+  requires_photo       boolean default false,
+  is_critical          boolean default false,
+  "order"              integer default 0,
+  created_at           timestamptz default now(),
+  -- Sprint 6
+  assigned_to_user_id  uuid references public.users(id),
+  role_id              uuid references public.roles(id),
+  checklist_type       text default 'regular'
+    check (checklist_type in ('regular','opening','closing','receiving'))
 );
 
 alter table public.checklist_tasks enable row level security;
@@ -141,8 +146,10 @@ create table public.task_executions (
   user_id        uuid not null references public.users(id),
   executed_at    timestamptz default now(),
   photo_url      text,
-  status         text not null check (status in ('done', 'skipped', 'flagged')),
-  notes          text
+  status         text not null check (status in ('done', 'skipped', 'flagged', 'doing')),
+  notes          text,
+  -- Sprint 6
+  started_at     timestamptz
 );
 
 alter table public.task_executions enable row level security;
@@ -167,6 +174,151 @@ create policy "task_executions: membro insere" on public.task_executions for ins
       where ru.restaurant_id = restaurant_id and ru.user_id = auth.uid() and ru.active = true
     )
   );
+
+-- ── SHIFTS (Sprint 6) ─────────────────────────────────────
+create table public.shifts (
+  id             uuid primary key default gen_random_uuid(),
+  restaurant_id  uuid not null references public.restaurants(id),
+  name           text not null,
+  start_time     time not null,
+  end_time       time not null,
+  days_of_week   int[] not null default '{}',
+  active         boolean default true,
+  created_at     timestamptz default now()
+);
+
+alter table public.shifts enable row level security;
+create policy "shifts_select" on public.shifts for select
+  using (restaurant_id in (
+    select restaurant_id from public.restaurant_users
+    where user_id = auth.uid() and active = true
+  ));
+create policy "shifts_write" on public.shifts for all
+  using (restaurant_id in (
+    select restaurant_id from public.restaurant_users
+    where user_id = auth.uid() and active = true and role in ('owner','manager')
+  ));
+
+-- ── ROLES (Sprint 6) ──────────────────────────────────────
+create table public.roles (
+  id                   uuid primary key default gen_random_uuid(),
+  restaurant_id        uuid not null references public.restaurants(id),
+  name                 text not null,
+  color                text not null default '#13b6ec',
+  max_concurrent_tasks integer not null default 1,
+  can_launch_purchases boolean default false,
+  created_at           timestamptz default now()
+);
+
+alter table public.roles enable row level security;
+create policy "roles_select" on public.roles for select
+  using (restaurant_id in (
+    select restaurant_id from public.restaurant_users
+    where user_id = auth.uid() and active = true
+  ));
+create policy "roles_write" on public.roles for all
+  using (restaurant_id in (
+    select restaurant_id from public.restaurant_users
+    where user_id = auth.uid() and active = true and role in ('owner','manager')
+  ));
+
+-- ── USER_ROLES (Sprint 6) ─────────────────────────────────
+create table public.user_roles (
+  id             uuid primary key default gen_random_uuid(),
+  restaurant_id  uuid not null references public.restaurants(id),
+  user_id        uuid not null references public.users(id),
+  role_id        uuid not null references public.roles(id),
+  created_at     timestamptz default now(),
+  unique(restaurant_id, user_id, role_id)
+);
+
+alter table public.user_roles enable row level security;
+create policy "user_roles_select" on public.user_roles for select
+  using (restaurant_id in (
+    select restaurant_id from public.restaurant_users
+    where user_id = auth.uid() and active = true
+  ));
+create policy "user_roles_write" on public.user_roles for all
+  using (restaurant_id in (
+    select restaurant_id from public.restaurant_users
+    where user_id = auth.uid() and active = true and role in ('owner','manager')
+  ));
+
+-- ── USER_SHIFTS (Sprint 6) ────────────────────────────────
+create table public.user_shifts (
+  id             uuid primary key default gen_random_uuid(),
+  restaurant_id  uuid not null references public.restaurants(id),
+  user_id        uuid not null references public.users(id),
+  shift_id       uuid not null references public.shifts(id),
+  created_at     timestamptz default now()
+);
+
+alter table public.user_shifts enable row level security;
+create policy "user_shifts_select" on public.user_shifts for select
+  using (restaurant_id in (
+    select restaurant_id from public.restaurant_users
+    where user_id = auth.uid() and active = true
+  ));
+create policy "user_shifts_write" on public.user_shifts for all
+  using (restaurant_id in (
+    select restaurant_id from public.restaurant_users
+    where user_id = auth.uid() and active = true and role in ('owner','manager')
+  ));
+
+-- ── PURCHASE_LISTS (Sprint 6) ─────────────────────────────
+create table public.purchase_lists (
+  id               uuid primary key default gen_random_uuid(),
+  restaurant_id    uuid not null references public.restaurants(id),
+  created_by       uuid not null references public.users(id),
+  title            text not null,
+  status           text not null default 'open'
+    check (status in ('open','closed')),
+  target_role_ids  uuid[] not null default '{}',
+  notes            text,
+  created_at       timestamptz default now(),
+  closed_at        timestamptz
+);
+
+alter table public.purchase_lists enable row level security;
+create policy "purchase_lists_select" on public.purchase_lists for select
+  using (restaurant_id in (
+    select restaurant_id from public.restaurant_users
+    where user_id = auth.uid() and active = true
+  ));
+create policy "purchase_lists_write" on public.purchase_lists for all
+  using (restaurant_id in (
+    select restaurant_id from public.restaurant_users
+    where user_id = auth.uid() and active = true and role in ('owner','manager')
+  ));
+
+-- ── PURCHASE_ITEMS (Sprint 6) ─────────────────────────────
+create table public.purchase_items (
+  id                uuid primary key default gen_random_uuid(),
+  purchase_list_id  uuid not null references public.purchase_lists(id),
+  restaurant_id     uuid not null,
+  name              text not null,
+  quantity          numeric,
+  unit              text check (unit in ('kg','g','L','ml','un','cx')),
+  brand             text,
+  notes             text,
+  checked           boolean default false,
+  checked_by        uuid references public.users(id),
+  checked_at        timestamptz,
+  has_problem       boolean default false,
+  problem_notes     text
+);
+
+alter table public.purchase_items enable row level security;
+create policy "purchase_items_select" on public.purchase_items for select
+  using (restaurant_id in (
+    select restaurant_id from public.restaurant_users
+    where user_id = auth.uid() and active = true
+  ));
+create policy "purchase_items_write" on public.purchase_items for all
+  using (restaurant_id in (
+    select restaurant_id from public.restaurant_users
+    where user_id = auth.uid() and active = true
+  ));
 
 -- ── ÍNDICES ───────────────────────────────────────────────
 create index idx_ru_user       on public.restaurant_users(user_id);
