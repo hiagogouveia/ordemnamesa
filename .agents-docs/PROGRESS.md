@@ -24,7 +24,8 @@ app/api/user-roles/[id]/           → DELETE ✅ (S6)
 app/api/user-shifts/               → GET (?user_id), POST ✅ (S6)
 app/api/user-shifts/[id]/          → DELETE ✅ (S6)
 app/api/purchase-lists/            → GET (?status), POST (verifica can_launch_purchases) ✅ (S6)
-app/api/purchase-lists/[id]/       → PUT (fecha com closed_at) ✅ (S6)
+app/api/purchase-lists/[id]/       → GET (detalhes + items) ✅ (S7), PUT (fecha com closed_at) ✅ (S6)
+app/api/equipe/[id]/               → PUT (atualiza users.name) ✅ (S7)
 app/api/purchase-items/            → POST ✅ (S6)
 app/api/purchase-items/[id]/       → PUT (checked_by/checked_at automático) ✅ (S6)
 app/api/task-executions/[id]/assume/ → POST (limite max_concurrent_tasks, 409) ✅ (S6)
@@ -60,6 +61,109 @@ S5 ✅ Dashboard Manager com dados reais + Fixes críticos
    - Botão "Nova Lista" visível no mobile
 S6 — Parte 1 ✅ Migration SQL (shifts, roles, user_roles, user_shifts, purchase_lists, purchase_items)
 S6 — Parte 2 ✅ APIs (13 route handlers, tsc limpo, commit 42683ab)
+
+## S7 — Bugs e Melhorias ✅ (em andamento)
+
+### Migration aplicada (NONPROD)
+supabase/migrations/20260307_s7_bugs_improvements.sql
+- roles: ADD COLUMN active boolean NOT NULL DEFAULT true
+- checklists: ADD COLUMN recurrence text, ADD COLUMN last_reset_at
+
+### BUG 1 ✅ — Funções/Áreas não apareciam após salvar
+Causa: tabela `roles` não tinha coluna `active`. `roles.filter(r => r.active)` retornava vazio.
+Fix: migration adicionou coluna com DEFAULT true.
+
+### BUG 2 ✅ — Compras: "Lista não encontrada" ao clicar
+Causa: GET `/api/purchase-lists/[id]` não existia, só PUT.
+Fix: adicionado GET handler em `app/api/purchase-lists/[id]/route.ts`.
+
+### BUG 3 ✅ — Filtro de áreas no checklist não funcionava
+Causa: filtros hardcoded por `c.category`, ignorando `role_id`.
+Fix: `checklist-list.tsx` usa `useRoles` para chips dinâmicos, filtra por `c.role_id`.
+
+### BUG 4 ✅ — Campo "Categoria Antiga" removido do checklist
+Substituído pelo campo "Repetição" (recorrência) no mesmo grid.
+Per-task assignment já existia em `task-item.tsx`.
+
+### MELHORIA 1 ✅ — Campo nome na tela de Equipe
+- `app/api/equipe/[id]/route.ts`: PUT → UPDATE users SET name
+- `lib/hooks/use-equipe.ts`: adicionado `useUpdateEquipeName`
+- `team-drawer.tsx`: nome editável inline com hover reveal
+- `equipe/page.tsx`: modal "Novo Colaborador" com campos name + email + cargo
+
+### MELHORIA 2 ✅ — Áreas e Turnos no drawer (já estava implementado)
+
+### MELHORIA 3 ✅ — Recorrência no checklist
+- Migration: recurrence + last_reset_at
+- `lib/types/index.ts`: Checklist type atualizado
+- `checklist-form.tsx`: select "Repetição" (none/daily/weekdays/weekly/monthly/yearly)
+- `app/api/tasks/kanban/route.ts`: reset automático por ciclo + enriquece tasks com is_required
+
+### MELHORIA 4 ✅ — Obrigatório no kanban
+- Kanban API retorna is_required por task (join com checklist)
+- Tasks obrigatórias ordenadas primeiro
+- Badge "⚡ Obrigatório" com borda primary
+- Banner verde "Todas as tarefas obrigatórias concluídas!" quando todas done
+
+### MELHORIA 5 ✅ — Banner sem área no staff
+- Banner amarelo "Você não tem área atribuída" quando userRoles.length === 0
+- Tarefas sem role_id (genéricas) ainda são exibidas
+
+### Build
+tsc --noEmit: ✅ sem erros
+
+---
+
+## S7 — Rodada 2 ✅ (commit 4415ed0)
+
+### BUG 1 ✅ — Cadastro de colaborador funcional
+- `POST /api/equipe`: usa `supabaseAdmin.auth.admin.createUser({ email_confirm: true, password })`
+- Cria usuário no Auth sem confirmação de e-mail, com senha definida pelo admin
+- Insere em `restaurant_users` com role selecionado
+- Modal "Novo Colaborador": nome, e-mail, senha (show/hide), cargo, áreas (chips), turno (select)
+- Após criar: atribui áreas via `/api/user-roles` e turno via `/api/user-shifts`
+
+### BUG 2 ✅ — Modal único de edição
+- `team-drawer.tsx` convertido de drawer lateral para modal centralizado (max-w-lg, scroll)
+- Tanto o lápis quanto o click na linha abrem o mesmo modal
+- Modal com: nome, cargo, status toggle, áreas (chips inline), turnos (chips inline)
+- Removido modal separado de "Alterar Cargo"
+
+### BUG 3 ✅ — Nome atualiza sem fechar e reabrir
+- `PUT /api/equipe/[id]` agora aceita `{ name, role, active, restaurant_id }` — atualiza tudo junto
+- Após salvar: `queryClient.setQueryData` atualiza cache local + `setSelectedMember` reflete no modal
+- Sem `router.refresh()` nem fechar/reabrir
+
+### BUG 4 ✅ — Staff vê tarefas (raiz era BUG 1)
+- Com BUG 1 corrigido, staff é criado corretamente no Auth e public.users
+- Kanban já exibia tarefas genéricas (role_id IS NULL) para todos
+- Banner "Você não tem área atribuída" já implementado (S7 anterior)
+
+### MELHORIA 1 ✅ — Enter para adicionar próxima tarefa
+- `task-item.tsx`: input de título com `onKeyDown Enter → onEnter?.()`
+- `checklist-form.tsx`: `useRef` de inputs, `addTask(afterTempId)` insere após o índice e foca
+
+### MELHORIA 2 ✅ — Atribuir rotina inteira a colaborador
+- Migration: `checklists.assigned_to_user_id uuid REFERENCES users(id)` (NONPROD aplicado)
+- `lib/types/index.ts`: campo adicionado ao tipo `Checklist`
+- `checklist-form.tsx`: select "Atribuir a colaborador específico" após Área
+- `kanban/route.ts`: checklists filtrados por `.or('assigned_to_user_id.is.null,assigned_to_user_id.eq.${user.id}')`
+
+### Arquivos modificados
+app/api/equipe/route.ts          → POST handler completo
+app/api/equipe/[id]/route.ts     → PUT estendido (name + role + active)
+app/(app)/equipe/_components/team-drawer.tsx → modal centralizado
+app/(app)/equipe/page.tsx        → modais unificados, novo colaborador
+components/checklists/task-item.tsx  → props onEnter + setInputRef
+components/checklists/checklist-form.tsx → refs, addTask(after), assigned_to_user_id
+app/api/tasks/kanban/route.ts    → filtro assigned_to_user_id
+lib/types/index.ts               → assigned_to_user_id em Checklist
+supabase/migrations/20260307_s7_bugs_improvements.sql → coluna adicionada
+
+### Build
+tsc --noEmit: ✅ sem erros
+
+---
 
 ## S6 — CONCLUÍDA ✅ (commit 963ad0a)
 
