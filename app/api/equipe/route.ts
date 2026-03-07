@@ -146,6 +146,82 @@ export async function GET(request: Request) {
     }
 }
 
+export async function POST(request: Request) {
+    try {
+        const authHeader = request.headers.get('Authorization');
+        if (!authHeader) {
+            return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
+        }
+
+        const token = authHeader.replace('Bearer ', '');
+        const adminSupabase = getAdminSupabase();
+
+        const { data: { user: caller }, error: callerError } = await adminSupabase.auth.getUser(token);
+        if (callerError || !caller) {
+            return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
+        }
+
+        const body = await request.json();
+        const { name, email, password, role, restaurant_id } = body;
+
+        if (!name || !email || !password || !role || !restaurant_id) {
+            return NextResponse.json({ error: 'Campos obrigatórios faltando' }, { status: 400 });
+        }
+
+        if (password.length < 6) {
+            return NextResponse.json({ error: 'Senha deve ter no mínimo 6 caracteres' }, { status: 400 });
+        }
+
+        // Verificar que o chamador é owner ou manager
+        const { data: membership } = await adminSupabase
+            .from('restaurant_users')
+            .select('role')
+            .eq('restaurant_id', restaurant_id)
+            .eq('user_id', caller.id)
+            .eq('active', true)
+            .single();
+
+        if (!membership || !['owner', 'manager'].includes(membership.role)) {
+            return NextResponse.json({ error: 'Permissão negada.' }, { status: 403 });
+        }
+
+        // 1. Criar usuário no Auth sem confirmação de e-mail
+        const { data: authUser, error: authError } = await adminSupabase.auth.admin.createUser({
+            email,
+            password,
+            email_confirm: true,
+            user_metadata: { name },
+        });
+
+        if (authError) {
+            if (authError.message.toLowerCase().includes('already')) {
+                return NextResponse.json({ error: 'E-mail já cadastrado' }, { status: 409 });
+            }
+            throw authError;
+        }
+
+        const newUserId = authUser.user.id;
+
+        // 2. Garantir entrada em public.users (trigger já faz isso, mas upsert por segurança)
+        await adminSupabase
+            .from('users')
+            .upsert({ id: newUserId, email, name }, { onConflict: 'id' });
+
+        // 3. Inserir em restaurant_users
+        const { error: ruError } = await adminSupabase
+            .from('restaurant_users')
+            .insert({ restaurant_id, user_id: newUserId, role, active: true });
+
+        if (ruError) throw ruError;
+
+        return NextResponse.json({ success: true, user_id: newUserId });
+
+    } catch (err: unknown) {
+        console.error('[POST /api/equipe]', err);
+        return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+    }
+}
+
 export async function PUT(request: Request) {
     try {
         const { searchParams } = new URL(request.url);

@@ -10,9 +10,11 @@ interface TaskItemProps {
     equipe: EquipeMember[];
     onUpdate: (id: string, updates: Partial<ChecklistTask>) => void;
     onRemove: (id: string) => void;
+    onEnter?: () => void;
+    setInputRef?: (el: HTMLInputElement | null) => void;
 }
 
-export function TaskItem({ task, equipe, onUpdate, onRemove }: TaskItemProps) {
+export function TaskItem({ task, equipe, onUpdate, onRemove, onEnter, setInputRef }: TaskItemProps) {
     const {
         attributes,
         listeners,
@@ -46,9 +48,11 @@ export function TaskItem({ task, equipe, onUpdate, onRemove }: TaskItemProps) {
             <div className="flex-1 space-y-3">
                 <div>
                     <input
+                        ref={setInputRef}
                         type="text"
                         value={task.title || ""}
                         onChange={(e) => onUpdate(task.tempId, { title: e.target.value })}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onEnter?.(); } }}
                         placeholder="Título da tarefa..."
                         className="w-full bg-transparent border-none outline-none text-white font-bold placeholder:text-[#325a67] placeholder:font-normal focus:ring-0"
                     />

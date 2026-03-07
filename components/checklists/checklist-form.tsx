@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { TaskItem } from "./task-item";
@@ -17,12 +17,19 @@ interface ChecklistFormProps {
     onCancel: () => void;
 }
 
-const CATEGORIES = ["Bartender", "Garçom", "Cozinheiro", "Gerente", "Equipe Limpeza", "Supervisor"];
 const SHIFTS = [
     { value: 'morning', label: 'Manhã' },
     { value: 'afternoon', label: 'Tarde' },
     { value: 'evening', label: 'Noite' },
     { value: 'any', label: 'Qualquer turno' }
+];
+const RECURRENCE_OPTIONS = [
+    { value: 'none', label: 'Não se repete' },
+    { value: 'daily', label: 'Todos os dias' },
+    { value: 'weekdays', label: 'Dias úteis (seg-sex)' },
+    { value: 'weekly', label: 'Semanal' },
+    { value: 'monthly', label: 'Mensal' },
+    { value: 'yearly', label: 'Anual' },
 ];
 const CHECKLIST_TYPES = [
     { value: 'regular', label: 'Regular' },
@@ -37,10 +44,12 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
     const [shift, setShift] = useState("any");
-    const [category, setCategory] = useState("");
     const [checklistType, setChecklistType] = useState("regular");
     const [roleId, setRoleId] = useState("");
+    const [assignedToUserId, setAssignedToUserId] = useState("");
     const [isRequired, setIsRequired] = useState(true);
+    const [recurrence, setRecurrence] = useState("none");
+    const taskInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
     const [tasks, setTasks] = useState<(Partial<ChecklistTask> & { tempId: string })[]>([]);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -58,10 +67,11 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
             setName(checklist.name);
             setDescription(checklist.description || "");
             setShift(checklist.shift);
-            setCategory(checklist.category || "");
             setChecklistType(checklist.checklist_type || "regular");
             setRoleId(checklist.role_id || "");
+            setAssignedToUserId(checklist.assigned_to_user_id || "");
             setIsRequired(checklist.is_required ?? true);
+            setRecurrence(checklist.recurrence || "none");
             setTasks(
                 (checklist.tasks || []).map((t) => ({ ...t, tempId: t.id }))
             );
@@ -69,10 +79,11 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
             setName("");
             setDescription("");
             setShift("any");
-            setCategory("");
             setChecklistType("regular");
             setRoleId("");
+            setAssignedToUserId("");
             setIsRequired(true);
+            setRecurrence("none");
             setTasks([]);
             setErrorMsg(null);
             setShowDeleteModal(false);
@@ -95,8 +106,20 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
         }
     };
 
-    const addTask = () => {
-        setTasks([...tasks, { tempId: Math.random().toString(), title: "", is_critical: false, requires_photo: false }]);
+    const addTask = (afterTempId?: string) => {
+        const newTempId = Math.random().toString();
+        const newTask = { tempId: newTempId, title: "", is_critical: false, requires_photo: false };
+        if (afterTempId) {
+            setTasks(prev => {
+                const idx = prev.findIndex(t => t.tempId === afterTempId);
+                const next = [...prev];
+                next.splice(idx + 1, 0, newTask);
+                return next;
+            });
+        } else {
+            setTasks(prev => [...prev, newTask]);
+        }
+        setTimeout(() => { taskInputRefs.current[newTempId]?.focus(); }, 50);
     };
 
     const updateTask = (id: string, updates: Partial<ChecklistTask>) => {
@@ -115,10 +138,11 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
             name,
             description,
             shift: shift as "morning" | "afternoon" | "evening" | "any",
-            category,
             checklist_type: checklistType as "regular" | "opening" | "closing" | "receiving",
             role_id: roleId || undefined,
+            assigned_to_user_id: assignedToUserId || undefined,
             is_required: isRequired,
+            recurrence,
             status: (isPublishing ? 'active' : 'draft') as "active" | "draft" | "archived",
             tasks: tasks.map(t => ({
                 title: t.title,
@@ -259,14 +283,13 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Categoria Antiga (Opcional)</label>
+                                <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Repetição</label>
                                 <select
-                                    value={category}
-                                    onChange={(e) => setCategory(e.target.value)}
+                                    value={recurrence}
+                                    onChange={(e) => setRecurrence(e.target.value)}
                                     className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
                                 >
-                                    <option value="">Selecione...</option>
-                                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                    {RECURRENCE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                                 </select>
                             </div>
                         </div>
@@ -283,7 +306,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Área (Função) *</label>
+                                <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Área (Função)</label>
                                 <select
                                     value={roleId}
                                     onChange={(e) => setRoleId(e.target.value)}
@@ -293,6 +316,23 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
                                     {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                                 </select>
                             </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Atribuir a colaborador específico (opcional)</label>
+                            <select
+                                value={assignedToUserId}
+                                onChange={(e) => setAssignedToUserId(e.target.value)}
+                                className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
+                            >
+                                <option value="">Disponível para toda a área</option>
+                                {equipe.filter(m => m.active).map(m => (
+                                    <option key={m.user_id} value={m.user_id}>{m.name}</option>
+                                ))}
+                            </select>
+                            {assignedToUserId && (
+                                <p className="text-xs text-[#92bbc9] mt-1.5">Apenas este colaborador verá esta rotina no turno.</p>
+                            )}
                         </div>
 
                         <div className="flex items-center gap-3 p-3 bg-[#16262c] border border-[#233f48] rounded-xl">
@@ -317,7 +357,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-lg font-bold text-white">Tarefas da Rotina</h3>
                             <button
-                                onClick={addTask}
+                                onClick={() => addTask()}
                                 className="flex items-center gap-1.5 text-sm font-bold text-[#13b6ec] hover:text-[#10a0d0] px-3 py-1.5 rounded-lg hover:bg-[#13b6ec]/10 transition-colors"
                             >
                                 <span className="material-symbols-outlined text-[18px]">add</span>
@@ -335,6 +375,8 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
                                             equipe={equipe}
                                             onUpdate={updateTask}
                                             onRemove={removeTask}
+                                            onEnter={() => addTask(task.tempId)}
+                                            setInputRef={(el) => { taskInputRefs.current[task.tempId] = el; }}
                                         />
                                     ))}
                                 </SortableContext>

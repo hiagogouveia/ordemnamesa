@@ -14,8 +14,11 @@ export interface Checklist {
     created_at: string
     category?: string
     role_id?: string
+    assigned_to_user_id?: string
     is_required?: boolean
     checklist_type?: 'regular' | 'opening' | 'closing' | 'receiving'
+    recurrence?: 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekdays'
+    last_reset_at?: string
     tasks?: ChecklistTask[]
     roles?: Role
 }
