@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChecklistCard, ExtendedChecklist } from "./checklist-card";
 import { useChecklists } from "@/lib/hooks/use-checklists";
+import { useRoles } from "@/lib/hooks/use-roles";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 
 interface ChecklistListProps {
@@ -13,14 +14,15 @@ interface ChecklistListProps {
 export function ChecklistList({ onSelect, selectedId }: ChecklistListProps) {
     const restaurantId = useRestaurantStore((state) => state.restaurantId);
     const { data: checklists, isLoading, error } = useChecklists(restaurantId || undefined);
+    const { data: roles = [] } = useRoles(restaurantId || undefined);
     const [searchTerm, setSearchTerm] = useState("");
-    const [activeFilter, setActiveFilter] = useState("Todos");
+    const [activeRoleId, setActiveRoleId] = useState<string | null>(null);
 
-    const filters = ['Todos', 'Cozinha', 'Salão', 'Bar', 'Gerência', 'Equipe Limpeza'];
+    const activeRoles = roles.filter(r => r.active);
 
     const filteredChecklists = checklists?.filter((c: ExtendedChecklist) => {
         const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesFilter = activeFilter === "Todos" || c.category === activeFilter;
+        const matchesFilter = activeRoleId === null || c.role_id === activeRoleId;
         return matchesSearch && matchesFilter;
     });
 
@@ -46,20 +48,31 @@ export function ChecklistList({ onSelect, selectedId }: ChecklistListProps) {
                     />
                 </div>
 
-                {/* Filtros */}
+                {/* Filtros por Área */}
                 <div className="flex gap-2 overflow-x-auto mt-4 pb-2 no-scrollbar-custom">
-                    {filters.map((filter) => {
-                        const isActive = activeFilter === filter;
+                    <button
+                        onClick={() => setActiveRoleId(null)}
+                        className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${activeRoleId === null
+                            ? "bg-[#13b6ec]/20 text-[#13b6ec] border border-[#13b6ec]/30"
+                            : "bg-[#16262c] text-[#92bbc9] border border-[#233f48] hover:bg-[#1a2c32] hover:text-white"
+                            }`}
+                    >
+                        Todos
+                    </button>
+                    {activeRoles.map((role) => {
+                        const isActive = activeRoleId === role.id;
                         return (
                             <button
-                                key={filter}
-                                onClick={() => setActiveFilter(filter)}
-                                className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${isActive
-                                    ? "bg-[#13b6ec]/20 text-[#13b6ec] border border-[#13b6ec]/30"
+                                key={role.id}
+                                onClick={() => setActiveRoleId(role.id)}
+                                className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors flex items-center gap-1.5 ${isActive
+                                    ? "border"
                                     : "bg-[#16262c] text-[#92bbc9] border border-[#233f48] hover:bg-[#1a2c32] hover:text-white"
                                     }`}
+                                style={isActive ? { borderColor: role.color, color: role.color, backgroundColor: `${role.color}20` } : {}}
                             >
-                                {filter}
+                                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: isActive ? role.color : '#92bbc9' }} />
+                                {role.name}
                             </button>
                         );
                     })}

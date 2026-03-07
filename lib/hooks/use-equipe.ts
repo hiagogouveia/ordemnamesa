@@ -55,6 +55,32 @@ export const useEquipe = (restaurantId: string | null) => {
     });
 };
 
+export const useUpdateEquipeName = (restaurantId: string | null) => {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async ({ userId, name }: { userId: string; name: string }) => {
+            const token = await getAuthToken();
+            const response = await fetch(`/api/equipe/${userId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ name, restaurant_id: restaurantId })
+            });
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Erro ao atualizar nome');
+            }
+            return response.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['equipe', restaurantId] });
+        }
+    });
+};
+
 export const useUpdateEquipeMember = (restaurantId: string | null) => {
     const queryClient = useQueryClient();
 

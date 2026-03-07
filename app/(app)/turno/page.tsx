@@ -44,6 +44,7 @@ export default function KanbanPage() {
     const currentShift = useMemo(() => getCurrentShift(shifts, timeNow), [shifts, timeNow]);
 
     const userRoleIds = useMemo(() => userRolesData.map(ur => ur.role_id), [userRolesData]);
+    const hasNoRoles = user !== null && userRolesData.length === 0;
 
     const activePurchaseList = useMemo(() => {
         if (!userRoleIds.length) return null;
@@ -62,6 +63,13 @@ export default function KanbanPage() {
             return !exec || exec.status === 'skipped';
         });
 
+        // Ordenar: is_required=true primeiro
+        todo.sort((a, b) => {
+            const aReq = (a as { is_required?: boolean }).is_required ? 1 : 0;
+            const bReq = (b as { is_required?: boolean }).is_required ? 1 : 0;
+            return bReq - aReq;
+        });
+
         const doing = executions.filter(e => e.status === 'doing');
         const done = executions.filter(e => e.status === 'done');
         const flagged = executions.filter(e => e.status === 'flagged');
@@ -76,6 +84,17 @@ export default function KanbanPage() {
             flaggedExecs: flagged.map(mapTask).filter(e => e.task),
         };
     }, [kanbanData, user]);
+
+    const allRequiredDone = useMemo(() => {
+        if (!kanbanData) return false;
+        const requiredTasks = kanbanData.tasks.filter(t => (t as { is_required?: boolean }).is_required);
+        if (requiredTasks.length === 0) return false;
+        const execMapByTaskId = new Map(kanbanData.executions.map(e => [e.task_id, e]));
+        return requiredTasks.every(t => {
+            const exec = execMapByTaskId.get(t.id);
+            return exec && exec.status === 'done';
+        });
+    }, [kanbanData]);
 
     // Modals
     const [assumeModal, setAssumeModal] = useState<KanbanTask | null>(null);
@@ -176,6 +195,25 @@ export default function KanbanPage() {
 
             <main className="max-w-[480px] mx-auto w-full p-4 flex flex-col gap-6">
 
+                {/* Banner todas obrigatórias concluídas */}
+                {allRequiredDone && (
+                    <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-center gap-3">
+                        <span className="material-symbols-outlined text-emerald-400 text-xl shrink-0">task_alt</span>
+                        <p className="text-emerald-300 font-bold text-sm">Todas as tarefas obrigatórias concluídas!</p>
+                    </div>
+                )}
+
+                {/* Banner sem área atribuída */}
+                {hasNoRoles && (
+                    <div className="bg-[#1a2c32] border border-amber-500/40 rounded-xl p-4 flex items-start gap-3">
+                        <span className="material-symbols-outlined text-amber-400 text-xl shrink-0 mt-0.5">warning</span>
+                        <div>
+                            <p className="text-amber-300 font-bold text-sm">Você não tem área atribuída</p>
+                            <p className="text-[#92bbc9] text-xs mt-0.5">Fale com seu gestor para ser adicionado a uma área. Enquanto isso, apenas tarefas gerais são exibidas.</p>
+                        </div>
+                    </div>
+                )}
+
                 {/* Banner de recebimento */}
                 {activePurchaseList && (
                     <div className="bg-[#1a2c32] border border-[#f59e0b] rounded-xl p-4 flex flex-col gap-3 animate-pulse shadow-[0_0_15px_rgba(245,158,11,0.15)]">
@@ -215,16 +253,24 @@ export default function KanbanPage() {
                                 <div className="flex flex-col gap-3">
                                     {todoTasks.map(task => {
                                         const isAssignedToOther = task.assigned_to_user_id && task.assigned_to_user_id !== user?.id;
+                                        const isRequired = (task as { is_required?: boolean }).is_required;
                                         return (
                                             <div key={task.id}
                                                 onClick={() => !isAssignedToOther && setAssumeModal(task)}
-                                                className={`bg-[#1a2c32] rounded-xl p-3 flex flex-col gap-2 border-l-4 border-[#233f48] shadow-sm transition-all ${!isAssignedToOther ? 'cursor-pointer hover:bg-[#1f363d]' : 'opacity-75'}`}>
+                                                className={`bg-[#1a2c32] rounded-xl p-3 flex flex-col gap-2 shadow-sm transition-all ${isRequired ? 'border-l-4 border-[#13b6ec] border border-[#13b6ec]/30' : 'border-l-4 border-[#233f48]'} ${!isAssignedToOther ? 'cursor-pointer hover:bg-[#1f363d]' : 'opacity-75'}`}>
 
                                                 <div className="flex justify-between items-start gap-3">
                                                     <span className="text-white text-sm font-medium leading-snug">{task.title}</span>
-                                                    {task.is_critical && (
-                                                        <span className="bg-red-500/10 text-red-400 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase shrink-0">Crítica</span>
-                                                    )}
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                        {isRequired && (
+                                                            <span className="bg-[#13b6ec]/10 text-[#13b6ec] text-[10px] font-bold px-1.5 py-0.5 rounded uppercase flex items-center gap-1">
+                                                                <span className="material-symbols-outlined text-[12px]">bolt</span> Obrigatório
+                                                            </span>
+                                                        )}
+                                                        {task.is_critical && (
+                                                            <span className="bg-red-500/10 text-red-400 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase">Crítica</span>
+                                                        )}
+                                                    </div>
                                                 </div>
 
                                                 <div className="flex items-center gap-3 mt-1 text-xs font-medium text-[#92bbc9]">
