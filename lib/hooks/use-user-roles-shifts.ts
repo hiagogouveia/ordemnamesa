@@ -52,7 +52,8 @@ export function useCreateUserRole() {
 export function useDeleteUserRole() {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: async ({ id, restaurant_id, user_id }: { id: string, restaurant_id: string, user_id: string }) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        mutationFn: async ({ id, restaurant_id: _r1, user_id: _u1 }: { id: string, restaurant_id: string, user_id: string }) => {
             const headers = await getAuthHeaders();
             const res = await fetch(`/api/user-roles/${id}`, {
                 method: "DELETE",
@@ -110,7 +111,8 @@ export function useCreateUserShift() {
 export function useDeleteUserShift() {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: async ({ id, restaurant_id, user_id }: { id: string, restaurant_id: string, user_id: string }) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        mutationFn: async ({ id, restaurant_id: _r2, user_id: _u2 }: { id: string, restaurant_id: string, user_id: string }) => {
             const headers = await getAuthHeaders();
             const res = await fetch(`/api/user-shifts/${id}`, {
                 method: "DELETE",

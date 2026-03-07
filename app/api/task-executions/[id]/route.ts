@@ -8,7 +8,7 @@ const getAdminSupabase = () => {
     );
 };
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
     try {
         const authHeader = request.headers.get('Authorization');
         if (!authHeader) return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
@@ -18,6 +18,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
         const { data: { user }, error: userError } = await adminSupabase.auth.getUser(token);
         if (userError || !user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
+        const { id } = await context.params;
         const body = await request.json();
         const { restaurant_id, status, notes, photo_url } = body;
 
@@ -25,15 +26,15 @@ export async function PUT(request: Request, { params }: { params: { id: string }
             return NextResponse.json({ error: 'Faltam campos obrigatórios' }, { status: 400 });
         }
 
-        const updateData: any = { status };
+        const updateData: Record<string, unknown> = { status };
         if (notes !== undefined) updateData.notes = notes;
         if (photo_url !== undefined) updateData.photo_url = photo_url;
-        if (status === 'done') updateData.executed_at = new Date().toISOString(); // update executed_at on finish
+        if (status === 'done') updateData.executed_at = new Date().toISOString();
 
         const { data: updated, error: execError } = await adminSupabase
             .from('task_executions')
             .update(updateData)
-            .eq('id', params.id)
+            .eq('id', id)
             .eq('restaurant_id', restaurant_id)
             .eq('user_id', user.id) // Only allow updating own executions
             .select()
@@ -45,7 +46,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
         }
 
         return NextResponse.json(updated);
-    } catch (err: any) {
-        return NextResponse.json({ error: err.message }, { status: 500 });
+    } catch (err: unknown) {
+        return NextResponse.json({ error: (err as Error).message }, { status: 500 });
     }
 }

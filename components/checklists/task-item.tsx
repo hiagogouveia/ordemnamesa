@@ -3,14 +3,16 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ChecklistTask } from "@/lib/types";
+import { EquipeMember } from "@/lib/hooks/use-equipe";
 
 interface TaskItemProps {
     task: Partial<ChecklistTask> & { tempId: string };
+    equipe: EquipeMember[];
     onUpdate: (id: string, updates: Partial<ChecklistTask>) => void;
     onRemove: (id: string) => void;
 }
 
-export function TaskItem({ task, onUpdate, onRemove }: TaskItemProps) {
+export function TaskItem({ task, equipe, onUpdate, onRemove }: TaskItemProps) {
     const {
         attributes,
         listeners,
@@ -55,8 +57,8 @@ export function TaskItem({ task, onUpdate, onRemove }: TaskItemProps) {
                 <div className="flex items-center gap-4">
                     <label className="flex items-center gap-2 cursor-pointer group/toggle">
                         <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${task.is_critical
-                                ? "bg-amber-500 border-amber-500 text-[#111e22]"
-                                : "bg-[#101d22] border-[#325a67] group-hover/toggle:border-amber-500/50"
+                            ? "bg-amber-500 border-amber-500 text-[#111e22]"
+                            : "bg-[#101d22] border-[#325a67] group-hover/toggle:border-amber-500/50"
                             }`}>
                             {task.is_critical && <span className="material-symbols-outlined text-[14px]">check</span>}
                         </div>
@@ -71,8 +73,8 @@ export function TaskItem({ task, onUpdate, onRemove }: TaskItemProps) {
 
                     <label className="flex items-center gap-2 cursor-pointer group/toggle">
                         <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${task.requires_photo
-                                ? "bg-[#13b6ec] border-[#13b6ec] text-[#111e22]"
-                                : "bg-[#101d22] border-[#325a67] group-hover/toggle:border-[#13b6ec]/50"
+                            ? "bg-[#13b6ec] border-[#13b6ec] text-[#111e22]"
+                            : "bg-[#101d22] border-[#325a67] group-hover/toggle:border-[#13b6ec]/50"
                             }`}>
                             {task.requires_photo && <span className="material-symbols-outlined text-[14px]">check</span>}
                         </div>
@@ -84,6 +86,19 @@ export function TaskItem({ task, onUpdate, onRemove }: TaskItemProps) {
                             className="hidden"
                         />
                     </label>
+
+                    <div className="ml-auto w-36">
+                        <select
+                            value={task.assigned_to_user_id || ""}
+                            onChange={(e) => onUpdate(task.tempId, { assigned_to_user_id: e.target.value || undefined })}
+                            className="w-full bg-[#101d22] border border-[#325a67] text-[#92bbc9] text-xs rounded px-2 py-1 outline-none focus:border-[#13b6ec]"
+                        >
+                            <option value="">Qualquer pessoa</option>
+                            {equipe.map(member => (
+                                <option key={member.id} value={member.user_id}>{member.name}</option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
             </div>
 

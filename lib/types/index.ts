@@ -13,7 +13,11 @@ export interface Checklist {
     created_by: string
     created_at: string
     category?: string
+    role_id?: string
+    is_required?: boolean
+    checklist_type?: 'regular' | 'opening' | 'closing' | 'receiving'
     tasks?: ChecklistTask[]
+    roles?: Role
 }
 
 export interface ChecklistTask {
@@ -27,7 +31,6 @@ export interface ChecklistTask {
     order: number
     assigned_to_user_id?: string
     role_id?: string
-    checklist_type?: 'regular' | 'opening' | 'closing' | 'receiving'
 }
 
 // Sprint 6

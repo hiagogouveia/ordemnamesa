@@ -27,7 +27,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         }
 
         const body = await request.json();
-        const { restaurant_id, name, description, shift, status, tasks, category } = body;
+        const { restaurant_id, name, description, shift, status, tasks, category, role_id, is_required, checklist_type } = body;
 
         if (!restaurant_id || !name) {
             return NextResponse.json({ error: 'restaurant_id e name são obrigatórios.' }, { status: 400 });
@@ -49,7 +49,10 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         // 1. Atualizar Checklist
         const { error: updateError } = await adminSupabase
             .from('checklists')
-            .update({ name, description, shift, status, category })
+            .update({
+                name, description, shift, status, category,
+                role_id, is_required: is_required !== undefined ? is_required : true, checklist_type: checklist_type || 'regular'
+            })
             .eq('id', id)
             .eq('restaurant_id', restaurant_id);
 
@@ -79,7 +82,8 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
                 description: task.description,
                 requires_photo: task.requires_photo || false,
                 is_critical: task.is_critical || false,
-                order: index
+                order: index,
+                assigned_to_user_id: task.assigned_to_user_id || null
             }));
 
             const { data: newTasks, error: tasksError } = await adminSupabase

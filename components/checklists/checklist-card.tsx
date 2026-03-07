@@ -31,12 +31,21 @@ export function ChecklistCard({ checklist, isSelected, onClick }: ChecklistCardP
         }
     };
 
+    const getTypeBadge = (type?: string) => {
+        switch (type) {
+            case 'opening': return <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1"><span className="text-[12px]">🌅</span> Abertura</span>;
+            case 'closing': return <span className="bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1"><span className="text-[12px]">🌙</span> Fechamento</span>;
+            case 'receiving': return <span className="bg-amber-500/20 text-amber-500 border border-amber-500/30 px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1"><span className="text-[12px]">📦</span> Recebimento</span>;
+            default: return null;
+        }
+    };
+
     return (
         <button
             onClick={onClick}
             className={`w-full text-left p-4 rounded-xl border transition-all duration-200 ${isSelected
-                    ? "bg-[#13b6ec]/10 border-[#13b6ec]/40 shadow-[0_4px_20px_0_rgba(19,182,236,0.1)]"
-                    : "bg-[#16262c] border-[#233f48] hover:border-[#325a67] hover:bg-[#1a2c32]"
+                ? "bg-[#13b6ec]/10 border-[#13b6ec]/40 shadow-[0_4px_20px_0_rgba(19,182,236,0.1)]"
+                : "bg-[#16262c] border-[#233f48] hover:border-[#325a67] hover:bg-[#1a2c32]"
                 }`}
         >
             <div className="flex justify-between items-start mb-2">
@@ -58,12 +67,19 @@ export function ChecklistCard({ checklist, isSelected, onClick }: ChecklistCardP
                     <span className="text-xs font-medium text-[#92bbc9]">{getShiftLabel(checklist.shift)}</span>
                 </div>
 
-                {checklist.category && (
+                {checklist.category ? (
                     <div className="flex items-center gap-1.5 text-[#325a67]">
                         <span className="material-symbols-outlined text-[16px]">person</span>
                         <span className="text-xs font-medium text-[#92bbc9] truncate">{checklist.category}</span>
                     </div>
-                )}
+                ) : checklist.roles ? (
+                    <div className="flex items-center gap-1.5 bg-[#1a2c32] px-2 py-0.5 rounded-md border border-[#233f48]">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: checklist.roles.color || '#92bbc9' }} />
+                        <span className="text-xs font-bold text-white truncate max-w-[100px]">{checklist.roles.name}</span>
+                    </div>
+                ) : null}
+
+                {getTypeBadge(checklist.checklist_type)}
 
                 <div className="flex items-center gap-1.5 text-[#325a67] ml-auto">
                     <span className="material-symbols-outlined text-[16px]">task_alt</span>

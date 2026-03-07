@@ -24,10 +24,12 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
     const pathname = usePathname();
     const router = useRouter();
     const restaurantName = useRestaurantStore((state) => state.restaurantName);
+    const restaurantId = useRestaurantStore((state) => state.restaurantId);
     const userRole = useRestaurantStore((state) => state.userRole);
     const clearRestaurant = useRestaurantStore((state) => state.clearRestaurant);
     const [userEmail, setUserEmail] = useState("");
     const [isLoggingOut, setIsLoggingOut] = useState(false);
+    const [canLaunchPurchases, setCanLaunchPurchases] = useState(false);
 
     const handleSignOut = async () => {
         setIsLoggingOut(true);
@@ -49,10 +51,21 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
             const { data } = await supabase.auth.getUser();
             if (data?.user) {
                 setUserEmail(data.user.email || "");
+
+                if (userRole === 'staff' && restaurantId) {
+                    const { data: userRoles } = await supabase
+                        .from('user_roles')
+                        .select('role:roles(can_launch_purchases)')
+                        .eq('restaurant_id', restaurantId)
+                        .eq('user_id', data.user.id);
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const can = userRoles?.some((ur: any) => ur.role?.can_launch_purchases);
+                    setCanLaunchPurchases(!!can);
+                }
             }
         }
         getUser();
-    }, []);
+    }, [userRole, restaurantId]);
 
     return (
         <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#111e22] border-r border-[#233f48] flex flex-col h-full shrink-0 transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
@@ -95,7 +108,12 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
             {/* Navegação */}
             <nav className="flex-1 overflow-y-auto px-4 py-6 flex flex-col gap-1.5">
                 <span className="text-[11px] font-bold text-[#325a67] uppercase tracking-wider mb-2 px-3">Menu Principal</span>
-                {(userRole === 'staff' ? staffNavigation : managerNavigation).map((item) => {
+                {(userRole === 'staff'
+                    ? canLaunchPurchases
+                        ? [...staffNavigation, { name: "Compras", href: "/compras", icon: "shopping_cart" }]
+                        : staffNavigation
+                    : managerNavigation
+                ).map((item) => {
                     const isActive = pathname.startsWith(item.href);
                     return (
                         <Link

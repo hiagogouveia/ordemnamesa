@@ -69,7 +69,8 @@ export function useUpdateShift() {
 export function useDeleteShift() {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: async ({ id, restaurant_id }: { id: string; restaurant_id: string }) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        mutationFn: async ({ id, restaurant_id: _r }: { id: string; restaurant_id: string }) => {
             const headers = await getAuthHeaders();
             const res = await fetch(`/api/shifts/${id}`, {
                 method: "DELETE",

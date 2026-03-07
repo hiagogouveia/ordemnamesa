@@ -47,7 +47,7 @@ export async function POST(request: Request) {
         }
 
         return NextResponse.json(newExecution, { status: 201 });
-    } catch (err: any) {
-        return NextResponse.json({ error: err.message }, { status: 500 });
+    } catch (err: unknown) {
+        return NextResponse.json({ error: (err as Error).message }, { status: 500 });
     }
 }

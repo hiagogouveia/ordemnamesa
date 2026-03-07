@@ -2,14 +2,15 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRestaurantStore } from '@/lib/store/restaurant-store';
-import { usePurchaseListDetails, useUpdatePurchaseItem, useUpdatePurchaseList } from '@/lib/hooks/use-purchases';
+import { usePurchaseListDetails, useUpdatePurchaseItem } from '@/lib/hooks/use-purchases';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 
-export default function RecebimentoPage({ params }: { params: { id: string } }) {
+export default function RecebimentoPage({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
     const { restaurantId } = useRestaurantStore();
+    const resolvedParams = React.use(params);
 
     const [userId, setUserId] = useState<string | null>(null);
 
@@ -19,9 +20,8 @@ export default function RecebimentoPage({ params }: { params: { id: string } }) 
         });
     }, []);
 
-    const { data, isLoading } = usePurchaseListDetails(restaurantId || undefined, params.id);
+    const { data, isLoading } = usePurchaseListDetails(restaurantId || undefined, resolvedParams.id);
     const updateItem = useUpdatePurchaseItem();
-    const updateList = useUpdatePurchaseList();
 
     const list = data?.list;
     const items = data?.items || [];
@@ -29,10 +29,10 @@ export default function RecebimentoPage({ params }: { params: { id: string } }) 
     const progress = items.length > 0 ? Math.round((items.filter(i => i.checked || i.has_problem).length / items.length) * 100) : 0;
     const isCompleted = items.length > 0 && items.every(i => i.checked || i.has_problem);
 
-    const [problemModal, setProblemModal] = useState<any>(null);
+    const [problemModal, setProblemModal] = useState<{ id: string; name: string; has_problem?: boolean; problem_notes?: string } | null>(null);
     const [problemText, setProblemText] = useState('');
 
-    const handleToggleCheck = async (item: any) => {
+    const handleToggleCheck = async (item: { id: string; checked?: boolean; has_problem?: boolean; problem_notes?: string }) => {
         if (!restaurantId || !userId) return;
 
         // Optimistic UI handled manually or via react-query onSuccess
@@ -42,7 +42,7 @@ export default function RecebimentoPage({ params }: { params: { id: string } }) 
             await updateItem.mutateAsync({
                 id: item.id,
                 restaurant_id: restaurantId,
-                purchase_list_id: params.id,
+                purchase_list_id: resolvedParams.id,
                 checked: isNowChecked,
                 checked_by: isNowChecked ? userId : undefined,
                 checked_at: isNowChecked ? new Date().toISOString() : undefined,
@@ -61,7 +61,7 @@ export default function RecebimentoPage({ params }: { params: { id: string } }) 
             await updateItem.mutateAsync({
                 id: problemModal.id,
                 restaurant_id: restaurantId,
-                purchase_list_id: params.id,
+                purchase_list_id: resolvedParams.id,
                 checked: true,
                 checked_by: userId,
                 checked_at: new Date().toISOString(),
@@ -75,13 +75,13 @@ export default function RecebimentoPage({ params }: { params: { id: string } }) 
         }
     };
 
-    const handleRemoverProblema = async (item: any) => {
+    const handleRemoverProblema = async (item: { id: string }) => {
         if (!restaurantId || !userId) return;
         try {
             await updateItem.mutateAsync({
                 id: item.id,
                 restaurant_id: restaurantId,
-                purchase_list_id: params.id,
+                purchase_list_id: resolvedParams.id,
                 has_problem: false,
                 problem_notes: undefined
             });
@@ -162,7 +162,7 @@ export default function RecebimentoPage({ params }: { params: { id: string } }) 
                                     <div className="flex flex-col gap-2 mt-1 ml-9">
                                         <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-2 text-red-400 text-xs flex flex-col gap-1">
                                             <div className="font-bold flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">warning</span> Problema Reportado:</div>
-                                            <p className="italic">"{item.problem_notes}"</p>
+                                            <p className="italic">&ldquo;{item.problem_notes}&rdquo;</p>
                                         </div>
                                         <button onClick={() => handleRemoverProblema(item)} className="text-xs text-[#92bbc9] hover:text-white self-start underline underline-offset-2">Desfazer problema</button>
                                     </div>
@@ -204,7 +204,7 @@ export default function RecebimentoPage({ params }: { params: { id: string } }) 
                             <span className="material-symbols-outlined text-2xl">warning</span>
                             <h3 className="font-bold text-lg truncate">Problema no Item</h3>
                         </div>
-                        <p className="text-[#92bbc9] text-xs">Descreva o problema com <strong className="text-white">"{problemModal.name}"</strong> (avaria, item faltando, marca errada, etc.)</p>
+                        <p className="text-[#92bbc9] text-xs">Descreva o problema com <strong className="text-white">&ldquo;{problemModal.name}&rdquo;</strong> (avaria, item faltando, marca errada, etc.)</p>
 
                         <textarea
                             autoFocus

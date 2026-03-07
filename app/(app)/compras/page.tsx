@@ -114,9 +114,9 @@ export default function ComprasPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                         {lists.map((list) => {
                             // Safely extract items count (if the API supports returning it)
-                            const itemsObj = (list as any).items || [];
+                            const itemsObj = (list as { items?: { checked?: boolean }[] }).items || [];
                             const totalItems = itemsObj.length || 0;
-                            const checkedItems = itemsObj.filter((i: any) => i.checked).length || 0;
+                            const checkedItems = itemsObj.filter((i) => i.checked).length || 0;
                             // Progress calculation logic safely guarded
                             const progress = totalItems > 0 ? (checkedItems / totalItems) * 100 : 0;
 

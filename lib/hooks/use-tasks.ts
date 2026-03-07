@@ -3,9 +3,11 @@ import { createClient } from '@/lib/supabase/client';
 
 export type TaskStatus = 'todo' | 'doing' | 'done' | 'flagged' | 'skipped';
 
+export interface KanbanTask { id: string; title: string; checklist_id: string; role_id?: string; assigned_to_user_id?: string; is_critical?: boolean; requires_photo?: boolean; [key: string]: unknown; }
+export interface KanbanExecution { id: string; task_id: string; status: TaskStatus; executed_at: string; notes?: string; [key: string]: unknown; }
 export interface KanbanData {
-    tasks: any[];
-    executions: any[];
+    tasks: KanbanTask[];
+    executions: KanbanExecution[];
 }
 
 const getAuthToken = async () => {

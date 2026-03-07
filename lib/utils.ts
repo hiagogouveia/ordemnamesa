@@ -1,4 +1,5 @@
-export function getCurrentShift(shifts: any[], currentTimeStr: string = new Date().toTimeString().slice(0, 5)): any | null {
+import { Shift } from './types';
+export function getCurrentShift(shifts: Shift[], currentTimeStr: string = new Date().toTimeString().slice(0, 5)): Shift | null {
     if (!shifts || shifts.length === 0) return null;
 
     const [currentHour, currentMinute] = currentTimeStr.split(':').map(Number);

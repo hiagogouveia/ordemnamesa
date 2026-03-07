@@ -50,9 +50,9 @@ export async function GET(request: Request) {
 
         const checklistIds = activeChecklists?.map(c => c.id) || [];
 
-        let tasksData: any[] = [];
+        let tasksData: Record<string, unknown>[] = [];
         if (checklistIds.length > 0) {
-            let tasksQuery = adminSupabase
+            const tasksQuery = adminSupabase
                 .from('checklist_tasks')
                 .select('*')
                 .eq('restaurant_id', restaurant_id)
@@ -62,9 +62,9 @@ export async function GET(request: Request) {
 
             const { data: tasks } = await tasksQuery;
 
-            // Filtro manual das roles (or com is.null é meio chato no supabase string query as vezes)
-            tasksData = (tasks || []).filter(task =>
-                !task.role_id || userRoleIds.includes(task.role_id)
+            // Filtro manual das roles
+            tasksData = (tasks || []).filter((task: Record<string, unknown>) =>
+                !task.role_id || userRoleIds.includes(task.role_id as string)
             );
         }
 
@@ -88,8 +88,8 @@ export async function GET(request: Request) {
             executions: executions || []
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[GET /api/tasks/kanban] Erro:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: (error as Error).message }, { status: 500 });
     }
 }

@@ -1,18 +1,16 @@
 'use client';
 
-import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useRestaurantStore } from '@/lib/store/restaurant-store';
-import { useKanbanTasks, useAssumeTask, useUpdateTaskStatus, TaskStatus } from '@/lib/hooks/use-tasks';
+import { useKanbanTasks, useAssumeTask, useUpdateTaskStatus, KanbanTask, KanbanExecution } from '@/lib/hooks/use-tasks';
 import { usePurchaseLists } from '@/lib/hooks/use-purchases';
 import { useUserRoles } from '@/lib/hooks/use-user-roles-shifts';
 import { useShifts } from '@/lib/hooks/use-shifts';
 import { getCurrentShift } from '@/lib/utils';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 
 export default function KanbanPage() {
-    const router = useRouter();
     const { restaurantId } = useRestaurantStore();
 
     const [user, setUser] = useState<{ id: string; name: string } | null>(null);
@@ -69,7 +67,7 @@ export default function KanbanPage() {
         const flagged = executions.filter(e => e.status === 'flagged');
 
         // Append task info to executions
-        const mapTask = (e: any) => ({ ...e, task: tasks.find(t => t.id === e.task_id) });
+        const mapTask = (e: KanbanExecution) => ({ ...e, task: tasks.find(t => t.id === e.task_id) });
 
         return {
             todoTasks: todo,
@@ -80,28 +78,28 @@ export default function KanbanPage() {
     }, [kanbanData, user]);
 
     // Modals
-    const [assumeModal, setAssumeModal] = useState<any>(null);
-    const [problemModal, setProblemModal] = useState<any>(null);
+    const [assumeModal, setAssumeModal] = useState<KanbanTask | null>(null);
+    const [problemModal, setProblemModal] = useState<KanbanExecution & { task?: KanbanTask } | null>(null);
     const [problemText, setProblemText] = useState('');
 
-    const handleAssume = async (task: any) => {
+    const handleAssume = async (task: KanbanTask) => {
         if (!restaurantId || !task) return;
         try {
             await assumeTask.mutateAsync({ restaurantId, taskId: task.id, checklistId: task.checklist_id });
             setAssumeModal(null);
-        } catch (e: any) {
-            alert(e.message || 'Erro ao assumir tarefa. Limite atingido?');
+        } catch (e: unknown) {
+            alert((e as Error).message || 'Erro ao assumir tarefa. Limite atingido?');
         }
     };
 
-    const handleConcluir = async (exec: any, file?: File) => {
+    const handleConcluir = async (exec: KanbanExecution, file?: File) => {
         if (!restaurantId || !user) return;
 
         let photoUrl = undefined;
         if (file) {
             const supabase = createClient();
             const filePath = `${restaurantId}/${exec.id}/${Date.now()}_${file.name}`;
-            const { data, error } = await supabase.storage.from('photos').upload(filePath, file);
+            const { error } = await supabase.storage.from('photos').upload(filePath, file);
             if (error) {
                 alert('Erro no upload da foto: ' + error.message);
                 return;
@@ -117,12 +115,12 @@ export default function KanbanPage() {
                 status: 'done',
                 photo_url: photoUrl
             });
-        } catch (e: any) {
-            alert('Erro ao concluir: ' + e.message);
+        } catch (e: unknown) {
+            alert('Erro ao concluir: ' + (e as Error).message);
         }
     };
 
-    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, exec: any) => {
+    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, exec: KanbanExecution) => {
         if (e.target.files && e.target.files[0]) {
             handleConcluir(exec, e.target.files[0]);
         }
@@ -139,8 +137,8 @@ export default function KanbanPage() {
             });
             setProblemModal(null);
             setProblemText('');
-        } catch (e: any) {
-            alert('Erro ao registrar problema: ' + e.message);
+        } catch (e: unknown) {
+            alert('Erro ao registrar problema: ' + (e as Error).message);
         }
     };
 
@@ -185,7 +183,7 @@ export default function KanbanPage() {
                             <span className="material-symbols-outlined">inventory_2</span>
                             📦 Pedido aguardando conferência
                         </div>
-                        <p className="text-[#92bbc9] text-xs">A lista "{activePurchaseList.title}" tem itens designados para sua função que acabaram de chegar.</p>
+                        <p className="text-[#92bbc9] text-xs">A lista &ldquo;{activePurchaseList.title}&rdquo; tem itens designados para sua função que acabaram de chegar.</p>
                         <Link href={`/recebimento/${activePurchaseList.id}`} className="mt-1 flex items-center justify-center gap-2 w-full py-2.5 bg-[#f59e0b] hover:bg-[#d97706] text-[#111e22] rounded-lg font-bold transition-colors">
                             <span className="material-symbols-outlined text-lg">fact_check</span> Conferir Agora
                         </Link>
@@ -296,7 +294,7 @@ export default function KanbanPage() {
                                     {flaggedExecs.map(exec => (
                                         <div key={exec.id} className="bg-red-950/20 border border-red-900/50 rounded-xl p-3 flex flex-col gap-3 border-l-4 border-l-red-500">
                                             <span className="text-white text-sm font-medium">{exec.task?.title}</span>
-                                            <p className="text-red-300 text-xs italic bg-red-950/40 p-2 rounded -mt-1">"{exec.notes}"</p>
+                                            <p className="text-red-300 text-xs italic bg-red-950/40 p-2 rounded -mt-1">&ldquo;{exec.notes}&rdquo;</p>
                                             <button onClick={() => updateTask.mutate({ restaurantId: restaurantId!, executionId: exec.id, status: 'doing' })} className="w-full py-1.5 bg-red-500/10 text-red-400 text-xs font-bold rounded-md hover:bg-red-500/20 uppercase tracking-widest mt-1">
                                                 Retomar Tarefa
                                             </button>
@@ -338,7 +336,7 @@ export default function KanbanPage() {
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
                     <div className="bg-[#1a2c32] border border-[#233f48] rounded-2xl p-5 w-full max-w-[360px] flex flex-col gap-4 shadow-xl">
                         <h3 className="text-white font-bold text-lg leading-tight">Assumir Tarefa</h3>
-                        <p className="text-[#92bbc9] text-sm">Deseja ser o responsável por: <strong className="text-white">"{assumeModal.title}"</strong>?</p>
+                        <p className="text-[#92bbc9] text-sm">Deseja ser o responsável por: <strong className="text-white">&ldquo;{assumeModal.title}&rdquo;</strong>?</p>
                         {assumeModal.requires_photo && (
                             <div className="bg-amber-400/10 text-amber-400 text-xs p-2 rounded-lg flex items-center gap-2 font-medium">
                                 <span className="material-symbols-outlined text-base">photo_camera</span> Ao concluir, uma foto será exigida.
@@ -359,7 +357,7 @@ export default function KanbanPage() {
                             <span className="material-symbols-outlined text-2xl">warning</span>
                             <h3 className="font-bold text-lg">Reportar Problema</h3>
                         </div>
-                        <p className="text-[#92bbc9] text-xs leading-relaxed">A tarefa de <strong className="text-white">"{problemModal.task?.title}"</strong> será pausada. Descreva o motivo do impedimento abaixo.</p>
+                        <p className="text-[#92bbc9] text-xs leading-relaxed">A tarefa de <strong className="text-white">&ldquo;{problemModal.task?.title}&rdquo;</strong> será pausada. Descreva o motivo do impedimento abaixo.</p>
 
                         <textarea
                             autoFocus

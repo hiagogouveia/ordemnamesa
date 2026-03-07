@@ -8,6 +8,8 @@ import { ExtendedChecklist } from "./checklist-card";
 import { useCreateChecklist, useUpdateChecklist, useDeleteChecklist } from "@/lib/hooks/use-checklists";
 import { ChecklistTask } from "@/lib/types";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
+import { useRoles } from "@/lib/hooks/use-roles";
+import { useEquipe } from "@/lib/hooks/use-equipe";
 
 interface ChecklistFormProps {
     checklist: ExtendedChecklist | null;
@@ -22,6 +24,12 @@ const SHIFTS = [
     { value: 'evening', label: 'Noite' },
     { value: 'any', label: 'Qualquer turno' }
 ];
+const CHECKLIST_TYPES = [
+    { value: 'regular', label: 'Regular' },
+    { value: 'opening', label: 'Abertura' },
+    { value: 'closing', label: 'Fechamento' },
+    { value: 'receiving', label: 'Recebimento' }
+];
 
 export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormProps) {
     const restaurantId = useRestaurantStore((state) => state.restaurantId);
@@ -30,9 +38,16 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
     const [description, setDescription] = useState("");
     const [shift, setShift] = useState("any");
     const [category, setCategory] = useState("");
+    const [checklistType, setChecklistType] = useState("regular");
+    const [roleId, setRoleId] = useState("");
+    const [isRequired, setIsRequired] = useState(true);
     const [tasks, setTasks] = useState<(Partial<ChecklistTask> & { tempId: string })[]>([]);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+    const { data: roles = [] } = useRoles(restaurantId || undefined);
+    const { data: equipeData } = useEquipe(restaurantId || null);
+    const equipe = equipeData?.equipe || [];
 
     const createMutation = useCreateChecklist();
     const updateMutation = useUpdateChecklist();
@@ -44,6 +59,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
             setDescription(checklist.description || "");
             setShift(checklist.shift);
             setCategory(checklist.category || "");
+            setChecklistType(checklist.checklist_type || "regular");
+            setRoleId(checklist.role_id || "");
+            setIsRequired(checklist.is_required ?? true);
             setTasks(
                 (checklist.tasks || []).map((t) => ({ ...t, tempId: t.id }))
             );
@@ -52,6 +70,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
             setDescription("");
             setShift("any");
             setCategory("");
+            setChecklistType("regular");
+            setRoleId("");
+            setIsRequired(true);
             setTasks([]);
             setErrorMsg(null);
             setShowDeleteModal(false);
@@ -95,12 +116,16 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
             description,
             shift: shift as "morning" | "afternoon" | "evening" | "any",
             category,
+            checklist_type: checklistType as "regular" | "opening" | "closing" | "receiving",
+            role_id: roleId || undefined,
+            is_required: isRequired,
             status: (isPublishing ? 'active' : 'draft') as "active" | "draft" | "archived",
             tasks: tasks.map(t => ({
                 title: t.title,
                 description: t.description,
                 is_critical: t.is_critical,
-                requires_photo: t.requires_photo
+                requires_photo: t.requires_photo,
+                assigned_to_user_id: t.assigned_to_user_id || undefined
             }))
         };
 
@@ -109,11 +134,16 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
             if (checklist?.id) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 await updateMutation.mutateAsync({ id: checklist.id, ...payload } as any);
+                onSaved();
             } else {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                await createMutation.mutateAsync(payload as any);
+                const res = await createMutation.mutateAsync(payload as any);
+                if (checklistType === 'receiving') {
+                    window.location.href = `/compras?new=true&checklist_id=${res.id}`; // Simple redirect
+                } else {
+                    onSaved();
+                }
             }
-            onSaved();
         } catch (e) {
             console.error(e);
             setErrorMsg(e instanceof Error ? e.message : "Erro inesperado ao salvar a rotina!");
@@ -229,7 +259,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Função Responsável</label>
+                                <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Categoria Antiga (Opcional)</label>
                                 <select
                                     value={category}
                                     onChange={(e) => setCategory(e.target.value)}
@@ -238,6 +268,46 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
                                     <option value="">Selecione...</option>
                                     {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                                 </select>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div>
+                                <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Tipo de Rotina</label>
+                                <select
+                                    value={checklistType}
+                                    onChange={(e) => setChecklistType(e.target.value)}
+                                    className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
+                                >
+                                    {CHECKLIST_TYPES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Área (Função) *</label>
+                                <select
+                                    value={roleId}
+                                    onChange={(e) => setRoleId(e.target.value)}
+                                    className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
+                                >
+                                    <option value="">Qualquer Área</option>
+                                    {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 p-3 bg-[#16262c] border border-[#233f48] rounded-xl">
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={isRequired}
+                                    onChange={(e) => setIsRequired(e.target.checked)}
+                                    className="sr-only peer"
+                                />
+                                <div className="w-11 h-6 bg-[#233f48] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#13b6ec]"></div>
+                            </label>
+                            <div>
+                                <h4 className="text-white text-sm font-bold">Obrigatório</h4>
+                                <p className="text-[#92bbc9] text-xs">Exigir conclusão no painel de turno</p>
                             </div>
                         </div>
                     </div>
@@ -262,6 +332,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
                                         <TaskItem
                                             key={task.tempId}
                                             task={task}
+                                            equipe={equipe}
                                             onUpdate={updateTask}
                                             onRemove={removeTask}
                                         />
