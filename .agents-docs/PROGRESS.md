@@ -61,10 +61,35 @@ S5 ✅ Dashboard Manager com dados reais + Fixes críticos
 S6 — Parte 1 ✅ Migration SQL (shifts, roles, user_roles, user_shifts, purchase_lists, purchase_items)
 S6 — Parte 2 ✅ APIs (13 route handlers, tsc limpo, commit 42683ab)
 
-## S6 — Partes pendentes
-- Parte 3: Hooks React Query para as novas entidades
-- Parte 4: Páginas de UI (turnos, funções, compras)
-- (histórico com filtros, notificações, relatórios exportáveis — prioridade a definir)
+## S6 — CONCLUÍDA ✅ (commit 963ad0a)
+
+### Telas Admin
+app/(app)/configuracoes/    → gestão de turnos e funções/roles ✅
+app/(app)/compras/          → listagem de listas de compra ✅
+app/(app)/compras/[id]/     → detalhe da lista com itens ✅
+
+### Telas Staff
+app/(app)/turno/            → kanban de tarefas (Para Fazer / Fazendo / Concluídas) ✅
+app/(app)/recebimento/[id]/ → conferência de itens recebidos ✅
+
+### Checklists avançados
+checklist_type: regular | opening | closing | receiving (badge visual por tipo)
+role_id no checklist: select de Área/Role com dot colorido
+is_required: toggle obrigatório
+Task: assigned_to_user_id (select de colaborador específico)
+Redirecionamento para /compras?new=true ao criar checklist tipo Recebimento
+
+### Navegação
+Sidebar: "Compras" visível para owner/manager
+Sidebar: "Compras" visível para staff com can_launch_purchases=true em qualquer role
+
+### Hooks React Query (lib/hooks/)
+use-roles.ts, use-shifts.ts, use-purchases.ts, use-tasks.ts
+use-user-roles-shifts.ts, use-equipe.ts (atualizado)
+
+### Build
+tsc --noEmit: ✅ sem erros
+npm run build: ✅ 37 páginas geradas sem erros
 
 ---
 **Como usar:** ler CONTEXT.md + PROGRESS.md antes de cada sessão.
