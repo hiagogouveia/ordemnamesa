@@ -97,7 +97,7 @@ export async function GET(request: Request) {
                 .eq('restaurant_id', restaurant_id)
                 .in('checklist_id', checklistIds)
                 .or(`assigned_to_user_id.is.null,assigned_to_user_id.eq.${user.id}`)
-                .order('order_index', { ascending: true });
+                .order('order', { ascending: true });
 
             const { data: tasks } = await tasksQuery;
 

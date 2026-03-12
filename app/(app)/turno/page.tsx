@@ -14,6 +14,7 @@ export default function KanbanPage() {
     const { restaurantId } = useRestaurantStore();
 
     const [user, setUser] = useState<{ id: string; name: string } | null>(null);
+    const [userLoading, setUserLoading] = useState(true);
 
     // Fetch auth user
     useEffect(() => {
@@ -21,12 +22,13 @@ export default function KanbanPage() {
             if (data.user) {
                 setUser({ id: data.user.id, name: data.user.user_metadata?.name || 'Membro' });
             }
+            setUserLoading(false);
         });
     }, []);
 
     const { data: kanbanData, isLoading: loadingKanban } = useKanbanTasks(restaurantId || undefined);
     const { data: shifts = [] } = useShifts(restaurantId || undefined);
-    const { data: userRolesData = [] } = useUserRoles(restaurantId || undefined, user?.id);
+    const { data: userRolesData = [], isLoading: loadingUserRoles } = useUserRoles(restaurantId || undefined, user?.id);
     const { data: purchaseLists = [] } = usePurchaseLists(restaurantId || undefined, 'open');
 
     const assumeTask = useAssumeTask();
@@ -44,7 +46,7 @@ export default function KanbanPage() {
     const currentShift = useMemo(() => getCurrentShift(shifts, timeNow), [shifts, timeNow]);
 
     const userRoleIds = useMemo(() => userRolesData.map(ur => ur.role_id), [userRolesData]);
-    const hasNoRoles = user !== null && userRolesData.length === 0;
+    const hasNoRoles = !userLoading && user !== null && !loadingUserRoles && userRolesData.length === 0;
 
     const activePurchaseList = useMemo(() => {
         if (!userRoleIds.length) return null;
