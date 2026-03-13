@@ -197,7 +197,7 @@ export default function ActivityExecutionPage() {
             </main>
 
             {/* Bottom Action */}
-            <div className="fixed bottom-0 left-0 right-0 px-4 pt-4 pb-20 lg:pb-4 bg-gradient-to-t from-[#0a1215] via-[#0a1215]/95 to-transparent z-40">
+            <div className="fixed bottom-0 left-0 lg:left-64 right-0 px-4 pt-4 pb-20 lg:pb-4 bg-gradient-to-t from-[#0a1215] via-[#0a1215]/95 to-transparent z-40">
                 <div className="max-w-[480px] mx-auto flex flex-col gap-2">
                     {isCompleted ? (
                         <button

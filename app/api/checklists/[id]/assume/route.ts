@@ -29,7 +29,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
         }
 
-        const userName = user.user_metadata?.name || user.email || 'Funcionário';
+        // Prefer name from users table, then user_metadata, then email
+        const { data: userRecord } = await adminSupabase
+            .from('users')
+            .select('name')
+            .eq('id', user.id)
+            .maybeSingle();
+        const userName = userRecord?.name || user.user_metadata?.name || user.email || 'Funcionário';
         const dateKey = new Date().toISOString().split('T')[0];
 
         // Verificar se já existe assumption para hoje (por qualquer pessoa)
