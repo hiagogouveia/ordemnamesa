@@ -42,7 +42,7 @@ export async function GET(request: Request) {
         // 2. Buscar todos checklists ATIVOS: sem atribuição específica OU atribuídos a este usuário
         const { data: activeChecklists } = await adminSupabase
             .from('checklists')
-            .select('id, is_required, recurrence, last_reset_at, assigned_to_user_id')
+            .select('id, name, is_required, recurrence, last_reset_at, assigned_to_user_id')
             .eq('restaurant_id', restaurant_id)
             .eq('active', true)
             .or(`assigned_to_user_id.is.null,assigned_to_user_id.eq.${user.id}`);
@@ -128,6 +128,7 @@ export async function GET(request: Request) {
             .lte('executed_at', endOfDay.toISOString());
 
         return NextResponse.json({
+            checklists: activeChecklists || [],
             tasks: tasksData || [],
             executions: executions || []
         });
