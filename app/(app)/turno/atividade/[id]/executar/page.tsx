@@ -167,7 +167,7 @@ export default function ActivityExecutionPage() {
                             </div>
                             <div>
                                 <h2 className="text-[#13b6ec] font-bold text-sm">Todas as tarefas concluídas!</h2>
-                                <p className="text-[#13b6ec]/70 text-xs mt-0.5">Clique em "Finalizar Atividade" para encerrar.</p>
+                                <p className="text-[#13b6ec]/70 text-xs mt-0.5">Clique em &quot;Finalizar Atividade&quot; para encerrar.</p>
                             </div>
                         </div>
                     )}
