@@ -25,9 +25,9 @@ export default function SelecionarRestaurantePage() {
     useEffect(() => {
         async function fetchRestaurants() {
             const supabase = createClient();
-            const { data: { session } } = await supabase.auth.getSession();
+            const { data: { user } } = await supabase.auth.getUser();
 
-            if (!session) {
+            if (!user) {
                 router.push("/login");
                 return;
             }
@@ -73,7 +73,8 @@ export default function SelecionarRestaurantePage() {
             role: restaurant.role,
         });
 
-        console.log('[RestaurantStore] set:', { id: restaurant.restaurants.id, role: restaurant.role });
+        // Setar cookie de role para proteção de rotas no middleware
+        document.cookie = `x-restaurant-role=${restaurant.role}; path=/; SameSite=Strict`;
 
         if (restaurant.role === 'staff') {
             router.push("/turno");

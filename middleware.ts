@@ -55,6 +55,24 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(url)
     }
 
+    // Proteção de rotas por role
+    // Rotas exclusivas de admin (owner/manager) — staff é bloqueado
+    const adminRoutes = ['/dashboard', '/equipe', '/checklists', '/configuracoes', '/compras', '/relatorios', '/admin']
+    const pathname = request.nextUrl.pathname
+    const isAdminRoute = adminRoutes.some(route => pathname === route || pathname.startsWith(route + '/'))
+
+    if (user && isAdminRoute) {
+        const userRole = request.cookies.get('x-restaurant-role')?.value
+        if (userRole === 'staff') {
+            const url = request.nextUrl.clone()
+            url.pathname = '/turno'
+            return NextResponse.redirect(url)
+        }
+    }
+
+    // Limpar cookie de role ao fazer logout (rota de signout)
+    // O cookie é limpo automaticamente quando o usuário vai para /login sem restaurante selecionado
+
     return supabaseResponse
 }
 

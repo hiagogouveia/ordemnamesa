@@ -44,6 +44,11 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
             return NextResponse.json({ error: 'Permissão negada.' }, { status: 403 });
         }
 
+        // Impedir que owner/manager rebaixe a si mesmo
+        if (userId === user.id && role !== undefined && role !== membership.role) {
+            return NextResponse.json({ error: 'Você não pode alterar seu próprio cargo.' }, { status: 403 });
+        }
+
         // Atualizar nome em public.users se fornecido
         if (name !== undefined) {
             const { error: nameError } = await adminSupabase

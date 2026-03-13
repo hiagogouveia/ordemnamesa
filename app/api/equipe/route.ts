@@ -224,6 +224,19 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
     try {
+        const authHeader = request.headers.get('Authorization');
+        if (!authHeader) {
+            return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
+        }
+
+        const token = authHeader.replace('Bearer ', '');
+        const adminSupabase = getAdminSupabase();
+
+        const { data: { user: caller }, error: callerError } = await adminSupabase.auth.getUser(token);
+        if (callerError || !caller) {
+            return NextResponse.json({ error: 'Sem autorização.' }, { status: 401 });
+        }
+
         const { searchParams } = new URL(request.url);
         const restaurant_id = searchParams.get('restaurant_id');
 
@@ -233,7 +246,18 @@ export async function PUT(request: Request) {
             return NextResponse.json({ error: 'Parâmetros inválidos' }, { status: 400 });
         }
 
-        const adminSupabase = getAdminSupabase();
+        // Verificar que o caller é owner ou manager
+        const { data: membership } = await adminSupabase
+            .from('restaurant_users')
+            .select('role')
+            .eq('restaurant_id', restaurant_id)
+            .eq('user_id', caller.id)
+            .eq('active', true)
+            .single();
+
+        if (!membership || !['owner', 'manager'].includes(membership.role)) {
+            return NextResponse.json({ error: 'Permissão negada.' }, { status: 403 });
+        }
 
         const updates: Record<string, boolean | string> = {};
         if (active !== undefined) updates.active = active;

@@ -32,7 +32,12 @@ export async function POST(request: Request) {
 
     await supabase.auth.signOut()
 
-    return NextResponse.redirect(`${requestUrl.origin}/login`, {
+    const response = NextResponse.redirect(`${requestUrl.origin}/login`, {
         status: 301,
     })
+
+    // Limpar cookie de role ao fazer logout
+    response.cookies.set('x-restaurant-role', '', { path: '/', maxAge: 0 })
+
+    return response
 }
