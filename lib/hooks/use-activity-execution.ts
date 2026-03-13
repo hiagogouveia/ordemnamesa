@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { KanbanTask, KanbanExecution, KanbanChecklist } from './use-tasks';
@@ -9,11 +9,6 @@ export interface ActivityData {
     executions: KanbanExecution[];
 }
 
-const getAuthToken = async () => {
-    const supabase = createClient();
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.access_token || '';
-};
 
 export const useActivityData = (restaurantId: string | undefined, checklistId: string | undefined) => {
     const queryClient = useQueryClient();
@@ -128,21 +123,6 @@ export const useToggleActivityTask = () => {
             executionId?: string; 
             isDone: boolean; 
         }) => {
-            const token = await getAuthToken();
-            const status = isDone ? 'done' : 'skipped';
-            const endpoint = executionId 
-                ? `/api/task-executions/${executionId}` 
-                : `/api/task-executions/assume`;
-                
-            const method = executionId ? 'PUT' : 'POST';
-            const body = executionId 
-                ? { restaurant_id: restaurantId, status }
-                : { restaurant_id: restaurantId, checklist_id: checklistId, task_id: taskId };
-
-            // For POST (assume), we create it as 'doing' according to the current API.
-            // But if we want it to be 'done' directly, we might need a custom endpoint or two steps.
-            // Wait, the new requirement is just ticking items off.
-            // Let's create a custom toggle API endpoint, or just use Supabase direct client mutation since we have RLS!
             const supabase = createClient();
             
             if (isDone) {
