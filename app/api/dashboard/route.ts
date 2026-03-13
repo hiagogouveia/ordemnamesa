@@ -127,6 +127,7 @@ export async function GET(request: Request) {
 
         const alertasRecentes: AlertaRecente[] = [];
         const todayPerformers: Record<string, { total_done: number; name: string; avatar: string | null; role: string }> = {};
+        const yesterdayExecutors = new Set<string>();
 
         if (execucoes) {
             execucoes.forEach((exec) => {
@@ -178,6 +179,9 @@ export async function GET(request: Request) {
                         doneYest++;
                         responseTimeSumYest += diffMins;
                         responseCountYest++;
+                        if (exec.executor_id) {
+                            yesterdayExecutors.add(exec.executor_id);
+                        }
                     }
                     if (exec.status === 'flagged') {
                         flaggedYest++;
@@ -191,32 +195,15 @@ export async function GET(request: Request) {
         const avgRespToday = responseCountToday > 0 ? Math.round(responseTimeSumToday / responseCountToday) : 0;
         const avgRespYest = responseCountYest > 0 ? Math.round(responseTimeSumYest / responseCountYest) : 0;
 
-        // 3. Equipe
-        const { data: staffData } = await adminSupabase
-            .from('restaurant_users')
-            .select('id, active, user:users(id, name, avatar_url)')
-            .eq('restaurant_id', restaurant_id)
-            .eq('role', 'staff');
-
-        let staffActiveToday = 0;
-        const staffAvatars: StaffAvatar[] = [];
-
-        // Simplificado, vamos assumir os ativos atuais como 'hoje'
-        if (staffData) {
-            staffData.forEach((s) => {
-                if (s.active) {
-                    staffActiveToday++;
-                    const userInfo = s.user as unknown as ExecUserInfo & { id?: string };
-                    if (staffAvatars.length < 3) {
-                        staffAvatars.push({
-                            id: userInfo?.id || s.id,
-                            nome: userInfo?.name || 'Usuário',
-                            avatar: userInfo?.avatar_url || null
-                        });
-                    }
-                }
-            });
-        }
+        // 3. Equipe — derivado de task_executions reais (quem executou tarefa hoje)
+        const staffActiveToday = Object.keys(todayPerformers).length;
+        const staffAvatars: StaffAvatar[] = Object.entries(todayPerformers)
+            .slice(0, 3)
+            .map(([uid, dt]) => ({
+                id: uid,
+                nome: dt.name,
+                avatar: dt.avatar
+            }));
 
         // 4. Progresso por Area format
         const checklistProgresso = Array.from(checkListMap.values()).map((c) => {
@@ -294,7 +281,7 @@ export async function GET(request: Request) {
             alertas_abertos: flaggedToday,
             alertas_abertos_diff: flaggedToday - flaggedYest,
             equipe_ativa: staffActiveToday,
-            equipe_ativa_diff: 0, // Mockado 0 difference na API por equanto
+            equipe_ativa_diff: Object.keys(todayPerformers).length - yesterdayExecutors.size,
             equipe_avatars: staffAvatars,
             tempo_resposta_mins: avgRespToday,
             tempo_resposta_diff_mins: avgRespToday - avgRespYest,
