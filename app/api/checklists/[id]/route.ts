@@ -27,7 +27,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         }
 
         const body = await request.json();
-        const { restaurant_id, name, description, shift, status, tasks, category, role_id, is_required, checklist_type } = body;
+        const { restaurant_id, name, description, shift, status, tasks, category, role_id, is_required, checklist_type, assigned_to_user_id, recurrence, start_time, end_time, recurrence_config } = body;
 
         if (!restaurant_id || !name) {
             return NextResponse.json({ error: 'restaurant_id e name são obrigatórios.' }, { status: 400 });
@@ -51,7 +51,12 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
             .from('checklists')
             .update({
                 name, description, shift, status, category,
-                role_id, is_required: is_required !== undefined ? is_required : true, checklist_type: checklist_type || 'regular'
+                role_id, is_required: is_required !== undefined ? is_required : true, checklist_type: checklist_type || 'regular',
+                assigned_to_user_id: assigned_to_user_id || null,
+                recurrence: recurrence || 'none',
+                start_time: start_time || null,
+                end_time: end_time || null,
+                recurrence_config: recurrence_config || null,
             })
             .eq('id', id)
             .eq('restaurant_id', restaurant_id);

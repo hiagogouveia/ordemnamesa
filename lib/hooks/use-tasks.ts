@@ -1,16 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
+import { ChecklistAssumption } from '@/lib/types';
 
 export type TaskStatus = 'todo' | 'doing' | 'done' | 'flagged' | 'skipped';
 
 export interface KanbanTask { id: string; title: string; description?: string; checklist_id: string; role_id?: string; assigned_to_user_id?: string; is_critical?: boolean; requires_photo?: boolean; [key: string]: unknown; }
 export interface KanbanExecution { id: string; task_id: string; status: TaskStatus; executed_at: string; notes?: string; [key: string]: unknown; }
-export interface KanbanChecklist { id: string; name: string; is_required: boolean; recurrence?: string; last_reset_at?: string; assigned_to_user_id?: string; checklist_type?: string; role_id?: string; [key: string]: unknown; }
+export interface KanbanChecklist { id: string; name: string; description?: string; is_required: boolean; recurrence?: string; last_reset_at?: string; assigned_to_user_id?: string; checklist_type?: string; role_id?: string; start_time?: string; end_time?: string; [key: string]: unknown; }
 
 export interface KanbanData {
     checklists: KanbanChecklist[];
     tasks: KanbanTask[];
     executions: KanbanExecution[];
+    assumptions: ChecklistAssumption[];
 }
 
 const getAuthToken = async () => {
@@ -32,6 +34,72 @@ export const useKanbanTasks = (restaurantId: string | undefined) => {
             return response.json() as Promise<KanbanData>;
         },
         enabled: !!restaurantId,
+    });
+};
+
+export const useChecklistAssumption = (restaurantId: string | undefined, checklistId: string | undefined) => {
+    return useQuery({
+        queryKey: ['assumption', restaurantId, checklistId],
+        queryFn: async () => {
+            if (!restaurantId || !checklistId) return null;
+            const supabase = createClient();
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token || '';
+            const response = await fetch(
+                `/api/checklists/${checklistId}/assume?restaurant_id=${restaurantId}`,
+                { headers: { 'Authorization': `Bearer ${token}` } }
+            );
+            if (!response.ok) return null;
+            const json = await response.json();
+            return json.assumption as ChecklistAssumption | null;
+        },
+        enabled: !!restaurantId && !!checklistId,
+    });
+};
+
+export const useAssumeChecklist = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async ({ restaurantId, checklistId }: { restaurantId: string; checklistId: string }) => {
+            const token = await getAuthToken();
+            const response = await fetch(`/api/checklists/${checklistId}/assume`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ restaurant_id: restaurantId }),
+            });
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Erro ao assumir atividade');
+            }
+            return response.json();
+        },
+        onSuccess: (_, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['assumption', variables.restaurantId, variables.checklistId] });
+            queryClient.invalidateQueries({ queryKey: ['kanban', variables.restaurantId] });
+        },
+    });
+};
+
+export const useCompleteChecklist = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async ({ restaurantId, checklistId }: { restaurantId: string; checklistId: string }) => {
+            const token = await getAuthToken();
+            const response = await fetch(`/api/checklists/${checklistId}/complete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ restaurant_id: restaurantId }),
+            });
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Erro ao finalizar atividade');
+            }
+            return response.json();
+        },
+        onSuccess: (_, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['assumption', variables.restaurantId, variables.checklistId] });
+            queryClient.invalidateQueries({ queryKey: ['kanban', variables.restaurantId] });
+        },
     });
 };
 

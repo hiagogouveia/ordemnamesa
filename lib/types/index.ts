@@ -2,6 +2,30 @@ export type ChecklistStatus = 'active' | 'draft' | 'archived'
 export type ShiftType = 'morning' | 'afternoon' | 'evening' | 'any' // Rename to avoid conflict with Shift table or keep? Let's keep it Shift for now, but the new table is 'shifts'
 export type UserRole = 'owner' | 'manager' | 'staff'
 
+// Sprint 8
+export interface RecurrenceConfig {
+    frequency: 'daily' | 'weekly' | 'monthly'
+    interval: number           // a cada X dias/semanas/meses
+    days_of_week?: number[]    // 0=Dom, 1=Seg, ..., 6=Sab (apenas para weekly)
+    end_type: 'never' | 'date' | 'count'
+    end_date?: string          // ISO date string
+    end_count?: number
+}
+
+// Sprint 8
+export interface ChecklistAssumption {
+    id: string
+    restaurant_id: string
+    checklist_id: string
+    user_id: string
+    user_name: string
+    date_key: string
+    assumed_at: string
+    completed_at?: string
+    completed_by_user_id?: string
+    completed_by_user_name?: string
+}
+
 export interface Checklist {
     id: string
     restaurant_id: string
@@ -17,8 +41,11 @@ export interface Checklist {
     assigned_to_user_id?: string
     is_required?: boolean
     checklist_type?: 'regular' | 'opening' | 'closing' | 'receiving'
-    recurrence?: 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekdays'
+    recurrence?: 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekdays' | 'custom'
     last_reset_at?: string
+    start_time?: string        // Sprint 8: formato HH:mm
+    end_time?: string          // Sprint 8: formato HH:mm
+    recurrence_config?: RecurrenceConfig // Sprint 8
     tasks?: ChecklistTask[]
     roles?: Role
 }

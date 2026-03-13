@@ -42,7 +42,7 @@ export async function GET(request: Request) {
         // 2. Buscar todos checklists ATIVOS: sem atribuição específica OU atribuídos a este usuário
         const { data: activeChecklists } = await adminSupabase
             .from('checklists')
-            .select('id, name, is_required, recurrence, last_reset_at, assigned_to_user_id')
+            .select('id, name, description, is_required, recurrence, last_reset_at, assigned_to_user_id, role_id, checklist_type, start_time, end_time')
             .eq('restaurant_id', restaurant_id)
             .eq('active', true)
             .or(`assigned_to_user_id.is.null,assigned_to_user_id.eq.${user.id}`);
@@ -127,10 +127,19 @@ export async function GET(request: Request) {
             .gte('executed_at', startOfDay.toISOString())
             .lte('executed_at', endOfDay.toISOString());
 
+        // 4. Buscar assumptions de HOJE para este restaurante
+        const todayKey = new Date().toISOString().split('T')[0];
+        const { data: assumptions } = await adminSupabase
+            .from('checklist_assumptions')
+            .select('*')
+            .eq('restaurant_id', restaurant_id)
+            .eq('date_key', todayKey);
+
         return NextResponse.json({
             checklists: activeChecklists || [],
             tasks: tasksData || [],
-            executions: executions || []
+            executions: executions || [],
+            assumptions: assumptions || [],
         });
 
     } catch (error: unknown) {

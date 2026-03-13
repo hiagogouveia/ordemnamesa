@@ -90,7 +90,7 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json();
-        const { restaurant_id, name, description, shift, status, tasks, category, role_id, is_required, checklist_type } = body;
+        const { restaurant_id, name, description, shift, status, tasks, category, role_id, is_required, checklist_type, assigned_to_user_id, recurrence, start_time, end_time, recurrence_config } = body;
 
         if (!restaurant_id || !name || !shift) {
             return NextResponse.json({ error: 'Campos obrigatórios faltando' }, { status: 400 });
@@ -121,6 +121,11 @@ export async function POST(request: Request) {
                 role_id,
                 is_required: is_required !== undefined ? is_required : true,
                 checklist_type: checklist_type || 'regular',
+                assigned_to_user_id: assigned_to_user_id || null,
+                recurrence: recurrence || 'none',
+                start_time: start_time || null,
+                end_time: end_time || null,
+                recurrence_config: recurrence_config || null,
                 active: true,
                 created_by: user.id
             })

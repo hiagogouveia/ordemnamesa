@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { RecurrencePicker } from "./recurrence-picker-modal";
+import type { RecurrenceConfig } from "@/lib/types";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { TaskItem } from "./task-item";
@@ -30,6 +32,7 @@ const RECURRENCE_OPTIONS = [
     { value: 'weekly', label: 'Semanal' },
     { value: 'monthly', label: 'Mensal' },
     { value: 'yearly', label: 'Anual' },
+    { value: 'custom', label: 'Personalizar...' },
 ];
 const CHECKLIST_TYPES = [
     { value: 'regular', label: 'Regular' },
@@ -49,6 +52,13 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
     const [assignedToUserId, setAssignedToUserId] = useState("");
     const [isRequired, setIsRequired] = useState(true);
     const [recurrence, setRecurrence] = useState("none");
+    // Sprint 8: Time window
+    const [hasTimeWindow, setHasTimeWindow] = useState(false);
+    const [startTime, setStartTime] = useState("");
+    const [endTime, setEndTime] = useState("");
+    // Sprint 8: Custom recurrence
+    const [recurrenceConfig, setRecurrenceConfig] = useState<RecurrenceConfig | undefined>(undefined);
+    const [showRecurrencePicker, setShowRecurrencePicker] = useState(false);
     const taskInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
     const [tasks, setTasks] = useState<(Partial<ChecklistTask> & { tempId: string })[]>([]);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -72,6 +82,14 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
             setAssignedToUserId(checklist.assigned_to_user_id || "");
             setIsRequired(checklist.is_required ?? true);
             setRecurrence(checklist.recurrence || "none");
+            // Sprint 8: time window
+            const st = checklist.start_time as string | undefined;
+            const et = checklist.end_time as string | undefined;
+            setStartTime(st || "");
+            setEndTime(et || "");
+            setHasTimeWindow(!!(st || et));
+            // Sprint 8: recurrence config
+            setRecurrenceConfig(checklist.recurrence_config as RecurrenceConfig | undefined);
             setTasks(
                 (checklist.tasks || []).map((t) => ({ ...t, tempId: t.id }))
             );
@@ -84,6 +102,10 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
             setAssignedToUserId("");
             setIsRequired(true);
             setRecurrence("none");
+            setStartTime("");
+            setEndTime("");
+            setHasTimeWindow(false);
+            setRecurrenceConfig(undefined);
             setTasks([]);
             setErrorMsg(null);
             setShowDeleteModal(false);
@@ -143,6 +165,11 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
             assigned_to_user_id: assignedToUserId || undefined,
             is_required: isRequired,
             recurrence,
+            // Sprint 8: time window
+            start_time: hasTimeWindow && startTime ? startTime : null,
+            end_time: hasTimeWindow && endTime ? endTime : null,
+            // Sprint 8: custom recurrence config
+            recurrence_config: recurrence === 'custom' ? recurrenceConfig : null,
             status: (isPublishing ? 'active' : 'draft') as "active" | "draft" | "archived",
             tasks: tasks.map(t => ({
                 title: t.title,
@@ -189,6 +216,28 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
     };
 
     const isLoading = createMutation.isPending || updateMutation.isPending;
+
+    const handleRecurrenceChange = useCallback((value: string) => {
+        if (value === 'custom') {
+            setShowRecurrencePicker(true);
+            // Keep previous recurrence until user confirms
+        } else {
+            setRecurrence(value);
+            setRecurrenceConfig(undefined);
+        }
+    }, []);
+
+    const getRecurrenceLabel = () => {
+        if (recurrence !== 'custom' || !recurrenceConfig) return null;
+        const freqLabel = recurrenceConfig.frequency === 'daily' ? 'dia(s)' : recurrenceConfig.frequency === 'weekly' ? 'semana(s)' : 'mês(es)';
+        const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+        const dayNames = recurrenceConfig.days_of_week?.map(d => days[d]).join(', ') || '';
+        let label = `A cada ${recurrenceConfig.interval} ${freqLabel}`;
+        if (dayNames) label += ` nas ${dayNames}`;
+        if (recurrenceConfig.end_type === 'date' && recurrenceConfig.end_date) label += ` até ${recurrenceConfig.end_date}`;
+        if (recurrenceConfig.end_type === 'count' && recurrenceConfig.end_count) label += `, ${recurrenceConfig.end_count} vez(es)`;
+        return label;
+    };
 
     return (
         <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#0a1215]">
@@ -286,11 +335,21 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
                                 <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Repetição</label>
                                 <select
                                     value={recurrence}
-                                    onChange={(e) => setRecurrence(e.target.value)}
+                                    onChange={(e) => handleRecurrenceChange(e.target.value)}
                                     className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
                                 >
                                     {RECURRENCE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                                 </select>
+                                {recurrence === 'custom' && recurrenceConfig && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowRecurrencePicker(true)}
+                                        className="mt-2 w-full text-left px-3 py-2 bg-[#13b6ec]/10 border border-[#13b6ec]/30 rounded-lg text-[#13b6ec] text-xs font-medium flex items-center justify-between gap-2 hover:bg-[#13b6ec]/20 transition-colors"
+                                    >
+                                        <span className="truncate">{getRecurrenceLabel()}</span>
+                                        <span className="material-symbols-outlined text-[14px] shrink-0">edit</span>
+                                    </button>
+                                )}
                             </div>
                         </div>
 
@@ -352,6 +411,53 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
                         </div>
                     </div>
 
+                    {/* Seção: Janela de Horário */}
+                    <div className="bg-[#101d22] border border-[#233f48] rounded-2xl p-6 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h3 className="text-white font-bold text-sm">Janela de Horário</h3>
+                                <p className="text-[#92bbc9] text-xs mt-0.5">Define quando a atividade fica disponível</p>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={hasTimeWindow}
+                                    onChange={(e) => setHasTimeWindow(e.target.checked)}
+                                    className="sr-only peer"
+                                />
+                                <div className="w-11 h-6 bg-[#233f48] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#13b6ec]"></div>
+                            </label>
+                        </div>
+
+                        {hasTimeWindow && (
+                            <div className="grid grid-cols-2 gap-4 pt-2">
+                                <div>
+                                    <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Início</label>
+                                    <input
+                                        type="time"
+                                        value={startTime}
+                                        onChange={(e) => setStartTime(e.target.value)}
+                                        className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Fim</label>
+                                    <input
+                                        type="time"
+                                        value={endTime}
+                                        onChange={(e) => setEndTime(e.target.value)}
+                                        className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all"
+                                    />
+                                </div>
+                                {startTime && endTime && (
+                                    <p className="col-span-2 text-[#13b6ec] text-xs font-medium">
+                                        Disponível das {startTime} às {endTime}
+                                    </p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
                     {/* Seção das Tarefas */}
                     <div>
                         <div className="flex items-center justify-between mb-4">
@@ -394,6 +500,25 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
 
                 </div>
             </div>
+
+            {/* Modal de Recorrência Personalizada */}
+            {showRecurrencePicker && (
+                <RecurrencePicker
+                    initial={recurrenceConfig}
+                    onConfirm={(config) => {
+                        setRecurrenceConfig(config);
+                        setRecurrence('custom');
+                        setShowRecurrencePicker(false);
+                    }}
+                    onCancel={() => {
+                        setShowRecurrencePicker(false);
+                        // If no config was set before, revert to 'none'
+                        if (!recurrenceConfig) {
+                            setRecurrence('none');
+                        }
+                    }}
+                />
+            )}
 
             {/* Modal de Arquivamento */}
             {showDeleteModal && (

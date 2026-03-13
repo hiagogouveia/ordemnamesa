@@ -112,14 +112,6 @@ export default function KanbanPage() {
         });
     }, [kanbanData]);
 
-    // Modals
-    const [assumeModal, setAssumeModal] = useState<KanbanChecklist | null>(null);
-
-    const handleAssume = (checklist: KanbanChecklist) => {
-        setAssumeModal(null);
-        router.push(`/turno/atividade/${checklist.id}`);
-    };
-
     // UI Helpers
     const getGreeting = () => {
         const h = new Date().getHours();
@@ -202,10 +194,12 @@ export default function KanbanPage() {
                                 <div className="flex flex-col gap-3">
                                     {todoActivities.map(activity => {
                                         const isAssignedToOther = activity.assigned_to_user_id && activity.assigned_to_user_id !== user?.id;
+                                        const assumption = kanbanData?.assumptions?.find(a => a.checklist_id === activity.id);
+                                        const isInactive = activity.start_time && timeNow && timeNow < (activity.start_time as string);
                                         return (
                                             <div key={activity.id}
-                                                onClick={() => !isAssignedToOther && setAssumeModal(activity)}
-                                                className={`bg-[#1a2c32] rounded-xl p-4 flex flex-col gap-2 shadow-sm transition-all ${activity.is_required ? 'border-l-4 border-[#13b6ec] border border-[#13b6ec]/30' : 'border-l-4 border-[#233f48]'} ${!isAssignedToOther ? 'cursor-pointer hover:bg-[#1f363d]' : 'opacity-75'}`}>
+                                                onClick={() => !isAssignedToOther && router.push(`/turno/atividade/${activity.id}`)}
+                                                className={`bg-[#1a2c32] rounded-xl p-4 flex flex-col gap-2 shadow-sm transition-all ${isInactive ? 'border-l-4 border-[#233f48] opacity-80' : activity.is_required ? 'border-l-4 border-[#13b6ec] border border-[#13b6ec]/30' : 'border-l-4 border-[#233f48]'} ${!isAssignedToOther ? 'cursor-pointer hover:bg-[#1f363d]' : 'opacity-75'}`}>
 
                                                 <div className="flex justify-between items-start gap-3">
                                                     <div>
@@ -213,7 +207,11 @@ export default function KanbanPage() {
                                                         <p className="text-[#92bbc9] text-xs mt-1">{activity.taskCount} itens</p>
                                                     </div>
                                                     <div className="flex flex-col items-end gap-1.5 shrink-0">
-                                                        {activity.is_required && (
+                                                        {isInactive ? (
+                                                            <span className="bg-amber-500/10 text-amber-400 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase flex items-center gap-1">
+                                                                <span className="material-symbols-outlined text-[12px]">schedule</span> Inativa
+                                                            </span>
+                                                        ) : activity.is_required && (
                                                             <span className="bg-[#13b6ec]/10 text-[#13b6ec] text-[10px] font-bold px-1.5 py-0.5 rounded uppercase flex items-center gap-1">
                                                                 <span className="material-symbols-outlined text-[12px]">bolt</span> Obrigatório
                                                             </span>
@@ -224,8 +222,18 @@ export default function KanbanPage() {
                                                 <div className="flex items-center gap-3 mt-2 pt-2 border-t border-[#233f48]/50 text-sm font-bold text-[#92bbc9]">
                                                     {isAssignedToOther ? (
                                                         <span className="text-[#325a67]">Atribuída a outro funcionário</span>
+                                                    ) : isInactive ? (
+                                                        <span className="text-amber-400/70 flex items-center gap-1 text-xs">
+                                                            <span className="material-symbols-outlined text-[14px]">schedule</span>
+                                                            Disponível às {activity.start_time as string}
+                                                        </span>
+                                                    ) : assumption ? (
+                                                        <span className="text-[#13b6ec]/80 flex items-center gap-1 text-xs">
+                                                            <span className="material-symbols-outlined text-[14px]">person</span>
+                                                            Assumida por {assumption.user_name}
+                                                        </span>
                                                     ) : (
-                                                        <span className="text-[#13b6ec] ml-auto flex items-center gap-1">Assumir Tarefa <span className="material-symbols-outlined text-[16px]">arrow_right_alt</span></span>
+                                                        <span className="text-[#13b6ec] ml-auto flex items-center gap-1">Ver detalhes <span className="material-symbols-outlined text-[16px]">arrow_right_alt</span></span>
                                                     )}
                                                 </div>
                                             </div>
@@ -244,32 +252,42 @@ export default function KanbanPage() {
                                     <span className="ml-auto bg-amber-400/20 text-amber-400 text-xs px-2 py-0.5 rounded-full">{doingActivities.length}</span>
                                 </div>
                                 <div className="flex flex-col gap-3">
-                                    {doingActivities.map(activity => (
-                                        <div key={activity.id} 
-                                            onClick={() => router.push(`/turno/atividade/${activity.id}`)}
-                                            className="bg-[#1a2c32] cursor-pointer hover:bg-[#1f363d] transition-colors border border-amber-500/20 rounded-xl p-4 flex flex-col gap-3">
-                                            
-                                            <div className="flex justify-between items-start gap-2">
-                                                <span className="text-white text-base font-bold leading-snug">{activity.name}</span>
-                                                {activity.flaggedTasksCount > 0 && (
-                                                    <span className="flex items-center gap-1 text-red-400 text-[10px] font-bold bg-red-500/10 px-2 py-1 rounded">
-                                                        <span className="material-symbols-outlined text-[12px]">warning</span> Impedimento
-                                                    </span>
-                                                )}
-                                            </div>
+                                    {doingActivities.map(activity => {
+                                        const assumption = kanbanData?.assumptions?.find(a => a.checklist_id === activity.id);
+                                        return (
+                                            <div key={activity.id}
+                                                onClick={() => router.push(`/turno/atividade/${activity.id}`)}
+                                                className="bg-[#1a2c32] cursor-pointer hover:bg-[#1f363d] transition-colors border border-amber-500/20 rounded-xl p-4 flex flex-col gap-3">
 
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex-1 w-full bg-[#101d22] rounded-full h-2.5 overflow-hidden">
-                                                    <div className="bg-amber-400 h-full rounded-full transition-all" style={{ width: `${activity.progress}%` }}></div>
+                                                <div className="flex justify-between items-start gap-2">
+                                                    <span className="text-white text-base font-bold leading-snug">{activity.name}</span>
+                                                    {activity.flaggedTasksCount > 0 && (
+                                                        <span className="flex items-center gap-1 text-red-400 text-[10px] font-bold bg-red-500/10 px-2 py-1 rounded">
+                                                            <span className="material-symbols-outlined text-[12px]">warning</span> Impedimento
+                                                        </span>
+                                                    )}
                                                 </div>
-                                                <span className="text-amber-400 text-xs font-bold shrink-0">{activity.progress}%</span>
-                                            </div>
 
-                                            <div className="flex items-center mt-1 text-sm font-bold">
-                                                <span className="text-amber-400 ml-auto flex items-center gap-1">Continuar <span className="material-symbols-outlined text-[16px]">arrow_right_alt</span></span>
+                                                {assumption && (
+                                                    <p className="text-[#92bbc9] text-xs flex items-center gap-1 -mt-1">
+                                                        <span className="material-symbols-outlined text-[14px] text-[#13b6ec]">person</span>
+                                                        Em execução por: <span className="text-white font-medium ml-0.5">{assumption.user_name}</span>
+                                                    </p>
+                                                )}
+
+                                                <div className="flex items-center gap-3">
+                                                    <div className="flex-1 w-full bg-[#101d22] rounded-full h-2.5 overflow-hidden">
+                                                        <div className="bg-amber-400 h-full rounded-full transition-all" style={{ width: `${activity.progress}%` }}></div>
+                                                    </div>
+                                                    <span className="text-amber-400 text-xs font-bold shrink-0">{activity.progress}%</span>
+                                                </div>
+
+                                                <div className="flex items-center mt-1 text-sm font-bold">
+                                                    <span className="text-amber-400 ml-auto flex items-center gap-1">Continuar <span className="material-symbols-outlined text-[16px]">arrow_right_alt</span></span>
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </section>
                         )}
@@ -303,20 +321,6 @@ export default function KanbanPage() {
                 )}
             </main>
 
-            {assumeModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-[#1a2c32] border border-[#233f48] rounded-2xl p-6 w-full max-w-[360px] flex flex-col gap-4 shadow-xl">
-                        <h3 className="text-white font-bold text-lg leading-tight">Assumir Rotina</h3>
-                        <p className="text-[#92bbc9] text-sm">Deseja iniciar a execução de <strong className="text-white">&ldquo;{assumeModal.name}&rdquo;</strong>?</p>
-                        <div className="flex gap-3 mt-4">
-                            <button onClick={() => setAssumeModal(null)} className="flex-1 py-3 rounded-xl bg-[#233f48] text-white font-medium hover:bg-[#2c4e5a] transition-colors text-sm">Cancelar</button>
-                            <button onClick={() => handleAssume(assumeModal)} className="flex-1 py-3 rounded-xl bg-[#13b6ec] text-[#111e22] font-bold hover:bg-[#10a1d4] transition-colors shadow-[0_0_15px_rgba(19,182,236,0.2)] text-sm flex justify-center items-center gap-2">
-                                Iniciar <span className="material-symbols-outlined text-[18px]">play_arrow</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

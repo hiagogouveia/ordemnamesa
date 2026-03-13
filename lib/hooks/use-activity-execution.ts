@@ -86,7 +86,11 @@ export const useActivityData = (restaurantId: string | undefined, checklistId: s
                         
                         let newExecutions = [...old.executions];
                         if (payload.eventType === 'INSERT') {
-                            // Ensure no duplicates
+                            // Remove optimistic record for this task (id starts with 'optimistic-')
+                            newExecutions = newExecutions.filter(
+                                e => !(String(e.id).startsWith('optimistic-') && e.task_id === payload.new.task_id)
+                            );
+                            // Add real record if not already present
                             if (!newExecutions.some(e => e.id === payload.new.id)) {
                                 newExecutions.push(payload.new as KanbanExecution);
                             }
@@ -155,16 +159,26 @@ export const useToggleActivityTask = () => {
                     return data;
                 }
             } else {
-                // To uncheck, we set status to 'todo' instead of DELETING to avoid RLS issues.
-                if (executionId) {
-                    const { data, error } = await supabase
+                // To uncheck: delete the execution record (no record = task not done)
+                let realExecutionId = executionId;
+                if (!realExecutionId || String(realExecutionId).startsWith('optimistic-')) {
+                    // Look up the real execution from the DB
+                    const { data: exec } = await supabase
                         .from('task_executions')
-                        .update({ status: 'todo', executed_at: new Date().toISOString() })
-                        .eq('id', executionId)
-                        .select()
-                        .single();
+                        .select('id')
+                        .eq('task_id', taskId)
+                        .eq('checklist_id', checklistId)
+                        .eq('status', 'done')
+                        .maybeSingle();
+                    realExecutionId = exec?.id;
+                }
+                if (realExecutionId) {
+                    const { error } = await supabase
+                        .from('task_executions')
+                        .delete()
+                        .eq('id', realExecutionId);
                     if (error) throw error;
-                    return data;
+                    return { deleted: true, taskId };
                 }
             }
         },
@@ -193,12 +207,8 @@ export const useToggleActivityTask = () => {
                             } as KanbanExecution);
                         }
                     } else {
-                        if (variables.executionId) {
-                            newExecs = newExecs.map(e => e.id === variables.executionId ? { ...e, status: 'todo' } : e);
-                        } else {
-                            // If there's an optimistic one, filter by task_id
-                            newExecs = newExecs.map(e => e.task_id === variables.taskId ? { ...e, status: 'todo' } : e);
-                        }
+                        // Remove the execution record (uncheck = delete)
+                        newExecs = newExecs.filter(e => e.id !== variables.executionId && e.task_id !== variables.taskId);
                     }
 
                     return { ...old, executions: newExecs };
