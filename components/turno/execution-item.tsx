@@ -6,9 +6,10 @@ interface ExecutionItemProps {
     execution?: KanbanExecution;
     onToggle: (taskId: string, executionId: string | undefined, isDone: boolean) => void;
     locked?: boolean;
+    isBlockedSequential?: boolean;
 }
 
-export function ExecutionItem({ task, execution, onToggle, locked = false }: ExecutionItemProps) {
+export function ExecutionItem({ task, execution, onToggle, locked = false, isBlockedSequential = false }: ExecutionItemProps) {
     const isDone = Boolean(execution && execution.status === 'done');
 
     // Manage local animation state separate from the data status
@@ -89,6 +90,13 @@ export function ExecutionItem({ task, execution, onToggle, locked = false }: Exe
                     <div className="flex items-center gap-1 mt-2 text-amber-400 text-xs font-semibold">
                         <span className="material-symbols-outlined text-[14px]">photo_camera</span>
                         Exige foto (Em breve via câmera modal)
+                    </div>
+                )}
+
+                {isBlockedSequential && !isDone && (
+                    <div className="flex items-center gap-1 mt-2 text-[#92bbc9]/70 text-xs font-semibold">
+                        <span className="material-symbols-outlined text-[14px]">lock</span>
+                        Conclua a tarefa acima para habilitar
                     </div>
                 )}
             </div>

@@ -174,15 +174,29 @@ export default function ActivityExecutionPage() {
 
                     {/* Task List */}
                     <div className="flex flex-col gap-3">
-                        {tasks.map(task => {
+                        {tasks.map((task, index) => {
                             const execution = executions?.find(e => e.task_id === task.id);
+                            
+                            // Sequential lock logic
+                            const enforceSequential = checklist.enforce_sequential_order;
+                            let isAccessBlocked = false;
+                            
+                            if (enforceSequential && index > 0) {
+                                const prevTask = tasks[index - 1];
+                                const prevExecution = executions?.find(e => e.task_id === prevTask.id);
+                                if (!prevExecution || prevExecution.status !== 'done') {
+                                    isAccessBlocked = true;
+                                }
+                            }
+
                             return (
                                 <ExecutionItem
                                     key={task.id}
                                     task={task}
                                     execution={execution}
                                     onToggle={handleToggle}
-                                    locked={isCompleted}
+                                    locked={isCompleted || isAccessBlocked}
+                                    isBlockedSequential={isAccessBlocked}
                                 />
                             );
                         })}

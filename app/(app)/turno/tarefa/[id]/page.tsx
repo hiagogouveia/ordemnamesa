@@ -41,6 +41,22 @@ export default function TarefaDetailsPage({ params }: { params: Promise<{ id: st
         return task ? { ...task, checklist: cl } : null;
     }, [checklists, id, checklistId]);
 
+    const isBlockedSequential = useMemo(() => {
+        if (!taskData || !taskData.checklist.enforce_sequential_order) return false;
+        
+        const tasks = taskData.checklist.tasks || [];
+        const sortedTasks = [...tasks].sort((a,b) => (a.order ?? 0) - (b.order ?? 0));
+        const currentIndex = sortedTasks.findIndex(t => t.id === id);
+        
+        if (currentIndex > 0) {
+            const prevTask = sortedTasks[currentIndex - 1];
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const prevDone = !!(execucoes as any[])?.find(e => e.task_id === prevTask.id && e.status === 'done');
+            if (!prevDone) return true;
+        }
+        return false;
+    }, [taskData, execucoes, id]);
+
     if (isLoading) {
         return (
             <div className="flex h-screen items-center justify-center bg-[#f6f8f8] dark:bg-[#101d22]">
@@ -217,10 +233,15 @@ export default function TarefaDetailsPage({ params }: { params: Promise<{ id: st
             <div className="fixed bottom-0 left-0 right-0 w-full bg-white dark:bg-[#111e22] border-t border-gray-200 dark:border-[#233f48] p-6 flex flex-col gap-3 max-w-[500px] mx-auto z-40 pb-safe">
                 <button
                     onClick={handleSubmit}
-                    disabled={!isReadyToSubmit || isPending || isUploading || alreadyDoneToday}
+                    disabled={!isReadyToSubmit || isPending || isUploading || alreadyDoneToday || isBlockedSequential}
                     className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-[#111e22] text-lg font-bold py-4 rounded-xl shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2"
                 >
-                    {alreadyDoneToday ? (
+                    {isBlockedSequential ? (
+                        <>
+                            <span className="material-symbols-outlined text-[24px]">lock</span>
+                            Conclua a tarefa anterior primeiro
+                        </>
+                    ) : alreadyDoneToday ? (
                         <>
                             <span className="material-symbols-outlined text-[24px]">task_alt</span>
                             Já concluída hoje

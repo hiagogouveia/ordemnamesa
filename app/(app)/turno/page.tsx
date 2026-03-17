@@ -10,6 +10,8 @@ import { getCurrentShift } from '@/lib/utils';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { sortChecklistsByPriority } from '@/lib/utils/checklist-priority';
+import { RoutineCard } from '@/components/checklists/routine-card';
 
 function getActivityTimeStatus(
     startTime: string | undefined,
@@ -62,6 +64,12 @@ export default function KanbanPage() {
         return purchaseLists.find(pl => pl.target_role_ids?.some((id: string) => userRoleIds.includes(id)));
     }, [purchaseLists, userRoleIds]);
 
+    const currentMinutes = useMemo(() => {
+        if (!timeNow) return 0;
+        const [h, m] = timeNow.split(':').map(Number);
+        return h * 60 + m;
+    }, [timeNow]);
+
     const { todoActivities, doingActivities, doneActivities } = useMemo(() => {
         if (!kanbanData || !user) return { todoActivities: [], doingActivities: [], doneActivities: [] };
 
@@ -103,26 +111,21 @@ export default function KanbanPage() {
             }
         }
 
-        // Smart sort: atrasadas → ativas → futuras → sem janela, then required first within each group
-        const getTimePriority = (activity: typeof todo[0]) => {
-            const s = getActivityTimeStatus(
-                activity.start_time as string | undefined,
-                activity.end_time as string | undefined,
-                timeNow
-            );
-            if (s === 'after') return 0;
-            if (s === 'active') return 1;
-            if (s === 'before') return 2;
-            return 3;
-        };
+        // Smart sort
         todo.sort((a, b) => {
-            const diff = getTimePriority(a) - getTimePriority(b);
+            const diff = sortChecklistsByPriority(a as any, b as any, currentMinutes);
+            if (diff !== 0) return diff;
+            return (b.is_required ? 1 : 0) - (a.is_required ? 1 : 0);
+        });
+
+        doing.sort((a, b) => {
+            const diff = sortChecklistsByPriority(a as any, b as any, currentMinutes);
             if (diff !== 0) return diff;
             return (b.is_required ? 1 : 0) - (a.is_required ? 1 : 0);
         });
 
         return { todoActivities: todo, doingActivities: doing, doneActivities: done };
-    }, [kanbanData, user, timeNow]);
+    }, [kanbanData, user, timeNow, currentMinutes]);
 
     const allRequiredDone = useMemo(() => {
         if (!kanbanData) return false;
@@ -220,87 +223,22 @@ export default function KanbanPage() {
                             ) : (
                                 <div className="flex flex-col gap-3">
                                     {todoActivities.map(activity => {
-                                        const isAssignedToOther = activity.assigned_to_user_id && activity.assigned_to_user_id !== user?.id;
+                                        const isAssignedToOther = Boolean(activity.assigned_to_user_id && activity.assigned_to_user_id !== user?.id);
                                         const assumption = kanbanData?.assumptions?.find(a => a.checklist_id === activity.id);
-                                        const twStatus = getActivityTimeStatus(
-                                            activity.start_time as string | undefined,
-                                            activity.end_time as string | undefined,
-                                            timeNow
-                                        );
-                                        const isOverdue = twStatus === 'after';
-                                        const isFuture = twStatus === 'before';
-                                        const hasWindow = twStatus !== 'always';
-
-                                        const borderClass = isOverdue
-                                            ? 'border-l-4 border-red-500 border border-red-500/20'
-                                            : isFuture
-                                                ? 'border-l-4 border-[#233f48] opacity-80'
-                                                : activity.is_required
-                                                    ? 'border-l-4 border-[#13b6ec] border border-[#13b6ec]/30'
-                                                    : 'border-l-4 border-[#233f48]';
-
                                         return (
-                                            <div key={activity.id}
-                                                onClick={() => !isAssignedToOther && router.push(`/turno/atividade/${activity.id}`)}
-                                                className={`bg-[#1a2c32] rounded-xl p-4 flex flex-col gap-2 shadow-sm transition-all ${borderClass} ${!isAssignedToOther ? 'cursor-pointer hover:bg-[#1f363d]' : 'opacity-75'}`}>
-
-                                                <div className="flex justify-between items-start gap-3">
-                                                    <div>
-                                                        <span className="text-white text-base font-bold leading-snug">{activity.name}</span>
-                                                        <p className="text-[#92bbc9] text-xs mt-1">{activity.taskCount} {activity.taskCount === 1 ? 'item' : 'itens'}</p>
-                                                    </div>
-                                                    <div className="flex flex-col items-end gap-1.5 shrink-0">
-                                                        {isOverdue ? (
-                                                            <span className="bg-red-500/10 text-red-400 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase flex items-center gap-1">
-                                                                <span className="material-symbols-outlined text-[12px]">warning</span> Atrasada
-                                                            </span>
-                                                        ) : isFuture ? (
-                                                            <span className="bg-amber-500/10 text-amber-400 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase flex items-center gap-1">
-                                                                <span className="material-symbols-outlined text-[12px]">schedule</span> Agendada
-                                                            </span>
-                                                        ) : activity.is_required && (
-                                                            <span className="bg-[#13b6ec]/10 text-[#13b6ec] text-[10px] font-bold px-1.5 py-0.5 rounded uppercase flex items-center gap-1">
-                                                                <span className="material-symbols-outlined text-[12px]">bolt</span> Obrigatório
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                {/* Time window row */}
-                                                {hasWindow && (activity.start_time || activity.end_time) && (
-                                                    <div className={`flex items-center gap-1.5 text-xs font-medium ${isOverdue ? 'text-red-400/70' : isFuture ? 'text-amber-400/70' : 'text-[#13b6ec]/70'}`}>
-                                                        <span className="material-symbols-outlined text-[13px]">schedule</span>
-                                                        {activity.start_time && activity.end_time
-                                                            ? `${activity.start_time as string} – ${activity.end_time as string}`
-                                                            : activity.start_time
-                                                                ? `A partir de ${activity.start_time as string}`
-                                                                : `Até ${activity.end_time as string}`}
-                                                    </div>
-                                                )}
-
-                                                <div className="flex items-center gap-3 mt-1 pt-2 border-t border-[#233f48]/50 text-sm font-bold text-[#92bbc9]">
-                                                    {isAssignedToOther ? (
-                                                        <span className="text-[#325a67]">Atribuída a outro funcionário</span>
-                                                    ) : isFuture ? (
-                                                        <span className="text-amber-400/70 flex items-center gap-1 text-xs">
-                                                            <span className="material-symbols-outlined text-[14px]">schedule</span>
-                                                            Disponível às {activity.start_time as string}
-                                                        </span>
-                                                    ) : isOverdue ? (
-                                                        <span className="text-red-400/80 flex items-center gap-1 text-xs">
-                                                            <span className="material-symbols-outlined text-[14px]">warning</span>
-                                                            Não executada no horário previsto
-                                                        </span>
-                                                    ) : assumption ? (
-                                                        <span className="text-[#13b6ec]/80 flex items-center gap-1 text-xs">
-                                                            <span className="material-symbols-outlined text-[14px]">person</span>
-                                                            Assumida por {assumption.user_name}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-[#13b6ec] ml-auto flex items-center gap-1">Ver detalhes <span className="material-symbols-outlined text-[16px]">arrow_right_alt</span></span>
-                                                    )}
-                                                </div>
-                                            </div>
+                                            <RoutineCard
+                                                key={activity.id}
+                                                variant="collaborator_todo"
+                                                title={activity.name}
+                                                itemsCount={activity.taskCount}
+                                                start_time={activity.start_time as string | undefined}
+                                                end_time={activity.end_time as string | undefined}
+                                                currentMinutes={currentMinutes}
+                                                isRequired={activity.is_required}
+                                                isAssignedToOther={isAssignedToOther}
+                                                assumptionName={assumption?.user_name}
+                                                onClick={() => router.push(`/turno/atividade/${activity.id}`)}
+                                            />
                                         );
                                     })}
                                 </div>
@@ -319,37 +257,19 @@ export default function KanbanPage() {
                                     {doingActivities.map(activity => {
                                         const assumption = kanbanData?.assumptions?.find(a => a.checklist_id === activity.id);
                                         return (
-                                            <div key={activity.id}
+                                            <RoutineCard
+                                                key={activity.id}
+                                                variant="collaborator_doing"
+                                                title={activity.name}
+                                                itemsCount={activity.taskCount}
+                                                start_time={activity.start_time as string | undefined}
+                                                end_time={activity.end_time as string | undefined}
+                                                currentMinutes={currentMinutes}
+                                                progress={activity.progress}
+                                                flaggedCount={activity.flaggedTasksCount}
+                                                assumptionName={assumption?.user_name}
                                                 onClick={() => router.push(`/turno/atividade/${activity.id}`)}
-                                                className="bg-[#1a2c32] cursor-pointer hover:bg-[#1f363d] transition-colors border border-amber-500/20 rounded-xl p-4 flex flex-col gap-3">
-
-                                                <div className="flex justify-between items-start gap-2">
-                                                    <span className="text-white text-base font-bold leading-snug">{activity.name}</span>
-                                                    {activity.flaggedTasksCount > 0 && (
-                                                        <span className="flex items-center gap-1 text-red-400 text-[10px] font-bold bg-red-500/10 px-2 py-1 rounded">
-                                                            <span className="material-symbols-outlined text-[12px]">warning</span> Impedimento
-                                                        </span>
-                                                    )}
-                                                </div>
-
-                                                {assumption && (
-                                                    <p className="text-[#92bbc9] text-xs flex items-center gap-1 -mt-1">
-                                                        <span className="material-symbols-outlined text-[14px] text-[#13b6ec]">person</span>
-                                                        Em execução por: <span className="text-white font-medium ml-0.5">{assumption.user_name}</span>
-                                                    </p>
-                                                )}
-
-                                                <div className="flex items-center gap-3">
-                                                    <div className="flex-1 w-full bg-[#101d22] rounded-full h-2.5 overflow-hidden">
-                                                        <div className="bg-amber-400 h-full rounded-full transition-all" style={{ width: `${activity.progress}%` }}></div>
-                                                    </div>
-                                                    <span className="text-amber-400 text-xs font-bold shrink-0">{activity.progress}%</span>
-                                                </div>
-
-                                                <div className="flex items-center mt-1 text-sm font-bold">
-                                                    <span className="text-amber-400 ml-auto flex items-center gap-1">Continuar <span className="material-symbols-outlined text-[16px]">arrow_right_alt</span></span>
-                                                </div>
-                                            </div>
+                                            />
                                         );
                                     })}
                                 </div>

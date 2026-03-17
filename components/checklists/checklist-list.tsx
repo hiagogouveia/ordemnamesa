@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { ChecklistCard, ExtendedChecklist } from "./checklist-card";
+import { ExtendedChecklist } from "./checklist-card";
+import { RoutineCard } from "./routine-card";
 import { useChecklists } from "@/lib/hooks/use-checklists";
 import { useRoles } from "@/lib/hooks/use-roles";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
+import { useSortedChecklists } from "@/lib/hooks/use-sorted-checklists";
 
 interface ChecklistListProps {
     onSelect: (checklist: ExtendedChecklist) => void;
@@ -25,6 +27,8 @@ export function ChecklistList({ onSelect, selectedId }: ChecklistListProps) {
         const matchesFilter = activeRoleId === null || c.role_id === activeRoleId;
         return matchesSearch && matchesFilter;
     });
+
+    const { sortedChecklists, currentMinutes } = useSortedChecklists(filteredChecklists);
 
     return (
         <div className="w-full md:w-[400px] lg:w-[420px] border-r border-[#233f48] bg-[#101d22] flex flex-col shrink-0 h-full">
@@ -89,16 +93,28 @@ export function ChecklistList({ onSelect, selectedId }: ChecklistListProps) {
                     <div className="text-center p-6 border border-red-500/30 bg-red-500/10 rounded-xl">
                         <p className="text-red-400 text-sm font-bold">Erro ao carregar</p>
                     </div>
-                ) : filteredChecklists?.length === 0 ? (
+                ) : sortedChecklists?.length === 0 ? (
                     <div className="text-center p-8">
                         <span className="material-symbols-outlined text-4xl text-[#325a67] mb-2">search_off</span>
                         <p className="text-[#92bbc9] text-sm">Nenhuma rotina encontrada</p>
                     </div>
                 ) : (
-                    filteredChecklists?.map((checklist: ExtendedChecklist) => (
-                        <ChecklistCard
+                    sortedChecklists?.map((checklist: ExtendedChecklist) => (
+                        <RoutineCard
                             key={checklist.id}
-                            checklist={checklist}
+                            variant="admin"
+                            title={checklist.name}
+                            description={checklist.description}
+                            start_time={checklist.start_time as string | undefined}
+                            end_time={checklist.end_time as string | undefined}
+                            currentMinutes={currentMinutes}
+                            isActiveStatus={checklist.status === 'active'}
+                            adminStatusString={checklist.status}
+                            itemsCount={checklist.tasks?.length || 0}
+                            shift={checklist.shift}
+                            routineType={checklist.checklist_type}
+                            sectorName={checklist.category || checklist.roles?.name}
+                            sectorColor={checklist.roles?.color}
                             isSelected={selectedId === checklist.id}
                             onClick={() => onSelect(checklist)}
                         />

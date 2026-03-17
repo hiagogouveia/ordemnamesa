@@ -58,6 +58,8 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
     const [endTime, setEndTime] = useState("");
     // Sprint 8: Custom recurrence
     const [recurrenceConfig, setRecurrenceConfig] = useState<RecurrenceConfig | undefined>(undefined);
+    // Sequence order
+    const [enforceSequentialOrder, setEnforceSequentialOrder] = useState(false);
     const [showRecurrencePicker, setShowRecurrencePicker] = useState(false);
     const taskInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
     const [tasks, setTasks] = useState<(Partial<ChecklistTask> & { tempId: string })[]>([]);
@@ -90,6 +92,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
             setHasTimeWindow(!!(st || et));
             // Sprint 8: recurrence config
             setRecurrenceConfig(checklist.recurrence_config as RecurrenceConfig | undefined);
+            setEnforceSequentialOrder(checklist.enforce_sequential_order ?? false);
             setTasks(
                 (checklist.tasks || []).map((t) => ({ ...t, tempId: t.id }))
             );
@@ -106,6 +109,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
             setEndTime("");
             setHasTimeWindow(false);
             setRecurrenceConfig(undefined);
+            setEnforceSequentialOrder(false);
             setTasks([]);
             setErrorMsg(null);
             setShowDeleteModal(false);
@@ -170,6 +174,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
             end_time: hasTimeWindow && endTime ? endTime : null,
             // Sprint 8: custom recurrence config
             recurrence_config: recurrence === 'custom' ? recurrenceConfig : null,
+            enforce_sequential_order: enforceSequentialOrder,
             status: (isPublishing ? 'active' : 'draft') as "active" | "draft" | "archived",
             tasks: tasks.map(t => ({
                 title: t.title,
@@ -394,19 +399,36 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
                             )}
                         </div>
 
-                        <div className="flex items-center gap-3 p-3 bg-[#16262c] border border-[#233f48] rounded-xl">
-                            <label className="relative inline-flex items-center cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={isRequired}
-                                    onChange={(e) => setIsRequired(e.target.checked)}
-                                    className="sr-only peer"
-                                />
-                                <div className="w-11 h-6 bg-[#233f48] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#13b6ec]"></div>
-                            </label>
-                            <div>
-                                <h4 className="text-white text-sm font-bold">Obrigatório</h4>
-                                <p className="text-[#92bbc9] text-xs">Exigir conclusão no painel de turno</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div className="flex items-center gap-3 p-3 bg-[#16262c] border border-[#233f48] rounded-xl">
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={isRequired}
+                                        onChange={(e) => setIsRequired(e.target.checked)}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-11 h-6 bg-[#233f48] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#13b6ec]"></div>
+                                </label>
+                                <div>
+                                    <h4 className="text-white text-sm font-bold">Obrigatório</h4>
+                                    <p className="text-[#92bbc9] text-xs">Exigir conclusão no painel de turno</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3 p-3 bg-[#16262c] border border-[#233f48] rounded-xl">
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={enforceSequentialOrder}
+                                        onChange={(e) => setEnforceSequentialOrder(e.target.checked)}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-11 h-6 bg-[#233f48] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#13b6ec]"></div>
+                                </label>
+                                <div>
+                                    <h4 className="text-white text-sm font-bold">Ordem Sequencial</h4>
+                                    <p className="text-[#92bbc9] text-xs">Concluir uma a uma nesta ordem</p>
+                                </div>
                             </div>
                         </div>
                     </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { Checklist } from "@/lib/types";
+import { getChecklistPriority, ChecklistPriorityLevel } from "@/lib/utils/checklist-priority";
 
 // Extended interface with UI-specific properties that we added
 export interface ExtendedChecklist extends Checklist {
@@ -11,9 +12,10 @@ interface ChecklistCardProps {
     checklist: ExtendedChecklist;
     isSelected: boolean;
     onClick: () => void;
+    currentMinutes?: number;
 }
 
-export function ChecklistCard({ checklist, isSelected, onClick }: ChecklistCardProps) {
+export function ChecklistCard({ checklist, isSelected, onClick, currentMinutes = 0 }: ChecklistCardProps) {
     const getStatusBadge = (status: string) => {
         switch (status) {
             case 'active': return <span className="bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide">Ativo</span>;
@@ -40,6 +42,35 @@ export function ChecklistCard({ checklist, isSelected, onClick }: ChecklistCardP
         }
     };
 
+    const priority = getChecklistPriority(checklist, currentMinutes);
+    const hasTime = checklist.start_time || checklist.end_time;
+    
+    let timeLabel = "Sem horário";
+    if (checklist.start_time && checklist.end_time) {
+        timeLabel = `${checklist.start_time} - ${checklist.end_time}`;
+    } else if (checklist.start_time) {
+        timeLabel = `A partir de ${checklist.start_time}`;
+    } else if (checklist.end_time) {
+        timeLabel = `Até ${checklist.end_time}`;
+    }
+
+    const renderPriorityBadge = () => {
+        if (!hasTime) {
+            return <span className="text-[10px] font-bold text-[#92bbc9] bg-[#16262c] px-2 py-0.5 rounded-full border border-[#233f48] uppercase tracking-wide">Sem Horário</span>;
+        }
+        
+        switch (priority) {
+            case ChecklistPriorityLevel.ACTIVE:
+                return <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 uppercase tracking-wide flex items-center gap-1"><span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span> Ativa</span>;
+            case ChecklistPriorityLevel.FUTURE:
+                return <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20 uppercase tracking-wide flex items-center gap-1"><span className="material-symbols-outlined text-[12px]">lock_clock</span> Futura</span>;
+            case ChecklistPriorityLevel.LATE:
+                return <span className="text-[10px] font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20 uppercase tracking-wide flex items-center gap-1"><span className="material-symbols-outlined text-[12px]">warning</span> Atrasada</span>;
+            default:
+                return null;
+        }
+    };
+
     return (
         <button
             onClick={onClick}
@@ -60,6 +91,14 @@ export function ChecklistCard({ checklist, isSelected, onClick }: ChecklistCardP
                     {checklist.description}
                 </p>
             )}
+
+            <div className="flex items-center gap-2 mb-4 bg-[#101d22] p-2 rounded-lg border border-[#233f48]/50">
+                <span className="material-symbols-outlined text-[#13b6ec] text-[16px]">schedule</span>
+                <span className="text-xs font-bold text-[#e0e0e0]">{timeLabel}</span>
+                <div className="ml-auto">
+                    {renderPriorityBadge()}
+                </div>
+            </div>
 
             <div className="flex items-center flex-wrap gap-x-4 gap-y-2 mt-auto pt-3 border-t border-[#233f48]/50">
                 <div className="flex items-center gap-1.5 text-[#325a67]">

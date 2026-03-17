@@ -46,6 +46,7 @@ export interface Checklist {
     start_time?: string        // Sprint 8: formato HH:mm
     end_time?: string          // Sprint 8: formato HH:mm
     recurrence_config?: RecurrenceConfig // Sprint 8
+    enforce_sequential_order?: boolean
     tasks?: ChecklistTask[]
     roles?: Role
 }
