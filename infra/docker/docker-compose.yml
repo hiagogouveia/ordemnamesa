@@ -39,7 +39,7 @@ services:
   # Next.js — aplicação web Ordem na Mesa
   # ---------------------------------------------------------------------------
   nextjs:
-    image: ghcr.io/${GITHUB_REPOSITORY:-org/ordem-na-mesa-web}:${IMAGE_TAG:-latest}
+    image: ghcr.io/hiagogouveia/ordem-na-mesa-web:${IMAGE_TAG:-nonprod-latest}
     container_name: ordem-na-mesa-nonprod-web
     restart: always
     expose:
