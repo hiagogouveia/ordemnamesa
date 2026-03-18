@@ -13,7 +13,8 @@ on:
       - "next.config.ts"
       - "package.json"
       - "package-lock.json"
-      - "infra/docker/Dockerfile"
+      - "infra/docker/**"
+      - ".github/workflows/app-nonprod.yml"
   workflow_dispatch:
     inputs:
       force_deploy:
