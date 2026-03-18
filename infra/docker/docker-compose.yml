@@ -1,0 +1,73 @@
+name: ordem-na-mesa-nonprod
+
+networks:
+  proxy:
+    name: ordem-na-mesa-nonprod-proxy
+
+volumes:
+  traefik-acme:
+    name: ordem-na-mesa-nonprod-acme
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Traefik — proxy reverso + SSL automático via Let's Encrypt
+  # ---------------------------------------------------------------------------
+  traefik:
+    image: traefik:v3.2
+    container_name: ordem-na-mesa-nonprod-traefik
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /opt/ordemnamesa/traefik/traefik.yml:/traefik.yml:ro
+      - /opt/ordemnamesa/traefik/acme.json:/acme.json
+    networks:
+      - proxy
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "traefik.enable=false"
+
+  # ---------------------------------------------------------------------------
+  # Next.js — aplicação web Ordem na Mesa
+  # ---------------------------------------------------------------------------
+  nextjs:
+    image: ghcr.io/${GITHUB_REPOSITORY:-org/ordem-na-mesa-web}:${IMAGE_TAG:-latest}
+    container_name: ordem-na-mesa-nonprod-web
+    restart: always
+    expose:
+      - "3000"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+    networks:
+      - proxy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nextjs.rule=Host(`nonprod.ordemnamesa.com.br`)"
+      - "traefik.http.routers.nextjs.entrypoints=websecure"
+      - "traefik.http.routers.nextjs.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.nextjs-http.rule=Host(`nonprod.ordemnamesa.com.br`)"
+      - "traefik.http.routers.nextjs-http.entrypoints=web"
+      - "traefik.http.routers.nextjs-http.middlewares=redirect-https"
+      - "traefik.http.middlewares.redirect-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.redirect-https.redirectscheme.permanent=true"
+      - "traefik.http.services.nextjs.loadbalancer.server.port=3000"

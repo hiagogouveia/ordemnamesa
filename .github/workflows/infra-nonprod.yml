@@ -1,0 +1,100 @@
+name: Infra NONPROD — Terraform
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "infra/terraform/**"
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Ação Terraform"
+        required: true
+        default: "plan"
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  TF_WORKING_DIR: infra/terraform/environments/nonprod
+  TF_VERSION: "1.10.1"
+
+jobs:
+  terraform:
+    name: Terraform ${{ github.event.inputs.action || 'apply' }}
+    runs-on: ubuntu-latest
+    environment: nonprod
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      # Chave privada OCI para autenticação via API key
+      - name: Configurar chave OCI
+        run: |
+          mkdir -p ~/.oci
+          echo "${{ secrets.OCI_PRIVATE_KEY }}" > ~/.oci/oci_api_key.pem
+          chmod 600 ~/.oci/oci_api_key.pem
+
+      - name: Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.OCI_OBJECT_STORAGE_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.OCI_OBJECT_STORAGE_SECRET_KEY }}
+        run: |
+          terraform init \
+            -backend-config="endpoint=https://${{ secrets.OCI_OBJECT_STORAGE_NAMESPACE }}.compat.objectstorage.sa-saopaulo-1.oraclecloud.com" \
+            -reconfigure
+
+      - name: Terraform Validate
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform validate
+
+      - name: Terraform Plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.OCI_OBJECT_STORAGE_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.OCI_OBJECT_STORAGE_SECRET_KEY }}
+          TF_VAR_tenancy_ocid: ${{ secrets.OCI_TENANCY_OCID }}
+          TF_VAR_user_ocid: ${{ secrets.OCI_USER_OCID }}
+          TF_VAR_fingerprint: ${{ secrets.OCI_FINGERPRINT }}
+          TF_VAR_private_key_path: ~/.oci/oci_api_key.pem
+        run: terraform plan -out=tfplan -input=false
+
+      - name: Terraform Apply
+        if: |
+          github.ref == 'refs/heads/main' &&
+          (github.event_name == 'push' || github.event.inputs.action == 'apply')
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.OCI_OBJECT_STORAGE_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.OCI_OBJECT_STORAGE_SECRET_KEY }}
+          TF_VAR_tenancy_ocid: ${{ secrets.OCI_TENANCY_OCID }}
+          TF_VAR_user_ocid: ${{ secrets.OCI_USER_OCID }}
+          TF_VAR_fingerprint: ${{ secrets.OCI_FINGERPRINT }}
+          TF_VAR_private_key_path: ~/.oci/oci_api_key.pem
+        run: terraform apply -auto-approve tfplan
+
+      - name: Outputs
+        if: success()
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.OCI_OBJECT_STORAGE_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.OCI_OBJECT_STORAGE_SECRET_KEY }}
+          TF_VAR_tenancy_ocid: ${{ secrets.OCI_TENANCY_OCID }}
+          TF_VAR_user_ocid: ${{ secrets.OCI_USER_OCID }}
+          TF_VAR_fingerprint: ${{ secrets.OCI_FINGERPRINT }}
+          TF_VAR_private_key_path: ~/.oci/oci_api_key.pem
+        run: terraform output

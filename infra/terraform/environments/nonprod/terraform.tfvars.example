@@ -1,0 +1,18 @@
+# Copiar para terraform.tfvars e preencher com seus valores
+# NUNCA commitar terraform.tfvars (já está no .gitignore)
+
+# --- OCI Auth ---
+tenancy_ocid     = "ocid1.tenancy.oc1..xxxx"
+user_ocid        = "ocid1.user.oc1..xxxx"
+fingerprint      = "xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx"
+private_key_path = "~/.oci/oci_api_key.pem"
+
+# --- Região ---
+region = "sa-saopaulo-1"
+
+# --- Rede (defaults já configurados, alterar se necessário) ---
+# vcn_cidr    = "10.0.0.0/16"
+# subnet_cidr = "10.0.1.0/24"
+
+# --- Compute ---
+# instance_shape = "VM.Standard.E2.1.Micro"

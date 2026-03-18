@@ -1,0 +1,35 @@
+# Traefik static configuration
+# Arquivo montado em /traefik.yml dentro do container
+
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+log:
+  level: INFO
+
+ping: {}
+
+api:
+  dashboard: false
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      # Substituir pelo e-mail real antes do deploy
+      email: devops@ordemnamesa.com.br
+      storage: /acme.json
+      httpChallenge:
+        entryPoint: web
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: ordem-na-mesa-nonprod-proxy
