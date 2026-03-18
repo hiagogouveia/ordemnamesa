@@ -32,7 +32,9 @@ export async function middleware(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     const publicRoutes = ['/', '/login', '/cadastro']
-    const isPublicRoute = publicRoutes.includes(request.nextUrl.pathname)
+    const isPublicRoute =
+        publicRoutes.includes(request.nextUrl.pathname) ||
+        request.nextUrl.pathname.startsWith('/blog')
 
     // Redirect to login if unauthenticated user tries to access a protected route
     if (!user && !isPublicRoute && !request.nextUrl.pathname.startsWith('/api')) {
