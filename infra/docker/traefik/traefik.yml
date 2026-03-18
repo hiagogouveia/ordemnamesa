@@ -29,7 +29,6 @@ certificatesResolvers:
         entryPoint: web
 
 providers:
-  docker:
-    endpoint: "unix:///var/run/docker.sock"
-    exposedByDefault: false
-    network: ordem-na-mesa-nonprod-proxy
+  file:
+    filename: /routes.yml
+    watch: true

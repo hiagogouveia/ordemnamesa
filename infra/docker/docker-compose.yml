@@ -21,8 +21,8 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - /opt/ordemnamesa/traefik/traefik.yml:/traefik.yml:ro
+      - /opt/ordemnamesa/traefik/routes.yml:/routes.yml:ro
       - /opt/ordemnamesa/traefik/acme.json:/acme.json
     networks:
       - proxy
@@ -32,8 +32,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-    labels:
-      - "traefik.enable=false"
 
   # ---------------------------------------------------------------------------
   # Next.js — aplicação web Ordem na Mesa
@@ -60,14 +58,3 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.nextjs.rule=Host(`nonprod.ordemnamesa.com.br`)"
-      - "traefik.http.routers.nextjs.entrypoints=websecure"
-      - "traefik.http.routers.nextjs.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.nextjs-http.rule=Host(`nonprod.ordemnamesa.com.br`)"
-      - "traefik.http.routers.nextjs-http.entrypoints=web"
-      - "traefik.http.routers.nextjs-http.middlewares=redirect-https"
-      - "traefik.http.middlewares.redirect-https.redirectscheme.scheme=https"
-      - "traefik.http.middlewares.redirect-https.redirectscheme.permanent=true"
-      - "traefik.http.services.nextjs.loadbalancer.server.port=3000"
