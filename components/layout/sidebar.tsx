@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { Logo } from "@/components/ui/Logo";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -71,12 +72,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
         <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#111e22] border-r border-[#233f48] flex flex-col h-full shrink-0 transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
             <div className="w-full px-6 flex items-center justify-between mb-8 pt-6">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-[#13b6ec] flex items-center justify-center overflow-hidden shrink-0">
-                        {/* Logo icon: garfo + check em #101d22 */}
-                        <span className="material-symbols-outlined text-[#101d22] text-2xl">
-                            restaurant
-                        </span>
-                    </div>
+                    <Logo width={40} height={40} />
                     <div className="flex flex-col">
                         <span className="text-white font-bold text-sm leading-tight">
                             Ordem na Mesa

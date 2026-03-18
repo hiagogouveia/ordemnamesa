@@ -10,6 +10,9 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Ordem na Mesa",
   description: "Sistema de checklists digitais para restaurantes",
+  icons: {
+    icon: '/logo-icon.png',
+  },
 };
 
 export default function RootLayout({

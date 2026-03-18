@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { Logo } from "@/components/ui/Logo";
 import { createClient } from "@/lib/supabase/client";
 
 const TITLES: Record<string, string> = {
@@ -48,8 +49,8 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
                 </button>
 
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#13b6ec] text-[#111e22] shadow-sm shadow-[#13b6ec]/20 lg:hidden">
-                        <span className="material-symbols-outlined text-[20px]">restaurant</span>
+                    <div className="lg:hidden">
+                        <Logo width={32} height={32} />
                     </div>
                     <h2 className="text-xl font-bold text-white tracking-tight hidden sm:block">{getHeaderTitle()}</h2>
                 </div>
