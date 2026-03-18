@@ -53,6 +53,12 @@ export function Navbar() {
             >
               Como Funciona
             </a>
+            <Link
+              href="/blog"
+              className="text-sm font-semibold text-slate-600 dark:text-[#93adc8] hover:text-primary transition-colors"
+            >
+              Blog
+            </Link>
             <div className="flex items-center gap-4 border-l border-slate-200 dark:border-[#293a41] pl-8">
               <Link
                 href="/login"
