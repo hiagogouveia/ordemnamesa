@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
+import { Logo } from "@/components/ui/Logo";
 
 interface RestaurantData {
     restaurant_id: string;
@@ -106,9 +107,7 @@ export default function SelecionarRestaurantePage() {
             <div className="w-full max-w-2xl flex flex-col items-center">
                 {/* Header Simples */}
                 <div className="flex items-center gap-3 mb-10">
-                    <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-[#13b6ec] text-[#111e22] shadow-lg shadow-[#13b6ec]/20">
-                        <span className="material-symbols-outlined text-[28px]">restaurant</span>
-                    </div>
+                    <Logo width={48} height={48} />
                     <h1 className="text-white text-2xl font-bold tracking-tight">Ordem na Mesa</h1>
                 </div>
 
