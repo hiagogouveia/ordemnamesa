@@ -3,8 +3,7 @@ name: Deploy Web App
 on:
   push:
     branches:
-      - main
-      - develop
+      - main # develop agora faz deploy na OCI (app-nonprod.yml)
 
 jobs:
   deploy:
