@@ -35,6 +35,11 @@ export interface RoutineCardProps {
     // Events & States
     isSelected?: boolean;
     onClick: () => void;
+    
+    // Drag & Drop
+    containerRef?: React.Ref<HTMLButtonElement>;
+    containerStyle?: React.CSSProperties;
+    dragHandleProps?: Record<string, any>;
 }
 
 export function RoutineCard({
@@ -57,7 +62,10 @@ export function RoutineCard({
     assumptionName,
     isAssignedToOther = false,
     isSelected = false,
-    onClick
+    onClick,
+    containerRef,
+    containerStyle,
+    dragHandleProps
 }: RoutineCardProps) {
 
     // --- Time and Status Calculation ---
@@ -144,20 +152,33 @@ export function RoutineCard({
 
     return (
         <button
+            ref={containerRef}
+            style={containerStyle}
             onClick={() => {
                 if (!isAssignedToOther || variant === "admin") onClick();
             }}
-            className={`w-full text-left p-4 rounded-xl border transition-all duration-200 flex flex-col gap-2 ${cardBgClass}`}
+            className={`w-full text-left p-4 rounded-xl border transition-all duration-200 flex flex-col gap-2 ${cardBgClass} ${dragHandleProps ? 'group/card' : ''}`}
         >
             <div className="flex justify-between items-start gap-3 w-full">
-                <div>
-                    <h3 className={`font-bold text-base line-clamp-1 pr-2 ${variant === 'admin' ? (isSelected ? "text-white" : "text-white/90") : "text-white leading-snug"}`}>
-                        {title}
-                    </h3>
-                    
-                    {variant !== 'admin' && (
-                        <p className="text-[#92bbc9] text-xs mt-1">{itemsCount} {itemsCount === 1 ? 'item' : 'itens'}</p>
+                <div className="flex items-start gap-2 max-w-full overflow-hidden">
+                    {dragHandleProps && (
+                        <div
+                            {...dragHandleProps}
+                            onClick={(e) => e.stopPropagation()} // Prevent card selection when dragging
+                            className="shrink-0 -ml-2 -mt-1 p-1 flex items-center justify-center rounded hover:bg-[#101d22] cursor-grab active:cursor-grabbing text-[#325a67] group-hover/card:text-[#92bbc9] transition-colors"
+                        >
+                            <span className="material-symbols-outlined text-[18px]">drag_indicator</span>
+                        </div>
                     )}
+                    <div className="min-w-0">
+                        <h3 className={`font-bold text-base truncate pr-2 ${variant === 'admin' ? (isSelected ? "text-white" : "text-white/90") : "text-white leading-snug"}`}>
+                            {title}
+                        </h3>
+                        
+                        {variant !== 'admin' && (
+                            <p className="text-[#92bbc9] text-xs mt-1">{itemsCount} {itemsCount === 1 ? 'item' : 'itens'}</p>
+                        )}
+                    </div>
                 </div>
 
                 <div className="flex flex-col items-end gap-1.5 shrink-0">

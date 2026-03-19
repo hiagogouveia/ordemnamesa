@@ -43,7 +43,7 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Permissões do restaurante não encontradas' }, { status: 403 });
         }
 
-        const { data: checklists, error } = await adminSupabase
+        let { data: checklists, error } = await adminSupabase
             .from('checklists')
             .select(`
                 *,
@@ -52,11 +52,31 @@ export async function GET(request: Request) {
             `)
             .eq('restaurant_id', restaurant_id)
             .eq('active', true)
-            .order('created_at', { ascending: false });
+            .order('order_index', { ascending: true });
 
         if (error) {
-            console.error('[GET /api/checklists] Falha Fetch Checklists:', error);
-            return NextResponse.json({ error: error.message }, { status: 500 });
+            // Em caso de fallback (ex: coluna order_index inexistente)
+            if (error.code === '42703' || error.message.includes('order_index')) {
+                const fallbackFetch = await adminSupabase
+                    .from('checklists')
+                    .select(`
+                        *,
+                        roles (*),
+                        tasks:checklist_tasks(*)
+                    `)
+                    .eq('restaurant_id', restaurant_id)
+                    .eq('active', true)
+                    .order('created_at', { ascending: false });
+
+                if (fallbackFetch.error) {
+                    console.error('[GET /api/checklists] Falha Fetch Fallback Checklists:', fallbackFetch.error);
+                    return NextResponse.json({ error: fallbackFetch.error.message }, { status: 500 });
+                }
+                checklists = fallbackFetch.data;
+            } else {
+                console.error('[GET /api/checklists] Falha Fetch Checklists:', error);
+                return NextResponse.json({ error: error.message }, { status: 500 });
+            }
         }
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

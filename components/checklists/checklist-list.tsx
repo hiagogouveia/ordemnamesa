@@ -1,6 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    DragEndEvent,
+} from "@dnd-kit/core";
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    verticalListSortingStrategy,
+    useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { createClient } from '@/lib/supabase/client';
 import { ExtendedChecklist } from "./checklist-card";
 import { RoutineCard } from "./routine-card";
 import { useChecklists } from "@/lib/hooks/use-checklists";
@@ -13,8 +31,61 @@ interface ChecklistListProps {
     selectedId: string | null;
 }
 
+function SortableRoutineCard({ checklist, currentMinutes, onSelect, selectedId, canReorder }: {
+    checklist: ExtendedChecklist;
+    currentMinutes: number;
+    onSelect: (c: ExtendedChecklist) => void;
+    selectedId: string | null;
+    canReorder: boolean;
+}) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({
+        id: checklist.id,
+        disabled: !canReorder
+    });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 10 : 1,
+        opacity: isDragging ? 0.5 : 1,
+    };
+
+    return (
+        <RoutineCard
+            containerRef={setNodeRef}
+            containerStyle={style}
+            dragHandleProps={canReorder ? { ...attributes, ...listeners } : undefined}
+            variant="admin"
+            title={checklist.name}
+            description={checklist.description}
+            start_time={checklist.start_time as string | undefined}
+            end_time={checklist.end_time as string | undefined}
+            currentMinutes={currentMinutes}
+            isActiveStatus={checklist.status === 'active'}
+            adminStatusString={checklist.status}
+            itemsCount={checklist.tasks?.length || 0}
+            shift={checklist.shift}
+            routineType={checklist.checklist_type}
+            sectorName={checklist.category || checklist.roles?.name}
+            sectorColor={checklist.roles?.color}
+            isSelected={selectedId === checklist.id}
+            onClick={() => onSelect(checklist)}
+        />
+    );
+}
+
 export function ChecklistList({ onSelect, selectedId }: ChecklistListProps) {
     const restaurantId = useRestaurantStore((state) => state.restaurantId);
+    const userRole = useRestaurantStore((state) => state.userRole);
+    const canReorder = userRole === 'owner' || userRole === 'manager';
+    
     const { data: checklists, isLoading, error } = useChecklists(restaurantId || undefined);
     const { data: roles = [] } = useRoles(restaurantId || undefined);
     const [searchTerm, setSearchTerm] = useState("");
@@ -29,6 +100,60 @@ export function ChecklistList({ onSelect, selectedId }: ChecklistListProps) {
     });
 
     const { sortedChecklists, currentMinutes } = useSortedChecklists(filteredChecklists);
+
+    const [optimisticList, setOptimisticList] = useState<ExtendedChecklist[]>([]);
+
+    useEffect(() => {
+        setOptimisticList(prev => {
+            if (!sortedChecklists) return prev;
+
+            const isSame =
+                prev.length === sortedChecklists.length &&
+                prev.every((item, i) => item.id === sortedChecklists[i]?.id);
+
+            return isSame ? prev : sortedChecklists;
+        });
+    }, [sortedChecklists]);
+
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    );
+
+    const handleDragEnd = async (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+
+        const oldIndex = optimisticList.findIndex((c) => c.id === active.id);
+        const newIndex = optimisticList.findIndex((c) => c.id === over.id);
+
+        const newList = arrayMove(optimisticList, oldIndex, newIndex);
+        
+        const updatedList = newList.map((item, index) => ({
+            ...item,
+            order_index: index
+        }));
+        
+        setOptimisticList(updatedList);
+
+        const supabase = createClient();
+        try {
+            const payload = updatedList.map(item => ({
+                id: item.id,
+                order_index: item.order_index
+            }));
+
+            const { error } = await supabase
+                .from('checklists')
+                .upsert(payload, { onConflict: 'id' });
+
+            if (error) {
+                console.error("Erro Supabase:", error);
+            }
+        } catch (err) {
+            console.error("Erro fatal ao reordenar rotinas:", err);
+        }
+    };
 
     return (
         <div className="w-full md:w-[400px] lg:w-[420px] border-r border-[#233f48] bg-[#101d22] flex flex-col shrink-0 h-full">
@@ -93,32 +218,26 @@ export function ChecklistList({ onSelect, selectedId }: ChecklistListProps) {
                     <div className="text-center p-6 border border-red-500/30 bg-red-500/10 rounded-xl">
                         <p className="text-red-400 text-sm font-bold">Erro ao carregar</p>
                     </div>
-                ) : sortedChecklists?.length === 0 ? (
+                ) : optimisticList?.length === 0 ? (
                     <div className="text-center p-8">
                         <span className="material-symbols-outlined text-4xl text-[#325a67] mb-2">search_off</span>
                         <p className="text-[#92bbc9] text-sm">Nenhuma rotina encontrada</p>
                     </div>
                 ) : (
-                    sortedChecklists?.map((checklist: ExtendedChecklist) => (
-                        <RoutineCard
-                            key={checklist.id}
-                            variant="admin"
-                            title={checklist.name}
-                            description={checklist.description}
-                            start_time={checklist.start_time as string | undefined}
-                            end_time={checklist.end_time as string | undefined}
-                            currentMinutes={currentMinutes}
-                            isActiveStatus={checklist.status === 'active'}
-                            adminStatusString={checklist.status}
-                            itemsCount={checklist.tasks?.length || 0}
-                            shift={checklist.shift}
-                            routineType={checklist.checklist_type}
-                            sectorName={checklist.category || checklist.roles?.name}
-                            sectorColor={checklist.roles?.color}
-                            isSelected={selectedId === checklist.id}
-                            onClick={() => onSelect(checklist)}
-                        />
-                    ))
+                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                        <SortableContext items={optimisticList.map(c => c.id)} strategy={verticalListSortingStrategy}>
+                            {optimisticList.map((checklist: ExtendedChecklist) => (
+                                <SortableRoutineCard
+                                    key={checklist.id}
+                                    checklist={checklist}
+                                    currentMinutes={currentMinutes}
+                                    onSelect={onSelect}
+                                    selectedId={selectedId}
+                                    canReorder={canReorder}
+                                />
+                            ))}
+                        </SortableContext>
+                    </DndContext>
                 )}
             </div>
         </div>
