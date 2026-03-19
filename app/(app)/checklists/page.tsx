@@ -9,6 +9,7 @@ import { useRestaurantStore } from "@/lib/store/restaurant-store";
 
 function ChecklistsContent() {
     const [selectedChecklist, setSelectedChecklist] = useState<ExtendedChecklist | null>(null);
+    const [activeRoleId, setActiveRoleId] = useState<string | null>(null);
 
     const searchParams = useSearchParams();
     const router = useRouter();
@@ -62,6 +63,7 @@ function ChecklistsContent() {
                 <ChecklistList
                     selectedId={selectedChecklist?.id || null}
                     onSelect={handleSelect}
+                    onRoleChange={setActiveRoleId}
                 />
             </div>
 
@@ -72,6 +74,7 @@ function ChecklistsContent() {
                         checklist={selectedChecklist}
                         onSaved={handleSaved}
                         onCancel={handleCancel}
+                        disableReorder={activeRoleId === null}
                     />
                 ) : (
                     <div className="flex-1 flex flex-col items-center justify-center text-[#92bbc9] p-6 text-center h-full bg-[#0a1215]">

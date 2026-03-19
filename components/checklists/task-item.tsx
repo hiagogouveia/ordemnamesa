@@ -12,9 +12,10 @@ interface TaskItemProps {
     onRemove: (id: string) => void;
     onEnter?: () => void;
     setInputRef?: (el: HTMLInputElement | null) => void;
+    disableReorder?: boolean;
 }
 
-export function TaskItem({ task, equipe, onUpdate, onRemove, onEnter, setInputRef }: TaskItemProps) {
+export function TaskItem({ task, equipe, onUpdate, onRemove, onEnter, setInputRef, disableReorder = false }: TaskItemProps) {
     const {
         attributes,
         listeners,
@@ -37,13 +38,15 @@ export function TaskItem({ task, equipe, onUpdate, onRemove, onEnter, setInputRe
             className={`group flex items-start gap-3 p-4 bg-[#16262c] border rounded-xl transition-colors ${isDragging ? "border-[#13b6ec] shadow-lg shadow-[#13b6ec]/10 opacity-80" : "border-[#233f48] hover:border-[#325a67]"
                 }`}
         >
-            <div
-                {...attributes}
-                {...listeners}
-                className="mt-1 flex items-center justify-center p-1 rounded hover:bg-[#1a2c32] cursor-grab active:cursor-grabbing text-[#325a67] group-hover:text-[#92bbc9] transition-colors"
-            >
-                <span className="material-symbols-outlined text-[20px]">drag_indicator</span>
-            </div>
+            {!disableReorder && (
+                <div
+                    {...attributes}
+                    {...listeners}
+                    className="mt-1 flex items-center justify-center p-1 rounded hover:bg-[#1a2c32] cursor-grab active:cursor-grabbing text-[#325a67] group-hover:text-[#92bbc9] transition-colors"
+                >
+                    <span className="material-symbols-outlined text-[20px]">drag_indicator</span>
+                </div>
+            )}
 
             <div className="flex-1 space-y-3">
                 <div>

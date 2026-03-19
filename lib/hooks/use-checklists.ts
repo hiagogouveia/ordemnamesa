@@ -1,5 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Checklist } from "../types";
+
+interface TaskOrderEntry {
+    id: string;
+    order: number;
+}
+
+interface ReorderTasksVariables {
+    checklistId: string;
+    restaurantId: string;
+    taskOrders: TaskOrderEntry[];
+}
 import { createClient } from "@/lib/supabase/client";
 
 // Função helper para obter o token de Auth e adicionar aos headers
@@ -79,6 +90,32 @@ export function useUpdateChecklist() {
         },
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ["checklists", variables.restaurant_id] });
+        },
+    });
+}
+
+// Reordenar Tarefas de um Checklist
+export function useReorderTasks() {
+    const queryClient = useQueryClient();
+
+    return useMutation<void, Error, ReorderTasksVariables>({
+        mutationFn: async ({ checklistId, restaurantId, taskOrders }) => {
+            const headers = await getAuthHeaders();
+            const res = await fetch(`/api/checklists/${checklistId}/tasks/reorder`, {
+                method: 'PATCH',
+                headers,
+                body: JSON.stringify({
+                    restaurant_id: restaurantId,
+                    task_orders: taskOrders,
+                }),
+            });
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || 'Erro ao reordenar tarefas');
+            }
+        },
+        onSuccess: (_, { restaurantId }) => {
+            queryClient.invalidateQueries({ queryKey: ['checklists', restaurantId] });
         },
     });
 }

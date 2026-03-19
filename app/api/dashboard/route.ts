@@ -92,7 +92,7 @@ export async function GET(request: Request) {
         // 1. Checklists Ativos para percentuais
         const { data: checklists } = await adminSupabase
             .from('checklists')
-            .select('id, title, tasks:checklist_tasks(id)')
+            .select('id, name, tasks:checklist_tasks(id)')
             .eq('restaurant_id', restaurant_id)
             .eq('active', true);
 
@@ -100,9 +100,9 @@ export async function GET(request: Request) {
         const checkListMap = new Map<string, { title: string; count: number; done: number }>();
 
         if (checklists) {
-            checklists.forEach((list: { id: string; title: string; tasks?: { id: string }[] }) => {
+            checklists.forEach((list: { id: string; name: string; tasks?: { id: string }[] }) => {
                 totalExpectedTasks += (list.tasks?.length || 0);
-                checkListMap.set(list.id, { title: list.title, count: list.tasks?.length || 0, done: 0 });
+                checkListMap.set(list.id, { title: list.name, count: list.tasks?.length || 0, done: 0 });
             });
         }
 

@@ -18,6 +18,7 @@ import {
     useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { useQueryClient } from "@tanstack/react-query";
 import { createClient } from '@/lib/supabase/client';
 import { ExtendedChecklist } from "./checklist-card";
 import { RoutineCard } from "./routine-card";
@@ -29,6 +30,7 @@ import { useSortedChecklists } from "@/lib/hooks/use-sorted-checklists";
 interface ChecklistListProps {
     onSelect: (checklist: ExtendedChecklist) => void;
     selectedId: string | null;
+    onRoleChange?: (roleId: string | null) => void;
 }
 
 function SortableRoutineCard({ checklist, currentMinutes, onSelect, selectedId, canReorder }: {
@@ -81,15 +83,23 @@ function SortableRoutineCard({ checklist, currentMinutes, onSelect, selectedId, 
     );
 }
 
-export function ChecklistList({ onSelect, selectedId }: ChecklistListProps) {
+export function ChecklistList({ onSelect, selectedId, onRoleChange }: ChecklistListProps) {
     const restaurantId = useRestaurantStore((state) => state.restaurantId);
     const userRole = useRestaurantStore((state) => state.userRole);
-    const canReorder = userRole === 'owner' || userRole === 'manager';
+    const queryClient = useQueryClient();
     
     const { data: checklists, isLoading, error } = useChecklists(restaurantId || undefined);
     const { data: roles = [] } = useRoles(restaurantId || undefined);
     const [searchTerm, setSearchTerm] = useState("");
     const [activeRoleId, setActiveRoleId] = useState<string | null>(null);
+
+    // Drag permitido apenas para owner/manager E com filtro de área ativo (não "Todos")
+    const canReorder = (userRole === 'owner' || userRole === 'manager') && activeRoleId !== null;
+
+    const handleRoleChange = (roleId: string | null) => {
+        setActiveRoleId(roleId);
+        onRoleChange?.(roleId);
+    };
 
     const activeRoles = roles.filter(r => r.active);
 
@@ -107,11 +117,22 @@ export function ChecklistList({ onSelect, selectedId }: ChecklistListProps) {
         setOptimisticList(prev => {
             if (!sortedChecklists) return prev;
 
-            const isSame =
-                prev.length === sortedChecklists.length &&
-                prev.every((item, i) => item.id === sortedChecklists[i]?.id);
+            // Compara apenas o CONJUNTO de IDs (não a ordem)
+            // Só reseta quando itens são adicionados/removidos, nunca por reordenação
+            const prevIds = new Set(prev.map(c => c.id));
+            const sortedIds = new Set(sortedChecklists.map(c => c.id));
+            const sameSet =
+                prevIds.size === sortedIds.size &&
+                [...sortedIds].every(id => prevIds.has(id));
 
-            return isSame ? prev : sortedChecklists;
+            if (sameSet && prev.length > 0) {
+                // Mesmos itens: preserva ordem otimista, mas atualiza dados individuais
+                const dataMap = new Map(sortedChecklists.map(c => [c.id, c]));
+                return prev.map(c => dataMap.get(c.id) || c);
+            }
+
+            // Itens adicionados/removidos ou carga inicial: usa ordem do sort
+            return sortedChecklists;
         });
     }, [sortedChecklists]);
 
@@ -124,34 +145,56 @@ export function ChecklistList({ onSelect, selectedId }: ChecklistListProps) {
         const { active, over } = event;
         if (!over || active.id === over.id) return;
 
+        const previousList = optimisticList; // snapshot para rollback
+
         const oldIndex = optimisticList.findIndex((c) => c.id === active.id);
         const newIndex = optimisticList.findIndex((c) => c.id === over.id);
 
         const newList = arrayMove(optimisticList, oldIndex, newIndex);
-        
+
         const updatedList = newList.map((item, index) => ({
             ...item,
             order_index: index
         }));
-        
+
         setOptimisticList(updatedList);
 
-        const supabase = createClient();
         try {
+            const supabase = createClient();
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token;
+            if (!token) throw new Error('Sessão expirada');
+
             const payload = updatedList.map(item => ({
                 id: item.id,
                 order_index: item.order_index
             }));
 
-            const { error } = await supabase
-                .from('checklists')
-                .upsert(payload, { onConflict: 'id' });
+            const res = await fetch('/api/checklists/reorder', {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify({ restaurant_id: restaurantId, checklist_orders: payload }),
+            });
 
-            if (error) {
-                console.error("Erro Supabase:", error);
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || 'Erro ao reordenar rotinas');
             }
+
+            queryClient.setQueryData(
+                ['checklists', restaurantId],
+                (old: ExtendedChecklist[] | undefined) => {
+                    if (!old) return old;
+                    const orderMap = new Map(updatedList.map(item => [item.id, item.order_index ?? 0]));
+                    return old.map(c => orderMap.has(c.id) ? { ...c, order_index: orderMap.get(c.id) } : c);
+                }
+            );
         } catch (err) {
-            console.error("Erro fatal ao reordenar rotinas:", err);
+            console.error("Erro ao reordenar rotinas:", err);
+            setOptimisticList(previousList); // rollback
         }
     };
 
@@ -180,7 +223,7 @@ export function ChecklistList({ onSelect, selectedId }: ChecklistListProps) {
                 {/* Filtros por Área */}
                 <div className="flex gap-2 overflow-x-auto mt-4 pb-2 no-scrollbar-custom">
                     <button
-                        onClick={() => setActiveRoleId(null)}
+                        onClick={() => handleRoleChange(null)}
                         className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${activeRoleId === null
                             ? "bg-[#13b6ec]/20 text-[#13b6ec] border border-[#13b6ec]/30"
                             : "bg-[#16262c] text-[#92bbc9] border border-[#233f48] hover:bg-[#1a2c32] hover:text-white"
@@ -193,7 +236,7 @@ export function ChecklistList({ onSelect, selectedId }: ChecklistListProps) {
                         return (
                             <button
                                 key={role.id}
-                                onClick={() => setActiveRoleId(role.id)}
+                                onClick={() => handleRoleChange(role.id)}
                                 className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors flex items-center gap-1.5 ${isActive
                                     ? "border"
                                     : "bg-[#16262c] text-[#92bbc9] border border-[#233f48] hover:bg-[#1a2c32] hover:text-white"

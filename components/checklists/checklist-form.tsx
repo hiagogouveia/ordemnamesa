@@ -7,7 +7,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { TaskItem } from "./task-item";
 import { ExtendedChecklist } from "./checklist-card";
-import { useCreateChecklist, useUpdateChecklist, useDeleteChecklist } from "@/lib/hooks/use-checklists";
+import { useCreateChecklist, useUpdateChecklist, useDeleteChecklist, useReorderTasks } from "@/lib/hooks/use-checklists";
 import { ChecklistTask } from "@/lib/types";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useRoles } from "@/lib/hooks/use-roles";
@@ -17,6 +17,7 @@ interface ChecklistFormProps {
     checklist: ExtendedChecklist | null;
     onSaved: () => void;
     onCancel: () => void;
+    disableReorder?: boolean;
 }
 
 const SHIFTS = [
@@ -41,7 +42,7 @@ const CHECKLIST_TYPES = [
     { value: 'receiving', label: 'Recebimento' }
 ];
 
-export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormProps) {
+export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = false }: ChecklistFormProps) {
     const restaurantId = useRestaurantStore((state) => state.restaurantId);
 
     const [name, setName] = useState("");
@@ -73,6 +74,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
     const createMutation = useCreateChecklist();
     const updateMutation = useUpdateChecklist();
     const deleteMutation = useDeleteChecklist();
+    const reorderMutation = useReorderTasks();
 
     useEffect(() => {
         if (checklist) {
@@ -117,18 +119,37 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
     }, [checklist]);
 
     const sensors = useSensors(
-        useSensor(PointerSensor),
+        useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
         useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
     );
 
-    const handleDragEnd = (event: { active: { id: string | number }; over: { id: string | number } | null }) => {
+    const handleDragEnd = async (event: { active: { id: string | number }; over: { id: string | number } | null }) => {
         const { active, over } = event;
-        if (over && active.id !== over.id) {
-            setTasks((items) => {
-                const oldIndex = items.findIndex((i) => i.tempId === active.id);
-                const newIndex = items.findIndex((i) => i.tempId === over.id);
-                return arrayMove(items, oldIndex, newIndex);
-            });
+        if (!over || active.id === over.id) return;
+
+        const previousTasks = tasks; // snapshot para rollback
+
+        const oldIndex = previousTasks.findIndex(i => i.tempId === active.id);
+        const newIndex = previousTasks.findIndex(i => i.tempId === over.id);
+        const newTasks = arrayMove(previousTasks, oldIndex, newIndex);
+
+        setTasks(newTasks); // optimistic UI imediato
+
+        // Não persistir se: checklist não salvo, reorder desabilitado, sem restaurantId
+        if (!checklist?.id || !restaurantId || disableReorder) return;
+
+        // Apenas tasks com ID real no banco (exclui tasks novas não salvas)
+        const taskOrders = newTasks
+            .filter(t => t.id)
+            .map((t, index) => ({ id: t.id as string, order: index }));
+
+        if (taskOrders.length === 0) return;
+
+        try {
+            await reorderMutation.mutateAsync({ checklistId: checklist.id, restaurantId, taskOrders });
+        } catch (e) {
+            setTasks(previousTasks); // rollback
+            setErrorMsg(e instanceof Error ? e.message : 'Erro ao salvar ordem das tarefas');
         }
     };
 
@@ -505,6 +526,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel }: ChecklistFormPro
                                             onRemove={removeTask}
                                             onEnter={() => addTask(task.tempId)}
                                             setInputRef={(el) => { taskInputRefs.current[task.tempId] = el; }}
+                                            disableReorder={disableReorder}
                                         />
                                     ))}
                                 </SortableContext>
