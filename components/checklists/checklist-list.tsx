@@ -19,6 +19,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { createClient } from '@/lib/supabase/client';
 import { ExtendedChecklist } from "./checklist-card";
 import { RoutineCard } from "./routine-card";
@@ -169,11 +170,18 @@ export function ChecklistList({ onSelect, selectedId, onRoleChange }: ChecklistL
 
     const activeRoles = roles.filter(r => r.active);
 
-    const filteredChecklists = checklists?.filter((c: ExtendedChecklist) => {
-        const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesFilter = activeRoleId === null || c.role_id === activeRoleId;
-        return matchesSearch && matchesFilter;
-    });
+    // CRITICAL: must be memoized. Without useMemo, .filter() returns a new array
+    // reference on every render, which cascades into useSortedChecklists always
+    // recalculating sortedChecklists, firing useEffect, calling setOptimisticList,
+    // re-rendering, and looping indefinitely — freezing the UI.
+    const filteredChecklists = useMemo(() =>
+        checklists?.filter((c: ExtendedChecklist) => {
+            const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesFilter = activeRoleId === null || c.role_id === activeRoleId;
+            return matchesSearch && matchesFilter;
+        }),
+        [checklists, searchTerm, activeRoleId]
+    );
 
     const { sortedChecklists, currentMinutes } = useSortedChecklists(filteredChecklists);
 
@@ -199,7 +207,10 @@ export function ChecklistList({ onSelect, selectedId, onRoleChange }: ChecklistL
             if (sameSet && prev.length > 0) {
                 // Mesmos itens: preserva ordem otimista, mas atualiza dados individuais
                 const dataMap = new Map(sortedChecklists.map(c => [c.id, c]));
-                return prev.map(c => dataMap.get(c.id) || c);
+                const updated = prev.map(c => dataMap.get(c.id) || c);
+                // Bail out if no item reference changed — prevents unnecessary re-renders
+                if (updated.every((item, i) => item === prev[i])) return prev;
+                return updated;
             }
 
             // Itens adicionados/removidos ou carga inicial: usa ordem do sort
