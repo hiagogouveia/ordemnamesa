@@ -5,6 +5,7 @@ import { RecurrencePicker } from "./recurrence-picker-modal";
 import type { RecurrenceConfig } from "@/lib/types";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { useIsMobile } from "@/lib/hooks/use-is-mobile";
 import { TaskItem } from "./task-item";
 import { ExtendedChecklist } from "./checklist-card";
 import { useCreateChecklist, useUpdateChecklist, useDeleteChecklist, useReorderTasks } from "@/lib/hooks/use-checklists";
@@ -75,6 +76,12 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     const updateMutation = useUpdateChecklist();
     const deleteMutation = useDeleteChecklist();
     const reorderMutation = useReorderTasks();
+    const isMobile = useIsMobile();
+    const [isReorderMode, setIsReorderMode] = useState(false);
+
+    useEffect(() => {
+        if (!isMobile) setIsReorderMode(false);
+    }, [isMobile]);
 
     useEffect(() => {
         if (checklist) {
@@ -118,27 +125,20 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         }
     }, [checklist]);
 
-    const sensors = useSensors(
-        useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-    );
+    const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 8 } });
+    const keyboardSensor = useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates });
+    const sensors = useSensors(...(isMobile ? [] : [pointerSensor, keyboardSensor]));
 
-    const handleDragEnd = async (event: { active: { id: string | number }; over: { id: string | number } | null }) => {
-        const { active, over } = event;
-        if (!over || active.id === over.id) return;
+    const performTaskReorder = async (oldIndex: number, newIndex: number) => {
+        if (oldIndex === newIndex) return;
 
-        const previousTasks = tasks; // snapshot para rollback
-
-        const oldIndex = previousTasks.findIndex(i => i.tempId === active.id);
-        const newIndex = previousTasks.findIndex(i => i.tempId === over.id);
+        const previousTasks = tasks;
         const newTasks = arrayMove(previousTasks, oldIndex, newIndex);
 
-        setTasks(newTasks); // optimistic UI imediato
+        setTasks(newTasks);
 
-        // Não persistir se: checklist não salvo, reorder desabilitado, sem restaurantId
         if (!checklist?.id || !restaurantId || disableReorder) return;
 
-        // Apenas tasks com ID real no banco (exclui tasks novas não salvas)
         const taskOrders = newTasks
             .filter(t => t.id)
             .map((t, index) => ({ id: t.id as string, order: index }));
@@ -148,9 +148,17 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         try {
             await reorderMutation.mutateAsync({ checklistId: checklist.id, restaurantId, taskOrders });
         } catch (e) {
-            setTasks(previousTasks); // rollback
+            setTasks(previousTasks);
             setErrorMsg(e instanceof Error ? e.message : 'Erro ao salvar ordem das tarefas');
         }
+    };
+
+    const handleDragEnd = async (event: { active: { id: string | number }; over: { id: string | number } | null }) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+        const oldIndex = tasks.findIndex(i => i.tempId === active.id);
+        const newIndex = tasks.findIndex(i => i.tempId === over.id);
+        await performTaskReorder(oldIndex, newIndex);
     };
 
     const addTask = (afterTempId?: string) => {
@@ -505,19 +513,36 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                     <div>
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-lg font-bold text-white">Tarefas da Rotina</h3>
-                            <button
-                                onClick={() => addTask()}
-                                className="flex items-center gap-1.5 text-sm font-bold text-[#13b6ec] hover:text-[#10a0d0] px-3 py-1.5 rounded-lg hover:bg-[#13b6ec]/10 transition-colors"
-                            >
-                                <span className="material-symbols-outlined text-[18px]">add</span>
-                                Adicionar Tarefa
-                            </button>
+                            <div className="flex items-center gap-2">
+                                {!disableReorder && isMobile && tasks.length > 1 && (
+                                    <button
+                                        onClick={() => setIsReorderMode(prev => !prev)}
+                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                                            isReorderMode
+                                                ? "bg-[#13b6ec]/20 text-[#13b6ec] border border-[#13b6ec]/40"
+                                                : "bg-[#16262c] text-[#92bbc9] border border-[#233f48]"
+                                        }`}
+                                    >
+                                        <span className="material-symbols-outlined text-[16px]">
+                                            {isReorderMode ? "check" : "swap_vert"}
+                                        </span>
+                                        {isReorderMode ? "Concluir" : "Reordenar"}
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => addTask()}
+                                    className="flex items-center gap-1.5 text-sm font-bold text-[#13b6ec] hover:text-[#10a0d0] px-3 py-1.5 rounded-lg hover:bg-[#13b6ec]/10 transition-colors"
+                                >
+                                    <span className="material-symbols-outlined text-[18px]">add</span>
+                                    Adicionar Tarefa
+                                </button>
+                            </div>
                         </div>
 
                         <div className="space-y-3">
-                            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd} onDragCancel={() => {}}>
                                 <SortableContext items={tasks.map(t => t.tempId)} strategy={verticalListSortingStrategy}>
-                                    {tasks.map((task) => (
+                                    {tasks.map((task, index) => (
                                         <TaskItem
                                             key={task.tempId}
                                             task={task}
@@ -527,6 +552,11 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                             onEnter={() => addTask(task.tempId)}
                                             setInputRef={(el) => { taskInputRefs.current[task.tempId] = el; }}
                                             disableReorder={disableReorder}
+                                            isReorderMode={isReorderMode}
+                                            isFirst={index === 0}
+                                            isLast={index === tasks.length - 1}
+                                            onMoveUp={() => performTaskReorder(index, index - 1)}
+                                            onMoveDown={() => performTaskReorder(index, index + 1)}
                                         />
                                     ))}
                                 </SortableContext>

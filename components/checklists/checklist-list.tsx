@@ -26,6 +26,7 @@ import { useChecklists } from "@/lib/hooks/use-checklists";
 import { useRoles } from "@/lib/hooks/use-roles";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useSortedChecklists } from "@/lib/hooks/use-sorted-checklists";
+import { useIsMobile } from "@/lib/hooks/use-is-mobile";
 
 interface ChecklistListProps {
     onSelect: (checklist: ExtendedChecklist) => void;
@@ -33,12 +34,17 @@ interface ChecklistListProps {
     onRoleChange?: (roleId: string | null) => void;
 }
 
-function SortableRoutineCard({ checklist, currentMinutes, onSelect, selectedId, canReorder }: {
+function SortableRoutineCard({ checklist, currentMinutes, onSelect, selectedId, canReorder, isReorderMode, onMoveUp, onMoveDown, isFirst, isLast }: {
     checklist: ExtendedChecklist;
     currentMinutes: number;
     onSelect: (c: ExtendedChecklist) => void;
     selectedId: string | null;
     canReorder: boolean;
+    isReorderMode: boolean;
+    onMoveUp: () => void;
+    onMoveDown: () => void;
+    isFirst: boolean;
+    isLast: boolean;
 }) {
     const {
         attributes,
@@ -49,7 +55,7 @@ function SortableRoutineCard({ checklist, currentMinutes, onSelect, selectedId, 
         isDragging,
     } = useSortable({
         id: checklist.id,
-        disabled: !canReorder
+        disabled: !canReorder || isReorderMode,
     });
 
     const style = {
@@ -58,6 +64,58 @@ function SortableRoutineCard({ checklist, currentMinutes, onSelect, selectedId, 
         zIndex: isDragging ? 10 : 1,
         opacity: isDragging ? 0.5 : 1,
     };
+
+    if (isReorderMode) {
+        return (
+            <div ref={setNodeRef} style={style} className="flex items-center gap-2">
+                <div className="flex flex-col gap-1 shrink-0">
+                    <button
+                        onClick={onMoveUp}
+                        disabled={isFirst}
+                        aria-label="Mover rotina para cima"
+                        className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-colors ${
+                            isFirst
+                                ? "border-[#233f48] text-[#233f48] cursor-not-allowed"
+                                : "border-[#325a67] text-[#92bbc9] hover:bg-[#13b6ec]/10 hover:border-[#13b6ec] hover:text-[#13b6ec] active:bg-[#13b6ec]/20"
+                        }`}
+                    >
+                        <span className="material-symbols-outlined text-[18px]">keyboard_arrow_up</span>
+                    </button>
+                    <button
+                        onClick={onMoveDown}
+                        disabled={isLast}
+                        aria-label="Mover rotina para baixo"
+                        className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-colors ${
+                            isLast
+                                ? "border-[#233f48] text-[#233f48] cursor-not-allowed"
+                                : "border-[#325a67] text-[#92bbc9] hover:bg-[#13b6ec]/10 hover:border-[#13b6ec] hover:text-[#13b6ec] active:bg-[#13b6ec]/20"
+                        }`}
+                    >
+                        <span className="material-symbols-outlined text-[18px]">keyboard_arrow_down</span>
+                    </button>
+                </div>
+                <div className="flex-1 min-w-0">
+                    <RoutineCard
+                        variant="admin"
+                        title={checklist.name}
+                        description={checklist.description}
+                        start_time={checklist.start_time as string | undefined}
+                        end_time={checklist.end_time as string | undefined}
+                        currentMinutes={currentMinutes}
+                        isActiveStatus={checklist.status === 'active'}
+                        adminStatusString={checklist.status}
+                        itemsCount={checklist.tasks?.length || 0}
+                        shift={checklist.shift}
+                        routineType={checklist.checklist_type}
+                        sectorName={checklist.category || checklist.roles?.name}
+                        sectorColor={checklist.roles?.color}
+                        isSelected={selectedId === checklist.id}
+                        onClick={() => onSelect(checklist)}
+                    />
+                </div>
+            </div>
+        );
+    }
 
     return (
         <RoutineCard
@@ -87,11 +145,18 @@ export function ChecklistList({ onSelect, selectedId, onRoleChange }: ChecklistL
     const restaurantId = useRestaurantStore((state) => state.restaurantId);
     const userRole = useRestaurantStore((state) => state.userRole);
     const queryClient = useQueryClient();
-    
+    const isMobile = useIsMobile();
+
     const { data: checklists, isLoading, error } = useChecklists(restaurantId || undefined);
     const { data: roles = [] } = useRoles(restaurantId || undefined);
     const [searchTerm, setSearchTerm] = useState("");
     const [activeRoleId, setActiveRoleId] = useState<string | null>(null);
+    const [isReorderMode, setIsReorderMode] = useState(false);
+
+    // Auto-exit reorder mode when switching to desktop
+    useEffect(() => {
+        if (!isMobile) setIsReorderMode(false);
+    }, [isMobile]);
 
     // Drag permitido apenas para owner/manager E com filtro de área ativo (não "Todos")
     const canReorder = (userRole === 'owner' || userRole === 'manager') && activeRoleId !== null;
@@ -136,22 +201,15 @@ export function ChecklistList({ onSelect, selectedId, onRoleChange }: ChecklistL
         });
     }, [sortedChecklists]);
 
-    const sensors = useSensors(
-        useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-    );
+    const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 5 } });
+    const keyboardSensor = useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates });
+    const sensors = useSensors(...(isMobile ? [] : [pointerSensor, keyboardSensor]));
 
-    const handleDragEnd = async (event: DragEndEvent) => {
-        const { active, over } = event;
-        if (!over || active.id === over.id) return;
+    const performReorder = async (oldIndex: number, newIndex: number) => {
+        if (oldIndex === newIndex) return;
 
-        const previousList = optimisticList; // snapshot para rollback
-
-        const oldIndex = optimisticList.findIndex((c) => c.id === active.id);
-        const newIndex = optimisticList.findIndex((c) => c.id === over.id);
-
+        const previousList = optimisticList;
         const newList = arrayMove(optimisticList, oldIndex, newIndex);
-
         const updatedList = newList.map((item, index) => ({
             ...item,
             order_index: index
@@ -194,8 +252,16 @@ export function ChecklistList({ onSelect, selectedId, onRoleChange }: ChecklistL
             );
         } catch (err) {
             console.error("Erro ao reordenar rotinas:", err);
-            setOptimisticList(previousList); // rollback
+            setOptimisticList(previousList);
         }
+    };
+
+    const handleDragEnd = async (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+        const oldIndex = optimisticList.findIndex((c) => c.id === active.id);
+        const newIndex = optimisticList.findIndex((c) => c.id === over.id);
+        await performReorder(oldIndex, newIndex);
     };
 
     return (
@@ -203,10 +269,27 @@ export function ChecklistList({ onSelect, selectedId, onRoleChange }: ChecklistL
             {/* Header Coluna */}
             <div className="p-4 border-b border-[#233f48] shrink-0">
                 <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-bold text-white tracking-tight">Rotinas</h2>
-                    <span className="text-xs font-bold bg-[#16262c] text-[#92bbc9] border border-[#233f48] px-2 py-1 rounded-full">
-                        {checklists?.length || 0}
-                    </span>
+                    <div className="flex items-center gap-2">
+                        <h2 className="text-lg font-bold text-white tracking-tight">Rotinas</h2>
+                        <span className="text-xs font-bold bg-[#16262c] text-[#92bbc9] border border-[#233f48] px-2 py-1 rounded-full">
+                            {checklists?.length || 0}
+                        </span>
+                    </div>
+                    {canReorder && isMobile && (
+                        <button
+                            onClick={() => setIsReorderMode(prev => !prev)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                                isReorderMode
+                                    ? "bg-[#13b6ec]/20 text-[#13b6ec] border border-[#13b6ec]/40"
+                                    : "bg-[#16262c] text-[#92bbc9] border border-[#233f48] hover:border-[#325a67]"
+                            }`}
+                        >
+                            <span className="material-symbols-outlined text-[16px]">
+                                {isReorderMode ? "check" : "swap_vert"}
+                            </span>
+                            {isReorderMode ? "Concluir" : "Reordenar"}
+                        </button>
+                    )}
                 </div>
 
                 <div className="flex items-center gap-2 bg-[#16262c] border border-[#233f48] rounded-xl px-3 py-2.5 focus-within:border-[#13b6ec] focus-within:shadow-[0_0_10px_rgba(19,182,236,0.1)] transition-all">
@@ -267,9 +350,9 @@ export function ChecklistList({ onSelect, selectedId, onRoleChange }: ChecklistL
                         <p className="text-[#92bbc9] text-sm">Nenhuma rotina encontrada</p>
                     </div>
                 ) : (
-                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd} onDragCancel={() => {}}>
                         <SortableContext items={optimisticList.map(c => c.id)} strategy={verticalListSortingStrategy}>
-                            {optimisticList.map((checklist: ExtendedChecklist) => (
+                            {optimisticList.map((checklist: ExtendedChecklist, index: number) => (
                                 <SortableRoutineCard
                                     key={checklist.id}
                                     checklist={checklist}
@@ -277,6 +360,11 @@ export function ChecklistList({ onSelect, selectedId, onRoleChange }: ChecklistL
                                     onSelect={onSelect}
                                     selectedId={selectedId}
                                     canReorder={canReorder}
+                                    isReorderMode={isReorderMode}
+                                    isFirst={index === 0}
+                                    isLast={index === optimisticList.length - 1}
+                                    onMoveUp={() => performReorder(index, index - 1)}
+                                    onMoveDown={() => performReorder(index, index + 1)}
                                 />
                             ))}
                         </SortableContext>

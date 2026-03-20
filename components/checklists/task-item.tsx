@@ -13,9 +13,14 @@ interface TaskItemProps {
     onEnter?: () => void;
     setInputRef?: (el: HTMLInputElement | null) => void;
     disableReorder?: boolean;
+    isReorderMode?: boolean;
+    onMoveUp?: () => void;
+    onMoveDown?: () => void;
+    isFirst?: boolean;
+    isLast?: boolean;
 }
 
-export function TaskItem({ task, equipe, onUpdate, onRemove, onEnter, setInputRef, disableReorder = false }: TaskItemProps) {
+export function TaskItem({ task, equipe, onUpdate, onRemove, onEnter, setInputRef, disableReorder = false, isReorderMode = false, onMoveUp, onMoveDown, isFirst = false, isLast = false }: TaskItemProps) {
     const {
         attributes,
         listeners,
@@ -23,7 +28,7 @@ export function TaskItem({ task, equipe, onUpdate, onRemove, onEnter, setInputRe
         transform,
         transition,
         isDragging,
-    } = useSortable({ id: task.tempId });
+    } = useSortable({ id: task.tempId, disabled: disableReorder });
 
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -38,7 +43,34 @@ export function TaskItem({ task, equipe, onUpdate, onRemove, onEnter, setInputRe
             className={`group flex items-start gap-3 p-4 bg-[#16262c] border rounded-xl transition-colors ${isDragging ? "border-[#13b6ec] shadow-lg shadow-[#13b6ec]/10 opacity-80" : "border-[#233f48] hover:border-[#325a67]"
                 }`}
         >
-            {!disableReorder && (
+            {isReorderMode ? (
+                <div className="flex flex-col gap-1 shrink-0 mt-0.5">
+                    <button
+                        onClick={onMoveUp}
+                        disabled={isFirst}
+                        aria-label="Mover tarefa para cima"
+                        className={`w-7 h-7 flex items-center justify-center rounded border transition-colors ${
+                            isFirst
+                                ? "border-[#233f48] text-[#233f48] cursor-not-allowed"
+                                : "border-[#325a67] text-[#92bbc9] hover:bg-[#13b6ec]/10 hover:border-[#13b6ec] hover:text-[#13b6ec] active:bg-[#13b6ec]/20"
+                        }`}
+                    >
+                        <span className="material-symbols-outlined text-[16px]">keyboard_arrow_up</span>
+                    </button>
+                    <button
+                        onClick={onMoveDown}
+                        disabled={isLast}
+                        aria-label="Mover tarefa para baixo"
+                        className={`w-7 h-7 flex items-center justify-center rounded border transition-colors ${
+                            isLast
+                                ? "border-[#233f48] text-[#233f48] cursor-not-allowed"
+                                : "border-[#325a67] text-[#92bbc9] hover:bg-[#13b6ec]/10 hover:border-[#13b6ec] hover:text-[#13b6ec] active:bg-[#13b6ec]/20"
+                        }`}
+                    >
+                        <span className="material-symbols-outlined text-[16px]">keyboard_arrow_down</span>
+                    </button>
+                </div>
+            ) : !disableReorder ? (
                 <div
                     {...attributes}
                     {...listeners}
@@ -46,7 +78,7 @@ export function TaskItem({ task, equipe, onUpdate, onRemove, onEnter, setInputRe
                 >
                     <span className="material-symbols-outlined text-[20px]">drag_indicator</span>
                 </div>
-            )}
+            ) : null}
 
             <div className="flex-1 space-y-3">
                 <div>
