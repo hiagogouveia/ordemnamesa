@@ -5,15 +5,14 @@ import { useState, useEffect } from "react";
 const MOBILE_BREAKPOINT = 768;
 
 export function useIsMobile(): boolean {
-    const [isMobile, setIsMobile] = useState<boolean>(() => {
-        if (typeof window === "undefined") return false;
-        return window.innerWidth < MOBILE_BREAKPOINT;
-    });
+    // Always start as false to avoid SSR/hydration mismatch
+    const [isMobile, setIsMobile] = useState<boolean>(false);
 
     useEffect(() => {
-        const handler = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
-        window.addEventListener("resize", handler);
-        return () => window.removeEventListener("resize", handler);
+        const check = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
+        check(); // Set real value after hydration
+        window.addEventListener("resize", check);
+        return () => window.removeEventListener("resize", check);
     }, []);
 
     return isMobile;

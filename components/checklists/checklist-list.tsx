@@ -152,6 +152,7 @@ export function ChecklistList({ onSelect, selectedId, onRoleChange }: ChecklistL
     const [searchTerm, setSearchTerm] = useState("");
     const [activeRoleId, setActiveRoleId] = useState<string | null>(null);
     const [isReorderMode, setIsReorderMode] = useState(false);
+    const [isDragActive, setIsDragActive] = useState(false);
 
     // Auto-exit reorder mode when switching to desktop
     useEffect(() => {
@@ -179,6 +180,11 @@ export function ChecklistList({ onSelect, selectedId, onRoleChange }: ChecklistL
     const [optimisticList, setOptimisticList] = useState<ExtendedChecklist[]>([]);
 
     useEffect(() => {
+        // Never update the list while a drag is in progress.
+        // A background refetch during drag would change SortableContext items,
+        // causing dnd-kit to lose track of the dragged item and never release pointer capture.
+        if (isDragActive) return;
+
         setOptimisticList(prev => {
             if (!sortedChecklists) return prev;
 
@@ -199,7 +205,7 @@ export function ChecklistList({ onSelect, selectedId, onRoleChange }: ChecklistL
             // Itens adicionados/removidos ou carga inicial: usa ordem do sort
             return sortedChecklists;
         });
-    }, [sortedChecklists]);
+    }, [sortedChecklists, isDragActive]);
 
     const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 5 } });
     const keyboardSensor = useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates });
@@ -350,7 +356,13 @@ export function ChecklistList({ onSelect, selectedId, onRoleChange }: ChecklistL
                         <p className="text-[#92bbc9] text-sm">Nenhuma rotina encontrada</p>
                     </div>
                 ) : (
-                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd} onDragCancel={() => {}}>
+                    <DndContext
+                        sensors={sensors}
+                        collisionDetection={closestCenter}
+                        onDragStart={() => setIsDragActive(true)}
+                        onDragEnd={(event) => { setIsDragActive(false); handleDragEnd(event); }}
+                        onDragCancel={() => setIsDragActive(false)}
+                    >
                         <SortableContext items={optimisticList.map(c => c.id)} strategy={verticalListSortingStrategy}>
                             {optimisticList.map((checklist: ExtendedChecklist, index: number) => (
                                 <SortableRoutineCard
