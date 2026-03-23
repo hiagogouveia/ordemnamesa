@@ -1,3 +1,17 @@
+export interface Restaurant {
+    id: string
+    name: string
+    slug: string
+    owner_id: string
+    logo_url?: string | null
+    active: boolean
+    cnpj?: string | null
+    phone?: string | null
+    cep?: string | null
+    address?: string | null
+    created_at: string
+}
+
 export type ChecklistStatus = 'active' | 'draft' | 'archived'
 export type ShiftType = 'morning' | 'afternoon' | 'evening' | 'any' // Rename to avoid conflict with Shift table or keep? Let's keep it Shift for now, but the new table is 'shifts'
 export type UserRole = 'owner' | 'manager' | 'staff'

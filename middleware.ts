@@ -31,7 +31,7 @@ export async function middleware(request: NextRequest) {
         data: { user },
     } = await supabase.auth.getUser()
 
-    const publicRoutes = ['/', '/login', '/cadastro']
+    const publicRoutes = ['/', '/login', '/cadastro', '/signup']
     const isPublicRoute =
         publicRoutes.includes(request.nextUrl.pathname) ||
         request.nextUrl.pathname.startsWith('/blog')
@@ -44,7 +44,7 @@ export async function middleware(request: NextRequest) {
     }
 
     // Redirect to /selecionar-restaurante if authenticated user tries to access /login or /cadastro
-    if (user && (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/cadastro')) {
+    if (user && ['/login', '/cadastro', '/signup'].includes(request.nextUrl.pathname)) {
         const url = request.nextUrl.clone()
         url.pathname = '/selecionar-restaurante'
         return NextResponse.redirect(url)

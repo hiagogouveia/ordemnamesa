@@ -66,9 +66,9 @@ export function Navbar() {
               >
                 Fazer Login
               </Link>
-              <button className="rounded-lg bg-primary px-5 py-2.5 text-sm font-bold text-white hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20">
+              <Link href="/signup" className="rounded-lg bg-primary px-5 py-2.5 text-sm font-bold text-white hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20">
                 Criar Conta
-              </button>
+              </Link>
             </div>
           </div>
 

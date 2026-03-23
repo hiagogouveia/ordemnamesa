@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export function Hero() {
   return (
     <header className="relative overflow-hidden pt-32 pb-16 sm:pt-40 sm:pb-24 lg:pb-32">
@@ -38,9 +40,9 @@ export function Hero() {
           </p>
 
           <div className="mt-10 flex items-center justify-center gap-x-4">
-            <button className="rounded-lg bg-primary px-8 py-4 text-base font-bold text-white shadow-xl shadow-primary/30 hover:bg-primary/90 transition-all hover:-translate-y-1">
-              Começar Agora
-            </button>
+            <Link href="/signup" className="rounded-lg bg-primary px-8 py-4 text-base font-bold text-white shadow-xl shadow-primary/30 hover:bg-primary/90 transition-all hover:-translate-y-1">
+              Criar conta grátis por 30 dias
+            </Link>
             <button className="rounded-lg bg-white dark:bg-[#1a2c32] px-8 py-4 text-base font-bold text-slate-900 dark:text-white shadow-sm ring-1 ring-slate-200 dark:ring-[#293a41] hover:bg-gray-50 dark:hover:bg-[#233f48] transition-all">
               Agendar Demo
             </button>

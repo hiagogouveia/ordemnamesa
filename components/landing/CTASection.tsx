@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 export function CTASection() {
   return (
     <section className="relative py-20 px-4 overflow-hidden">
@@ -13,6 +15,13 @@ export function CTASection() {
           Junte-se a centenas de gestores que recuperaram o controle de suas
           operações.
         </p>
+        <Link
+          href="/signup"
+          className="inline-block mb-6 rounded-lg bg-primary px-10 py-4 text-base font-bold text-white shadow-xl shadow-primary/30 hover:bg-primary/90 transition-all hover:-translate-y-1"
+        >
+          Criar conta grátis por 30 dias
+        </Link>
+
         <form
           className="flex flex-col sm:flex-row gap-4 max-w-md mx-auto"
           onSubmit={(e) => e.preventDefault()}
