@@ -39,12 +39,22 @@ export async function GET(request: Request) {
 
         const userRoleIds = userRoles?.map(ur => ur.role_id) || [];
 
-        // 2. Buscar todos checklists ATIVOS: sem atribuição específica OU atribuídos a este usuário
+        // 2. Buscar checklists ATIVOS do usuário: filtrados pelos roles do usuário
+        if (userRoleIds.length === 0) {
+            return NextResponse.json({
+                checklists: [],
+                tasks: [],
+                executions: [],
+                assumptions: [],
+            });
+        }
+
         const { data: activeChecklists } = await adminSupabase
             .from('checklists')
-            .select('id, name, description, is_required, recurrence, last_reset_at, assigned_to_user_id, role_id, checklist_type, start_time, end_time')
+            .select('id, name, description, is_required, recurrence, last_reset_at, assigned_to_user_id, role_id, roles(id, name, color), checklist_type, start_time, end_time')
             .eq('restaurant_id', restaurant_id)
             .eq('active', true)
+            .in('role_id', userRoleIds)
             .or(`assigned_to_user_id.is.null,assigned_to_user_id.eq.${user.id}`);
 
         const checklistIds = activeChecklists?.map(c => c.id) || [];

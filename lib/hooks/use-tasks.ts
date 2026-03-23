@@ -6,7 +6,7 @@ export type TaskStatus = 'todo' | 'doing' | 'done' | 'flagged' | 'skipped';
 
 export interface KanbanTask { id: string; title: string; description?: string; checklist_id: string; role_id?: string; assigned_to_user_id?: string; is_critical?: boolean; requires_photo?: boolean; [key: string]: unknown; }
 export interface KanbanExecution { id: string; task_id: string; status: TaskStatus; executed_at: string; notes?: string; [key: string]: unknown; }
-export interface KanbanChecklist { id: string; name: string; description?: string; is_required: boolean; recurrence?: string; last_reset_at?: string; assigned_to_user_id?: string; checklist_type?: string; role_id?: string; start_time?: string; end_time?: string; [key: string]: unknown; }
+export interface KanbanChecklist { id: string; name: string; description?: string; is_required: boolean; recurrence?: string; last_reset_at?: string; assigned_to_user_id?: string; checklist_type?: string; role_id?: string; roles?: { id: string; name: string; color: string }; start_time?: string; end_time?: string; [key: string]: unknown; }
 
 export interface KanbanData {
     checklists: KanbanChecklist[];

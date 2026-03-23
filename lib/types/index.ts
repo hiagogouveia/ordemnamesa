@@ -96,6 +96,7 @@ export interface UserRoleAssignment {
     user_id: string
     role_id: string
     created_at: string
+    role?: Role
     roles?: Role
 }
 

@@ -145,33 +145,28 @@ export default function KanbanPage() {
     const userAreas = useMemo(() => {
         if (!userRolesData) return [];
         const areas = userRolesData
-            .map(ur => (ur as any).roles?.name || (ur as any).role?.name)
-            .filter(Boolean);
-        return Array.from(new Set(areas)).sort() as string[];
+            .map(ur => ur.role?.name)
+            .filter((name): name is string => Boolean(name));
+        return Array.from(new Set(areas)).sort();
     }, [userRolesData]);
 
-    const availableAreas = useMemo(() => {
-        return ['Geral', ...userAreas];
-    }, [userAreas]);
-
-    const [activeArea, setActiveArea] = useState<string>('Geral');
+    const [activeArea, setActiveArea] = useState<string>('');
 
     useEffect(() => {
-        if (activeArea !== 'Geral' && !userAreas.includes(activeArea)) {
-            setActiveArea('Geral');
+        if (userAreas.length > 0 && !userAreas.includes(activeArea)) {
+            setActiveArea(userAreas[0]);
         }
     }, [userAreas, activeArea]);
 
-    const getFiltered = (activities: any[], tab: string) => {
-        if (tab === 'Geral') {
-            return activities.filter(a => !a.area || a.area === 'Qualquer Área');
-        }
-        return activities.filter(a => a.area === tab);
+    const getFiltered = <T extends { role_id?: string }>(activities: T[]): T[] => {
+        const activeRole = userRolesData.find(ur => ur.role?.name === activeArea);
+        if (!activeRole) return [];
+        return activities.filter(a => a.role_id === activeRole.role_id);
     };
 
-    const filteredTodo = useMemo(() => getFiltered(todoActivities, activeArea), [todoActivities, activeArea]);
-    const filteredDoing = useMemo(() => getFiltered(doingActivities, activeArea), [doingActivities, activeArea]);
-    const filteredDone = useMemo(() => getFiltered(doneActivities, activeArea), [doneActivities, activeArea]);
+    const filteredTodo = useMemo(() => getFiltered(todoActivities), [todoActivities, activeArea, userRolesData]);
+    const filteredDoing = useMemo(() => getFiltered(doingActivities), [doingActivities, activeArea, userRolesData]);
+    const filteredDone = useMemo(() => getFiltered(doneActivities), [doneActivities, activeArea, userRolesData]);
 
     // UI Helpers
     const getGreeting = () => {
@@ -212,7 +207,7 @@ export default function KanbanPage() {
                         <span className="material-symbols-outlined text-amber-400 text-xl shrink-0 mt-0.5">warning</span>
                         <div>
                             <p className="text-amber-300 font-bold text-sm">Você não tem área atribuída</p>
-                            <p className="text-[#92bbc9] text-xs mt-0.5">Fale com seu gestor para ser adicionado a uma área. Enquanto isso, apenas tarefas gerais são exibidas.</p>
+                            <p className="text-[#92bbc9] text-xs mt-0.5">Fale com seu gestor para ser adicionado a uma área.</p>
                         </div>
                     </div>
                 )}
@@ -239,16 +234,16 @@ export default function KanbanPage() {
                 ) : (
                     <div className="flex flex-col gap-6">
 
-                        {availableAreas.length > 0 && (
+                        {userAreas.length > 1 && (
                             <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide snap-x">
-                                {availableAreas.map((area) => (
+                                {userAreas.map((area) => (
                                     <button
                                         key={area}
                                         onClick={() => setActiveArea(area)}
                                         className={`
                                             snap-start whitespace-nowrap px-6 py-3 rounded-full text-sm font-semibold transition-colors
-                                            ${activeArea === area 
-                                                ? 'bg-[#00c6d2] text-[#0f1b21]' 
+                                            ${activeArea === area
+                                                ? 'bg-[#00c6d2] text-[#0f1b21]'
                                                 : 'bg-[#182a32] text-[#92bbc9] border border-[#233f48] hover:bg-[#233f48]'
                                             }
                                         `}
@@ -289,7 +284,7 @@ export default function KanbanPage() {
                                                 isRequired={activity.is_required}
                                                 isAssignedToOther={isAssignedToOther}
                                                 assumptionName={assumption?.user_name}
-                                                area={(activity as any).area}
+                                                area={activity.roles?.name}
                                                 onClick={() => router.push(`/turno/atividade/${activity.id}`)}
                                             />
                                         );
@@ -321,7 +316,7 @@ export default function KanbanPage() {
                                                 progress={activity.progress}
                                                 flaggedCount={activity.flaggedTasksCount}
                                                 assumptionName={assumption?.user_name}
-                                                area={(activity as any).area}
+                                                area={activity.roles?.name}
                                                 onClick={() => router.push(`/turno/atividade/${activity.id}`)}
                                             />
                                         );
