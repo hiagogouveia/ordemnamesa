@@ -142,6 +142,37 @@ export default function KanbanPage() {
         });
     }, [kanbanData]);
 
+    const userAreas = useMemo(() => {
+        if (!userRolesData) return [];
+        const areas = userRolesData
+            .map(ur => (ur as any).roles?.name || (ur as any).role?.name)
+            .filter(Boolean);
+        return Array.from(new Set(areas)).sort() as string[];
+    }, [userRolesData]);
+
+    const availableAreas = useMemo(() => {
+        return ['Geral', ...userAreas];
+    }, [userAreas]);
+
+    const [activeArea, setActiveArea] = useState<string>('Geral');
+
+    useEffect(() => {
+        if (activeArea !== 'Geral' && !userAreas.includes(activeArea)) {
+            setActiveArea('Geral');
+        }
+    }, [userAreas, activeArea]);
+
+    const getFiltered = (activities: any[], tab: string) => {
+        if (tab === 'Geral') {
+            return activities.filter(a => !a.area || a.area === 'Qualquer Área');
+        }
+        return activities.filter(a => a.area === tab);
+    };
+
+    const filteredTodo = useMemo(() => getFiltered(todoActivities, activeArea), [todoActivities, activeArea]);
+    const filteredDoing = useMemo(() => getFiltered(doingActivities, activeArea), [doingActivities, activeArea]);
+    const filteredDone = useMemo(() => getFiltered(doneActivities, activeArea), [doneActivities, activeArea]);
+
     // UI Helpers
     const getGreeting = () => {
         const h = new Date().getHours();
@@ -208,21 +239,42 @@ export default function KanbanPage() {
                 ) : (
                     <div className="flex flex-col gap-6">
 
+                        {availableAreas.length > 0 && (
+                            <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide snap-x">
+                                {availableAreas.map((area) => (
+                                    <button
+                                        key={area}
+                                        onClick={() => setActiveArea(area)}
+                                        className={`
+                                            snap-start whitespace-nowrap px-6 py-3 rounded-full text-sm font-semibold transition-colors
+                                            ${activeArea === area 
+                                                ? 'bg-[#00c6d2] text-[#0f1b21]' 
+                                                : 'bg-[#182a32] text-[#92bbc9] border border-[#233f48] hover:bg-[#233f48]'
+                                            }
+                                        `}
+                                        style={{ minHeight: '44px' }}
+                                    >
+                                        {area}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
                         {/* PARA FAZER */}
                         <section className="flex flex-col gap-3">
                             <div className="flex items-center gap-2">
                                 <span className="material-symbols-outlined text-[#92bbc9]">list_alt</span>
                                 <h2 className="text-white font-bold tracking-wide uppercase text-sm">Para Fazer</h2>
-                                <span className="ml-auto bg-[#233f48] text-white text-xs px-2 py-0.5 rounded-full">{todoActivities.length}</span>
+                                <span className="ml-auto bg-[#233f48] text-white text-xs px-2 py-0.5 rounded-full">{filteredTodo.length}</span>
                             </div>
 
-                            {todoActivities.length === 0 ? (
+                            {filteredTodo.length === 0 ? (
                                 <div className="text-center py-8 text-[#92bbc9] text-sm bg-[#1a2c32] rounded-xl border border-dashed border-[#233f48]">
-                                    {kanbanData?.checklists.length === 0 ? "Nenhuma rotina ativa para você" : "✓ Todas as rotinas iniciadas!"}
+                                    {kanbanData?.checklists.length === 0 ? "Nenhuma rotina ativa para você" : "✓ Todas as rotinas desta área iniciadas!"}
                                 </div>
                             ) : (
                                 <div className="flex flex-col gap-3">
-                                    {todoActivities.map(activity => {
+                                    {filteredTodo.map(activity => {
                                         const isAssignedToOther = Boolean(activity.assigned_to_user_id && activity.assigned_to_user_id !== user?.id);
                                         const assumption = kanbanData?.assumptions?.find(a => a.checklist_id === activity.id);
                                         return (
@@ -237,6 +289,7 @@ export default function KanbanPage() {
                                                 isRequired={activity.is_required}
                                                 isAssignedToOther={isAssignedToOther}
                                                 assumptionName={assumption?.user_name}
+                                                area={(activity as any).area}
                                                 onClick={() => router.push(`/turno/atividade/${activity.id}`)}
                                             />
                                         );
@@ -246,15 +299,15 @@ export default function KanbanPage() {
                         </section>
 
                         {/* EM ANDAMENTO */}
-                        {doingActivities.length > 0 && (
+                        {filteredDoing.length > 0 && (
                             <section className="flex flex-col gap-3">
                                 <div className="flex items-center gap-2">
                                     <span className="material-symbols-outlined text-amber-400">hourglass_top</span>
                                     <h2 className="text-amber-400 font-bold tracking-wide uppercase text-sm">Em Andamento</h2>
-                                    <span className="ml-auto bg-amber-400/20 text-amber-400 text-xs px-2 py-0.5 rounded-full">{doingActivities.length}</span>
+                                    <span className="ml-auto bg-amber-400/20 text-amber-400 text-xs px-2 py-0.5 rounded-full">{filteredDoing.length}</span>
                                 </div>
                                 <div className="flex flex-col gap-3">
-                                    {doingActivities.map(activity => {
+                                    {filteredDoing.map(activity => {
                                         const assumption = kanbanData?.assumptions?.find(a => a.checklist_id === activity.id);
                                         return (
                                             <RoutineCard
@@ -268,6 +321,7 @@ export default function KanbanPage() {
                                                 progress={activity.progress}
                                                 flaggedCount={activity.flaggedTasksCount}
                                                 assumptionName={assumption?.user_name}
+                                                area={(activity as any).area}
                                                 onClick={() => router.push(`/turno/atividade/${activity.id}`)}
                                             />
                                         );
@@ -281,13 +335,13 @@ export default function KanbanPage() {
                             <summary className="flex items-center justify-between cursor-pointer p-3 bg-[#1a2c32] rounded-xl border border-[#233f48] select-none list-none [&::-webkit-details-marker]:hidden">
                                 <div className="flex items-center gap-2 text-emerald-400">
                                     <span className="material-symbols-outlined text-lg">task_alt</span>
-                                    <h2 className="font-bold tracking-wide uppercase text-sm">Rotinas Concluídas ({doneActivities.length})</h2>
+                                    <h2 className="font-bold tracking-wide uppercase text-sm">Rotinas Concluídas ({filteredDone.length})</h2>
                                 </div>
                                 <span className="material-symbols-outlined text-[#92bbc9] group-open:rotate-180 transition-transform">expand_more</span>
                             </summary>
                             <div className="flex flex-col gap-2 mt-3 pl-2 border-l-2 border-emerald-900/30">
-                                {doneActivities.length === 0 && <span className="text-[#325a67] text-xs p-2">Nenhuma rotina finalizada hoje.</span>}
-                                {doneActivities.map(activity => (
+                                {filteredDone.length === 0 && <span className="text-[#325a67] text-xs p-2">Nenhuma rotina finalizada nesta área hoje.</span>}
+                                {filteredDone.map(activity => (
                                     <div key={activity.id} 
                                         onClick={() => router.push(`/turno/atividade/${activity.id}`)}
                                         className="flex justify-between items-center cursor-pointer hover:bg-[#1a2c32]/70 bg-[#1a2c32]/50 rounded-lg p-3 transition-colors border border-transparent hover:border-[#233f48]">

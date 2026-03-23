@@ -27,6 +27,7 @@ export interface RoutineCardProps {
     isRequired?: boolean;
     
     // Collaborator specific
+    area?: string;
     progress?: number;
     flaggedCount?: number;
     assumptionName?: string;
@@ -61,6 +62,7 @@ export function RoutineCard({
     flaggedCount = 0,
     assumptionName,
     isAssignedToOther = false,
+    area,
     isSelected = false,
     onClick,
     containerRef,
@@ -175,9 +177,17 @@ export function RoutineCard({
                             {title}
                         </h3>
                         
-                        {variant !== 'admin' && (
-                            <p className="text-[#92bbc9] text-xs mt-1">{itemsCount} {itemsCount === 1 ? 'item' : 'itens'}</p>
-                        )}
+                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                            {variant !== 'admin' && (
+                                <span className="bg-[#1a2c32] text-[#92bbc9] border border-[#233f48] px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-[12px] opacity-70">location_on</span>
+                                    {(!area || area === 'Qualquer Área') ? 'Geral' : area}
+                                </span>
+                            )}
+                            {variant !== 'admin' && (
+                                <p className="text-[#92bbc9] text-xs font-medium">{itemsCount} {itemsCount === 1 ? 'item' : 'itens'}</p>
+                            )}
+                        </div>
                     </div>
                 </div>
 
