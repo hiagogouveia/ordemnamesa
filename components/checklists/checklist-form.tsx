@@ -67,6 +67,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     const [tasks, setTasks] = useState<(Partial<ChecklistTask> & { tempId: string })[]>([]);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [draftSaved, setDraftSaved] = useState(false);
 
     const { data: roles = [] } = useRoles(restaurantId || undefined);
     const { data: equipeData } = useEquipe(restaurantId || null);
@@ -106,24 +107,71 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 (checklist.tasks || []).map((t) => ({ ...t, tempId: t.id }))
             );
         } else {
-            setName("");
-            setDescription("");
-            setShift("any");
-            setChecklistType("regular");
-            setRoleId("");
-            setAssignedToUserId("");
-            setIsRequired(true);
-            setRecurrence("none");
-            setStartTime("");
-            setEndTime("");
-            setHasTimeWindow(false);
-            setRecurrenceConfig(undefined);
-            setEnforceSequentialOrder(false);
-            setTasks([]);
-            setErrorMsg(null);
-            setShowDeleteModal(false);
+            const resetForm = () => {
+                setName("");
+                setDescription("");
+                setShift("any");
+                setChecklistType("regular");
+                setRoleId("");
+                setAssignedToUserId("");
+                setIsRequired(true);
+                setRecurrence("none");
+                setStartTime("");
+                setEndTime("");
+                setHasTimeWindow(false);
+                setRecurrenceConfig(undefined);
+                setEnforceSequentialOrder(false);
+                setTasks([]);
+                setErrorMsg(null);
+                setShowDeleteModal(false);
+                setDraftSaved(false);
+            };
+
+            const savedDraft = localStorage.getItem("ordem_na_mesa_draft_rotina");
+            if (savedDraft) {
+                try {
+                    const parsed = JSON.parse(savedDraft);
+                    setName(parsed.name ?? "");
+                    setDescription(parsed.description ?? "");
+                    setShift(parsed.shift ?? "any");
+                    setChecklistType(parsed.checklistType ?? "regular");
+                    setRoleId(parsed.roleId ?? "");
+                    setAssignedToUserId(parsed.assignedToUserId ?? "");
+                    setIsRequired(parsed.isRequired ?? true);
+                    setRecurrence(parsed.recurrence ?? "none");
+                    setStartTime(parsed.startTime ?? "");
+                    setEndTime(parsed.endTime ?? "");
+                    setHasTimeWindow(parsed.hasTimeWindow ?? false);
+                    setRecurrenceConfig(parsed.recurrenceConfig ?? undefined);
+                    setEnforceSequentialOrder(parsed.enforceSequentialOrder ?? false);
+                    setTasks(parsed.tasks ?? []);
+                    setErrorMsg(null);
+                    setShowDeleteModal(false);
+                    setDraftSaved(true);
+                } catch {
+                    localStorage.removeItem("ordem_na_mesa_draft_rotina");
+                    resetForm();
+                }
+            } else {
+                resetForm();
+            }
         }
     }, [checklist]);
+
+    useEffect(() => {
+        if (checklist) return;
+        const handler = setTimeout(() => {
+            if (!name && !description && tasks.length === 0) return;
+            const formState = {
+                name, description, shift, checklistType, roleId, assignedToUserId,
+                isRequired, recurrence, startTime, endTime, hasTimeWindow,
+                recurrenceConfig, enforceSequentialOrder, tasks
+            };
+            localStorage.setItem("ordem_na_mesa_draft_rotina", JSON.stringify(formState));
+            setDraftSaved(true);
+        }, 500);
+        return () => clearTimeout(handler);
+    }, [name, description, shift, checklistType, roleId, assignedToUserId, isRequired, recurrence, startTime, endTime, hasTimeWindow, recurrenceConfig, enforceSequentialOrder, tasks, checklist]);
 
     const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 8 } });
     const keyboardSensor = useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates });
@@ -223,6 +271,8 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             } else {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const res = await createMutation.mutateAsync(payload as any);
+                localStorage.removeItem("ordem_na_mesa_draft_rotina");
+                setDraftSaved(false);
                 if (checklistType === 'receiving') {
                     window.location.href = `/compras?new=true&checklist_id=${res.id}`; // Simple redirect
                 } else {
@@ -287,6 +337,12 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 </div>
 
                 <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end w-full sm:w-auto">
+                    {!checklist && draftSaved && (
+                         <span className="text-xs text-[#92bbc9]/60 italic mr-2 flex items-center gap-1">
+                             <span className="material-symbols-outlined text-[14px]">cloud_done</span>
+                             Rascunho salvo
+                         </span>
+                    )}
                     {checklist && (
                         <button
                             onClick={() => setShowDeleteModal(true)}
