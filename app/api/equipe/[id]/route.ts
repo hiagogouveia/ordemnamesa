@@ -49,6 +49,50 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
             return NextResponse.json({ error: 'Você não pode alterar seu próprio cargo.' }, { status: 403 });
         }
 
+        // Buscar role atual do target para validações de privilégio
+        const { data: targetMember } = await adminSupabase
+            .from('restaurant_users')
+            .select('role')
+            .eq('user_id', userId)
+            .eq('restaurant_id', restaurant_id)
+            .single();
+
+        if (!targetMember) {
+            return NextResponse.json({ error: 'Membro não encontrado.' }, { status: 404 });
+        }
+
+        // Manager não pode alterar cargos
+        if (membership.role === 'manager' && role !== undefined) {
+            return NextResponse.json({ error: 'Gerência não pode alterar cargos.' }, { status: 403 });
+        }
+
+        // Manager só pode gerenciar colaboradores (staff)
+        if (membership.role === 'manager' && targetMember.role !== 'staff') {
+            return NextResponse.json({ error: 'Gerência só pode gerenciar colaboradores.' }, { status: 403 });
+        }
+
+        // Proteger último owner: não desativar nem rebaixar
+        if (targetMember.role === 'owner') {
+            const isBeingDeactivated = active === false;
+            const isBeingDemoted = role !== undefined && role !== 'owner';
+
+            if (isBeingDeactivated || isBeingDemoted) {
+                const { count } = await adminSupabase
+                    .from('restaurant_users')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('restaurant_id', restaurant_id)
+                    .eq('role', 'owner')
+                    .eq('active', true);
+
+                if ((count ?? 0) <= 1) {
+                    return NextResponse.json(
+                        { error: 'Não é possível remover o único administrador.' },
+                        { status: 403 }
+                    );
+                }
+            }
+        }
+
         // Atualizar nome em public.users se fornecido
         if (name !== undefined) {
             const { error: nameError } = await adminSupabase

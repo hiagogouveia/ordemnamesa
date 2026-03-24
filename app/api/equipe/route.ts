@@ -185,6 +185,16 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Permissão negada.' }, { status: 403 });
         }
 
+        // Validar role
+        if (!['owner', 'manager', 'staff'].includes(role)) {
+            return NextResponse.json({ error: 'Cargo inválido.' }, { status: 400 });
+        }
+
+        // Manager só pode convidar colaboradores (staff)
+        if (membership.role === 'manager' && role !== 'staff') {
+            return NextResponse.json({ error: 'Gerência só pode convidar colaboradores.' }, { status: 403 });
+        }
+
         // 1. Criar usuário no Auth sem confirmação de e-mail
         const { data: authUser, error: authError } = await adminSupabase.auth.admin.createUser({
             email,
@@ -257,6 +267,50 @@ export async function PUT(request: Request) {
 
         if (!membership || !['owner', 'manager'].includes(membership.role)) {
             return NextResponse.json({ error: 'Permissão negada.' }, { status: 403 });
+        }
+
+        // Buscar registro alvo para validações
+        const { data: target } = await adminSupabase
+            .from('restaurant_users')
+            .select('role, user_id')
+            .eq('id', id)
+            .eq('restaurant_id', restaurant_id)
+            .single();
+
+        if (!target) {
+            return NextResponse.json({ error: 'Membro não encontrado.' }, { status: 404 });
+        }
+
+        // Manager não pode alterar cargos
+        if (membership.role === 'manager' && role !== undefined) {
+            return NextResponse.json({ error: 'Gerência não pode alterar cargos.' }, { status: 403 });
+        }
+
+        // Manager só pode gerenciar colaboradores (staff)
+        if (membership.role === 'manager' && target.role !== 'staff') {
+            return NextResponse.json({ error: 'Gerência só pode gerenciar colaboradores.' }, { status: 403 });
+        }
+
+        // Proteger último owner: não desativar nem rebaixar
+        if (target.role === 'owner') {
+            const isBeingDeactivated = active === false;
+            const isBeingDemoted = role !== undefined && role !== 'owner';
+
+            if (isBeingDeactivated || isBeingDemoted) {
+                const { count } = await adminSupabase
+                    .from('restaurant_users')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('restaurant_id', restaurant_id)
+                    .eq('role', 'owner')
+                    .eq('active', true);
+
+                if ((count ?? 0) <= 1) {
+                    return NextResponse.json(
+                        { error: 'Não é possível remover o único administrador.' },
+                        { status: 403 }
+                    );
+                }
+            }
         }
 
         const updates: Record<string, boolean | string> = {};
