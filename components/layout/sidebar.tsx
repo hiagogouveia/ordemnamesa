@@ -6,9 +6,11 @@ import { Logo } from "@/components/ui/Logo";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useMyActivitiesBadge } from "@/lib/hooks/use-my-activities";
 
 const managerNavigation = [
     { name: "Dashboard", href: "/dashboard", icon: "dashboard" },
+    { name: "Minhas Atividades", href: "/my-activities", icon: "assignment_ind", badge: true },
     { name: "Checklists", href: "/checklists", icon: "checklist" },
     { name: "Equipe", href: "/equipe", icon: "group" },
     { name: "Compras", href: "/compras", icon: "shopping_cart" },
@@ -18,6 +20,7 @@ const managerNavigation = [
 
 const staffNavigation = [
     { name: "Turno Atual", href: "/turno", icon: "dashboard" },
+    { name: "Minhas Atividades", href: "/my-activities", icon: "assignment_ind", badge: true },
     { name: "Histórico", href: "/historico", icon: "history" },
 ];
 
@@ -31,6 +34,8 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
     const [userEmail, setUserEmail] = useState("");
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const [canLaunchPurchases, setCanLaunchPurchases] = useState(false);
+    const { data: badgeData } = useMyActivitiesBadge(restaurantId || undefined);
+    const pendingCount = badgeData?.pending ?? 0;
 
     const handleSignOut = async () => {
         setIsLoggingOut(true);
@@ -124,6 +129,11 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
                                 {item.icon}
                             </span>
                             {item.name}
+                            {'badge' in item && item.badge && pendingCount > 0 && (
+                                <span className="ml-auto bg-[#13b6ec] text-[#0a1215] text-[10px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-tight">
+                                    {pendingCount > 99 ? "99+" : pendingCount}
+                                </span>
+                            )}
                         </Link>
                     );
                 })}

@@ -90,9 +90,9 @@ export function RolesTab() {
         <div className="flex flex-col gap-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h2 className="text-xl font-bold text-white mb-1">Funções e Áreas</h2>
+                    <h2 className="text-xl font-bold text-white mb-1">Funções</h2>
                     <p className="text-sm text-[#92bbc9]">
-                        Crie funções (ex: Cozinha, Bar, Salão) e configure regras de operação para sua equipe.
+                        Crie funções (ex: Cozinha, Gerência, Administração) e atribua membros da equipe a cada uma. As funções controlam o que cada pessoa vê em "Minhas Atividades".
                     </p>
                 </div>
                 <button

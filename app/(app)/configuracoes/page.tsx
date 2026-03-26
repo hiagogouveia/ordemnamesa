@@ -17,7 +17,7 @@ export default function ConfiguracoesPage() {
                     <div>
                         <h1 className="text-2xl font-bold text-white mb-1 font-fraunces">Configurações</h1>
                         <p className="text-sm text-[#92bbc9]">
-                            Gerencie turnos, áreas, funções e dados da sua operação.
+                            Gerencie turnos, funções e dados da sua operação.
                         </p>
                     </div>
                 </div>
@@ -34,7 +34,7 @@ export default function ConfiguracoesPage() {
                         onClick={() => setActiveTab("funcoes")}
                         className={`pb-4 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeTab === "funcoes" ? "border-[#13b6ec] text-[#13b6ec]" : "border-transparent text-[#92bbc9] hover:text-white"}`}
                     >
-                        Funções e Áreas
+                        Funções
                     </button>
                     <button
                         onClick={() => setActiveTab("geral")}

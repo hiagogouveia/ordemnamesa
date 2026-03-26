@@ -65,6 +65,10 @@ export interface Checklist {
     order_index?: number | null
     tasks?: ChecklistTask[]
     roles?: Role
+    // Sprint 13: My Activities
+    area_id?: string | null
+    target_role?: TargetRole
+    area?: Area | null
 }
 
 export interface ChecklistTask {
@@ -134,6 +138,41 @@ export interface PurchaseList {
     closed_at?: string
     created_at: string
     updated_at: string
+}
+
+// ============================================================
+// Sprint 13 — Areas & My Activities
+// ============================================================
+
+export interface Area {
+    id: string
+    restaurant_id: string
+    name: string
+    description?: string | null
+    color: string
+    created_at: string
+}
+
+export type TargetRole = 'staff' | 'manager' | 'owner' | 'all'
+export type MyActivityStatus = 'pending' | 'in_progress' | 'done_today' | 'overdue'
+
+export interface MyActivity {
+    id: string
+    restaurant_id: string
+    name: string
+    description?: string | null
+    shift: ShiftType
+    checklist_type: 'regular' | 'opening' | 'closing' | 'receiving'
+    is_required: boolean
+    start_time?: string | null
+    end_time?: string | null
+    target_role: TargetRole
+    area_id?: string | null
+    area?: Area | null
+    task_count: number
+    done_count: number
+    progress_percent: number
+    activity_status: MyActivityStatus
 }
 
 export interface PurchaseItem {
