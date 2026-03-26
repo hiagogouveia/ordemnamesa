@@ -11,8 +11,10 @@ const getAdminSupabase = () =>
 function computeActivityStatus(
     endTime: string | null | undefined,
     taskCount: number,
-    doneCount: number
+    doneCount: number,
+    isFormallyConcluded: boolean
 ): MyActivityStatus {
+    if (isFormallyConcluded) return 'done_today';
     if (taskCount === 0) return 'pending';
     if (doneCount >= taskCount) return 'done_today';
     const nowHHMM = new Date().toTimeString().slice(0, 5);
@@ -120,6 +122,21 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: executionsError.message }, { status: 500 });
         }
 
+        // Conclusões formais do dia (completed_at definido) — fonte de verdade imutável
+        const todayKey = startOfDay.toISOString().split('T')[0];
+
+        const { data: assumptions } = await adminSupabase
+            .from('checklist_assumptions')
+            .select('checklist_id, completed_at')
+            .eq('restaurant_id', restaurant_id)
+            .eq('user_id', user.id)
+            .eq('date_key', todayKey)
+            .not('completed_at', 'is', null);
+
+        const completedSet = new Set<string>(
+            (assumptions ?? []).map((a: { checklist_id: string; completed_at: string }) => a.checklist_id)
+        );
+
         // Mapa de tarefas concluídas por checklist
         const doneCountMap = new Map<string, Set<string>>();
         for (const exec of executions ?? []) {
@@ -162,7 +179,7 @@ export async function GET(request: Request) {
                 task_count: taskCount,
                 done_count: doneCount,
                 progress_percent: progressPercent,
-                activity_status: computeActivityStatus(checklist.end_time, taskCount, doneCount),
+                activity_status: computeActivityStatus(checklist.end_time, taskCount, doneCount, completedSet.has(checklist.id)),
             };
         });
 

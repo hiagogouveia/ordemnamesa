@@ -97,6 +97,7 @@ export default function ActivityDetailsPage() {
 
     const isAssumedByMe = assumption?.user_id === user?.id;
     const isAssumedByOther = !!assumption && !isAssumedByMe;
+    const isCompleted = Boolean(assumption?.completed_at);
 
     // Shift type labels
     const shiftLabels: Record<string, string> = {
@@ -151,7 +152,7 @@ export default function ActivityDetailsPage() {
                         </div>
                     )}
 
-                    {timeWindowStatus === 'after' && checklist.end_time && (
+                    {timeWindowStatus === 'after' && checklist.end_time && !isCompleted && (
                         <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-center gap-3">
                             <span className="material-symbols-outlined text-red-400 shrink-0">warning</span>
                             <div>
@@ -160,6 +161,20 @@ export default function ActivityDetailsPage() {
                                     {checklist.start_time && checklist.end_time
                                         ? `A janela ${checklist.start_time} – ${checklist.end_time} já encerrou`
                                         : `O horário limite (${checklist.end_time}) já passou`}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {isCompleted && (
+                        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-center gap-3">
+                            <span className="material-symbols-outlined text-emerald-400 shrink-0">task_alt</span>
+                            <div>
+                                <p className="text-emerald-300 font-bold text-sm">Atividade Concluída</p>
+                                <p className="text-emerald-400/70 text-xs mt-0.5">
+                                    {assumption?.completed_by_user_name
+                                        ? `Finalizada por: ${assumption.completed_by_user_name}`
+                                        : 'Esta atividade foi finalizada com sucesso.'}
                                 </p>
                             </div>
                         </div>
@@ -282,7 +297,15 @@ export default function ActivityDetailsPage() {
             {/* Bottom Action */}
             <div className="fixed bottom-0 left-0 lg:left-64 right-0 px-4 pt-4 pb-20 lg:pb-4 bg-gradient-to-t from-[#0a1215] via-[#0a1215]/95 to-transparent z-40">
                 <div className="max-w-[480px] mx-auto flex flex-col gap-2">
-                    {timeWindowStatus === 'before' ? (
+                    {isCompleted ? (
+                        <button
+                            onClick={() => router.push(`/turno/atividade/${checklistId}/executar`)}
+                            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-base py-4 rounded-xl shadow-[0_8px_20px_rgba(16,185,129,0.2)] active:scale-95 transition-all flex items-center justify-center gap-2"
+                        >
+                            <span className="material-symbols-outlined text-[20px]">task_alt</span>
+                            Ver atividade concluída
+                        </button>
+                    ) : timeWindowStatus === 'before' ? (
                         <button
                             disabled
                             className="w-full bg-[#1a2c32] text-[#325a67] font-bold text-base py-4 rounded-xl border border-[#233f48] cursor-not-allowed flex items-center justify-center gap-2"
