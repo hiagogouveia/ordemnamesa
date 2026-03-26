@@ -11,7 +11,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     try {
         const { id: checklistId } = await params;
         const body = await request.json();
-        const { restaurant_id } = body;
+        const { restaurant_id, observation } = body;
 
         if (!restaurant_id) {
             return NextResponse.json({ error: 'restaurant_id é obrigatório' }, { status: 400 });
@@ -49,6 +49,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
                     completed_at: now,
                     completed_by_user_id: user.id,
                     completed_by_user_name: userName,
+                    ...(observation !== undefined && { observation }),
                 })
                 .eq('id', existing.id)
                 .select()
@@ -67,6 +68,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
                     completed_at: now,
                     completed_by_user_id: user.id,
                     completed_by_user_name: userName,
+                    ...(observation !== undefined && { observation }),
                 })
                 .select()
                 .single();

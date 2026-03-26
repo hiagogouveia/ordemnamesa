@@ -46,6 +46,28 @@ export function useChecklists(restaurantId: string | undefined) {
     });
 }
 
+// Buscar status diário para o Admin (Assumptions + Checklists)
+export function useAdminChecklistsStatus(restaurantId: string | undefined) {
+    return useQuery({
+        queryKey: ["admin_checklists_status", restaurantId],
+        queryFn: async () => {
+            if (!restaurantId) return null;
+            const headers = await getAuthHeaders();
+            const res = await fetch(`/api/admin/checklists?restaurant_id=${restaurantId}`, {
+                headers,
+            });
+
+            if (!res.ok) {
+                throw new Error('Falha ao buscar status diário dos checklists');
+            }
+
+            return res.json();
+        },
+        enabled: !!restaurantId,
+        refetchInterval: 15000, 
+    });
+}
+
 // Criar Checklist
 export function useCreateChecklist() {
     const queryClient = useQueryClient();

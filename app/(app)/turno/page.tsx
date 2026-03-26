@@ -336,17 +336,25 @@ export default function KanbanPage() {
                             </summary>
                             <div className="flex flex-col gap-2 mt-3 pl-2 border-l-2 border-emerald-900/30">
                                 {filteredDone.length === 0 && <span className="text-[#325a67] text-xs p-2">Nenhuma rotina finalizada nesta área hoje.</span>}
-                                {filteredDone.map(activity => (
-                                    <div key={activity.id} 
-                                        onClick={() => router.push(`/turno/atividade/${activity.id}`)}
-                                        className="flex justify-between items-center cursor-pointer hover:bg-[#1a2c32]/70 bg-[#1a2c32]/50 rounded-lg p-3 transition-colors border border-transparent hover:border-[#233f48]">
-                                        <div className="flex items-center gap-2">
-                                            <span className="material-symbols-outlined text-emerald-400/80 text-sm">check_circle</span>
-                                            <span className="text-white/80 text-sm">{activity.name}</span>
+                                {filteredDone.map(activity => {
+                                    const assumption = kanbanData?.assumptions?.find(a => a.checklist_id === activity.id);
+                                    const hasObservation = !!assumption?.observation;
+
+                                    return (
+                                        <div key={activity.id} 
+                                            onClick={() => router.push(`/turno/atividade/${activity.id}`)}
+                                            className="flex justify-between items-center cursor-pointer hover:bg-[#1a2c32]/70 bg-[#1a2c32]/50 rounded-lg p-3 transition-colors border border-transparent hover:border-[#233f48]">
+                                            <div className="flex items-center gap-2">
+                                                <span className="material-symbols-outlined text-emerald-400/80 text-sm">check_circle</span>
+                                                <span className="text-white/80 text-sm">{activity.name}</span>
+                                                {hasObservation && (
+                                                    <span className="material-symbols-outlined text-[#13b6ec] text-[16px] ml-1" title="Contém observações">chat</span>
+                                                )}
+                                            </div>
+                                            <span className="text-[#92bbc9] text-xs">{activity.taskCount} itens</span>
                                         </div>
-                                        <span className="text-[#92bbc9] text-xs">{activity.taskCount} itens</span>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </details>
 

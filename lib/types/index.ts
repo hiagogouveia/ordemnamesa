@@ -38,6 +38,7 @@ export interface ChecklistAssumption {
     completed_at?: string
     completed_by_user_id?: string
     completed_by_user_name?: string
+    observation?: string
 }
 
 export interface Checklist {

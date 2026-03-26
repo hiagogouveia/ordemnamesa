@@ -83,12 +83,12 @@ export const useAssumeChecklist = () => {
 export const useCompleteChecklist = () => {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: async ({ restaurantId, checklistId }: { restaurantId: string; checklistId: string }) => {
+        mutationFn: async ({ restaurantId, checklistId, observation }: { restaurantId: string; checklistId: string; observation?: string }) => {
             const token = await getAuthToken();
             const response = await fetch(`/api/checklists/${checklistId}/complete`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ restaurant_id: restaurantId }),
+                body: JSON.stringify({ restaurant_id: restaurantId, observation }),
             });
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
@@ -99,6 +99,7 @@ export const useCompleteChecklist = () => {
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ['assumption', variables.restaurantId, variables.checklistId] });
             queryClient.invalidateQueries({ queryKey: ['kanban', variables.restaurantId] });
+            queryClient.invalidateQueries({ queryKey: ["admin_checklists_status", variables.restaurantId] });
         },
     });
 };

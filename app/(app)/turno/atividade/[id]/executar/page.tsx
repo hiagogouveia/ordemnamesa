@@ -15,6 +15,7 @@ export default function ActivityExecutionPage() {
 
     const [showFinalizeModal, setShowFinalizeModal] = useState(false);
     const [finalizing, setFinalizing] = useState(false);
+    const [observation, setObservation] = useState("");
 
     const { data: activityData, isLoading, isError } = useActivityData(restaurantId || undefined, checklistId);
     const { data: assumption } = useChecklistAssumption(restaurantId || undefined, checklistId);
@@ -48,7 +49,7 @@ export default function ActivityExecutionPage() {
         if (!restaurantId || !checklistId) return;
         setFinalizing(true);
         try {
-            await completeMutation.mutateAsync({ restaurantId, checklistId });
+            await completeMutation.mutateAsync({ restaurantId, checklistId, observation: observation || undefined });
             setShowFinalizeModal(false);
         } catch (e) {
             console.error('Erro ao finalizar atividade:', e);
@@ -144,7 +145,7 @@ export default function ActivityExecutionPage() {
             </header>
 
             <main className="flex-1 overflow-y-auto px-4 py-6">
-                <div className="max-w-[480px] mx-auto w-full flex flex-col gap-4 pb-32">
+                <div className="max-w-[480px] mx-auto w-full flex flex-col gap-4 pb-48">
 
                     {/* Completed banner */}
                     {isCompleted && (
@@ -206,6 +207,35 @@ export default function ActivityExecutionPage() {
                             </div>
                         )}
                     </div>
+
+                    {/* Observation Field (Appears only when all done and not completed) */}
+                    {isAllDone && !isCompleted && (
+                        <div className="mt-6 flex flex-col gap-2 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                            <label className="text-white text-base font-bold ml-1 flex flex-col">
+                                Observações (opcional)
+                                <span className="text-xs text-[#92bbc9] mt-0.5 font-normal">Algum problema ou observação sobre a rotina?</span>
+                            </label>
+                            <textarea
+                                value={observation}
+                                onChange={(e) => setObservation(e.target.value)}
+                                placeholder="Digite algo, se necessário..."
+                                className="w-full bg-[#1a2c32] border border-[#233f48] rounded-xl p-4 text-white text-base placeholder:text-[#92bbc9]/50 focus:outline-none focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] resize-none transition-all min-h-[120px]"
+                            />
+                        </div>
+                    )}
+
+                    {/* Exibição da Observação após concluído */}
+                    {isCompleted && assumption?.observation && (
+                        <div className="mt-6 flex flex-col gap-2">
+                            <label className="text-white text-base font-bold ml-1 flex items-center gap-2">
+                                <span className="material-symbols-outlined text-[#92bbc9] text-xl">chat</span>
+                                Observações do colaborador
+                            </label>
+                            <div className="w-full bg-[#1a2c32] border border-[#233f48] rounded-xl p-4 text-[#92bbc9] text-base min-h-[120px] whitespace-pre-wrap leading-relaxed">
+                                {assumption.observation}
+                            </div>
+                        </div>
+                    )}
 
                 </div>
             </main>

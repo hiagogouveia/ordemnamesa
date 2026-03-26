@@ -1,30 +1,137 @@
 "use client";
 
+import { useState, useMemo, useEffect } from "react";
+import { useRestaurantStore } from "@/lib/store/restaurant-store";
+import { createClient } from "@/lib/supabase/client";
+import { useQuery } from "@tanstack/react-query";
+import { Checklist, ChecklistAssumption } from "@/lib/types";
+import { RoutineCard } from "@/components/checklists/routine-card";
+import { sortChecklistsByPriority } from "@/lib/utils/checklist-priority";
+
+function useAdminChecklistsData(restaurantId?: string) {
+    return useQuery({
+        queryKey: ["admin_checklists_status", restaurantId],
+        queryFn: async () => {
+            if (!restaurantId) return null;
+            
+            const supabase = createClient();
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token || '';
+
+            const res = await fetch(`/api/admin/checklists?restaurant_id=${restaurantId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!res.ok) {
+                throw new Error('Falha ao buscar checklists do admin');
+            }
+
+            return res.json();
+        },
+        enabled: !!restaurantId,
+        refetchInterval: 15000, 
+    });
+}
+
 export default function AdminChecklists() {
+    const { restaurantId } = useRestaurantStore();
+    const { data, isLoading } = useAdminChecklistsData(restaurantId || undefined);
+    
+    const [currentTime, setCurrentTime] = useState("");
+    const [activeTab, setActiveTab] = useState<"ativas" | "concluidas">("ativas");
+
+    console.log("SISTEMA ATUALIZADO - ABA:", activeTab);
+    console.log("SISTEMA ATUALIZADO - DADOS:", data);
+
+    useEffect(() => {
+        setCurrentTime(new Date().toTimeString().slice(0, 5));
+        const interval = setInterval(() => setCurrentTime(new Date().toTimeString().slice(0, 5)), 60000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const currentMinutes = useMemo(() => {
+        if (!currentTime) return 0;
+        const [h, m] = currentTime.split(':').map(Number);
+        return h * 60 + m;
+    }, [currentTime]);
+
+    const { activeChecklists, completedChecklists } = useMemo(() => {
+        if (!data) return { activeChecklists: [], completedChecklists: [] };
+
+        const active: (Checklist & { itemsCount: number })[] = [];
+        const completed: (Checklist & { itemsCount: number, assumption: ChecklistAssumption })[] = [];
+
+        data.checklists.forEach((checklist: any) => {
+            const assumption = data.assumptions.find((a: ChecklistAssumption) => a.checklist_id === checklist.id);
+            const itemsCount = data.tasks.filter((t: any) => t.checklist_id === checklist.id).length;
+            
+            const enrichedChecklist = { ...checklist, itemsCount };
+
+            if (assumption?.completed_at) {
+                completed.push({ ...enrichedChecklist, assumption });
+            } else {
+                active.push(enrichedChecklist);
+            }
+        });
+
+        // Sorting
+        active.sort((a, b) => sortChecklistsByPriority(a, b, currentMinutes));
+        completed.sort((a, b) => {
+            const timeA = new Date(a.assumption.completed_at!).getTime();
+            const timeB = new Date(b.assumption.completed_at!).getTime();
+            return timeB - timeA; // DESC (mais recentes no topo)
+        });
+
+        return { activeChecklists: active, completedChecklists: completed };
+    }, [data, currentMinutes]);
+
+    const displayData = activeTab === "ativas" ? activeChecklists : completedChecklists;
+
     return (
         <div className="flex flex-col gap-6 animate-fade-in pb-20 md:pb-6">
             {/* Page Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Gestão de Checklists</h1>
-                    <p className="text-slate-500 dark:text-[#93adc8]">Crie e edite as rotinas da sua equipe</p>
+                    <p className="text-slate-500 dark:text-[#93adc8]">Acompanhe as rotinas da sua equipe hoje</p>
                 </div>
 
-                <button className="w-full md:w-auto flex items-center justify-center gap-2 bg-primary hover:bg-[#0ea5d6] text-white font-bold py-2.5 px-6 rounded-lg shadow-lg shadow-primary/20 transition-all active:scale-[0.98]">
+                <button className="w-full md:w-auto flex items-center justify-center gap-2 bg-[#13b6ec] hover:bg-[#10a1d4] text-[#0a1215] font-bold py-2.5 px-6 rounded-lg shadow-lg shadow-[#13b6ec]/20 transition-all active:scale-[0.98]">
                     <span className="material-symbols-outlined text-[20px]">add</span>
                     Novo Checklist
                 </button>
             </div>
 
-            {/* Toolbar */}
+            {/* Toolbar Areas */}
             <div className="flex flex-col sm:flex-row justify-between gap-4 bg-white dark:bg-[#111e22] p-4 rounded-xl shadow-sm border border-slate-200 dark:border-[#233f48]">
-                <div className="relative group w-full sm:max-w-md">
-                    <div className="absolute left-0 top-0 bottom-0 pl-3 flex items-center pointer-events-none text-slate-400 dark:text-[#557682] group-focus-within:text-primary transition-colors">
-                        <span className="material-symbols-outlined text-[20px]">search</span>
-                    </div>
-                    <input type="text" placeholder="Buscar checklist..." className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-slate-900 dark:text-white focus:outline-0 focus:ring-0 border border-slate-200 dark:border-[#325a67] bg-white dark:bg-[#192d33] focus:border-primary dark:focus:border-primary h-10 placeholder:text-slate-400 dark:placeholder:text-[#5a7b88] pl-10 pr-4 text-sm font-normal leading-normal transition-all shadow-sm" />
+                
+                {/* Tabs "Rotinas" and "Concluídas" */}
+                <div className="flex bg-slate-100 dark:bg-[#1a2c32] p-1 rounded-lg w-full sm:w-auto border border-slate-200 dark:border-[#233f48]">
+                    <button 
+                        onClick={() => setActiveTab("ativas")}
+                        className={`flex-1 sm:flex-none flex items-center justify-center gap-4 px-6 py-2 rounded-md font-bold text-sm transition-all ${activeTab === 'ativas' ? 'bg-white dark:bg-[#233f48] text-[#13b6ec] dark:text-white shadow-md' : 'text-slate-500 dark:text-[#92bbc9] hover:text-[#13b6ec] dark:hover:text-white'}`}
+                    >
+                        <div className="flex items-center gap-2">
+                            Rotinas
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${activeTab === 'ativas' ? 'bg-red-500 text-white' : 'bg-slate-200 dark:bg-[#111e22] text-slate-500 dark:text-[#92bbc9]'}`}>
+                                {activeChecklists.length}
+                            </span>
+                        </div>
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab("concluidas")}
+                        className={`flex-1 sm:flex-none flex items-center justify-center gap-4 px-6 py-2 rounded-md font-bold text-sm transition-all ${activeTab === 'concluidas' ? 'bg-white dark:bg-[#233f48] text-[#13b6ec] dark:text-white shadow-md' : 'text-slate-500 dark:text-[#92bbc9] hover:text-[#13b6ec] dark:hover:text-white'}`}
+                    >
+                        <div className="flex items-center gap-2">
+                            Concluídas
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${activeTab === 'concluidas' ? 'bg-[#13b6ec] text-white' : 'bg-slate-200 dark:bg-[#111e22] text-slate-500 dark:text-[#92bbc9]'}`}>
+                                {completedChecklists.length}
+                            </span>
+                        </div>
+                    </button>
                 </div>
 
+                {/* Filters */}
                 <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
                     <button className="flex-shrink-0 flex items-center gap-2 bg-white dark:bg-[#1a2c32] border border-slate-200 dark:border-[#325a67] hover:border-slate-300 dark:hover:border-primary text-slate-700 dark:text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors shadow-sm">
                         <span className="material-symbols-outlined text-[18px]">filter_list</span>
@@ -37,92 +144,76 @@ export default function AdminChecklists() {
                 </div>
             </div>
 
+            {/* Loading State */}
+            {isLoading && (
+                <div className="flex justify-center py-10">
+                    <span className="material-symbols-outlined animate-spin text-4xl text-[#13b6ec]">progress_activity</span>
+                </div>
+            )}
+
             {/* Checklists Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {/* Card 1 */}
-                <div className="bg-white dark:bg-[#111e22] rounded-xl shadow-sm border border-slate-200 dark:border-[#233f48] overflow-hidden group hover:border-primary dark:hover:border-primary transition-colors flex flex-col">
-                    <div className="p-5 flex-1">
-                        <div className="flex justify-between items-start mb-4">
-                            <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 dark:bg-[#1a2c32] dark:text-[#93adc8] text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">
-                                Cozinha Quente
-                            </span>
-                            <button className="text-slate-400 hover:text-primary transition-colors">
-                                <span className="material-symbols-outlined">more_vert</span>
-                            </button>
-                        </div>
-                        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2 group-hover:text-primary transition-colors">Abertura de Cozinha</h3>
-                        <p className="text-sm text-slate-500 dark:text-[#5a7b88] mb-4">Checklist diário com verificação de termostatos e validade de insumos.</p>
+            {!isLoading && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {displayData.map((item) => {
+                        const isCompleted = activeTab === "concluidas";
+                        const completedAssumption = isCompleted ? (item as any).assumption as ChecklistAssumption : null;
+                        
+                        let descriptionStr = item.description || "Sem descrição definida.";
+                        
+                        if (isCompleted && completedAssumption) {
+                            const timeStr = new Date(completedAssumption.completed_at!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                            
+                            descriptionStr = `Finalizado por: ${completedAssumption.user_name} às ${timeStr}`;
+                            if (completedAssumption.observation) {
+                                descriptionStr += `\n💬 Obs: ${completedAssumption.observation}`;
+                            }
+                        }
 
-                        <div className="flex items-center gap-4 text-sm text-slate-600 dark:text-[#93adc8]">
-                            <div className="flex items-center gap-1">
-                                <span className="material-symbols-outlined text-[16px]">task</span>
-                                12 Tarefas
+                        return (
+                            <div key={item.id} className="h-full flex">
+                                <RoutineCard
+                                    variant="admin"
+                                    title={item.name}
+                                    description={descriptionStr}
+                                    start_time={item.start_time}
+                                    end_time={item.end_time}
+                                    currentMinutes={currentMinutes}
+                                    itemsCount={item.itemsCount}
+                                    shift={item.shift as string}
+                                    sectorName={(item as any).roles?.name}
+                                    sectorColor={(item as any).roles?.color}
+                                    routineType={item.checklist_type}
+                                    adminStatusString={isCompleted ? "archived" : "active"}
+                                    onClick={() => {}}
+                                />
                             </div>
-                            <div className="flex items-center gap-1">
-                                <span className="material-symbols-outlined text-[16px]">schedule</span>
-                                Turno Manhã
+                        );
+                    })}
+
+                    {/* New Checklist Card Placeholder (Only on Active tab) */}
+                    {activeTab === "ativas" && (
+                        <button className="bg-slate-50 dark:bg-[#152329] rounded-xl shadow-sm border-2 border-dashed border-slate-300 dark:border-[#325a67] p-6 flex flex-col items-center justify-center gap-4 hover:border-[#13b6ec] transition-colors group min-h-[200px]">
+                            <div className="w-16 h-16 rounded-full bg-slate-200 dark:bg-[#233f48] flex items-center justify-center text-slate-400 group-hover:bg-[#13b6ec]/20 group-hover:text-[#13b6ec] transition-colors">
+                                <span className="material-symbols-outlined text-3xl">add</span>
                             </div>
-                        </div>
-                    </div>
-                    <div className="border-t border-slate-100 dark:border-[#233f48] p-4 bg-slate-50 dark:bg-[#152329] flex justify-between items-center">
-                        <div className="flex -space-x-2">
-                            <div className="w-8 h-8 rounded-full border-2 border-white dark:border-[#152329] bg-slate-200" style={{ backgroundImage: "url('https://randomuser.me/api/portraits/men/32.jpg')", backgroundSize: 'cover' }}></div>
-                            <div className="w-8 h-8 rounded-full border-2 border-white dark:border-[#152329] bg-slate-200" style={{ backgroundImage: "url('https://randomuser.me/api/portraits/women/44.jpg')", backgroundSize: 'cover' }}></div>
-                            <div className="w-8 h-8 rounded-full border-2 border-white dark:border-[#152329] bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
-                                +3
-                            </div>
-                        </div>
-                        <button className="text-sm font-bold text-primary hover:text-primary/80 transition-colors">
-                            Editar
+                            <span className="text-sm font-bold text-slate-600 dark:text-[#93adc8] group-hover:text-[#13b6ec] transition-colors">
+                                Criar Novo Checklist
+                            </span>
                         </button>
+                    )}
+                </div>
+            )}
+            
+            {/* Empty State Concluídas */}
+            {!isLoading && activeTab === "concluidas" && completedChecklists.length === 0 && (
+                <div className="w-full flex justify-center py-20 text-[#5a7b88]">
+                    <div className="text-center">
+                        <span className="material-symbols-outlined text-5xl mb-3 opacity-50">inventory_2</span>
+                        <p className="font-medium">Nenhuma rotina foi concluída hoje ainda.</p>
                     </div>
                 </div>
+            )}
 
-                {/* Card 2 */}
-                <div className="bg-white dark:bg-[#111e22] rounded-xl shadow-sm border border-slate-200 dark:border-[#233f48] overflow-hidden group hover:border-primary dark:hover:border-primary transition-colors flex flex-col">
-                    <div className="p-5 flex-1">
-                        <div className="flex justify-between items-start mb-4">
-                            <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 dark:bg-[#1a2c32] dark:text-[#93adc8] text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">
-                                Salão Principal
-                            </span>
-                            <button className="text-slate-400 hover:text-primary transition-colors">
-                                <span className="material-symbols-outlined">more_vert</span>
-                            </button>
-                        </div>
-                        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2 group-hover:text-primary transition-colors">Fechamento do Salão</h3>
-                        <p className="text-sm text-slate-500 dark:text-[#5a7b88] mb-4">Organização de mesas, limpeza do chão e sangria de caixa.</p>
-
-                        <div className="flex items-center gap-4 text-sm text-slate-600 dark:text-[#93adc8]">
-                            <div className="flex items-center gap-1">
-                                <span className="material-symbols-outlined text-[16px]">task</span>
-                                24 Tarefas
-                            </div>
-                            <div className="flex items-center gap-1">
-                                <span className="material-symbols-outlined text-[16px]">schedule</span>
-                                Turno Noite
-                            </div>
-                        </div>
-                    </div>
-                    <div className="border-t border-slate-100 dark:border-[#233f48] p-4 bg-slate-50 dark:bg-[#152329] flex justify-between items-center">
-                        <div className="flex -space-x-2">
-                            <div className="w-8 h-8 rounded-full border-2 border-white dark:border-[#152329] bg-slate-200" style={{ backgroundImage: "url('https://randomuser.me/api/portraits/women/68.jpg')", backgroundSize: 'cover' }}></div>
-                        </div>
-                        <button className="text-sm font-bold text-primary hover:text-primary/80 transition-colors">
-                            Editar
-                        </button>
-                    </div>
-                </div>
-
-                {/* New Checklist Card Placeholder */}
-                <button className="bg-slate-50 dark:bg-[#152329] rounded-xl shadow-sm border-2 border-dashed border-slate-300 dark:border-[#325a67] p-6 flex flex-col items-center justify-center gap-4 hover:border-primary transition-colors group min-h-[250px]">
-                    <div className="w-16 h-16 rounded-full bg-slate-200 dark:bg-[#233f48] flex items-center justify-center text-slate-400 group-hover:bg-primary/20 group-hover:text-primary transition-colors">
-                        <span className="material-symbols-outlined text-3xl">add</span>
-                    </div>
-                    <span className="text-sm font-bold text-slate-600 dark:text-[#93adc8] group-hover:text-primary transition-colors">
-                        Criar Novo Checklist
-                    </span>
-                </button>
-            </div>
         </div>
     );
 }

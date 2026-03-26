@@ -23,7 +23,7 @@ import { useMemo } from "react";
 import { createClient } from '@/lib/supabase/client';
 import { ExtendedChecklist } from "./checklist-card";
 import { RoutineCard } from "./routine-card";
-import { useChecklists } from "@/lib/hooks/use-checklists";
+import { useChecklists, useAdminChecklistsStatus } from "@/lib/hooks/use-checklists";
 import { useRoles } from "@/lib/hooks/use-roles";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useSortedChecklists } from "@/lib/hooks/use-sorted-checklists";
@@ -35,7 +35,7 @@ interface ChecklistListProps {
     onRoleChange?: (roleId: string | null) => void;
 }
 
-function SortableRoutineCard({ checklist, currentMinutes, onSelect, selectedId, canReorder, isReorderMode, onMoveUp, onMoveDown, isFirst, isLast }: {
+function SortableRoutineCard({ checklist, currentMinutes, onSelect, selectedId, canReorder, isReorderMode, onMoveUp, onMoveDown, isFirst, isLast, descriptionOverride, isCompleted }: {
     checklist: ExtendedChecklist;
     currentMinutes: number;
     onSelect: (c: ExtendedChecklist) => void;
@@ -46,6 +46,8 @@ function SortableRoutineCard({ checklist, currentMinutes, onSelect, selectedId, 
     onMoveDown: () => void;
     isFirst: boolean;
     isLast: boolean;
+    descriptionOverride?: string;
+    isCompleted?: boolean;
 }) {
     const {
         attributes,
@@ -99,12 +101,12 @@ function SortableRoutineCard({ checklist, currentMinutes, onSelect, selectedId, 
                     <RoutineCard
                         variant="admin"
                         title={checklist.name}
-                        description={checklist.description}
+                        description={descriptionOverride || checklist.description}
                         start_time={checklist.start_time as string | undefined}
                         end_time={checklist.end_time as string | undefined}
                         currentMinutes={currentMinutes}
-                        isActiveStatus={checklist.status === 'active'}
-                        adminStatusString={checklist.status}
+                        isActiveStatus={!isCompleted && checklist.status === 'active'}
+                        adminStatusString={isCompleted ? "archived" : checklist.status}
                         itemsCount={checklist.tasks?.length || 0}
                         shift={checklist.shift}
                         routineType={checklist.checklist_type}
@@ -125,12 +127,12 @@ function SortableRoutineCard({ checklist, currentMinutes, onSelect, selectedId, 
             dragHandleProps={canReorder ? { ...attributes, ...listeners } : undefined}
             variant="admin"
             title={checklist.name}
-            description={checklist.description}
+            description={descriptionOverride || checklist.description}
             start_time={checklist.start_time as string | undefined}
             end_time={checklist.end_time as string | undefined}
             currentMinutes={currentMinutes}
-            isActiveStatus={checklist.status === 'active'}
-            adminStatusString={checklist.status}
+            isActiveStatus={!isCompleted && checklist.status === 'active'}
+            adminStatusString={isCompleted ? "archived" : checklist.status}
             itemsCount={checklist.tasks?.length || 0}
             shift={checklist.shift}
             routineType={checklist.checklist_type}
@@ -149,9 +151,11 @@ export function ChecklistList({ onSelect, selectedId, onRoleChange }: ChecklistL
     const isMobile = useIsMobile();
 
     const { data: checklists, isLoading, error } = useChecklists(restaurantId || undefined);
+    const { data: statusData } = useAdminChecklistsStatus(restaurantId || undefined);
     const { data: roles = [] } = useRoles(restaurantId || undefined);
     const [searchTerm, setSearchTerm] = useState("");
     const [activeRoleId, setActiveRoleId] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<"ativas" | "concluidas">("ativas");
     const [isReorderMode, setIsReorderMode] = useState(false);
     const [isDragActive, setIsDragActive] = useState(false);
 
@@ -174,14 +178,26 @@ export function ChecklistList({ onSelect, selectedId, onRoleChange }: ChecklistL
     // reference on every render, which cascades into useSortedChecklists always
     // recalculating sortedChecklists, firing useEffect, calling setOptimisticList,
     // re-rendering, and looping indefinitely — freezing the UI.
-    const filteredChecklists = useMemo(() =>
-        checklists?.filter((c: ExtendedChecklist) => {
+    const filteredChecklists = useMemo(() => {
+        if (!checklists) return undefined;
+        return checklists.filter((c: ExtendedChecklist) => {
             const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase());
             const matchesFilter = activeRoleId === null || c.role_id === activeRoleId;
-            return matchesSearch && matchesFilter;
-        }),
-        [checklists, searchTerm, activeRoleId]
-    );
+
+            const assumption = statusData?.assumptions?.find((a: any) => a.checklist_id === c.id);
+            const isCompleted = !!assumption?.completed_at;
+            const matchesTab = activeTab === 'ativas' ? !isCompleted : isCompleted;
+
+            return matchesSearch && matchesFilter && matchesTab;
+        });
+    }, [checklists, searchTerm, activeRoleId, activeTab, statusData]);
+
+    const completedCount = useMemo(() => {
+        if (!checklists || !statusData?.assumptions) return 0;
+        return checklists.filter(c => statusData.assumptions.some((a: any) => a.checklist_id === c.id && !!a.completed_at)).length;
+    }, [checklists, statusData]);
+
+    const activeCount = checklists ? checklists.length - completedCount : 0;
 
     const { sortedChecklists, currentMinutes } = useSortedChecklists(filteredChecklists);
 
@@ -292,7 +308,7 @@ export function ChecklistList({ onSelect, selectedId, onRoleChange }: ChecklistL
                             {checklists?.length || 0}
                         </span>
                     </div>
-                    {canReorder && isMobile && (
+                    {canReorder && isMobile && activeTab === 'ativas' && (
                         <button
                             onClick={() => setIsReorderMode(prev => !prev)}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
@@ -318,6 +334,28 @@ export function ChecklistList({ onSelect, selectedId, onRoleChange }: ChecklistL
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="bg-transparent border-none outline-none text-white text-sm w-full placeholder:text-[#325a67]"
                     />
+                </div>
+
+                {/* Tabs "Rotinas" and "Concluídas" */}
+                <div className="flex gap-2 mt-4 bg-[#16262c] p-1 rounded-lg border border-[#233f48]">
+                    <button 
+                        onClick={() => setActiveTab("ativas")}
+                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-1.5 rounded-md font-bold text-xs transition-all ${activeTab === 'ativas' ? 'bg-[#233f48] text-[#13b6ec] shadow-sm' : 'text-[#92bbc9] hover:text-white'}`}
+                    >
+                        Ativas
+                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${activeTab === 'ativas' ? 'bg-[#13b6ec] text-white' : 'bg-[#1a2c32] text-[#92bbc9]'}`}>
+                            {activeCount}
+                        </span>
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab("concluidas")}
+                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-1.5 rounded-md font-bold text-xs transition-all ${activeTab === 'concluidas' ? 'bg-[#233f48] text-[#13b6ec] shadow-sm' : 'text-[#92bbc9] hover:text-white'}`}
+                    >
+                        Concluídas
+                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${activeTab === 'concluidas' ? 'bg-[#13b6ec] text-white' : 'bg-[#1a2c32] text-[#92bbc9]'}`}>
+                            {completedCount}
+                        </span>
+                    </button>
                 </div>
 
                 {/* Filtros por Área */}
@@ -375,21 +413,37 @@ export function ChecklistList({ onSelect, selectedId, onRoleChange }: ChecklistL
                         onDragCancel={() => setIsDragActive(false)}
                     >
                         <SortableContext items={optimisticList.map(c => c.id)} strategy={verticalListSortingStrategy}>
-                            {optimisticList.map((checklist: ExtendedChecklist, index: number) => (
-                                <SortableRoutineCard
-                                    key={checklist.id}
-                                    checklist={checklist}
-                                    currentMinutes={currentMinutes}
-                                    onSelect={onSelect}
-                                    selectedId={selectedId}
-                                    canReorder={canReorder}
-                                    isReorderMode={isReorderMode}
-                                    isFirst={index === 0}
-                                    isLast={index === optimisticList.length - 1}
-                                    onMoveUp={() => performReorder(index, index - 1)}
-                                    onMoveDown={() => performReorder(index, index + 1)}
-                                />
-                            ))}
+                            {optimisticList.map((checklist: ExtendedChecklist, index: number) => {
+                                const assumption = statusData?.assumptions?.find((a: any) => a.checklist_id === checklist.id);
+                                const isCompleted = !!assumption?.completed_at;
+                                let descriptionStr: string | undefined = undefined;
+
+                                if (isCompleted && assumption) {
+                                    const timeStr = new Date(assumption.completed_at!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                    descriptionStr = `Finalizado por: ${assumption.user_name || 'Desconhecido'} às ${timeStr}`;
+                                    if (assumption.observation) {
+                                        descriptionStr += `\n💬 Obs: ${assumption.observation}`;
+                                    }
+                                }
+
+                                return (
+                                    <SortableRoutineCard
+                                        key={checklist.id}
+                                        checklist={checklist}
+                                        currentMinutes={currentMinutes}
+                                        onSelect={onSelect}
+                                        selectedId={selectedId}
+                                        canReorder={canReorder && activeTab === 'ativas'} // Only reorder on active
+                                        isReorderMode={isReorderMode && activeTab === 'ativas'}
+                                        isFirst={index === 0}
+                                        isLast={index === optimisticList.length - 1}
+                                        onMoveUp={() => performReorder(index, index - 1)}
+                                        onMoveDown={() => performReorder(index, index + 1)}
+                                        descriptionOverride={descriptionStr}
+                                        isCompleted={isCompleted}
+                                    />
+                                );
+                            })}
                         </SortableContext>
                     </DndContext>
                 )}
