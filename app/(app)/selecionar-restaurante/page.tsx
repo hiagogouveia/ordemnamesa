@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { Logo } from "@/components/ui/Logo";
+import Image from "next/image";
 
 interface RestaurantData {
     restaurant_id: string;
@@ -74,8 +75,11 @@ export default function SelecionarRestaurantePage() {
             role: restaurant.role,
         });
 
-        // Setar cookie de role para proteção de rotas no middleware
+        // Setar cookies de contexto para uso em Server Components e middleware
         document.cookie = `x-restaurant-role=${restaurant.role}; path=/; SameSite=Strict`;
+        document.cookie = `x-restaurant-id=${restaurant.restaurants.id}; path=/; SameSite=Strict`;
+        document.cookie = `x-restaurant-name=${encodeURIComponent(restaurant.restaurants.name)}; path=/; SameSite=Strict`;
+        document.cookie = `x-restaurant-slug=${restaurant.restaurants.slug}; path=/; SameSite=Strict`;
 
         if (restaurant.role === 'staff') {
             router.push("/turno");
@@ -139,7 +143,7 @@ export default function SelecionarRestaurantePage() {
                             >
                                 <div className="w-14 h-14 shrink-0 rounded-full border-2 border-[#233f48] group-hover:border-[#13b6ec]/50 flex items-center justify-center overflow-hidden bg-[#101d22] relative transition-colors">
                                     {item.restaurants.logo_url ? (
-                                        <img src={item.restaurants.logo_url} alt={`Logo ${item.restaurants.name}`} className="w-full h-full object-cover" />
+                                        <Image src={item.restaurants.logo_url} alt={`Logo ${item.restaurants.name}`} fill sizes="56px" className="object-cover" />
                                     ) : (
                                         <span className="text-lg font-bold text-white">{item.restaurants.name.charAt(0).toUpperCase()}</span>
                                     )}

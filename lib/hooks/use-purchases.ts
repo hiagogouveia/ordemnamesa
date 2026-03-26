@@ -23,6 +23,8 @@ export function usePurchaseLists(restaurantId: string | undefined, status?: 'ope
             return res.json();
         },
         enabled: !!restaurantId,
+        staleTime: 60 * 1000,        // listas de compras têm movimento frequente
+        refetchOnWindowFocus: true,
     });
 }
 
@@ -41,6 +43,8 @@ export function usePurchaseListDetails(restaurantId: string | undefined, listId:
             return { list, items: list.items || [] };
         },
         enabled: !!restaurantId && !!listId,
+        staleTime: 60 * 1000,        // itens de uma lista mudam durante operação
+        refetchOnWindowFocus: true,
     });
 }
 

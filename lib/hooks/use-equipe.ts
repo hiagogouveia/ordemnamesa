@@ -52,6 +52,8 @@ export const useEquipe = (restaurantId: string | null) => {
             return response.json();
         },
         enabled: !!restaurantId,
+        staleTime: 5 * 60 * 1000,   // lista de colaboradores muda raramente
+        refetchOnWindowFocus: true,
     });
 };
 

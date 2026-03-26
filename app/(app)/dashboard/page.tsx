@@ -1,23 +1,77 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useRestaurantStore } from '@/lib/store/restaurant-store';
 import { useDashboard } from '@/lib/hooks/use-dashboard';
+import { Avatar } from '@/components/ui/avatar';
 import Link from 'next/link';
+
+// ─── Skeleton ────────────────────────────────────────────────────────────────
+
+function DashboardSkeleton() {
+    return (
+        <div className="flex-1 flex flex-col min-w-0 bg-[#101d22] animate-pulse">
+            {/* header */}
+            <div className="h-16 px-6 border-b border-[#233f48] flex items-center gap-4">
+                <div className="h-5 w-40 rounded bg-[#233f48]" />
+            </div>
+            <main className="flex-1 p-4 md:p-6">
+                <div className="max-w-[1600px] mx-auto flex flex-col gap-6">
+                    {/* 4 stat cards */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {[1, 2, 3, 4].map(i => (
+                            <div key={i} className="bg-[#1a2c32] rounded-xl p-5 border border-[#233f48] flex flex-col gap-3">
+                                <div className="h-3 w-24 rounded bg-[#233f48]" />
+                                <div className="h-9 w-20 rounded bg-[#233f48]" />
+                                <div className="h-1.5 w-full rounded-full bg-[#233f48]" />
+                            </div>
+                        ))}
+                    </div>
+                    {/* chart + side panels */}
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                        <div className="xl:col-span-2 flex flex-col gap-6">
+                            <div className="bg-[#1a2c32] rounded-xl p-6 border border-[#233f48] h-64" />
+                            <div className="bg-[#1a2c32] rounded-xl border border-[#233f48] overflow-hidden">
+                                {[1, 2, 3].map(i => (
+                                    <div key={i} className="p-4 border-b border-[#233f48] flex items-center gap-4">
+                                        <div className="w-8 h-8 rounded-lg bg-[#233f48] shrink-0" />
+                                        <div className="flex-1 flex flex-col gap-2">
+                                            <div className="h-3 w-1/3 rounded bg-[#233f48]" />
+                                            <div className="h-2 w-full rounded-full bg-[#233f48]" />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="xl:col-span-1 flex flex-col gap-6">
+                            <div className="bg-[#1a2c32] rounded-xl border border-[#233f48] h-64" />
+                            <div className="bg-[#1a2c32] rounded-xl border border-[#233f48] p-5 flex flex-col gap-4">
+                                {[1, 2, 3].map(i => (
+                                    <div key={i} className="flex items-center gap-3">
+                                        <div className="size-10 rounded-full bg-[#233f48] shrink-0" />
+                                        <div className="flex-1 flex flex-col gap-2">
+                                            <div className="h-3 w-28 rounded bg-[#233f48]" />
+                                            <div className="h-2 w-16 rounded bg-[#233f48]" />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    );
+}
 // Uso de datas com Intl API
 
 
 export default function DashboardPage() {
     const router = useRouter();
     const { userRole, restaurantId, restaurantName } = useRestaurantStore();
-    const [isMounted, setIsMounted] = useState(false);
 
     const { data: dashboardData, isLoading, error } = useDashboard(restaurantId);
-
-    useEffect(() => {
-        setIsMounted(true);
-    }, []);
 
     useEffect(() => {
         if (userRole === 'staff') {
@@ -25,15 +79,8 @@ export default function DashboardPage() {
         }
     }, [userRole, router]);
 
-    // Previne SSR mismatch e Flash do dashboard na navegação de staff
-    if (!isMounted || !userRole || userRole === 'staff' || isLoading) {
-        return (
-            <div className="flex h-screen items-center justify-center bg-[#101d22]">
-                <div className="animate-spin text-[#13b6ec]">
-                    <span className="material-symbols-outlined text-4xl">refresh</span>
-                </div>
-            </div>
-        );
+    if (!userRole || userRole === 'staff' || isLoading) {
+        return <DashboardSkeleton />;
     }
 
     if (error) {
@@ -175,10 +222,14 @@ export default function DashboardPage() {
                                 </div>
                                 <div className="flex -space-x-2 mt-3">
                                     {equipe_avatars.map((avatar, idx) => (
-                                        <div key={idx} className="size-6 rounded-full border border-surface-dark bg-cover bg-center shrink-0 bg-[#233f48] text-[8px] flex items-center justify-center font-bold"
-                                            style={avatar.avatar ? { backgroundImage: `url(${avatar.avatar})` } : {}}>
-                                            {!avatar.avatar ? avatar.nome.charAt(0).toUpperCase() : ''}
-                                        </div>
+                                        <Avatar
+                                            key={idx}
+                                            src={avatar.avatar}
+                                            name={avatar.nome}
+                                            size={24}
+                                            border="border-surface-dark"
+                                            className="text-[8px]"
+                                        />
                                     ))}
                                     {equipe_ativa > 3 && (
                                         <div className="size-6 shrink-0 rounded-full border border-surface-dark bg-[#233f48] flex items-center justify-center text-[10px] text-white">
@@ -372,14 +423,12 @@ export default function DashboardPage() {
                                     ) : top_performers.map((perf, idx) => (
                                         <div key={idx} className="flex items-center justify-between">
                                             <div className="flex items-center gap-3">
-                                                {perf.avatar ? (
-                                                    <div className={`size-10 rounded-full bg-cover bg-center border ${idx === 0 ? 'border-primary' : 'border-transparent'}`}
-                                                        style={{ backgroundImage: `url(${perf.avatar})` }}></div>
-                                                ) : (
-                                                    <div className={`size-10 rounded-full flex items-center justify-center bg-[#233f48] text-white font-bold text-sm border ${idx === 0 ? 'border-primary' : 'border-transparent'}`}>
-                                                        {perf.name.charAt(0).toUpperCase()}
-                                                    </div>
-                                                )}
+                                                <Avatar
+                                                    src={perf.avatar}
+                                                    name={perf.name}
+                                                    size={40}
+                                                    border={idx === 0 ? 'border-primary' : 'border-transparent'}
+                                                />
                                                 <div className="flex flex-col max-w-[120px]">
                                                     <p className="text-white text-sm font-bold truncate" title={perf.name}>{perf.name}</p>
                                                     <p className="text-[#92bbc9] text-xs truncate" title={perf.role}>{perf.role}</p>

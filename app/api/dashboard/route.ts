@@ -79,22 +79,43 @@ export async function GET(request: Request) {
 
         const yesterday = new Date(today);
         yesterday.setDate(yesterday.getDate() - 1);
-        const endOfYesterday = new Date(yesterday);
-        endOfYesterday.setHours(23, 59, 59, 999);
 
         const sevenDaysAgo = new Date(today);
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6); // Hoje + 6 últimos
 
         const endStringDay = endOfDay.toISOString();
-
         const startStringYest = yesterday.toISOString();
 
-        // 1. Checklists Ativos para percentuais
-        const { data: checklists } = await adminSupabase
-            .from('checklists')
-            .select('id, name, tasks:checklist_tasks(id)')
-            .eq('restaurant_id', restaurant_id)
-            .eq('active', true);
+        // Disparar as 3 queries independentes em paralelo
+        const [checklistsResult, execucoesResult, weekExecsResult] = await Promise.all([
+            // 1. Checklists ativos para percentuais
+            adminSupabase
+                .from('checklists')
+                .select('id, name, tasks:checklist_tasks(id)')
+                .eq('restaurant_id', restaurant_id)
+                .eq('active', true),
+
+            // 2. Execuções hoje + ontem para KPIs e variações
+            adminSupabase
+                .from('task_executions')
+                .select('status, checklist_id, executed_at, created_at, execution_notes, checklist_tasks(title, id), executor_id, user:restaurant_users!executor_id(user:users(id, name, email, avatar_url))')
+                .eq('restaurant_id', restaurant_id)
+                .gte('executed_at', startStringYest)
+                .lte('executed_at', endStringDay),
+
+            // 3. Execuções dos últimos 7 dias para tendências
+            adminSupabase
+                .from('task_executions')
+                .select('executed_at, status')
+                .eq('restaurant_id', restaurant_id)
+                .in('status', ['done', 'completed'])
+                .gte('executed_at', sevenDaysAgo.toISOString())
+                .lte('executed_at', endStringDay),
+        ]);
+
+        const checklists = checklistsResult.data;
+        const execucoes = execucoesResult.data;
+        const weekExecs = weekExecsResult.data;
 
         let totalExpectedTasks = 0;
         const checkListMap = new Map<string, { title: string; count: number; done: number }>();
@@ -105,15 +126,6 @@ export async function GET(request: Request) {
                 checkListMap.set(list.id, { title: list.name, count: list.tasks?.length || 0, done: 0 });
             });
         }
-
-        // 2. Execuções Hoje vs Ontem (Para variações e KPIs gerais)
-        // Busca um volume que caiba na RAM, assumindo num máximo 2000 por dia (bom pra MVP)
-        const { data: execucoes } = await adminSupabase
-            .from('task_executions')
-            .select('status, checklist_id, executed_at, created_at, execution_notes, checklist_tasks(title, id), executor_id, user:restaurant_users!executor_id(user:users(id, name, email, avatar_url))')
-            .eq('restaurant_id', restaurant_id)
-            .gte('executed_at', startStringYest)  // Pegar ultimos dois dias de uma vez para separar no JS
-            .lte('executed_at', endStringDay);
 
         let doneToday = 0;
         let flaggedToday = 0;
@@ -227,18 +239,9 @@ export async function GET(request: Request) {
             };
         });
 
-        // 5. Tendências de 7 dias (Soma de count para cada dia gte sevenDaysAgo)
-        // Para os últimos 7 dias, vamos buscar direto via aggregate sum se for possivel, mas como supabase count = ok
+        // 5. Tendências de 7 dias
         const tendencesArr = [];
         const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-
-        const { data: weekExecs } = await adminSupabase
-            .from('task_executions')
-            .select('executed_at, status')
-            .eq('restaurant_id', restaurant_id)
-            .in('status', ['done', 'completed'])
-            .gte('executed_at', sevenDaysAgo.toISOString())
-            .lte('executed_at', endStringDay);
 
         // Agrupar por dia da semana
         const weekMap: Record<string, number> = {};

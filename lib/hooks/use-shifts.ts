@@ -25,6 +25,8 @@ export function useShifts(restaurantId: string | undefined) {
             return res.json();
         },
         enabled: !!restaurantId,
+        staleTime: 10 * 60 * 1000,  // turnos são configuração — mudam raramente
+        refetchOnWindowFocus: false,
     });
 }
 

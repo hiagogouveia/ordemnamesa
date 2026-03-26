@@ -34,6 +34,7 @@ export const useKanbanTasks = (restaurantId: string | undefined) => {
             return response.json() as Promise<KanbanData>;
         },
         enabled: !!restaurantId,
+        staleTime: 5 * 60 * 1000,   // estrutura do kanban muda só quando checklists são editados
     });
 };
 
@@ -54,6 +55,8 @@ export const useChecklistAssumption = (restaurantId: string | undefined, checkli
             return json.assumption as ChecklistAssumption | null;
         },
         enabled: !!restaurantId && !!checklistId,
+        staleTime: 30 * 1000,        // assumption de turno pode mudar entre colaboradores
+        refetchOnWindowFocus: true,
     });
 };
 

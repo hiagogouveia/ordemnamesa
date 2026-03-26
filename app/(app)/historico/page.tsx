@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
+import Image from 'next/image';
 import { useRestaurantStore } from '@/lib/store/restaurant-store';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
@@ -97,12 +98,15 @@ function PhotoModal({ entry, onClose }: PhotoModalProps) {
                 </button>
 
                 {/* Image */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                    src={entry.photo_url!}
-                    alt={entry.checklist_tasks?.title || 'Foto da tarefa'}
-                    className="w-full rounded-xl object-contain max-h-[70vh]"
-                />
+                <div className="relative w-full rounded-xl overflow-hidden" style={{ maxHeight: '70vh', minHeight: '200px' }}>
+                    <Image
+                        src={entry.photo_url!}
+                        alt={entry.checklist_tasks?.title || 'Foto da tarefa'}
+                        fill
+                        sizes="(max-width: 768px) 100vw, 600px"
+                        className="object-contain"
+                    />
+                </div>
 
                 {/* Caption */}
                 <div className="bg-[#16262c] border border-[#325a67] rounded-xl px-5 py-3 flex flex-col gap-1">

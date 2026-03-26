@@ -31,7 +31,8 @@ export function useMyActivities(restaurantId: string | undefined) {
             return res.json();
         },
         enabled: !!restaurantId,
-        staleTime: 30_000,
+        staleTime: 2 * 60 * 1000,    // considera fresco por 2 min
+        refetchOnWindowFocus: true,
     });
 }
 
@@ -49,8 +50,8 @@ export function useMyActivitiesBadge(restaurantId: string | undefined) {
             return res.json();
         },
         enabled: !!restaurantId,
-        staleTime: 60_000,
-        refetchInterval: 120_000,
+        staleTime: 2 * 60 * 1000,    // considera fresco por 2 min
+        refetchOnWindowFocus: true,
     });
 }
 

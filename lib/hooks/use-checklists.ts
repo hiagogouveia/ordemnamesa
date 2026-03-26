@@ -43,6 +43,8 @@ export function useChecklists(restaurantId: string | undefined) {
             return res.json();
         },
         enabled: !!restaurantId,
+        staleTime: 5 * 60 * 1000,    // estrutura de checklists muda raramente
+        refetchOnWindowFocus: false,  // mutations já invalidam quando necessário
     });
 }
 
@@ -64,7 +66,8 @@ export function useAdminChecklistsStatus(restaurantId: string | undefined) {
             return res.json();
         },
         enabled: !!restaurantId,
-        refetchInterval: 15000, 
+        staleTime: 2 * 60 * 1000,    // considera fresco por 2 min
+        refetchOnWindowFocus: true,
     });
 }
 

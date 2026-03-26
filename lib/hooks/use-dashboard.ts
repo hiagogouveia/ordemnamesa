@@ -68,6 +68,7 @@ export const useDashboard = (restaurantId: string | null) => {
             return response.json();
         },
         enabled: !!restaurantId,
-        refetchInterval: 30000, // 30 segundos
+        staleTime: 5 * 60 * 1000,    // considera fresco por 5 min
+        refetchOnWindowFocus: true,   // refresca ao voltar para a aba
     });
 };

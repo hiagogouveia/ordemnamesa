@@ -60,5 +60,6 @@ export const useRelatorios = (restaurantId: string | null, startDate: string, en
             return response.json();
         },
         enabled: !!restaurantId,
+        staleTime: 5 * 60 * 1000,   // relatório é fresco por 5 min; muda quando o usuário troca o período
     });
 };

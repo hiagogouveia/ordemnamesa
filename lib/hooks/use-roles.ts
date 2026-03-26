@@ -25,6 +25,8 @@ export function useRoles(restaurantId: string | undefined) {
             return res.json();
         },
         enabled: !!restaurantId,
+        staleTime: 10 * 60 * 1000,  // cargos são configuração — mudam raramente
+        refetchOnWindowFocus: false,
     });
 }
 

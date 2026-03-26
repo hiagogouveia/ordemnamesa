@@ -9,6 +9,7 @@ import {
 } from "@/lib/hooks/use-user-roles-shifts";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { Avatar } from "@/components/ui/avatar";
 
 interface TeamEditModalProps {
     isOpen: boolean;
@@ -142,13 +143,7 @@ export function TeamDrawer({ isOpen, onClose, member, onUpdated }: TeamEditModal
 
                     {/* Header com avatar + nome */}
                     <div className="p-5 border-b border-[#233f48] flex items-center gap-4 shrink-0">
-                        {member.avatar ? (
-                            <div className="w-12 h-12 rounded-full bg-cover bg-center border-2 border-[#13b6ec] shrink-0" style={{ backgroundImage: `url(${member.avatar})` }} />
-                        ) : (
-                            <div className="w-12 h-12 rounded-full bg-[#111e22] border-2 border-[#13b6ec] flex items-center justify-center text-white text-lg font-bold shrink-0">
-                                {member.name.charAt(0).toUpperCase()}
-                            </div>
-                        )}
+                        <Avatar src={member.avatar} name={member.name} size={48} border="border-[#13b6ec]" />
                         <div className="flex-1 min-w-0">
                             <p className="text-white font-bold truncate">{member.name}</p>
                             <p className="text-[#92bbc9] text-xs truncate">{member.email}</p>

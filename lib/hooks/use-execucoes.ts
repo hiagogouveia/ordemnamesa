@@ -129,19 +129,37 @@ export const useDesfazerExecucao = () => {
     });
 };
 
-export const useHistoricoUsuario = (restaurantId: string | null, userId: string | null) => {
+export interface HistoricoServerParams {
+    page:   number;
+    filter: string; // 'all' | 'done' | 'skipped' | 'flagged'
+    date:   string; // 'YYYY-MM-DD' ou ''
+    limit?: number;
+}
+
+export const useHistoricoUsuario = (
+    restaurantId: string | null,
+    userId: string | null,
+    params: HistoricoServerParams = { page: 0, filter: 'all', date: '' },
+) => {
+    const { page, filter, date, limit = 10 } = params;
+
     return useQuery({
-        queryKey: ['execucoes', 'historico', restaurantId, userId],
+        queryKey: ['execucoes', 'historico', restaurantId, userId, page, filter, date],
         queryFn: async () => {
             if (!restaurantId || !userId) return null;
 
             const token = await getAuthToken();
 
-            // Busca os dados da tabela task_executions para este usuário e restaurante
-            const response = await fetch(`/api/execucoes/historico?restaurant_id=${restaurantId}`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+            const qs = new URLSearchParams({
+                restaurant_id: restaurantId,
+                page:   String(page),
+                limit:  String(limit),
+                filter,
+                ...(date ? { date } : {}),
+            });
+
+            const response = await fetch(`/api/execucoes/historico?${qs}`, {
+                headers: { 'Authorization': `Bearer ${token}` },
             });
 
             if (!response.ok) {
@@ -152,5 +170,6 @@ export const useHistoricoUsuario = (restaurantId: string | null, userId: string 
             return response.json();
         },
         enabled: !!restaurantId && !!userId,
+        staleTime: 30 * 1000,  // histórico muda só após uma execução de tarefa
     });
 };

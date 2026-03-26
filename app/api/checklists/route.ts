@@ -47,8 +47,8 @@ export async function GET(request: Request) {
             .from('checklists')
             .select(`
                 *,
-                roles (*),
-                tasks:checklist_tasks(*)
+                roles ( id, name, color ),
+                tasks:checklist_tasks (*)
             `)
             .eq('restaurant_id', restaurant_id)
             .eq('active', true)
@@ -61,8 +61,8 @@ export async function GET(request: Request) {
                     .from('checklists')
                     .select(`
                         *,
-                        roles (*),
-                        tasks:checklist_tasks(*)
+                        roles ( id, name, color ),
+                        tasks:checklist_tasks (*)
                     `)
                     .eq('restaurant_id', restaurant_id)
                     .eq('active', true)
@@ -86,7 +86,11 @@ export async function GET(request: Request) {
             tasks: checklist.tasks?.sort((a: any, b: any) => a.order - b.order) || []
         }));
 
-        return NextResponse.json(formattedChecklists || []);
+        return NextResponse.json(formattedChecklists || [], {
+            headers: {
+                'Cache-Control': 'private, max-age=300, stale-while-revalidate=600',
+            },
+        });
     } catch (error: unknown) {
         console.error('[GET /api/checklists] Erro inesperado:', error);
         return NextResponse.json({ error: (error as Error).message }, { status: 500 });

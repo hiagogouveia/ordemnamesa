@@ -8,6 +8,13 @@ export function LogoutButton() {
     const handleLogout = async () => {
         clearRestaurant()
 
+        // Limpar cookies de contexto do restaurante
+        const expired = 'expires=Thu, 01 Jan 1970 00:00:01 GMT; path=/; SameSite=Strict';
+        document.cookie = `x-restaurant-role=; ${expired}`;
+        document.cookie = `x-restaurant-id=; ${expired}`;
+        document.cookie = `x-restaurant-name=; ${expired}`;
+        document.cookie = `x-restaurant-slug=; ${expired}`;
+
         // Calls the sign out API route
         await fetch('/api/auth/signout', {
             method: 'POST',
