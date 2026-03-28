@@ -236,7 +236,7 @@ export function ChecklistList({ onSelect, selectedId, onRoleChange }: ChecklistL
 
     const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 5 } });
     const keyboardSensor = useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates });
-    const sensors = useSensors(...(isMobile ? [] : [pointerSensor, keyboardSensor]));
+    const sensors = useSensors(pointerSensor, keyboardSensor);
 
     const performReorder = async (oldIndex: number, newIndex: number) => {
         if (oldIndex === newIndex) return;
@@ -433,7 +433,7 @@ export function ChecklistList({ onSelect, selectedId, onRoleChange }: ChecklistL
                                         currentMinutes={currentMinutes}
                                         onSelect={onSelect}
                                         selectedId={selectedId}
-                                        canReorder={canReorder && activeTab === 'ativas'} // Only reorder on active
+                                        canReorder={canReorder && activeTab === 'ativas' && !isMobile} // drag only on desktop; mobile uses arrow buttons
                                         isReorderMode={isReorderMode && activeTab === 'ativas'}
                                         isFirst={index === 0}
                                         isLast={index === optimisticList.length - 1}

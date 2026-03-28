@@ -35,6 +35,7 @@ export function useChecklists(restaurantId: string | undefined) {
             const headers = await getAuthHeaders();
             const res = await fetch(`/api/checklists?restaurant_id=${restaurantId}`, {
                 headers,
+                cache: 'no-store',
             });
             if (!res.ok) {
                 const errData = await res.json().catch(() => ({}));
@@ -91,6 +92,9 @@ export function useCreateChecklist() {
         },
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ["checklists", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["my-activities", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["my-activities-badge", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["admin_checklists_status", variables.restaurant_id] });
         },
     });
 }
@@ -115,6 +119,9 @@ export function useUpdateChecklist() {
         },
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ["checklists", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["my-activities", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["my-activities-badge", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["admin_checklists_status", variables.restaurant_id] });
         },
     });
 }

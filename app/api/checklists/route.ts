@@ -86,11 +86,7 @@ export async function GET(request: Request) {
             tasks: checklist.tasks?.sort((a: any, b: any) => a.order - b.order) || []
         }));
 
-        return NextResponse.json(formattedChecklists || [], {
-            headers: {
-                'Cache-Control': 'private, max-age=300, stale-while-revalidate=600',
-            },
-        });
+        return NextResponse.json(formattedChecklists || []);
     } catch (error: unknown) {
         console.error('[GET /api/checklists] Erro inesperado:', error);
         return NextResponse.json({ error: (error as Error).message }, { status: 500 });
