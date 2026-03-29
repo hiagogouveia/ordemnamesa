@@ -10,6 +10,7 @@ export interface EquipeMember {
     role: 'staff' | 'manager' | 'owner';
     active: boolean;
     performance: number | null;
+    areas: { id: string; name: string; color: string }[];
 }
 
 export interface EquipeData {

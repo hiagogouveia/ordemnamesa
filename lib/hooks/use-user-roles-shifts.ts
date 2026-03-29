@@ -45,6 +45,7 @@ export function useCreateUserRole() {
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ["user-roles", variables.restaurant_id, variables.user_id] });
             queryClient.invalidateQueries({ queryKey: ["user-roles", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["equipe", variables.restaurant_id] });
         },
     });
 }
@@ -64,6 +65,7 @@ export function useDeleteUserRole() {
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ["user-roles", variables.restaurant_id, variables.user_id] });
             queryClient.invalidateQueries({ queryKey: ["user-roles", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["equipe", variables.restaurant_id] });
         },
     });
 }

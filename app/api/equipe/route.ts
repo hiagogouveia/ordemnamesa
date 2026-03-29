@@ -68,7 +68,43 @@ export async function GET(request: Request) {
 
         if (membersErr) throw membersErr;
 
-        // 2. Desempenho dos Colaboradores (Tarefas concluídas últimos 7 dias)
+        // 2. Áreas (roles) de cada colaborador (sem N+1: duas queries + merge em JS)
+        // O drawer chama de "Áreas Atribuídas" mas usa a tabela user_roles → roles
+        const [
+            { data: userRoleRows, error: userRolesErr },
+            { data: allRolesData, error: rolesErr }
+        ] = await Promise.all([
+            adminSupabase
+                .from('user_roles')
+                .select('user_id, role_id')
+                .eq('restaurant_id', restaurant_id),
+            adminSupabase
+                .from('roles')
+                .select('id, name, color')
+                .eq('restaurant_id', restaurant_id),
+        ]);
+
+        if (userRolesErr) console.error('[GET /api/equipe] user_roles error:', userRolesErr);
+        if (rolesErr) console.error('[GET /api/equipe] roles error:', rolesErr);
+
+        const rolesById: Record<string, { id: string; name: string; color: string }> = {};
+        if (allRolesData) {
+            for (const r of allRolesData) {
+                rolesById[r.id] = { id: r.id, name: r.name, color: r.color };
+            }
+        }
+
+        const areasMap: Record<string, { id: string; name: string; color: string }[]> = {};
+        if (userRoleRows) {
+            for (const ur of userRoleRows) {
+                const role = rolesById[ur.role_id];
+                if (!role) continue;
+                if (!areasMap[ur.user_id]) areasMap[ur.user_id] = [];
+                areasMap[ur.user_id].push(role);
+            }
+        }
+
+        // 3. Desempenho dos Colaboradores (Tarefas concluídas últimos 7 dias)
         const { data: execucoes } = await adminSupabase
             .from('task_executions')
             .select('user_id, status')
@@ -126,7 +162,8 @@ export async function GET(request: Request) {
                 avatar: u?.avatar_url || null,
                 role: m.role,
                 active: m.active,
-                performance: pStats.total === 0 ? null : rating
+                performance: pStats.total === 0 ? null : rating,
+                areas: areasMap[m.user_id] || []
             };
         });
 

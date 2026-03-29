@@ -336,9 +336,38 @@ export function EquipeClient({ restaurantId, userRole }: Props) {
                                                         size={40}
                                                         border="border-[#233f48]"
                                                     />
-                                                    <div className="flex flex-col max-w-[200px]">
+                                                    <div className="flex flex-col gap-1 max-w-[220px]">
                                                         <p className="font-medium text-white text-sm truncate">{member.name}</p>
                                                         <p className="text-[#92bbc9] text-xs truncate">{member.email}</p>
+                                                        <div className="flex flex-wrap gap-1 mt-0.5">
+                                                            {(member.areas || []).length === 0 ? (
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#233f48] text-[#92bbc9] border border-[#2e4f5c]">
+                                                                    Sem área
+                                                                </span>
+                                                            ) : (
+                                                                <>
+                                                                    {(member.areas || []).slice(0, 3).map(area => (
+                                                                        <span
+                                                                            key={area.id}
+                                                                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border"
+                                                                            style={{
+                                                                                backgroundColor: `${area.color}18`,
+                                                                                color: area.color,
+                                                                                borderColor: `${area.color}40`
+                                                                            }}
+                                                                        >
+                                                                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: area.color }} />
+                                                                            {area.name}
+                                                                        </span>
+                                                                    ))}
+                                                                    {(member.areas || []).length > 3 && (
+                                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#233f48] text-[#92bbc9] border border-[#2e4f5c]">
+                                                                            +{member.areas.length - 3}
+                                                                        </span>
+                                                                    )}
+                                                                </>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </td>
