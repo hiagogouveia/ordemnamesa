@@ -21,7 +21,7 @@ export function useAreas(restaurantId: string | undefined) {
         queryFn: async (): Promise<Area[]> => {
             if (!restaurantId) return [];
             const headers = await getAuthHeaders();
-            const res = await fetch(`/api/areas?restaurant_id=${restaurantId}`, { headers });
+            const res = await fetch(`/api/areas?restaurant_id=${restaurantId}`, { headers, cache: "no-store" });
             if (!res.ok) {
                 const errData = await res.json().catch(() => ({}));
                 throw new Error(errData.error || "Erro ao buscar áreas.");
@@ -39,16 +39,31 @@ export function useAllAreas(restaurantId: string | undefined) {
         queryKey: ["areas-all", restaurantId],
         queryFn: async (): Promise<Area[]> => {
             if (!restaurantId) return [];
-            const headers = await getAuthHeaders();
+            const supabase = createClient();
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.access_token) {
+                console.warn("[useAllAreas] sem access_token — sessão expirada?");
+                return [];
+            }
+            const headers: Record<string, string> = {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${session.access_token}`,
+            };
             const res = await fetch(
                 `/api/areas?restaurant_id=${restaurantId}&scope=all`,
-                { headers }
+                { headers, cache: "no-store" }
             );
-            if (!res.ok) return [];
-            return res.json();
+            if (!res.ok) {
+                const text = await res.text().catch(() => "");
+                console.error(`[useAllAreas] HTTP ${res.status}:`, text);
+                return [];
+            }
+            const data: Area[] = await res.json();
+            console.log("[useAllAreas]", { restaurantId, count: data.length, data });
+            return data;
         },
         enabled: !!restaurantId,
-        staleTime: 300_000,
+        staleTime: 0,
     });
 }
 
@@ -77,6 +92,7 @@ export function useCreateArea() {
         },
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ["areas", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["areas-all", variables.restaurant_id] });
         },
     });
 }
@@ -107,6 +123,7 @@ export function useUpdateArea() {
         },
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ["areas", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["areas-all", variables.restaurant_id] });
             queryClient.invalidateQueries({ queryKey: ["my-activities", variables.restaurant_id] });
         },
     });
@@ -133,6 +150,7 @@ export function useDeleteArea() {
         },
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ["areas", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["areas-all", variables.restaurant_id] });
             queryClient.invalidateQueries({ queryKey: ["my-activities", variables.restaurant_id] });
         },
     });

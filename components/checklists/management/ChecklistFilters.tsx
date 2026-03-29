@@ -49,34 +49,38 @@ export function ChecklistFilters({
             </div>
 
             {/* Área */}
-            {areas.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[#92bbc9] text-xs font-bold uppercase tracking-wide shrink-0">Área:</span>
-                    <button
-                        onClick={() => onAreaChange("")}
-                        className={`px-3 py-1 rounded-full text-xs font-bold border transition-colors ${
-                            selectedAreaId === ""
-                                ? "bg-[#13b6ec]/20 text-[#13b6ec] border-[#13b6ec]/40"
-                                : "bg-[#16262c] text-[#92bbc9] border-[#233f48] hover:text-white"
-                        }`}
-                    >
-                        Todas
-                    </button>
-                    {areas.map((area) => (
+            <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[#92bbc9] text-xs font-bold uppercase tracking-wide shrink-0">Área:</span>
+                {areas.length === 0 ? (
+                    <span className="text-[#325a67] text-xs italic">Nenhuma área cadastrada</span>
+                ) : (
+                    <>
                         <button
-                            key={area.id}
-                            onClick={() => onAreaChange(area.id)}
+                            onClick={() => onAreaChange("")}
                             className={`px-3 py-1 rounded-full text-xs font-bold border transition-colors ${
-                                selectedAreaId === area.id
+                                selectedAreaId === ""
                                     ? "bg-[#13b6ec]/20 text-[#13b6ec] border-[#13b6ec]/40"
                                     : "bg-[#16262c] text-[#92bbc9] border-[#233f48] hover:text-white"
                             }`}
                         >
-                            {area.name}
+                            Todas
                         </button>
-                    ))}
-                </div>
-            )}
+                        {areas.map((area) => (
+                            <button
+                                key={area.id}
+                                onClick={() => onAreaChange(area.id)}
+                                className={`px-3 py-1 rounded-full text-xs font-bold border transition-colors ${
+                                    selectedAreaId === area.id
+                                        ? "bg-[#13b6ec]/20 text-[#13b6ec] border-[#13b6ec]/40"
+                                        : "bg-[#16262c] text-[#92bbc9] border-[#233f48] hover:text-white"
+                                }`}
+                            >
+                                {area.name}
+                            </button>
+                        ))}
+                    </>
+                )}
+            </div>
         </div>
     );
 }

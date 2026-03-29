@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, Suspense } from "react";
+import { useState, useMemo, Suspense, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useChecklists, useCreateChecklist, useDeleteChecklist, useToggleChecklistStatus } from "@/lib/hooks/use-checklists";
@@ -36,10 +36,13 @@ function ChecklistsContent() {
     const router = useRouter();
 
     // UI state
+    const [mounted, setMounted] = useState(false);
     const [view, setView] = useState<"list" | "board">("list");
     const [searchQuery, setSearchQuery] = useState("");
     const [showFilters, setShowFilters] = useState(false);
     const [editorState, setEditorState] = useState<EditorState>(null);
+
+    useEffect(() => { setMounted(true); }, []);
 
     // URL-persisted filters + sorting
     const selectedShift = searchParams.get("shift") ?? "";
@@ -225,7 +228,7 @@ function ChecklistsContent() {
                 onShiftChange={setShiftFilter}
                 selectedAreaId={selectedAreaId}
                 onAreaChange={setAreaFilter}
-                areas={areas}
+                areas={mounted ? areas : []}
             />
 
             <div className="flex flex-1 overflow-hidden">
