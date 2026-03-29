@@ -69,6 +69,7 @@ export interface Checklist {
     area_id?: string | null
     target_role?: TargetRole
     area?: Area | null
+    responsible?: { id: string; name: string } | null
 }
 
 export interface ChecklistTask {
@@ -138,6 +139,18 @@ export interface PurchaseList {
     closed_at?: string
     created_at: string
     updated_at: string
+}
+
+// ============================================================
+// Sprint 14 — Checklist Management Board
+// ============================================================
+
+export interface ChecklistOrder {
+    id: string
+    restaurant_id: string
+    checklist_id: string
+    shift: 'morning' | 'afternoon' | 'evening'
+    position: number
 }
 
 // ============================================================

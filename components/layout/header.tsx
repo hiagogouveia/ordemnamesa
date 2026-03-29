@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { Logo } from "@/components/ui/Logo";
 import { createClient } from "@/lib/supabase/client";
 
@@ -17,7 +17,6 @@ const TITLES: Record<string, string> = {
 
 export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
     const pathname = usePathname();
-    const router = useRouter();
     const [userInitial, setUserInitial] = useState("U");
 
     useEffect(() => {
@@ -65,15 +64,6 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
                     {userInitial}
                 </div>
 
-                {pathname.startsWith("/checklists") && (
-                    <button
-                        onClick={() => router.push('/checklists?new=true')}
-                        className="flex h-9 items-center gap-2 px-3 sm:px-4 bg-[#13b6ec] hover:bg-[#10a0d0] text-[#111e22] rounded-lg font-bold text-sm transition-colors shadow-[0_4px_14px_0_rgba(19,182,236,0.39)]"
-                    >
-                        <span className="material-symbols-outlined text-[18px]">add</span>
-                        <span className="hidden sm:inline">Nova Lista</span>
-                    </button>
-                )}
             </div>
         </header>
     );

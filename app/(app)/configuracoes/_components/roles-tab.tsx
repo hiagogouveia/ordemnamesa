@@ -90,9 +90,9 @@ export function RolesTab() {
         <div className="flex flex-col gap-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h2 className="text-xl font-bold text-white mb-1">Funções</h2>
+                    <h2 className="text-xl font-bold text-white mb-1">Áreas</h2>
                     <p className="text-sm text-[#92bbc9]">
-                        Crie funções (ex: Cozinha, Gerência, Administração) e atribua membros da equipe a cada uma. As funções controlam o que cada pessoa vê em "Minhas Atividades".
+                        Crie áreas (ex: Cozinha, Gerência, Administração) e atribua membros da equipe a cada uma. As áreas controlam o que cada pessoa vê em "Minhas Atividades".
                     </p>
                 </div>
                 <button
@@ -100,7 +100,7 @@ export function RolesTab() {
                     className="flex items-center justify-center gap-2 bg-[#13b6ec] text-[#101d22] px-4 py-2.5 rounded-lg font-semibold hover:bg-white hover:text-[#101d22] transition-colors whitespace-nowrap"
                 >
                     <span className="material-symbols-outlined text-xl">add</span>
-                    Nova Função
+                    Nova Área
                 </button>
             </div>
 
@@ -110,8 +110,8 @@ export function RolesTab() {
                         <div className="w-12 h-12 rounded-full bg-[#1a2c32] flex items-center justify-center mb-4">
                             <span className="material-symbols-outlined text-[#325a67]">badge</span>
                         </div>
-                        <h3 className="text-white font-medium mb-1">Nenhuma função cadastrada</h3>
-                        <p className="text-sm text-[#92bbc9]">Crie uma área ou função para começar a gerenciar.</p>
+                        <h3 className="text-white font-medium mb-1">Nenhuma área cadastrada</h3>
+                        <p className="text-sm text-[#92bbc9]">Crie uma área para começar a gerenciar.</p>
                     </div>
                 )}
                 {activeRoles.map((role) => (
@@ -154,7 +154,7 @@ export function RolesTab() {
                     <div className="bg-[#16262c] rounded-2xl w-full max-w-md border border-[#233f48] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
                         <div className="px-6 py-5 border-b border-[#233f48] flex justify-between items-center shrink-0">
                             <h2 className="text-xl font-bold text-white">
-                                {editingRole ? "Editar Função" : "Nova Função"}
+                                {editingRole ? "Editar Área" : "Nova Área"}
                             </h2>
                             <button
                                 onClick={() => setIsModalOpen(false)}
@@ -166,7 +166,7 @@ export function RolesTab() {
 
                         <div className="p-6 overflow-y-auto flex-1 flex flex-col gap-6">
                             <div className="flex flex-col gap-2">
-                                <label className="text-sm font-medium text-[#92bbc9]">Nome da Função/Área</label>
+                                <label className="text-sm font-medium text-[#92bbc9]">Nome da Área</label>
                                 <input
                                     type="text"
                                     value={formName}

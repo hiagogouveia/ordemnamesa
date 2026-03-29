@@ -113,6 +113,64 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
     }
 }
 
+export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
+    try {
+        const { id } = await context.params;
+
+        const authHeader = request.headers.get('Authorization');
+        if (!authHeader) {
+            return NextResponse.json({ error: 'Não autorizado. Token Ausente.' }, { status: 401 });
+        }
+        const token = authHeader.replace('Bearer ', '');
+
+        const adminSupabase = getAdminSupabase();
+        const { data: { user }, error: userError } = await adminSupabase.auth.getUser(token);
+
+        if (userError || !user) {
+            console.error('[PATCH /api/checklists/[id]] Auth error:', userError);
+            return NextResponse.json({ error: 'Não autorizado ou Token inválido.' }, { status: 401 });
+        }
+
+        const body = await request.json();
+        const { restaurant_id, active } = body;
+
+        if (!restaurant_id) {
+            return NextResponse.json({ error: 'restaurant_id é obrigatório.' }, { status: 400 });
+        }
+
+        const { data: userRole } = await adminSupabase
+            .from('restaurant_users')
+            .select('role')
+            .eq('restaurant_id', restaurant_id)
+            .eq('user_id', user.id)
+            .eq('active', true)
+            .single();
+
+        if (!userRole || userRole.role === 'staff') {
+            return NextResponse.json({ error: 'Permissões insuficientes.' }, { status: 403 });
+        }
+
+        const updateData: Record<string, unknown> = {};
+        if (active !== undefined) updateData.active = active;
+
+        const { error: updateError } = await adminSupabase
+            .from('checklists')
+            .update(updateData)
+            .eq('id', id)
+            .eq('restaurant_id', restaurant_id);
+
+        if (updateError) {
+            console.error('[PATCH /api/checklists/[id]] Erro no update:', updateError);
+            return NextResponse.json({ error: updateError.message }, { status: 500 });
+        }
+
+        return NextResponse.json({ success: true });
+    } catch (error: unknown) {
+        console.error('[PATCH /api/checklists/[id]] Erro Inesperado:', error);
+        return NextResponse.json({ error: (error as Error).message }, { status: 500 });
+    }
+}
+
 export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await context.params;

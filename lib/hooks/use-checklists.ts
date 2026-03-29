@@ -152,6 +152,38 @@ export function useReorderTasks() {
     });
 }
 
+// Toggle status ativo/inativo de um Checklist (Sprint 14)
+export function useToggleChecklistStatus() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async ({
+            id,
+            restaurantId,
+            active,
+        }: {
+            id: string;
+            restaurantId: string;
+            active: boolean;
+        }) => {
+            const headers = await getAuthHeaders();
+            const res = await fetch(`/api/checklists/${id}`, {
+                method: "PATCH",
+                headers,
+                body: JSON.stringify({ restaurant_id: restaurantId, active }),
+            });
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || "Erro ao atualizar status do checklist");
+            }
+            return res.json();
+        },
+        onSuccess: (_, variables) => {
+            queryClient.invalidateQueries({ queryKey: ["checklists", variables.restaurantId] });
+        },
+    });
+}
+
 // Deletar Checklist (Soft Delete)
 export function useDeleteChecklist() {
     const queryClient = useQueryClient();

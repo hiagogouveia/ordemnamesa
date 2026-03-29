@@ -48,6 +48,8 @@ export async function GET(request: Request) {
             .select(`
                 *,
                 roles ( id, name, color ),
+                area:areas!area_id ( id, name, color ),
+                responsible:users!assigned_to_user_id ( id, name ),
                 tasks:checklist_tasks (*)
             `)
             .eq('restaurant_id', restaurant_id)
@@ -62,6 +64,8 @@ export async function GET(request: Request) {
                     .select(`
                         *,
                         roles ( id, name, color ),
+                        area:areas!area_id ( id, name, color ),
+                        responsible:users!assigned_to_user_id ( id, name ),
                         tasks:checklist_tasks (*)
                     `)
                     .eq('restaurant_id', restaurant_id)

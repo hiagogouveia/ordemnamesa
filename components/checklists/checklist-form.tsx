@@ -13,6 +13,9 @@ import { ChecklistTask } from "@/lib/types";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useRoles } from "@/lib/hooks/use-roles";
 import { useEquipe } from "@/lib/hooks/use-equipe";
+import { useAllAreas } from "@/lib/hooks/use-areas";
+import { useUserAreasByRestaurant } from "@/lib/hooks/use-user-areas";
+import { useUserRoles } from "@/lib/hooks/use-user-roles-shifts";
 
 interface ChecklistFormProps {
     checklist: ExtendedChecklist | null;
@@ -69,9 +72,31 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [draftSaved, setDraftSaved] = useState(false);
 
+    const [areaId, setAreaId] = useState<string>("");
+
     const { data: roles = [] } = useRoles(restaurantId || undefined);
     const { data: equipeData } = useEquipe(restaurantId || null);
+    const { data: areas = [] } = useAllAreas(restaurantId || undefined);
+    const { data: userAreas = [], isLoading: userAreasLoading } = useUserAreasByRestaurant(restaurantId || undefined);
+    const { data: userRoles = [], isLoading: userRolesLoading } = useUserRoles(restaurantId || undefined);
     const equipe = equipeData?.equipe || [];
+
+    const filteredEquipe = equipe.filter(m => {
+        if (!m.active) return false;
+        if (roleId && !userRoles.some(ur => ur.user_id === m.user_id && ur.role_id === roleId)) return false;
+        if (areaId && !userAreas.some(ua => ua.user_id === m.user_id && ua.area_id === areaId)) return false;
+        return true;
+    });
+
+    // Auto-clear responsible if they no longer belong to the selected area/role filter
+    useEffect(() => {
+        if (!assignedToUserId) return;
+        if (equipe.length === 0 || userAreasLoading || userRolesLoading) return;
+        if (!filteredEquipe.some(m => m.user_id === assignedToUserId)) {
+            setAssignedToUserId("");
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [filteredEquipe, userAreasLoading, userRolesLoading]);
 
     const createMutation = useCreateChecklist();
     const updateMutation = useUpdateChecklist();
@@ -103,6 +128,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             // Sprint 8: recurrence config
             setRecurrenceConfig(checklist.recurrence_config as RecurrenceConfig | undefined);
             setEnforceSequentialOrder(checklist.enforce_sequential_order ?? false);
+            setAreaId(checklist.area_id || "");
             setTasks(
                 (checklist.tasks || []).map((t) => ({ ...t, tempId: t.id }))
             );
@@ -121,6 +147,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 setHasTimeWindow(false);
                 setRecurrenceConfig(undefined);
                 setEnforceSequentialOrder(false);
+                setAreaId("");
                 setTasks([]);
                 setErrorMsg(null);
                 setShowDeleteModal(false);
@@ -144,6 +171,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                     setHasTimeWindow(parsed.hasTimeWindow ?? false);
                     setRecurrenceConfig(parsed.recurrenceConfig ?? undefined);
                     setEnforceSequentialOrder(parsed.enforceSequentialOrder ?? false);
+                    setAreaId(parsed.areaId ?? "");
                     setTasks(parsed.tasks ?? []);
                     setErrorMsg(null);
                     setShowDeleteModal(false);
@@ -165,13 +193,13 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             const formState = {
                 name, description, shift, checklistType, roleId, assignedToUserId,
                 isRequired, recurrence, startTime, endTime, hasTimeWindow,
-                recurrenceConfig, enforceSequentialOrder, tasks
+                recurrenceConfig, enforceSequentialOrder, areaId, tasks
             };
             localStorage.setItem("ordem_na_mesa_draft_rotina", JSON.stringify(formState));
             setDraftSaved(true);
         }, 500);
         return () => clearTimeout(handler);
-    }, [name, description, shift, checklistType, roleId, assignedToUserId, isRequired, recurrence, startTime, endTime, hasTimeWindow, recurrenceConfig, enforceSequentialOrder, tasks, checklist]);
+    }, [name, description, shift, checklistType, roleId, assignedToUserId, isRequired, recurrence, startTime, endTime, hasTimeWindow, recurrenceConfig, enforceSequentialOrder, areaId, tasks, checklist]);
 
     const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 8 } });
     const keyboardSensor = useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates });
@@ -252,6 +280,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             // Sprint 8: custom recurrence config
             recurrence_config: recurrence === 'custom' ? recurrenceConfig : null,
             enforce_sequential_order: enforceSequentialOrder,
+            area_id: areaId || null,
             status: (isPublishing ? 'active' : 'draft') as "active" | "draft" | "archived",
             tasks: tasks.map(t => ({
                 title: t.title,
@@ -443,6 +472,20 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                             </div>
                         </div>
 
+                        {areas.length > 0 && (
+                            <div>
+                                <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Área</label>
+                                <select
+                                    value={areaId}
+                                    onChange={(e) => { setAreaId(e.target.value); setAssignedToUserId(""); }}
+                                    className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
+                                >
+                                    <option value="">Qualquer área</option>
+                                    {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                </select>
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                             <div>
                                 <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Tipo de Rotina</label>
@@ -455,32 +498,35 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Área (Função)</label>
+                                <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Função / Cargo</label>
                                 <select
                                     value={roleId}
-                                    onChange={(e) => setRoleId(e.target.value)}
+                                    onChange={(e) => { setRoleId(e.target.value); setAssignedToUserId(""); }}
                                     className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
                                 >
-                                    <option value="">Qualquer Área</option>
+                                    <option value="">Qualquer função</option>
                                     {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                                 </select>
                             </div>
                         </div>
 
                         <div>
-                            <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Atribuir a colaborador específico (opcional)</label>
+                            <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Responsável (opcional)</label>
                             <select
                                 value={assignedToUserId}
                                 onChange={(e) => setAssignedToUserId(e.target.value)}
                                 className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
                             >
-                                <option value="">Disponível para toda a área</option>
-                                {equipe.filter(m => m.active).map(m => (
+                                <option value="">Disponível para toda a equipe</option>
+                                {filteredEquipe.map(m => (
                                     <option key={m.user_id} value={m.user_id}>{m.name}</option>
                                 ))}
                             </select>
                             {assignedToUserId && (
                                 <p className="text-xs text-[#92bbc9] mt-1.5">Apenas este colaborador verá esta rotina no turno.</p>
+                            )}
+                            {(areaId || roleId) && filteredEquipe.length === 0 && (
+                                <p className="text-xs text-amber-400 mt-1.5">Nenhum colaborador nesta área / função.</p>
                             )}
                         </div>
 
