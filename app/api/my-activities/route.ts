@@ -57,21 +57,29 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Acesso ao restaurante não encontrado.' }, { status: 403 });
         }
 
-        // Buscar as funções (roles) atribuídas ao usuário — mesmo sistema do turno
+        // Buscar as áreas e funções (roles) atribuídas ao usuário
+        const { data: userAreaRows } = await adminSupabase
+            .from('user_areas')
+            .select('area_id')
+            .eq('restaurant_id', restaurant_id)
+            .eq('user_id', user.id);
+
         const { data: userRoleRows } = await adminSupabase
             .from('user_roles')
             .select('role_id')
             .eq('restaurant_id', restaurant_id)
             .eq('user_id', user.id);
 
-        const userRoleIds = (userRoleRows ?? []).map((r) => r.role_id);
+        const areaIds = (userAreaRows ?? []).map((r) => r.area_id);
+        const roleIds = (userRoleRows ?? []).map((r) => r.role_id);
+        const effectiveIds = areaIds.length > 0 ? areaIds : roleIds;
 
-        // Sem funções atribuídas → sem atividades
-        if (userRoleIds.length === 0) {
+        // Sem funções ou áreas atribuídas → sem atividades
+        if (effectiveIds.length === 0) {
             return NextResponse.json([]);
         }
 
-        // Checklists cujo role_id está entre as funções do usuário
+        // Checklists cuja area_id ou role_id está entre as áreas efetivas do usuário
         const { data: checklists, error: checklistsError } = await adminSupabase
             .from('checklists')
             .select(`
@@ -87,14 +95,15 @@ export async function GET(request: Request) {
                 target_role,
                 area_id,
                 role_id,
+                area:areas(id, name, color),
                 role:roles(id, name, color),
                 task_count:checklist_tasks(count)
             `)
             .eq('restaurant_id', restaurant_id)
             .eq('active', true)
             .eq('status', 'active')
-            .not('role_id', 'is', null)
-            .in('role_id', userRoleIds)
+            .or(`role_id.not.is.null,area_id.not.is.null`)
+            .or(`area_id.in.(${effectiveIds.join(',')}),role_id.in.(${effectiveIds.join(',')})`)
             .order('order_index', { ascending: true, nullsFirst: false });
 
         if (checklistsError) {
@@ -161,8 +170,11 @@ export async function GET(request: Request) {
                 ? Math.round((doneCount / taskCount) * 100)
                 : 0;
 
-            // Expõe role como 'area' para reutilizar o filtro do frontend (mesma estrutura: id, name, color)
+            // Expõe area ou role como 'area' para o frontend (fallback)
             const role = checklist.role ?? null;
+            const area = checklist.area ?? null;
+            const fallbackArea = area ? area : role;
+            
             return {
                 id: checklist.id,
                 restaurant_id: checklist.restaurant_id,
@@ -174,8 +186,8 @@ export async function GET(request: Request) {
                 start_time: checklist.start_time ?? null,
                 end_time: checklist.end_time ?? null,
                 target_role: (checklist.target_role ?? 'all') as TargetRole,
-                area_id: checklist.role_id ?? null,   // usa role_id no lugar de area_id
-                area: role ? { id: role.id, name: role.name, color: role.color, restaurant_id: checklist.restaurant_id, created_at: '' } : null,
+                area_id: checklist.area_id ?? checklist.role_id ?? null,
+                area: fallbackArea ? { id: fallbackArea.id, name: fallbackArea.name, color: fallbackArea.color, restaurant_id: checklist.restaurant_id, created_at: '' } : null,
                 task_count: taskCount,
                 done_count: doneCount,
                 progress_percent: progressPercent,

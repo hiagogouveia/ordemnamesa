@@ -70,43 +70,104 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         }
 
         // 2. Atualizar Tasks
-        const { error: deleteTasksError } = await adminSupabase
+        // Pegar estado de tasks atuais
+        const { data: existingTasks } = await adminSupabase
             .from('checklist_tasks')
-            .delete()
+            .select('id')
             .eq('checklist_id', id);
 
-        if (deleteTasksError) {
-            console.error('[PUT /api/checklists/[id]] Erro ao deletar tasks antigas:', deleteTasksError);
-            return NextResponse.json({ error: deleteTasksError.message }, { status: 500 });
-        }
+        const existingTaskIds = new Set(existingTasks?.map(t => t.id) || []);
 
-        let insertedTasks = [];
         if (tasks && tasks.length > 0) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const tasksToInsert = tasks.map((task: any, index: number) => ({
-                checklist_id: id,
-                restaurant_id,
-                title: task.title,
-                description: task.description,
-                requires_photo: task.requires_photo || false,
-                is_critical: task.is_critical || false,
-                order: index,
-                assigned_to_user_id: task.assigned_to_user_id || null
-            }));
+            const tasksToUpdate: any[] = [];
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const tasksToInsert: any[] = [];
 
-            const { data: newTasks, error: tasksError } = await adminSupabase
-                .from('checklist_tasks')
-                .insert(tasksToInsert)
-                .select();
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            tasks.forEach((task: any, index: number) => {
+                const taskPayload = {
+                    checklist_id: id,
+                    restaurant_id,
+                    title: task.title,
+                    description: task.description,
+                    requires_photo: task.requires_photo || false,
+                    is_critical: task.is_critical || false,
+                    order: index,
+                    assigned_to_user_id: task.assigned_to_user_id || null
+                };
 
-            if (tasksError) {
-                console.error('[PUT /api/checklists/[id]] Erro ao recriar tasks:', tasksError);
-                return NextResponse.json({ error: tasksError.message }, { status: 500 });
+                if (task.id && existingTaskIds.has(task.id)) {
+                    tasksToUpdate.push({ ...taskPayload, id: task.id });
+                    existingTaskIds.delete(task.id); // Marked as preserved
+                } else {
+                    tasksToInsert.push(taskPayload);
+                }
+            });
+
+            // Update preservers
+            for (const task of tasksToUpdate) {
+                const { error: updateError } = await adminSupabase
+                    .from('checklist_tasks')
+                    .update(task)
+                    .eq('id', task.id);
+                if (updateError) {
+                    console.error('[PUT /api/checklists/[id]] Erro update task:', updateError);
+                }
             }
-            insertedTasks = newTasks.sort((a, b) => a.order - b.order);
+
+            // Insert new tasks
+            if (tasksToInsert.length > 0) {
+                const { error: insertError } = await adminSupabase
+                    .from('checklist_tasks')
+                    .insert(tasksToInsert);
+                if (insertError) {
+                    console.error('[PUT /api/checklists/[id]] Erro insert task:', insertError);
+                }
+            }
         }
 
-        return NextResponse.json({ success: true, tasks: insertedTasks });
+        // Handle Removals gracefully (Opção B - Sem quebrar FK)
+        const idsToRemove = Array.from(existingTaskIds);
+        if (idsToRemove.length > 0) {
+            // Verify if deleted tasks have prior executions
+            const { data: executions } = await adminSupabase
+                .from('task_executions')
+                .select('task_id')
+                .in('task_id', idsToRemove);
+                
+            const executedTaskIds = new Set(executions?.map(e => e.task_id) || []);
+            const safeToDeleteIds = idsToRemove.filter(taskId => !executedTaskIds.has(taskId));
+            
+            if (safeToDeleteIds.length > 0) {
+                const { error: deleteError } = await adminSupabase
+                    .from('checklist_tasks')
+                    .delete()
+                    .in('id', safeToDeleteIds);
+                if (deleteError) {
+                    console.error('[PUT /api/checklists/[id]] Erro na deleção safe de tasks:', deleteError);
+                }
+            }
+            // Tasks with execution histories (executedTaskIds) will inherently become orphaned from the checklist view order since the frontend doesn't render them anymore, but they stay in the DB for logs.
+        }
+
+        // 3. Buscar checklist completo atualizado
+        const { data: fullChecklist, error: fetchFullError } = await adminSupabase
+            .from('checklists')
+            .select(`
+                *,
+                roles:role_id (id, name, color),
+                tasks:checklist_tasks (*)
+            `)
+            .eq('id', id)
+            .single();
+
+        if (fetchFullError) {
+            console.error('[PUT /api/checklists/[id]] Erro ao buscar checklist atualizado:', fetchFullError);
+            return NextResponse.json({ error: fetchFullError.message }, { status: 500 });
+        }
+
+        return NextResponse.json(fullChecklist);
     } catch (error: unknown) {
         console.error('[PUT /api/checklists/[id]] Erro Inesperado:', error);
         return NextResponse.json({ error: (error as Error).message }, { status: 500 });

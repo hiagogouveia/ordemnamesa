@@ -104,12 +104,14 @@ export function useUpdateChecklist() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: async (data: Partial<Checklist> & { id: string }) => {
+        mutationFn: async (data: Partial<Checklist> & { id: string, skipInvalidation?: boolean }) => {
             const headers = await getAuthHeaders();
+            // Remove skipInvalidation properties before sending to backend
+            const { skipInvalidation, ...payloadData } = data;
             const res = await fetch(`/api/checklists/${data.id}`, {
                 method: "PUT",
                 headers,
-                body: JSON.stringify(data),
+                body: JSON.stringify(payloadData),
             });
             if (!res.ok) {
                 const errData = await res.json().catch(() => ({}));
@@ -117,11 +119,20 @@ export function useUpdateChecklist() {
             }
             return res.json();
         },
-        onSuccess: (_, variables) => {
-            queryClient.invalidateQueries({ queryKey: ["checklists", variables.restaurant_id] });
-            queryClient.invalidateQueries({ queryKey: ["my-activities", variables.restaurant_id] });
-            queryClient.invalidateQueries({ queryKey: ["my-activities-badge", variables.restaurant_id] });
-            queryClient.invalidateQueries({ queryKey: ["admin_checklists_status", variables.restaurant_id] });
+        onSuccess: (updatedChecklist, variables) => {
+            queryClient.setQueryData(
+                ["checklists", variables.restaurant_id],
+                (old: any[] | undefined) => {
+                    if (!old) return [updatedChecklist];
+                    return old.map((c: any) => c.id === updatedChecklist.id ? updatedChecklist : c);
+                }
+            );
+            if (!variables.skipInvalidation) {
+                queryClient.invalidateQueries({ queryKey: ["checklists", variables.restaurant_id] });
+                queryClient.invalidateQueries({ queryKey: ["my-activities", variables.restaurant_id] });
+                queryClient.invalidateQueries({ queryKey: ["my-activities-badge", variables.restaurant_id] });
+                queryClient.invalidateQueries({ queryKey: ["admin_checklists_status", variables.restaurant_id] });
+            }
         },
     });
 }

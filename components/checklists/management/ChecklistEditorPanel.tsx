@@ -106,27 +106,15 @@ function ChecklistViewPanel({ checklist, onEdit, onClose }: ChecklistViewPanelPr
                                 {TYPE_LABELS[checklist.checklist_type ?? "regular"] ?? "—"}
                             </span>
                         </div>
-                        {(checklist.area || checklist.roles) && (
+                        {checklist.area && (
                             <div className="flex items-center justify-between">
                                 <span className="text-[#92bbc9] text-sm">Área</span>
                                 <span className="flex items-center gap-1.5 text-white text-sm font-medium">
-                                    {checklist.area ? (
-                                        <>
-                                            <span
-                                                className="w-2 h-2 rounded-full shrink-0"
-                                                style={{ backgroundColor: checklist.area.color || "#325a67" }}
-                                            />
-                                            {checklist.area.name}
-                                        </>
-                                    ) : (
-                                        <>
-                                            <span
-                                                className="w-2 h-2 rounded-full shrink-0"
-                                                style={{ backgroundColor: checklist.roles!.color || "#325a67" }}
-                                            />
-                                            {checklist.roles!.name}
-                                        </>
-                                    )}
+                                    <span
+                                        className="w-2 h-2 rounded-full shrink-0"
+                                        style={{ backgroundColor: checklist.area.color || "#325a67" }}
+                                    />
+                                    {checklist.area.name}
                                 </span>
                             </div>
                         )}

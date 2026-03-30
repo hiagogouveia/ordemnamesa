@@ -52,6 +52,31 @@ export async function GET(request: Request) {
 
         if (status) query = query.eq('status', status);
 
+        // Security filter: Se for staff, filtrar pelas areas/roles do usuário
+        if (membership.role === 'staff') {
+            const { data: userAreas } = await adminSupabase
+                .from('user_areas')
+                .select('area_id')
+                .eq('restaurant_id', restaurant_id)
+                .eq('user_id', user.id);
+
+            const { data: userRoles } = await adminSupabase
+                .from('user_roles')
+                .select('role_id')
+                .eq('restaurant_id', restaurant_id)
+                .eq('user_id', user.id);
+
+            const areaIds = userAreas?.map(ua => ua.area_id) || [];
+            const roleIds = userRoles?.map(ur => ur.role_id) || [];
+            const effectiveIds = areaIds.length > 0 ? areaIds : roleIds;
+
+            if (effectiveIds.length > 0) {
+                query = query.or(`target_area_ids.cs.{${effectiveIds.join(',')}},target_role_ids.cs.{${effectiveIds.join(',')}}`);
+            } else {
+                return NextResponse.json([]); // Sem áreas/cargos, não vê nada de compras
+            }
+        }
+
         const { data, error } = await query;
 
         if (error) {
@@ -115,7 +140,8 @@ export async function POST(request: Request) {
                 restaurant_id,
                 created_by: user.id,
                 title,
-                target_role_ids: target_role_ids || [],
+                target_role_ids: target_role_ids || [], // Mantém pro fallback
+                target_area_ids: target_role_ids || [], // Salva nas áreas também
                 notes: notes || null,
             })
             .select()

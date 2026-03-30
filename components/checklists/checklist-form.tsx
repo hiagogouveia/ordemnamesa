@@ -11,11 +11,10 @@ import { ExtendedChecklist } from "./checklist-card";
 import { useCreateChecklist, useUpdateChecklist, useDeleteChecklist, useReorderTasks } from "@/lib/hooks/use-checklists";
 import { ChecklistTask } from "@/lib/types";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
-import { useRoles } from "@/lib/hooks/use-roles";
 import { useEquipe } from "@/lib/hooks/use-equipe";
 import { useAllAreas } from "@/lib/hooks/use-areas";
 import { useUserAreasByRestaurant } from "@/lib/hooks/use-user-areas";
-import { useUserRoles } from "@/lib/hooks/use-user-roles-shifts";
+import isEqual from "lodash/isEqual";
 
 interface ChecklistFormProps {
     checklist: ExtendedChecklist | null;
@@ -53,7 +52,6 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     const [description, setDescription] = useState("");
     const [shift, setShift] = useState("any");
     const [checklistType, setChecklistType] = useState("regular");
-    const [roleId, setRoleId] = useState("");
     const [assignedToUserId, setAssignedToUserId] = useState("");
     const [isRequired, setIsRequired] = useState(true);
     const [recurrence, setRecurrence] = useState("none");
@@ -70,20 +68,22 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     const [tasks, setTasks] = useState<(Partial<ChecklistTask> & { tempId: string })[]>([]);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
-    const [draftSaved, setDraftSaved] = useState(false);
+    const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+    const isFirstLoad = useRef(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const previousStateRef = useRef<any>(null);
+    const isSavingRef = useRef(false);
+    const isPublishingRef = useRef(false);
 
     const [areaId, setAreaId] = useState<string>("");
 
-    const { data: roles = [] } = useRoles(restaurantId || undefined);
     const { data: equipeData } = useEquipe(restaurantId || null);
     const { data: areas = [] } = useAllAreas(restaurantId || undefined);
     const { data: userAreas = [], isLoading: userAreasLoading } = useUserAreasByRestaurant(restaurantId || undefined);
-    const { data: userRoles = [], isLoading: userRolesLoading } = useUserRoles(restaurantId || undefined);
     const equipe = equipeData?.equipe || [];
 
     const filteredEquipe = equipe.filter(m => {
         if (!m.active) return false;
-        if (roleId && !userRoles.some(ur => ur.user_id === m.user_id && ur.role_id === roleId)) return false;
         if (areaId && !userAreas.some(ua => ua.user_id === m.user_id && ua.area_id === areaId)) return false;
         return true;
     });
@@ -91,12 +91,12 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     // Auto-clear responsible if they no longer belong to the selected area/role filter
     useEffect(() => {
         if (!assignedToUserId) return;
-        if (equipe.length === 0 || userAreasLoading || userRolesLoading) return;
+        if (equipe.length === 0 || userAreasLoading) return;
         if (!filteredEquipe.some(m => m.user_id === assignedToUserId)) {
             setAssignedToUserId("");
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [filteredEquipe, userAreasLoading, userRolesLoading]);
+    }, [filteredEquipe, userAreasLoading]);
 
     const createMutation = useCreateChecklist();
     const updateMutation = useUpdateChecklist();
@@ -109,13 +109,51 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         if (!isMobile) setIsReorderMode(false);
     }, [isMobile]);
 
+    const prevChecklistId = useRef<string | null>(null);
+
     useEffect(() => {
+        // Only reset the whole form if the checklist ID changes
+        // This prevents background refetches from wiping local unsaved changes
+        const currentId = checklist?.id || (!checklist ? 'new' : null);
+        if (currentId === prevChecklistId.current && checklist !== null) {
+            return;
+        }
+        prevChecklistId.current = currentId;
+
         if (checklist) {
+            // Priority: Local Draft (if exists) > Checklist Props
+            const draftKey = `ordem_na_mesa_draft_rotina_${checklist.id}`;
+            const savedDraft = localStorage.getItem(draftKey);
+            
+            if (savedDraft) {
+                try {
+                    const parsed = JSON.parse(savedDraft);
+                    setName(parsed.name ?? "");
+                    setDescription(parsed.description ?? "");
+                    setShift(parsed.shift ?? "any");
+                    setChecklistType(parsed.checklistType ?? "regular");
+                    setAssignedToUserId(parsed.assignedToUserId ?? "");
+                    setIsRequired(parsed.isRequired ?? true);
+                    setRecurrence(parsed.recurrence ?? "none");
+                    setStartTime(parsed.startTime ?? "");
+                    setEndTime(parsed.endTime ?? "");
+                    setHasTimeWindow(parsed.hasTimeWindow ?? false);
+                    setRecurrenceConfig(parsed.recurrenceConfig ?? undefined);
+                    setEnforceSequentialOrder(parsed.enforceSequentialOrder ?? false);
+                    setTasks(parsed.tasks ?? []);
+                    setSaveState("saved");
+                    isFirstLoad.current = false; // Prevents autosave on initial draft load
+                    previousStateRef.current = parsed;
+                    return; // Skip setting from props since we used draft
+                } catch {
+                    localStorage.removeItem(draftKey);
+                }
+            }
+
             setName(checklist.name);
             setDescription(checklist.description || "");
             setShift(checklist.shift);
             setChecklistType(checklist.checklist_type || "regular");
-            setRoleId(checklist.role_id || "");
             setAssignedToUserId(checklist.assigned_to_user_id || "");
             setIsRequired(checklist.is_required ?? true);
             setRecurrence(checklist.recurrence || "none");
@@ -128,17 +166,17 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             // Sprint 8: recurrence config
             setRecurrenceConfig(checklist.recurrence_config as RecurrenceConfig | undefined);
             setEnforceSequentialOrder(checklist.enforce_sequential_order ?? false);
-            setAreaId(checklist.area_id || "");
+            setAreaId(checklist.area_id || checklist.role_id || ""); // fallback map to areaId
             setTasks(
                 (checklist.tasks || []).map((t) => ({ ...t, tempId: t.id }))
             );
+            setSaveState("idle");
         } else {
             const resetForm = () => {
                 setName("");
                 setDescription("");
                 setShift("any");
                 setChecklistType("regular");
-                setRoleId("");
                 setAssignedToUserId("");
                 setIsRequired(true);
                 setRecurrence("none");
@@ -151,7 +189,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 setTasks([]);
                 setErrorMsg(null);
                 setShowDeleteModal(false);
-                setDraftSaved(false);
+                setSaveState("idle");
             };
 
             const savedDraft = localStorage.getItem("ordem_na_mesa_draft_rotina");
@@ -162,7 +200,6 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                     setDescription(parsed.description ?? "");
                     setShift(parsed.shift ?? "any");
                     setChecklistType(parsed.checklistType ?? "regular");
-                    setRoleId(parsed.roleId ?? "");
                     setAssignedToUserId(parsed.assignedToUserId ?? "");
                     setIsRequired(parsed.isRequired ?? true);
                     setRecurrence(parsed.recurrence ?? "none");
@@ -175,7 +212,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                     setTasks(parsed.tasks ?? []);
                     setErrorMsg(null);
                     setShowDeleteModal(false);
-                    setDraftSaved(true);
+                    setSaveState("saved");
+                    isFirstLoad.current = false;
+                    previousStateRef.current = parsed;
                 } catch {
                     localStorage.removeItem("ordem_na_mesa_draft_rotina");
                     resetForm();
@@ -187,19 +226,73 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     }, [checklist]);
 
     useEffect(() => {
-        if (checklist) return;
-        const handler = setTimeout(() => {
-            if (!name && !description && tasks.length === 0) return;
-            const formState = {
-                name, description, shift, checklistType, roleId, assignedToUserId,
-                isRequired, recurrence, startTime, endTime, hasTimeWindow,
-                recurrenceConfig, enforceSequentialOrder, areaId, tasks
-            };
-            localStorage.setItem("ordem_na_mesa_draft_rotina", JSON.stringify(formState));
-            setDraftSaved(true);
-        }, 500);
+        const formState = {
+            name, description, shift, checklistType, assignedToUserId,
+            isRequired, recurrence, startTime, endTime, hasTimeWindow,
+            recurrenceConfig, enforceSequentialOrder, areaId, tasks
+        };
+        
+        if (isFirstLoad.current) {
+            isFirstLoad.current = false;
+            previousStateRef.current = formState; // Sync inicial
+            return;
+        }
+
+        if (!name.trim() && tasks.length === 0) return;
+        if (!tasks || tasks.length === 0) return; // Prevent deleting tasks by accidentally sending empty list
+        
+        if (isEqual(previousStateRef.current, formState)) return;
+        if (isPublishingRef.current) return;
+        
+        const draftKey = checklist ? `ordem_na_mesa_draft_rotina_${checklist.id}` : "ordem_na_mesa_draft_rotina";
+        localStorage.setItem(draftKey, JSON.stringify(formState));
+        
+        const handler = setTimeout(async () => {
+            if (isSavingRef.current) return;
+            
+            setSaveState("saving");
+            
+            try {
+                if (checklist?.id && restaurantId && updateMutation) {
+                    isSavingRef.current = true;
+                    const payload = {
+                        id: checklist.id,
+                        restaurant_id: restaurantId,
+                        ...formState,
+                        area_id: checklist.area_id || undefined,
+                        target_role: checklist.target_role || 'all',
+                        status: 'draft',
+                        skipInvalidation: true, // AUTO-SAVE skips invalidation!
+                        tasks: tasks.map(t => ({
+                            id: t.id || undefined,
+                            title: t.title,
+                            description: t.description || "",
+                            is_critical: t.is_critical || false,
+                            requires_photo: t.requires_photo || false,
+                            assigned_to_user_id: t.assigned_to_user_id || undefined
+                        }))
+                    };
+                    
+                    console.log("AUTOSAVE PAYLOAD:", payload);
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const response = await updateMutation.mutateAsync(payload as any);
+                    console.log("BACKEND RESPONSE:", response);
+                    
+                    previousStateRef.current = formState;
+                    setSaveState("saved");
+                } else {
+                    setSaveState("saved"); // Apenas local para creation
+                }
+            } catch (error) {
+                console.error("Autosave Remoto Falhou", error);
+                setSaveState("error");
+            } finally {
+                isSavingRef.current = false;
+            }
+        }, 1500);
+
         return () => clearTimeout(handler);
-    }, [name, description, shift, checklistType, roleId, assignedToUserId, isRequired, recurrence, startTime, endTime, hasTimeWindow, recurrenceConfig, enforceSequentialOrder, areaId, tasks, checklist]);
+    }, [name, description, shift, checklistType, assignedToUserId, isRequired, recurrence, startTime, endTime, hasTimeWindow, recurrenceConfig, enforceSequentialOrder, areaId, tasks, checklist, restaurantId, updateMutation]);
 
     const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 8 } });
     const keyboardSensor = useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates });
@@ -270,7 +363,6 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             description,
             shift: shift as "morning" | "afternoon" | "evening" | "any",
             checklist_type: checklistType as "regular" | "opening" | "closing" | "receiving",
-            role_id: roleId || undefined,
             assigned_to_user_id: assignedToUserId || undefined,
             is_required: isRequired,
             recurrence,
@@ -282,26 +374,33 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             enforce_sequential_order: enforceSequentialOrder,
             area_id: areaId || null,
             status: (isPublishing ? 'active' : 'draft') as "active" | "draft" | "archived",
+            target_role: checklist?.target_role || 'all',
             tasks: tasks.map(t => ({
+                id: t.id || undefined,
                 title: t.title,
-                description: t.description,
-                is_critical: t.is_critical,
-                requires_photo: t.requires_photo,
+                description: t.description || "",
+                is_critical: t.is_critical || false,
+                requires_photo: t.requires_photo || false,
                 assigned_to_user_id: t.assigned_to_user_id || undefined
             }))
         };
 
         try {
             setErrorMsg(null);
+            isPublishingRef.current = true;
             if (checklist?.id) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                await updateMutation.mutateAsync({ id: checklist.id, ...payload } as any);
+                await updateMutation.mutateAsync({ id: checklist.id, skipInvalidation: false, ...payload } as any);
+                await new Promise(resolve => setTimeout(resolve, 300));
+                localStorage.removeItem(`ordem_na_mesa_draft_rotina_${checklist.id}`);
+                setSaveState("idle");
                 onSaved();
             } else {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const res = await createMutation.mutateAsync(payload as any);
+                await new Promise(resolve => setTimeout(resolve, 300));
                 localStorage.removeItem("ordem_na_mesa_draft_rotina");
-                setDraftSaved(false);
+                setSaveState("idle");
                 if (checklistType === 'receiving') {
                     window.location.href = `/compras?new=true&checklist_id=${res.id}`; // Simple redirect
                 } else {
@@ -311,6 +410,8 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         } catch (e) {
             console.error(e);
             setErrorMsg(e instanceof Error ? e.message : "Erro inesperado ao salvar a rotina!");
+        } finally {
+            isPublishingRef.current = false;
         }
     };
 
@@ -366,10 +467,22 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 </div>
 
                 <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end w-full sm:w-auto">
-                    {!checklist && draftSaved && (
-                         <span className="text-xs text-[#92bbc9]/60 italic mr-2 flex items-center gap-1">
+                    {saveState === "saving" && (
+                         <span className="text-xs text-[#13b6ec] italic mr-2 flex items-center gap-1">
+                             <span className="material-symbols-outlined text-[14px] animate-spin">sync</span>
+                             Salvando na nuvem...
+                         </span>
+                    )}
+                    {saveState === "saved" && (
+                         <span className="text-xs text-emerald-400 italic mr-2 flex items-center gap-1">
                              <span className="material-symbols-outlined text-[14px]">cloud_done</span>
-                             Rascunho salvo
+                             Salvo
+                         </span>
+                    )}
+                    {saveState === "error" && (
+                         <span className="text-xs text-red-400 italic mr-2 flex items-center gap-1" title="Alguns dados só estão salvos localmente">
+                             <span className="material-symbols-outlined text-[14px]">cloud_off</span>
+                             Erro - Rascunho Local
                          </span>
                     )}
                     {checklist && (
@@ -472,20 +585,19 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                             </div>
                         </div>
 
-                        <div>
-                            <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Área</label>
-                            <select
-                                value={areaId}
-                                onChange={(e) => { setAreaId(e.target.value); setAssignedToUserId(""); }}
-                                className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
-                                disabled={areas.length === 0}
-                            >
-                                <option value="">{areas.length === 0 ? "Nenhuma área cadastrada" : "Qualquer área"}</option>
-                                {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                            </select>
-                        </div>
-
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div>
+                                <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Área</label>
+                                <select
+                                    value={areaId}
+                                    onChange={(e) => { setAreaId(e.target.value); setAssignedToUserId(""); }}
+                                    className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
+                                    disabled={areas.length === 0}
+                                >
+                                    <option value="">{areas.length === 0 ? "Nenhuma área cadastrada" : "Qualquer área"}</option>
+                                    {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                </select>
+                            </div>
                             <div>
                                 <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Tipo de Rotina</label>
                                 <select
@@ -494,17 +606,6 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                     className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
                                 >
                                     {CHECKLIST_TYPES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Cargo</label>
-                                <select
-                                    value={roleId}
-                                    onChange={(e) => { setRoleId(e.target.value); setAssignedToUserId(""); }}
-                                    className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
-                                >
-                                    <option value="">Qualquer função</option>
-                                    {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                                 </select>
                             </div>
                         </div>
@@ -524,8 +625,8 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                             {assignedToUserId && (
                                 <p className="text-xs text-[#92bbc9] mt-1.5">Apenas este colaborador verá esta rotina no turno.</p>
                             )}
-                            {(areaId || roleId) && filteredEquipe.length === 0 && (
-                                <p className="text-xs text-amber-400 mt-1.5">Nenhum colaborador nesta área / função.</p>
+                            {areaId && filteredEquipe.length === 0 && (
+                                <p className="text-xs text-amber-400 mt-1.5">Nenhum colaborador nesta área.</p>
                             )}
                         </div>
 

@@ -90,8 +90,8 @@ function ChecklistsContent() {
                     valB = SHIFT_SORT_ORDER[b.shift] ?? 99;
                     break;
                 case "area":
-                    valA = (a.area?.name)?.toLowerCase() ?? "\uffff";
-                    valB = (b.area?.name)?.toLowerCase() ?? "\uffff";
+                    valA = (a.area?.name || "\uffff").toLowerCase();
+                    valB = (b.area?.name || "\uffff").toLowerCase();
                     break;
                 case "responsible":
                     valA = a.responsible?.name?.toLowerCase() ?? "\uffff";

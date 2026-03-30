@@ -30,17 +30,25 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
         }
 
-        // 1. Obter roles do usuário neste restaurante
+        // 1. Obter areas e roles do usuário neste restaurante
+        const { data: userAreas } = await adminSupabase
+            .from('user_areas')
+            .select('area_id')
+            .eq('restaurant_id', restaurant_id)
+            .eq('user_id', user.id);
+            
         const { data: userRoles } = await adminSupabase
             .from('user_roles')
             .select('role_id')
             .eq('restaurant_id', restaurant_id)
             .eq('user_id', user.id);
 
-        const userRoleIds = userRoles?.map(ur => ur.role_id) || [];
+        const areaIds = userAreas?.map(ua => ua.area_id) || [];
+        const roleIds = userRoles?.map(ur => ur.role_id) || [];
+        const effectiveIds = areaIds.length > 0 ? areaIds : roleIds;
 
-        // 2. Buscar checklists ATIVOS do usuário: filtrados pelos roles do usuário
-        if (userRoleIds.length === 0) {
+        // 2. Buscar checklists ATIVOS do usuário: filtrados pelas areas/roles do usuário
+        if (effectiveIds.length === 0) {
             return NextResponse.json({
                 checklists: [],
                 tasks: [],
@@ -51,10 +59,10 @@ export async function GET(request: Request) {
 
         const { data: activeChecklists } = await adminSupabase
             .from('checklists')
-            .select('id, name, description, is_required, recurrence, last_reset_at, assigned_to_user_id, role_id, roles(id, name, color), checklist_type, start_time, end_time')
+            .select('id, name, description, is_required, recurrence, last_reset_at, assigned_to_user_id, role_id, area_id, roles(id, name, color), areas(id, name, color), checklist_type, start_time, end_time')
             .eq('restaurant_id', restaurant_id)
             .eq('active', true)
-            .in('role_id', userRoleIds)
+            .or(`area_id.in.(${effectiveIds.join(',')}),role_id.in.(${effectiveIds.join(',')})`)
             .or(`assigned_to_user_id.is.null,assigned_to_user_id.eq.${user.id}`);
 
         const checklistIds = activeChecklists?.map(c => c.id) || [];
@@ -111,9 +119,11 @@ export async function GET(request: Request) {
 
             const { data: tasks } = await tasksQuery;
 
-            // Filtro manual das roles
+            // Filtro manual das areas/roles
             tasksData = (tasks || []).filter((task: Record<string, unknown>) =>
-                !task.role_id || userRoleIds.includes(task.role_id as string)
+                (!task.role_id && !task.area_id) || 
+                (task.area_id && effectiveIds.includes(task.area_id as string)) ||
+                (task.role_id && effectiveIds.includes(task.role_id as string))
             );
         }
 

@@ -68,15 +68,24 @@ export async function GET(request: Request) {
 
         if (membersErr) throw membersErr;
 
-        // 2. Áreas (roles) de cada colaborador (sem N+1: duas queries + merge em JS)
-        // O drawer chama de "Áreas Atribuídas" mas usa a tabela user_roles → roles
+        // 2. Áreas (roles) de cada colaborador (sem N+1)
         const [
+            { data: userAreaRows, error: userAreasErr },
             { data: userRoleRows, error: userRolesErr },
+            { data: allAreasData, error: areasErr },
             { data: allRolesData, error: rolesErr }
         ] = await Promise.all([
             adminSupabase
+                .from('user_areas')
+                .select('user_id, area_id')
+                .eq('restaurant_id', restaurant_id),
+            adminSupabase
                 .from('user_roles')
                 .select('user_id, role_id')
+                .eq('restaurant_id', restaurant_id),
+            adminSupabase
+                .from('areas')
+                .select('id, name, color')
                 .eq('restaurant_id', restaurant_id),
             adminSupabase
                 .from('roles')
@@ -84,19 +93,43 @@ export async function GET(request: Request) {
                 .eq('restaurant_id', restaurant_id),
         ]);
 
+        if (userAreasErr) console.error('[GET /api/equipe] user_areas error:', userAreasErr);
         if (userRolesErr) console.error('[GET /api/equipe] user_roles error:', userRolesErr);
+        if (areasErr) console.error('[GET /api/equipe] areas error:', areasErr);
         if (rolesErr) console.error('[GET /api/equipe] roles error:', rolesErr);
 
         const rolesById: Record<string, { id: string; name: string; color: string }> = {};
+        if (allAreasData) {
+            for (const a of allAreasData) {
+                rolesById[a.id] = { id: a.id, name: a.name, color: a.color };
+            }
+        }
         if (allRolesData) {
             for (const r of allRolesData) {
-                rolesById[r.id] = { id: r.id, name: r.name, color: r.color };
+                // Roles are a fallback, don't overwrite areas if exist
+                if (!rolesById[r.id]) {
+                    rolesById[r.id] = { id: r.id, name: r.name, color: r.color };
+                }
             }
         }
 
         const areasMap: Record<string, { id: string; name: string; color: string }[]> = {};
+        
+        // Priority to user_areas
+        if (userAreaRows) {
+            for (const ua of userAreaRows) {
+                const area = rolesById[ua.area_id];
+                if (!area) continue;
+                if (!areasMap[ua.user_id]) areasMap[ua.user_id] = [];
+                areasMap[ua.user_id].push(area);
+            }
+        }
+
+        // Fallback to user_roles if map is empty for the user
         if (userRoleRows) {
             for (const ur of userRoleRows) {
+                if (areasMap[ur.user_id] && areasMap[ur.user_id].length > 0) continue; // skip if has area
+                
                 const role = rolesById[ur.role_id];
                 if (!role) continue;
                 if (!areasMap[ur.user_id]) areasMap[ur.user_id] = [];

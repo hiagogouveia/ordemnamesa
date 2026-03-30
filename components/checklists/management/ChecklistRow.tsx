@@ -99,16 +99,8 @@ export function ChecklistRow({
                         />
                         <span className="text-[#92bbc9] text-sm">{checklist.area.name}</span>
                     </span>
-                ) : checklist.roles?.name ? (
-                    <span className="flex items-center gap-1.5">
-                        <span
-                            className="w-2 h-2 rounded-full shrink-0"
-                            style={{ backgroundColor: checklist.roles.color || "#325a67" }}
-                        />
-                        <span className="text-[#92bbc9] text-sm">{checklist.roles.name}</span>
-                    </span>
                 ) : (
-                    <span className="text-[#325a67] text-sm italic">Qualquer área</span>
+                    <span className="text-[#325a67] text-sm italic">—</span>
                 )}
             </td>
 
