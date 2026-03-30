@@ -39,16 +39,7 @@ export function useAllAreas(restaurantId: string | undefined) {
         queryKey: ["areas-all", restaurantId],
         queryFn: async (): Promise<Area[]> => {
             if (!restaurantId) return [];
-            const supabase = createClient();
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.access_token) {
-                console.warn("[useAllAreas] sem access_token — sessão expirada?");
-                return [];
-            }
-            const headers: Record<string, string> = {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${session.access_token}`,
-            };
+            const headers = await getAuthHeaders();
             const res = await fetch(
                 `/api/areas?restaurant_id=${restaurantId}&scope=all`,
                 { headers, cache: "no-store" }
@@ -56,14 +47,12 @@ export function useAllAreas(restaurantId: string | undefined) {
             if (!res.ok) {
                 const text = await res.text().catch(() => "");
                 console.error(`[useAllAreas] HTTP ${res.status}:`, text);
-                return [];
+                throw new Error("Erro na requisição das áreas");
             }
-            const data: Area[] = await res.json();
-            console.log("[useAllAreas]", { restaurantId, count: data.length, data });
-            return data;
+            return res.json();
         },
         enabled: !!restaurantId,
-        staleTime: 0,
+        staleTime: 300_000,
     });
 }
 

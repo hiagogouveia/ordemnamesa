@@ -1,7 +1,26 @@
 "use client";
 
+import { useState, useRef, useMemo, useCallback } from "react";
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+    SortableContext,
+    arrayMove,
+    sortableKeyboardCoordinates,
+    verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { ChecklistRow } from "./ChecklistRow";
+import { SortableChecklistRow } from "./SortableChecklistRow";
+import { buildOrdersFromList } from "@/lib/sort/reorder";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
+import type { ChecklistOrder } from "@/lib/types";
 
 type SortField = "name" | "shift" | "area" | "responsible" | "status";
 type SortOrder = "asc" | "desc";
@@ -13,10 +32,20 @@ interface SortableHeaderProps {
     currentOrder: SortOrder;
     onSort: (field: SortField) => void;
     className?: string;
+    disabled?: boolean;
 }
 
-function SortableHeader({ field, label, currentField, currentOrder, onSort, className = "" }: SortableHeaderProps) {
+function SortableHeader({ field, label, currentField, currentOrder, onSort, className = "", disabled = false }: SortableHeaderProps) {
     const isActive = currentField === field;
+
+    if (disabled) {
+        return (
+            <th className={`px-3 py-2 text-left ${className}`}>
+                <span className="text-xs font-bold uppercase tracking-wide text-[#233f48]">{label}</span>
+            </th>
+        );
+    }
+
     return (
         <th
             className={`px-3 py-2 text-left cursor-pointer select-none group ${className}`}
@@ -54,6 +83,9 @@ interface ChecklistListViewProps {
     onStatusToggle: (id: string, active: boolean) => void;
     onDuplicate: (checklist: ExtendedChecklist) => void;
     onDelete: (id: string) => void;
+    orders: ChecklistOrder[];
+    onOrdersSave: (newOrders: ChecklistOrder[]) => Promise<void>;
+    restaurantId: string | null | undefined;
 }
 
 export function ChecklistListView({
@@ -68,7 +100,64 @@ export function ChecklistListView({
     onStatusToggle,
     onDuplicate,
     onDelete,
+    orders,
+    onOrdersSave,
+    restaurantId,
 }: ChecklistListViewProps) {
+    const [reorderMode, setReorderMode] = useState(false);
+    const [localItems, setLocalItems] = useState<ExtendedChecklist[]>([]);
+    const [isSaving, setIsSaving] = useState(false);
+    const beforeReorderRef = useRef<ExtendedChecklist[]>([]);
+
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    );
+
+    // Sort current checklists by their saved position (used when entering reorder mode)
+    const itemsSortedByPosition = useMemo(() => {
+        return [...checklists].sort((a, b) => {
+            const posA = orders.find((o) => o.checklist_id === a.id && o.shift === a.shift)?.position ?? 9999;
+            const posB = orders.find((o) => o.checklist_id === b.id && o.shift === b.shift)?.position ?? 9999;
+            return posA - posB;
+        });
+    }, [checklists, orders]);
+
+    const handleEnterReorder = () => {
+        beforeReorderRef.current = itemsSortedByPosition;
+        setLocalItems(itemsSortedByPosition);
+        setReorderMode(true);
+    };
+
+    const handleCancelReorder = () => {
+        setLocalItems(beforeReorderRef.current);
+        setReorderMode(false);
+    };
+
+    const handleDragEnd = useCallback((event: DragEndEvent) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+
+        setLocalItems((prev) => {
+            const activeIdx = prev.findIndex((c) => c.id === String(active.id));
+            const overIdx = prev.findIndex((c) => c.id === String(over.id));
+            if (activeIdx === -1 || overIdx === -1) return prev;
+            return arrayMove(prev, activeIdx, overIdx);
+        });
+    }, []);
+
+    const handleSave = async () => {
+        if (!restaurantId) return;
+        setIsSaving(true);
+        try {
+            const newOrders = buildOrdersFromList(localItems, restaurantId, orders);
+            await onOrdersSave(newOrders);
+            setReorderMode(false);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     if (isLoading) {
         return (
             <div className="flex flex-col gap-2">
@@ -94,73 +183,147 @@ export function ChecklistListView({
         );
     }
 
+    const displayItems = reorderMode ? localItems : checklists;
+
     return (
         <div className="overflow-x-auto">
-            <div className="flex items-center gap-1.5 px-1 pb-2">
-                <span className="material-symbols-outlined text-[#325a67] text-[14px]">info</span>
-                <span className="text-[#325a67] text-xs">A ordem das rotinas é definida no modo Cards</span>
+            {/* Toolbar */}
+            <div className="flex items-center justify-between px-1 pb-2">
+                <div className="flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[#325a67] text-[14px]">info</span>
+                    <span className="text-[#325a67] text-xs">
+                        {reorderMode
+                            ? "Arraste as linhas para reordenar. A ordem é salva por turno."
+                            : "Ative o modo de reordenação para ajustar a ordem das rotinas."}
+                    </span>
+                </div>
+                <div className="flex items-center gap-2">
+                    {reorderMode ? (
+                        <>
+                            <button
+                                onClick={handleCancelReorder}
+                                disabled={isSaving}
+                                className="px-3 py-1.5 text-xs font-bold text-[#92bbc9] hover:text-white bg-[#16262c] border border-[#233f48] rounded-lg transition-colors disabled:opacity-60"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleSave}
+                                disabled={isSaving}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-[#13b6ec] hover:bg-[#0ea5d4] text-[#0a1215] rounded-lg transition-colors disabled:opacity-60"
+                            >
+                                {isSaving ? (
+                                    <span className="material-symbols-outlined text-[14px] animate-spin">refresh</span>
+                                ) : (
+                                    <span className="material-symbols-outlined text-[14px]">save</span>
+                                )}
+                                Salvar ordem
+                            </button>
+                        </>
+                    ) : (
+                        <button
+                            onClick={handleEnterReorder}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#92bbc9] hover:text-white bg-[#16262c] border border-[#233f48] rounded-lg transition-colors"
+                        >
+                            <span className="material-symbols-outlined text-[14px]">swap_vert</span>
+                            Reordenar
+                        </button>
+                    )}
+                </div>
             </div>
-            <table className="w-full min-w-[640px]">
-                <thead>
-                    <tr className="border-b border-[#233f48]">
-                        <th className="pl-4 pr-2 py-2 w-8" />
-                        <SortableHeader
-                            field="name"
-                            label="Título"
-                            currentField={sortField}
-                            currentOrder={sortOrder}
-                            onSort={onSortChange}
-                        />
-                        <SortableHeader
-                            field="shift"
-                            label="Turno"
-                            currentField={sortField}
-                            currentOrder={sortOrder}
-                            onSort={onSortChange}
-                        />
-                        <SortableHeader
-                            field="area"
-                            label="Área"
-                            currentField={sortField}
-                            currentOrder={sortOrder}
-                            onSort={onSortChange}
-                        />
-                        <SortableHeader
-                            field="responsible"
-                            label="Responsável"
-                            currentField={sortField}
-                            currentOrder={sortOrder}
-                            onSort={onSortChange}
-                            className="hidden md:table-cell"
-                        />
-                        <th className="px-3 py-2 text-left text-[#92bbc9] text-xs font-bold uppercase tracking-wide hidden lg:table-cell">
-                            Recorrência
-                        </th>
-                        <SortableHeader
-                            field="status"
-                            label="Status"
-                            currentField={sortField}
-                            currentOrder={sortOrder}
-                            onSort={onSortChange}
-                        />
-                        <th className="px-3 py-2 w-12" />
-                    </tr>
-                </thead>
-                <tbody>
-                    {checklists.map((checklist) => (
-                        <ChecklistRow
-                            key={checklist.id}
-                            checklist={checklist}
-                            isSelected={checklist.id === selectedId}
-                            onSelect={() => onSelect(checklist)}
-                            onEdit={() => onEdit(checklist)}
-                            onStatusToggle={(active) => onStatusToggle(checklist.id, active)}
-                            onDuplicate={() => onDuplicate(checklist)}
-                            onDelete={() => onDelete(checklist.id)}
-                        />
-                    ))}
-                </tbody>
-            </table>
+
+            <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+            >
+                <table className="w-full min-w-[640px]">
+                    <thead>
+                        <tr className="border-b border-[#233f48]">
+                            <th className="pl-4 pr-2 py-2 w-8" />
+                            <SortableHeader
+                                field="name"
+                                label="Título"
+                                currentField={sortField}
+                                currentOrder={sortOrder}
+                                onSort={onSortChange}
+                                disabled={reorderMode}
+                            />
+                            <SortableHeader
+                                field="shift"
+                                label="Turno"
+                                currentField={sortField}
+                                currentOrder={sortOrder}
+                                onSort={onSortChange}
+                                disabled={reorderMode}
+                            />
+                            <SortableHeader
+                                field="area"
+                                label="Área"
+                                currentField={sortField}
+                                currentOrder={sortOrder}
+                                onSort={onSortChange}
+                                disabled={reorderMode}
+                            />
+                            <SortableHeader
+                                field="responsible"
+                                label="Responsável"
+                                currentField={sortField}
+                                currentOrder={sortOrder}
+                                onSort={onSortChange}
+                                disabled={reorderMode}
+                                className="hidden md:table-cell"
+                            />
+                            <th className="px-3 py-2 text-left text-[#92bbc9] text-xs font-bold uppercase tracking-wide hidden lg:table-cell">
+                                Recorrência
+                            </th>
+                            <SortableHeader
+                                field="status"
+                                label="Status"
+                                currentField={sortField}
+                                currentOrder={sortOrder}
+                                onSort={onSortChange}
+                                disabled={reorderMode}
+                            />
+                            <th className="px-3 py-2 w-12" />
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {reorderMode ? (
+                            <SortableContext
+                                items={localItems.map((c) => c.id)}
+                                strategy={verticalListSortingStrategy}
+                            >
+                                {localItems.map((checklist) => (
+                                    <SortableChecklistRow
+                                        key={checklist.id}
+                                        checklist={checklist}
+                                        isSelected={checklist.id === selectedId}
+                                        onSelect={() => onSelect(checklist)}
+                                        onEdit={() => onEdit(checklist)}
+                                        onStatusToggle={(active) => onStatusToggle(checklist.id, active)}
+                                        onDuplicate={() => onDuplicate(checklist)}
+                                        onDelete={() => onDelete(checklist.id)}
+                                    />
+                                ))}
+                            </SortableContext>
+                        ) : (
+                            displayItems.map((checklist) => (
+                                <ChecklistRow
+                                    key={checklist.id}
+                                    checklist={checklist}
+                                    isSelected={checklist.id === selectedId}
+                                    onSelect={() => onSelect(checklist)}
+                                    onEdit={() => onEdit(checklist)}
+                                    onStatusToggle={(active) => onStatusToggle(checklist.id, active)}
+                                    onDuplicate={() => onDuplicate(checklist)}
+                                    onDelete={() => onDelete(checklist.id)}
+                                />
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </DndContext>
         </div>
     );
 }

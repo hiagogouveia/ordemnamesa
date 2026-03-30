@@ -44,7 +44,6 @@ function ChecklistsContent() {
 
     useEffect(() => { setMounted(true); }, []);
 
-    // URL-persisted filters + sorting
     const selectedShift = searchParams.get("shift") ?? "";
     const selectedAreaId = searchParams.get("area_id") ?? "";
     const sortField = (searchParams.get("sort") as SortField | null) ?? null;
@@ -57,7 +56,7 @@ function ChecklistsContent() {
     // Queries
     const { data: checklists = [], isLoading } = useChecklists(restaurantId ?? undefined);
     const { data: orders = [] } = useChecklistOrders(restaurantId ?? undefined);
-    const { data: areas = [] } = useAllAreas(restaurantId ?? undefined);
+    const { data: areas = [], isLoading: isLoadingAreas } = useAllAreas(restaurantId ?? undefined);
 
     // Mutations
     const { mutate: toggleStatus } = useToggleChecklistStatus();
@@ -91,8 +90,8 @@ function ChecklistsContent() {
                     valB = SHIFT_SORT_ORDER[b.shift] ?? 99;
                     break;
                 case "area":
-                    valA = (a.area?.name ?? a.roles?.name)?.toLowerCase() ?? "\uffff";
-                    valB = (b.area?.name ?? b.roles?.name)?.toLowerCase() ?? "\uffff";
+                    valA = (a.area?.name)?.toLowerCase() ?? "\uffff";
+                    valB = (b.area?.name)?.toLowerCase() ?? "\uffff";
                     break;
                 case "responsible":
                     valA = a.responsible?.name?.toLowerCase() ?? "\uffff";
@@ -228,7 +227,8 @@ function ChecklistsContent() {
                 onShiftChange={setShiftFilter}
                 selectedAreaId={selectedAreaId}
                 onAreaChange={setAreaFilter}
-                areas={mounted ? areas : []}
+                areas={areas}
+                isLoadingAreas={isLoadingAreas}
             />
 
             <div className="flex flex-1 overflow-hidden">
@@ -251,6 +251,9 @@ function ChecklistsContent() {
                             onStatusToggle={handleStatusToggle}
                             onDuplicate={handleDuplicate}
                             onDelete={handleDelete}
+                            orders={orders}
+                            onOrdersSave={handleOrdersSave}
+                            restaurantId={restaurantId}
                         />
                     ) : (
                         <ChecklistBoardView

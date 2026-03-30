@@ -472,19 +472,18 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                             </div>
                         </div>
 
-                        {areas.length > 0 && (
-                            <div>
-                                <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Área</label>
-                                <select
-                                    value={areaId}
-                                    onChange={(e) => { setAreaId(e.target.value); setAssignedToUserId(""); }}
-                                    className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
-                                >
-                                    <option value="">Qualquer área</option>
-                                    {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                                </select>
-                            </div>
-                        )}
+                        <div>
+                            <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Área</label>
+                            <select
+                                value={areaId}
+                                onChange={(e) => { setAreaId(e.target.value); setAssignedToUserId(""); }}
+                                className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
+                                disabled={areas.length === 0}
+                            >
+                                <option value="">{areas.length === 0 ? "Nenhuma área cadastrada" : "Qualquer área"}</option>
+                                {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                            </select>
+                        </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                             <div>
@@ -498,7 +497,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Função / Cargo</label>
+                                <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Cargo</label>
                                 <select
                                     value={roleId}
                                     onChange={(e) => { setRoleId(e.target.value); setAssignedToUserId(""); }}

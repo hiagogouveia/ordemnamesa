@@ -16,6 +16,17 @@ interface ChecklistFiltersProps {
     selectedAreaId: string;
     onAreaChange: (areaId: string) => void;
     areas: Area[];
+    isLoadingAreas?: boolean;
+}
+
+function SkeletonAreas() {
+    return (
+        <div className="flex gap-2">
+            <div className="h-6 w-16 bg-[#16262c] rounded-full animate-pulse border border-[#233f48]" />
+            <div className="h-6 w-20 bg-[#16262c] rounded-full animate-pulse border border-[#233f48]" />
+            <div className="h-6 w-24 bg-[#16262c] rounded-full animate-pulse border border-[#233f48]" />
+        </div>
+    );
 }
 
 export function ChecklistFilters({
@@ -25,6 +36,7 @@ export function ChecklistFilters({
     selectedAreaId,
     onAreaChange,
     areas,
+    isLoadingAreas,
 }: ChecklistFiltersProps) {
     if (!visible) return null;
 
@@ -51,7 +63,9 @@ export function ChecklistFilters({
             {/* Área */}
             <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[#92bbc9] text-xs font-bold uppercase tracking-wide shrink-0">Área:</span>
-                {areas.length === 0 ? (
+                {isLoadingAreas ? (
+                    <SkeletonAreas />
+                ) : !areas || areas.length === 0 ? (
                     <span className="text-[#325a67] text-xs italic">Nenhuma área cadastrada</span>
                 ) : (
                     <>
