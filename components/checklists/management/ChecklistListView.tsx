@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useMemo, useCallback } from "react";
+import { useState, useRef, useCallback } from "react";
 import {
     DndContext,
     closestCenter,
@@ -18,9 +18,7 @@ import {
 } from "@dnd-kit/sortable";
 import { ChecklistRow } from "./ChecklistRow";
 import { SortableChecklistRow } from "./SortableChecklistRow";
-import { buildOrdersFromList } from "@/lib/sort/reorder";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
-import type { ChecklistOrder } from "@/lib/types";
 
 type SortField = "name" | "shift" | "area" | "responsible" | "status";
 type SortOrder = "asc" | "desc";
@@ -83,9 +81,8 @@ interface ChecklistListViewProps {
     onStatusToggle: (id: string, active: boolean) => void;
     onDuplicate: (checklist: ExtendedChecklist) => void;
     onDelete: (id: string) => void;
-    orders: ChecklistOrder[];
-    onOrdersSave: (newOrders: ChecklistOrder[]) => Promise<void>;
-    restaurantId: string | null | undefined;
+    onReorder: (items: Array<{ id: string; order_index: number }>) => Promise<void>;
+    selectedAreaId: string;
 }
 
 export function ChecklistListView({
@@ -100,9 +97,8 @@ export function ChecklistListView({
     onStatusToggle,
     onDuplicate,
     onDelete,
-    orders,
-    onOrdersSave,
-    restaurantId,
+    onReorder,
+    selectedAreaId,
 }: ChecklistListViewProps) {
     const [reorderMode, setReorderMode] = useState(false);
     const [localItems, setLocalItems] = useState<ExtendedChecklist[]>([]);
@@ -114,18 +110,12 @@ export function ChecklistListView({
         useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
     );
 
-    // Sort current checklists by their saved position (used when entering reorder mode)
-    const itemsSortedByPosition = useMemo(() => {
-        return [...checklists].sort((a, b) => {
-            const posA = orders.find((o) => o.checklist_id === a.id && o.shift === a.shift)?.position ?? 9999;
-            const posB = orders.find((o) => o.checklist_id === b.id && o.shift === b.shift)?.position ?? 9999;
-            return posA - posB;
-        });
-    }, [checklists, orders]);
-
     const handleEnterReorder = () => {
-        beforeReorderRef.current = itemsSortedByPosition;
-        setLocalItems(itemsSortedByPosition);
+        const sorted = [...checklists].sort(
+            (a, b) => (a.order_index ?? 9999) - (b.order_index ?? 9999)
+        );
+        beforeReorderRef.current = sorted;
+        setLocalItems(sorted);
         setReorderMode(true);
     };
 
@@ -147,11 +137,10 @@ export function ChecklistListView({
     }, []);
 
     const handleSave = async () => {
-        if (!restaurantId) return;
         setIsSaving(true);
         try {
-            const newOrders = buildOrdersFromList(localItems, restaurantId, orders);
-            await onOrdersSave(newOrders);
+            const payload = localItems.map((item, index) => ({ id: item.id, order_index: index }));
+            await onReorder(payload);
             setReorderMode(false);
         } finally {
             setIsSaving(false);
@@ -223,7 +212,13 @@ export function ChecklistListView({
                     ) : (
                         <button
                             onClick={handleEnterReorder}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#92bbc9] hover:text-white bg-[#16262c] border border-[#233f48] rounded-lg transition-colors"
+                            disabled={!selectedAreaId}
+                            title={!selectedAreaId ? "Selecione uma área para reordenar" : undefined}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-[#16262c] border border-[#233f48] rounded-lg transition-colors ${
+                                selectedAreaId
+                                    ? "text-[#92bbc9] hover:text-white"
+                                    : "text-[#325a67] cursor-not-allowed opacity-50"
+                            }`}
                         >
                             <span className="material-symbols-outlined text-[14px]">swap_vert</span>
                             Reordenar

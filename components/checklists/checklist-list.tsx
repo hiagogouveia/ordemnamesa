@@ -308,13 +308,17 @@ export function ChecklistList({ onSelect, selectedId, onRoleChange }: ChecklistL
                             {checklists?.length || 0}
                         </span>
                     </div>
-                    {canReorder && isMobile && activeTab === 'ativas' && (
+                    {(userRole === 'owner' || userRole === 'manager') && isMobile && activeTab === 'ativas' && (
                         <button
                             onClick={() => setIsReorderMode(prev => !prev)}
+                            disabled={activeRoleId === null}
+                            title={activeRoleId === null ? "Selecione uma área para reordenar" : undefined}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                                isReorderMode
-                                    ? "bg-[#13b6ec]/20 text-[#13b6ec] border border-[#13b6ec]/40"
-                                    : "bg-[#16262c] text-[#92bbc9] border border-[#233f48] hover:border-[#325a67]"
+                                activeRoleId === null
+                                    ? "bg-[#16262c] text-[#325a67] border border-[#233f48] cursor-not-allowed opacity-50"
+                                    : isReorderMode
+                                        ? "bg-[#13b6ec]/20 text-[#13b6ec] border border-[#13b6ec]/40"
+                                        : "bg-[#16262c] text-[#92bbc9] border border-[#233f48] hover:border-[#325a67]"
                             }`}
                         >
                             <span className="material-symbols-outlined text-[16px]">

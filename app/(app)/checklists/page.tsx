@@ -2,9 +2,11 @@
 
 import { useState, useMemo, Suspense, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useChecklists, useCreateChecklist, useDeleteChecklist, useToggleChecklistStatus } from "@/lib/hooks/use-checklists";
 import { useChecklistOrders, useUpdateChecklistOrders } from "@/lib/hooks/use-checklist-orders";
+import { createClient } from "@/lib/supabase/client";
 import { useAllAreas } from "@/lib/hooks/use-areas";
 import { ChecklistHeader } from "@/components/checklists/management/ChecklistHeader";
 import { ChecklistFilters } from "@/components/checklists/management/ChecklistFilters";
@@ -48,6 +50,8 @@ function ChecklistsContent() {
     const selectedAreaId = searchParams.get("area_id") ?? "";
     const sortField = (searchParams.get("sort") as SortField | null) ?? null;
     const sortOrder = (searchParams.get("order") as SortOrder | null) ?? "asc";
+
+    const queryClient = useQueryClient();
 
     // Store
     const restaurantId = useRestaurantStore((state) => state.restaurantId);
@@ -203,6 +207,39 @@ function ChecklistsContent() {
         });
     };
 
+    const handleReorder = async (items: Array<{ id: string; order_index: number }>) => {
+        if (!restaurantId) return;
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (!token) throw new Error("Sessão expirada");
+
+        const res = await fetch("/api/checklists/reorder", {
+            method: "PATCH",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ restaurant_id: restaurantId, checklist_orders: items }),
+        });
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || "Erro ao reordenar");
+        }
+
+        queryClient.setQueryData(
+            ["checklists", restaurantId],
+            (old: ExtendedChecklist[] | undefined) => {
+                if (!old) return old;
+                const orderMap = new Map(items.map((i) => [i.id, i.order_index]));
+                const updated = old.map((c) =>
+                    orderMap.has(c.id) ? { ...c, order_index: orderMap.get(c.id) } : c
+                );
+                return [...updated].sort((a, b) => (a.order_index ?? 9999) - (b.order_index ?? 9999));
+            }
+        );
+    };
+
     const handleEditorSaved = () => {
         setEditorState(null);
     };
@@ -251,9 +288,8 @@ function ChecklistsContent() {
                             onStatusToggle={handleStatusToggle}
                             onDuplicate={handleDuplicate}
                             onDelete={handleDelete}
-                            orders={orders}
-                            onOrdersSave={handleOrdersSave}
-                            restaurantId={restaurantId}
+                            selectedAreaId={selectedAreaId}
+                            onReorder={handleReorder}
                         />
                     ) : (
                         <ChecklistBoardView
