@@ -35,8 +35,9 @@ export interface RoutineCardProps {
     
     // Events & States
     isSelected?: boolean;
+    isPreview?: boolean;
     onClick: () => void;
-    
+
     // Drag & Drop
     containerRef?: React.Ref<HTMLButtonElement>;
     containerStyle?: React.CSSProperties;
@@ -64,6 +65,7 @@ export function RoutineCard({
     isAssignedToOther = false,
     area,
     isSelected = false,
+    isPreview = false,
     onClick,
     containerRef,
     containerStyle,
@@ -106,7 +108,7 @@ export function RoutineCard({
             ? "bg-[#13b6ec]/10 border-[#13b6ec]/40 shadow-[0_4px_20px_0_rgba(19,182,236,0.1)]"
             : "bg-[#16262c] border-[#233f48] hover:border-[#325a67] hover:bg-[#1a2c32]";
     } else {
-        cardBgClass = `bg-[#1a2c32] shadow-sm transition-all ${!isAssignedToOther ? 'cursor-pointer hover:bg-[#1f363d]' : 'opacity-75'} ${cardBorder}`;
+        cardBgClass = `bg-[#1a2c32] shadow-sm transition-all ${isPreview ? 'cursor-default' : (!isAssignedToOther ? 'cursor-pointer hover:bg-[#1f363d]' : 'opacity-75')} ${cardBorder}`;
     }
 
     // --- Render Helpers ---
@@ -254,7 +256,7 @@ export function RoutineCard({
             )}
 
             {/* Collaborator TODO Footer */}
-            {variant === 'collaborator_todo' && (
+            {variant === 'collaborator_todo' && !isPreview && (
                 <div className="flex items-center gap-3 mt-1 pt-2 border-t border-[#233f48]/50 text-sm font-bold text-[#92bbc9] w-full">
                     {isAssignedToOther ? (
                         <span className="text-[#325a67]">Atribuída a outro funcionário</span>

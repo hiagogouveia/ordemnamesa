@@ -5,8 +5,8 @@ interface ChecklistHeaderProps {
     onSearchChange: (q: string) => void;
     showFilters: boolean;
     onToggleFilters: () => void;
-    view: "list" | "board";
-    onViewChange: (v: "list" | "board") => void;
+    view: "list" | "board" | "preview";
+    onViewChange: (v: "list" | "board" | "preview") => void;
     onNewChecklist: () => void;
 }
 
@@ -83,6 +83,18 @@ export function ChecklistHeader({
                     >
                         <span className="material-symbols-outlined text-[16px]">view_column</span>
                         <span className="hidden sm:inline">Cards</span>
+                    </button>
+                    <button
+                        onClick={() => onViewChange("preview")}
+                        title="Preview do colaborador"
+                        className={`flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-bold transition-all ${
+                            view === "preview"
+                                ? "bg-[#233f48] text-[#13b6ec]"
+                                : "text-[#92bbc9] hover:text-white"
+                        }`}
+                    >
+                        <span className="material-symbols-outlined text-[16px]">visibility</span>
+                        <span className="hidden sm:inline">Preview</span>
                     </button>
                 </div>
 

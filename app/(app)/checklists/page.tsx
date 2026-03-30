@@ -13,6 +13,7 @@ import { ChecklistFilters } from "@/components/checklists/management/ChecklistFi
 import { ChecklistListView } from "@/components/checklists/management/ChecklistListView";
 import { ChecklistBoardView } from "@/components/checklists/management/ChecklistBoardView";
 import { ChecklistEditorPanel } from "@/components/checklists/management/ChecklistEditorPanel";
+import { ChecklistPreviewView } from "@/components/checklists/management/ChecklistPreviewView";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
 import type { ChecklistOrder } from "@/lib/types";
 
@@ -39,12 +40,23 @@ function ChecklistsContent() {
 
     // UI state
     const [mounted, setMounted] = useState(false);
-    const [view, setView] = useState<"list" | "board">("list");
+    const [view, setView] = useState<"list" | "board" | "preview">("list");
+    const [currentMinutes, setCurrentMinutes] = useState(0);
     const [searchQuery, setSearchQuery] = useState("");
     const [showFilters, setShowFilters] = useState(false);
     const [editorState, setEditorState] = useState<EditorState>(null);
 
     useEffect(() => { setMounted(true); }, []);
+
+    useEffect(() => {
+        const compute = () => {
+            const now = new Date();
+            return now.getHours() * 60 + now.getMinutes();
+        };
+        setCurrentMinutes(compute());
+        const id = setInterval(() => setCurrentMinutes(compute()), 60_000);
+        return () => clearInterval(id);
+    }, []);
 
     const selectedShift = searchParams.get("shift") ?? "";
     const selectedAreaId = searchParams.get("area_id") ?? "";
@@ -275,7 +287,12 @@ function ChecklistsContent() {
                         editorState ? "hidden md:flex md:flex-col md:min-w-0 md:flex-1" : "flex-1"
                     } overflow-auto p-4`}
                 >
-                    {view === "list" ? (
+                    {view === "preview" ? (
+                        <ChecklistPreviewView
+                            checklists={filtered}
+                            currentMinutes={currentMinutes}
+                        />
+                    ) : view === "list" ? (
                         <ChecklistListView
                             checklists={filtered}
                             isLoading={isLoading}
