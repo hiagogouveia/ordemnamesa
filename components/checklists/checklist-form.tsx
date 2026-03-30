@@ -13,7 +13,6 @@ import { ChecklistTask } from "@/lib/types";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useEquipe } from "@/lib/hooks/use-equipe";
 import { useAllAreas } from "@/lib/hooks/use-areas";
-import { useUserAreasByRestaurant } from "@/lib/hooks/use-user-areas";
 import isEqual from "lodash/isEqual";
 
 interface ChecklistFormProps {
@@ -79,24 +78,23 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
 
     const { data: equipeData } = useEquipe(restaurantId || null);
     const { data: areas = [] } = useAllAreas(restaurantId || undefined);
-    const { data: userAreas = [], isLoading: userAreasLoading } = useUserAreasByRestaurant(restaurantId || undefined);
     const equipe = equipeData?.equipe || [];
 
     const filteredEquipe = equipe.filter(m => {
         if (!m.active) return false;
-        if (areaId && !userAreas.some(ua => ua.user_id === m.user_id && ua.area_id === areaId)) return false;
+        if (areaId && !m.areas.some(a => a.id === areaId)) return false;
         return true;
     });
 
     // Auto-clear responsible if they no longer belong to the selected area/role filter
     useEffect(() => {
         if (!assignedToUserId) return;
-        if (equipe.length === 0 || userAreasLoading) return;
+        if (equipe.length === 0) return;
         if (!filteredEquipe.some(m => m.user_id === assignedToUserId)) {
             setAssignedToUserId("");
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [filteredEquipe, userAreasLoading]);
+    }, [filteredEquipe]);
 
     const createMutation = useCreateChecklist();
     const updateMutation = useUpdateChecklist();
