@@ -83,6 +83,7 @@ interface ChecklistListViewProps {
     onDelete: (id: string) => void;
     onReorder: (items: Array<{ id: string; order_index: number }>) => Promise<void>;
     selectedAreaId: string;
+    hasReducingFilters: boolean;
     currentMinutes: number;
 }
 
@@ -100,6 +101,7 @@ export function ChecklistListView({
     onDelete,
     onReorder,
     selectedAreaId,
+    hasReducingFilters,
     currentMinutes,
 }: ChecklistListViewProps) {
     const [reorderMode, setReorderMode] = useState(false);
@@ -214,10 +216,16 @@ export function ChecklistListView({
                     ) : (
                         <button
                             onClick={handleEnterReorder}
-                            disabled={!selectedAreaId}
-                            title={!selectedAreaId ? "Selecione uma área para reordenar" : undefined}
+                            disabled={!selectedAreaId || hasReducingFilters}
+                            title={
+                                !selectedAreaId
+                                    ? "Selecione uma área para reordenar"
+                                    : hasReducingFilters
+                                    ? "Remova os filtros de disponibilidade, turno e status para reordenar"
+                                    : undefined
+                            }
                             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-[#16262c] border border-[#233f48] rounded-lg transition-colors ${
-                                selectedAreaId
+                                selectedAreaId && !hasReducingFilters
                                     ? "text-[#92bbc9] hover:text-white"
                                     : "text-[#325a67] cursor-not-allowed opacity-50"
                             }`}
@@ -237,7 +245,7 @@ export function ChecklistListView({
                 <table className="w-full min-w-[640px]">
                     <thead>
                         <tr className="border-b border-[#233f48]">
-                            <th className="pl-4 pr-2 py-2 w-8" />
+                            {reorderMode && <th className="pl-4 pr-2 py-2 w-8" />}
                             <SortableHeader
                                 field="name"
                                 label="Título"

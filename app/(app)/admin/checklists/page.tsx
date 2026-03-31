@@ -74,8 +74,12 @@ export default function AdminChecklists() {
             }
         });
 
-        // Sorting
-        active.sort((a, b) => sortChecklistsByPriority(a, b, currentMinutes));
+        // Sorting: prioridade primeiro, order_index como desempate
+        active.sort((a, b) => {
+            const priorityDiff = sortChecklistsByPriority(a, b, currentMinutes);
+            if (priorityDiff !== 0) return priorityDiff;
+            return (a.order_index ?? 9999) - (b.order_index ?? 9999);
+        });
         completed.sort((a, b) => {
             const timeA = new Date(a.assumption.completed_at!).getTime();
             const timeB = new Date(b.assumption.completed_at!).getTime();

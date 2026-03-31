@@ -36,7 +36,8 @@ export async function GET(request: Request) {
             .from("checklists")
             .select("*, roles(id, name, color)")
             .eq("restaurant_id", restaurant_id)
-            .eq("active", true);
+            .eq("active", true)
+            .order("order_index", { ascending: true });
 
         // 2. Get today's assumptions
         const todayKey = new Date().toISOString().split("T")[0];

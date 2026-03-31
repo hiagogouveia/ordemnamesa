@@ -122,16 +122,6 @@ export function ChecklistRow({
                 isSelected ? "bg-[#13b6ec]/5" : "hover:bg-[#16262c]"
             } ${!checklist.active ? "opacity-50" : ""}`}
         >
-            {/* Checkbox (estrutura futura) */}
-            <td className="pl-4 pr-2 py-3 w-8">
-                <input
-                    type="checkbox"
-                    className="rounded border-[#325a67] bg-[#16262c] accent-[#13b6ec]"
-                    onClick={(e) => e.stopPropagation()}
-                    readOnly
-                />
-            </td>
-
             {/* Título */}
             <td className="px-3 py-3" onClick={onSelect}>
                 <span className="font-semibold text-white text-sm">{checklist.name}</span>

@@ -125,9 +125,12 @@ function ChecklistsContent() {
             return true;
         });
 
-        if (!sortField) return result;
+        // Sempre ordenar por order_index como base
+        const sorted = [...result].sort((a, b) => (a.order_index ?? 9999) - (b.order_index ?? 9999));
 
-        return [...result].sort((a, b) => {
+        if (!sortField) return sorted;
+
+        return sorted.sort((a, b) => {
             let valA: string | number;
             let valB: string | number;
 
@@ -159,6 +162,7 @@ function ChecklistsContent() {
             const mult = sortOrder === "asc" ? 1 : -1;
             if (valA < valB) return -1 * mult;
             if (valA > valB) return 1 * mult;
+            // Tiebreaker: order_index (já está na ordem base)
             return 0;
         });
     }, [checklists, searchQuery, selectedShift, selectedAreaId, selectedAvailability, selectedExecStatus, currentMinutes, sortField, sortOrder]);
@@ -359,6 +363,7 @@ function ChecklistsContent() {
                             onDuplicate={handleDuplicate}
                             onDelete={handleDelete}
                             selectedAreaId={selectedAreaId}
+                            hasReducingFilters={!!(selectedShift || selectedAvailability || selectedExecStatus)}
                             onReorder={handleReorder}
                             currentMinutes={currentMinutes}
                         />
