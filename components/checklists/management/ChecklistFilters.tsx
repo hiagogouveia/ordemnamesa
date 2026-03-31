@@ -9,14 +9,21 @@ const SHIFT_CHIPS = [
     { value: "evening", label: "Noite" },
 ];
 
+const AVAILABILITY_CHIPS = [
+    { value: "", label: "Todas" },
+    { value: "active", label: "Ativas" },
+    { value: "inactive", label: "Inativas" },
+];
+
 interface ChecklistFiltersProps {
-    visible: boolean;
     selectedShift: string;
     onShiftChange: (shift: string) => void;
     selectedAreaId: string;
     onAreaChange: (areaId: string) => void;
     areas: Area[];
     isLoadingAreas?: boolean;
+    selectedAvailability: string;
+    onAvailabilityChange: (value: string) => void;
 }
 
 function SkeletonAreas() {
@@ -30,18 +37,35 @@ function SkeletonAreas() {
 }
 
 export function ChecklistFilters({
-    visible,
     selectedShift,
     onShiftChange,
     selectedAreaId,
     onAreaChange,
     areas,
     isLoadingAreas,
+    selectedAvailability,
+    onAvailabilityChange,
 }: ChecklistFiltersProps) {
-    if (!visible) return null;
-
     return (
         <div className="shrink-0 px-4 py-3 border-b border-[#233f48] bg-[#0a1215] flex flex-col gap-3">
+            {/* Disponibilidade */}
+            <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[#92bbc9] text-xs font-bold uppercase tracking-wide shrink-0">Disponibilidade:</span>
+                {AVAILABILITY_CHIPS.map((chip) => (
+                    <button
+                        key={chip.value}
+                        onClick={() => onAvailabilityChange(chip.value)}
+                        className={`px-3 py-1 rounded-full text-xs font-bold border transition-colors ${
+                            selectedAvailability === chip.value
+                                ? "bg-[#13b6ec]/20 text-[#13b6ec] border-[#13b6ec]/40"
+                                : "bg-[#16262c] text-[#92bbc9] border-[#233f48] hover:text-white"
+                        }`}
+                    >
+                        {chip.label}
+                    </button>
+                ))}
+            </div>
+
             {/* Turno */}
             <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[#92bbc9] text-xs font-bold uppercase tracking-wide shrink-0">Turno:</span>

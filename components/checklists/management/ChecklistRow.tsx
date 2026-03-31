@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
+import type { ExecutionStatus } from "@/lib/types";
 
 const SHIFT_LABELS: Record<string, string> = {
     morning: "Manhã",
@@ -18,6 +19,29 @@ const RECURRENCE_LABELS: Record<string, string> = {
     yearly: "Anual",
     weekdays: "Dias úteis",
     custom: "Personalizada",
+};
+
+const EXECUTION_STATUS_CONFIG: Record<ExecutionStatus, { label: string; className: string }> = {
+    pending: {
+        label: "Pendente",
+        className: "bg-[#16262c] text-[#92bbc9] border-[#233f48]",
+    },
+    in_progress: {
+        label: "Em execução",
+        className: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+    },
+    done: {
+        label: "Concluído",
+        className: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+    },
+    overdue: {
+        label: "Atrasado",
+        className: "bg-red-500/20 text-red-400 border-red-500/30",
+    },
+    blocked: {
+        label: "Impedido",
+        className: "bg-amber-500/20 text-amber-400 border-amber-500/30",
+    },
 };
 
 interface ChecklistRowProps {
@@ -60,11 +84,14 @@ export function ChecklistRow({
         }
     };
 
+    const execStatus = (checklist.execution_status ?? "pending") as ExecutionStatus;
+    const execConfig = EXECUTION_STATUS_CONFIG[execStatus] ?? EXECUTION_STATUS_CONFIG.pending;
+
     return (
         <tr
             className={`border-b border-[#1a2c32] transition-colors cursor-pointer ${
                 isSelected ? "bg-[#13b6ec]/5" : "hover:bg-[#16262c]"
-            }`}
+            } ${!checklist.active ? "opacity-50" : ""}`}
         >
             {/* Checkbox (estrutura futura) */}
             <td className="pl-4 pr-2 py-3 w-8">
@@ -118,7 +145,7 @@ export function ChecklistRow({
                 </span>
             </td>
 
-            {/* Status */}
+            {/* Disponibilidade */}
             <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
                 <button
                     onClick={() => onStatusToggle(!checklist.active)}
@@ -134,6 +161,13 @@ export function ChecklistRow({
                     </span>
                     {checklist.active ? "Ativo" : "Inativo"}
                 </button>
+            </td>
+
+            {/* Status (execução) */}
+            <td className="px-3 py-3 hidden lg:table-cell" onClick={onSelect}>
+                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border ${execConfig.className}`}>
+                    {execConfig.label}
+                </span>
             </td>
 
             {/* Ações */}

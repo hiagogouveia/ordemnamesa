@@ -43,7 +43,6 @@ function ChecklistsContent() {
     const [view, setView] = useState<"list" | "board" | "preview">("list");
     const [currentMinutes, setCurrentMinutes] = useState(0);
     const [searchQuery, setSearchQuery] = useState("");
-    const [showFilters, setShowFilters] = useState(false);
     const [editorState, setEditorState] = useState<EditorState>(null);
 
     useEffect(() => { setMounted(true); }, []);
@@ -60,6 +59,7 @@ function ChecklistsContent() {
 
     const selectedShift = searchParams.get("shift") ?? "";
     const selectedAreaId = searchParams.get("area_id") ?? "";
+    const selectedAvailability = searchParams.get("availability") ?? "";
     const sortField = (searchParams.get("sort") as SortField | null) ?? null;
     const sortOrder = (searchParams.get("order") as SortOrder | null) ?? "asc";
 
@@ -87,6 +87,8 @@ function ChecklistsContent() {
             if (q && !c.name.toLowerCase().includes(q)) return false;
             if (selectedShift && c.shift !== selectedShift && c.shift !== "any") return false;
             if (selectedAreaId && c.area_id !== selectedAreaId) return false;
+            if (selectedAvailability === "active" && !c.active) return false;
+            if (selectedAvailability === "inactive" && c.active) return false;
             return true;
         });
 
@@ -126,7 +128,7 @@ function ChecklistsContent() {
             if (valA > valB) return 1 * mult;
             return 0;
         });
-    }, [checklists, searchQuery, selectedShift, selectedAreaId, sortField, sortOrder]);
+    }, [checklists, searchQuery, selectedShift, selectedAreaId, selectedAvailability, sortField, sortOrder]);
 
     // ─── URL HELPERS ────────────────────────────────────────────────────────────
 
@@ -141,6 +143,13 @@ function ChecklistsContent() {
         const params = new URLSearchParams(searchParams.toString());
         if (areaId) params.set("area_id", areaId);
         else params.delete("area_id");
+        router.replace(`/checklists?${params.toString()}`);
+    };
+
+    const setAvailabilityFilter = (value: string) => {
+        const params = new URLSearchParams(searchParams.toString());
+        if (value) params.set("availability", value);
+        else params.delete("availability");
         router.replace(`/checklists?${params.toString()}`);
     };
 
@@ -263,21 +272,20 @@ function ChecklistsContent() {
             <ChecklistHeader
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
-                showFilters={showFilters}
-                onToggleFilters={() => setShowFilters((v) => !v)}
                 view={view}
                 onViewChange={setView}
                 onNewChecklist={() => setEditorState({ checklist: null, mode: "new" })}
             />
 
             <ChecklistFilters
-                visible={showFilters}
                 selectedShift={selectedShift}
                 onShiftChange={setShiftFilter}
                 selectedAreaId={selectedAreaId}
                 onAreaChange={setAreaFilter}
                 areas={areas}
                 isLoadingAreas={isLoadingAreas}
+                selectedAvailability={selectedAvailability}
+                onAvailabilityChange={setAvailabilityFilter}
             />
 
             <div className="flex flex-1 overflow-hidden">

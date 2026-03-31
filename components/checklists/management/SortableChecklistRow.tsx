@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
+import type { ExecutionStatus } from "@/lib/types";
 
 const SHIFT_LABELS: Record<string, string> = {
     morning: "Manhã",
@@ -20,6 +21,29 @@ const RECURRENCE_LABELS: Record<string, string> = {
     yearly: "Anual",
     weekdays: "Dias úteis",
     custom: "Personalizada",
+};
+
+const EXECUTION_STATUS_CONFIG: Record<ExecutionStatus, { label: string; className: string }> = {
+    pending: {
+        label: "Pendente",
+        className: "bg-[#16262c] text-[#92bbc9] border-[#233f48]",
+    },
+    in_progress: {
+        label: "Em execução",
+        className: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+    },
+    done: {
+        label: "Concluído",
+        className: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+    },
+    overdue: {
+        label: "Atrasado",
+        className: "bg-red-500/20 text-red-400 border-red-500/30",
+    },
+    blocked: {
+        label: "Impedido",
+        className: "bg-amber-500/20 text-amber-400 border-amber-500/30",
+    },
 };
 
 interface SortableChecklistRowProps {
@@ -56,7 +80,7 @@ export function SortableChecklistRow({
     const style: React.CSSProperties = {
         transform: CSS.Transform.toString(transform),
         transition,
-        opacity: isDragging ? 0.5 : 1,
+        opacity: isDragging ? 0.5 : checklist.active ? 1 : 0.5,
         position: isDragging ? "relative" : undefined,
         zIndex: isDragging ? 1 : undefined,
     };
@@ -78,6 +102,9 @@ export function SortableChecklistRow({
             onDelete();
         }
     };
+
+    const execStatus = (checklist.execution_status ?? "pending") as ExecutionStatus;
+    const execConfig = EXECUTION_STATUS_CONFIG[execStatus] ?? EXECUTION_STATUS_CONFIG.pending;
 
     return (
         <tr
@@ -141,7 +168,7 @@ export function SortableChecklistRow({
                 </span>
             </td>
 
-            {/* Status */}
+            {/* Disponibilidade */}
             <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
                 <button
                     onClick={() => onStatusToggle(!checklist.active)}
@@ -157,6 +184,13 @@ export function SortableChecklistRow({
                     </span>
                     {checklist.active ? "Ativo" : "Inativo"}
                 </button>
+            </td>
+
+            {/* Status (execução) */}
+            <td className="px-3 py-3 hidden lg:table-cell">
+                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border ${execConfig.className}`}>
+                    {execConfig.label}
+                </span>
             </td>
 
             {/* Ações */}

@@ -53,7 +53,6 @@ export async function GET(request: Request) {
                 tasks:checklist_tasks (*)
             `)
             .eq('restaurant_id', restaurant_id)
-            .eq('active', true)
             .order('order_index', { ascending: true });
 
         if (error) {
@@ -69,7 +68,6 @@ export async function GET(request: Request) {
                         tasks:checklist_tasks (*)
                     `)
                     .eq('restaurant_id', restaurant_id)
-                    .eq('active', true)
                     .order('created_at', { ascending: false });
 
                 if (fallbackFetch.error) {

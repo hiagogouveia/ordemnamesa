@@ -274,12 +274,15 @@ export function ChecklistListView({
                             </th>
                             <SortableHeader
                                 field="status"
-                                label="Status"
+                                label="Disponibilidade"
                                 currentField={sortField}
                                 currentOrder={sortOrder}
                                 onSort={onSortChange}
                                 disabled={reorderMode}
                             />
+                            <th className="px-3 py-2 text-left text-[#92bbc9] text-xs font-bold uppercase tracking-wide hidden lg:table-cell">
+                                Status
+                            </th>
                             <th className="px-3 py-2 w-12" />
                         </tr>
                     </thead>

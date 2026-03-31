@@ -13,6 +13,7 @@ export interface Restaurant {
 }
 
 export type ChecklistStatus = 'active' | 'draft' | 'archived'
+export type ExecutionStatus = 'pending' | 'in_progress' | 'done' | 'blocked' | 'overdue'
 export type ShiftType = 'morning' | 'afternoon' | 'evening' | 'any' // Rename to avoid conflict with Shift table or keep? Let's keep it Shift for now, but the new table is 'shifts'
 export type UserRole = 'owner' | 'manager' | 'staff'
 
@@ -70,6 +71,7 @@ export interface Checklist {
     target_role?: TargetRole
     area?: Area | null
     responsible?: { id: string; name: string } | null
+    execution_status?: ExecutionStatus
 }
 
 export interface ChecklistTask {
