@@ -200,16 +200,20 @@ export function SortableChecklistRow({
             <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
                 <button
                     onClick={() => onStatusToggle(!checklist.active)}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border transition-colors ${
+                    role="switch"
+                    aria-checked={checklist.active}
+                    className={`group flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border cursor-pointer transition-all duration-200 active:scale-95 ${
                         checklist.active
-                            ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30"
-                            : "bg-gray-500/20 text-gray-400 border-gray-500/30 hover:bg-gray-500/30"
+                            ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30 hover:border-emerald-400/50 hover:shadow-[0_0_8px_rgba(16,185,129,0.2)]"
+                            : "bg-gray-500/20 text-gray-400 border-gray-500/30 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30 hover:shadow-[0_0_8px_rgba(239,68,68,0.15)]"
                     }`}
                     title={checklist.active ? "Clique para desativar" : "Clique para ativar"}
                 >
-                    <span className="material-symbols-outlined text-[12px]">
-                        {checklist.active ? "check_circle" : "cancel"}
-                    </span>
+                    <span className={`inline-block w-3 h-3 rounded-full transition-colors duration-200 ${
+                        checklist.active
+                            ? "bg-emerald-400 group-hover:bg-emerald-300"
+                            : "bg-gray-500 group-hover:bg-red-400"
+                    }`} />
                     {checklist.active ? "Ativo" : "Inativo"}
                 </button>
             </td>

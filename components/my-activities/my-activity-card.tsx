@@ -6,11 +6,18 @@ import type { MyActivity } from "@/lib/types";
 interface MyActivityCardProps {
     activity: MyActivity;
     currentMinutes: number;
+    currentUserId?: string;
     onClick: () => void;
 }
 
-export function MyActivityCard({ activity, currentMinutes, onClick }: MyActivityCardProps) {
+export function MyActivityCard({ activity, currentMinutes, currentUserId, onClick }: MyActivityCardProps) {
     const isDoing = activity.activity_status === "in_progress";
+    const isAssumedByMe = activity.assumed_by_user_id === currentUserId;
+
+    // Nome a exibir: "Você" se for o próprio usuário
+    const displayName = activity.assumed_by_name
+        ? (isAssumedByMe ? "Você" : activity.assumed_by_name)
+        : undefined;
 
     return (
         <RoutineCard
@@ -24,6 +31,8 @@ export function MyActivityCard({ activity, currentMinutes, onClick }: MyActivity
             isRequired={activity.is_required}
             area={activity.area?.name}
             progress={activity.progress_percent}
+            assumptionName={displayName}
+            isAssignedToMe={isAssumedByMe}
             onClick={onClick}
         />
     );

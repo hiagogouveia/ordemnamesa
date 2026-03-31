@@ -1,186 +1,74 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import {
-    DndContext,
-    closestCenter,
-    KeyboardSensor,
-    PointerSensor,
-    useSensor,
-    useSensors,
-    DragEndEvent,
-} from "@dnd-kit/core";
-import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+import { useMemo } from "react";
 import { ChecklistBoardColumn } from "./ChecklistBoardColumn";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
-import type { ChecklistOrder } from "@/lib/types";
+import type { ExecutionStatus } from "@/lib/types";
 
-const COLUMNS: { shift: "morning" | "afternoon" | "evening"; label: string }[] = [
-    { shift: "morning", label: "Manhã" },
-    { shift: "afternoon", label: "Tarde" },
-    { shift: "evening", label: "Noite" },
+const STATUS_COLUMNS: {
+    status: ExecutionStatus;
+    label: string;
+    icon: string;
+    color: string;
+}[] = [
+    { status: "not_started", label: "Disponível", icon: "radio_button_unchecked", color: "#92bbc9" },
+    { status: "in_progress", label: "Em execução", icon: "pending_actions", color: "#3b82f6" },
+    { status: "overdue", label: "Atrasada", icon: "alarm_off", color: "#ef4444" },
+    { status: "blocked", label: "Com impedimento", icon: "warning", color: "#eab308" },
+    { status: "done", label: "Finalizada", icon: "task_alt", color: "#22c55e" },
 ];
 
-function buildColumn(
-    shift: "morning" | "afternoon" | "evening",
-    checklists: ExtendedChecklist[],
-    orders: ChecklistOrder[]
-): (ExtendedChecklist & { position: number })[] {
-    return checklists
-        .filter((c) => c.shift === shift)
-        .map((c) => {
-            const order = orders.find(
-                (o) => o.checklist_id === c.id && o.shift === shift
-            );
-            return { ...c, position: order?.position ?? 9999 };
-        })
-        .sort((a, b) => a.position - b.position);
+function isOverdue(checklist: ExtendedChecklist, currentMinutes: number): boolean {
+    if (!checklist.end_time) return false;
+    if (checklist.execution_status === "done") return false;
+    const [h, m] = checklist.end_time.split(":").map(Number);
+    return currentMinutes > h * 60 + m;
+}
+
+function getComputedStatus(checklist: ExtendedChecklist, currentMinutes: number): ExecutionStatus {
+    const apiStatus = (checklist.execution_status ?? "not_started") as ExecutionStatus;
+    if (apiStatus !== "done" && isOverdue(checklist, currentMinutes)) return "overdue";
+    return apiStatus;
 }
 
 interface ChecklistBoardViewProps {
     checklists: ExtendedChecklist[];
-    orders: ChecklistOrder[];
     isLoading: boolean;
+    currentMinutes: number;
     onSelect: (checklist: ExtendedChecklist) => void;
     onStatusToggle: (id: string, active: boolean) => void;
-    onOrdersSave: (orders: ChecklistOrder[]) => Promise<void>;
 }
 
 export function ChecklistBoardView({
     checklists,
-    orders,
     isLoading,
+    currentMinutes,
     onSelect,
     onStatusToggle,
-    onOrdersSave,
 }: ChecklistBoardViewProps) {
-    const [editMode, setEditMode] = useState(false);
-    const [localOrders, setLocalOrders] = useState<ChecklistOrder[]>(orders);
-    const [isSaving, setIsSaving] = useState(false);
-    const beforeEditOrdersRef = useRef<ChecklistOrder[]>([]);
+    const grouped = useMemo(() => {
+        const map: Record<ExecutionStatus, ExtendedChecklist[]> = {
+            not_started: [],
+            in_progress: [],
+            overdue: [],
+            blocked: [],
+            done: [],
+        };
 
-    // Sync local orders when server data changes (and not in edit mode)
-    useEffect(() => {
-        if (!editMode) {
-            setLocalOrders(orders);
+        for (const c of checklists) {
+            const status = getComputedStatus(c, currentMinutes);
+            map[status].push(c);
         }
-    }, [orders, editMode]);
 
-    const sensors = useSensors(
-        useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-    );
-
-    const handleEditModeToggle = () => {
-        if (!editMode) {
-            beforeEditOrdersRef.current = [...localOrders];
-        }
-        setEditMode((v) => !v);
-    };
-
-    const handleCancelEdit = () => {
-        setLocalOrders(beforeEditOrdersRef.current);
-        setEditMode(false);
-    };
-
-    const handleSave = async () => {
-        setIsSaving(true);
-        try {
-            await onOrdersSave(localOrders);
-            setEditMode(false);
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
-    const handleDragEnd = useCallback(
-        (event: DragEndEvent) => {
-            const { active, over } = event;
-            if (!over || active.id === over.id) return;
-
-            const activeShift = (active.data.current as { shift?: string })?.shift;
-            const overShift = (over.data.current as { shift?: string })?.shift;
-
-            // Enforce same-column-only drops
-            if (!activeShift || activeShift !== overShift) return;
-
-            const shift = activeShift as "morning" | "afternoon" | "evening";
-            const activeChecklistId = (active.data.current as { checklist_id?: string })?.checklist_id;
-            const overChecklistId = (over.data.current as { checklist_id?: string })?.checklist_id;
-
-            if (!activeChecklistId || !overChecklistId) return;
-
-            setLocalOrders((prev) => {
-                // Get all checklists for this column (same logic as buildColumn)
-                const colChecklists = checklists.filter(
-                    (c) => c.shift === shift
-                );
-
-                // Build current order for this column
-                const colOrders = colChecklists
-                    .map((c) => {
-                        const existing = prev.find(
-                            (o) => o.checklist_id === c.id && o.shift === shift
-                        );
-                        return {
-                            checklist_id: c.id,
-                            position: existing?.position ?? 9999,
-                        };
-                    })
-                    .sort((a, b) => a.position - b.position);
-
-                const activeIdx = colOrders.findIndex(
-                    (o) => o.checklist_id === activeChecklistId
-                );
-                const overIdx = colOrders.findIndex(
-                    (o) => o.checklist_id === overChecklistId
-                );
-
-                if (activeIdx === -1 || overIdx === -1) return prev;
-
-                const reordered = arrayMove(colOrders, activeIdx, overIdx).map(
-                    (item, i) => ({ ...item, position: i })
-                );
-
-                // Merge back
-                const otherOrders = prev.filter((o) => o.shift !== shift);
-                const newColOrders: ChecklistOrder[] = reordered.map((item) => {
-                    const existing = prev.find(
-                        (o) => o.checklist_id === item.checklist_id && o.shift === shift
-                    );
-                    return {
-                        id: existing?.id ?? `temp-${item.checklist_id}-${shift}`,
-                        restaurant_id: existing?.restaurant_id ?? "",
-                        checklist_id: item.checklist_id,
-                        shift,
-                        position: item.position,
-                    };
-                });
-
-                return [...otherOrders, ...newColOrders];
-            });
-        },
-        [checklists]
-    );
-
-    const boardData = useMemo(
-        () =>
-            COLUMNS.reduce(
-                (acc, col) => {
-                    acc[col.shift] = buildColumn(col.shift, checklists, localOrders);
-                    return acc;
-                },
-                {} as Record<string, (ExtendedChecklist & { position: number })[]>
-            ),
-        [checklists, localOrders]
-    );
+        return map;
+    }, [checklists, currentMinutes]);
 
     if (isLoading) {
         return (
             <div className="flex gap-4 h-full">
-                {COLUMNS.map((col) => (
+                {STATUS_COLUMNS.map((col) => (
                     <div
-                        key={col.shift}
+                        key={col.status}
                         className="min-w-[280px] flex-1 bg-[#16262c] border border-[#233f48] rounded-xl p-3 flex flex-col gap-2"
                     >
                         <div className="animate-pulse bg-[#233f48] h-8 rounded-lg mb-1" />
@@ -197,71 +85,18 @@ export function ChecklistBoardView({
     }
 
     return (
-        <div className="flex flex-col h-full gap-3">
-            {/* Board toolbar */}
-            <div className="flex items-center justify-between shrink-0">
-                <p className="text-[#92bbc9] text-xs">
-                    {editMode
-                        ? "Arraste os cards para reordenar dentro de cada turno."
-                        : "Ative o modo edição para reordenar as listas por turno."}
-                </p>
-                <div className="flex items-center gap-2">
-                    {editMode ? (
-                        <>
-                            <button
-                                onClick={handleCancelEdit}
-                                disabled={isSaving}
-                                className="px-3 py-1.5 text-xs font-bold text-[#92bbc9] hover:text-white bg-[#16262c] border border-[#233f48] rounded-lg transition-colors"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                onClick={handleSave}
-                                disabled={isSaving}
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-[#13b6ec] hover:bg-[#0ea5d4] text-[#0a1215] rounded-lg transition-colors disabled:opacity-60"
-                            >
-                                {isSaving ? (
-                                    <span className="material-symbols-outlined text-[14px] animate-spin">
-                                        refresh
-                                    </span>
-                                ) : (
-                                    <span className="material-symbols-outlined text-[14px]">save</span>
-                                )}
-                                Salvar alterações
-                            </button>
-                        </>
-                    ) : (
-                        <button
-                            onClick={handleEditModeToggle}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#92bbc9] hover:text-white bg-[#16262c] border border-[#233f48] rounded-lg transition-colors"
-                        >
-                            <span className="material-symbols-outlined text-[14px]">edit</span>
-                            Modo edição
-                        </button>
-                    )}
-                </div>
-            </div>
-
-            {/* Board columns */}
-            <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-            >
-                <div className="flex gap-4 flex-1 overflow-x-auto pb-2">
-                    {COLUMNS.map((col) => (
-                        <ChecklistBoardColumn
-                            key={col.shift}
-                            shift={col.shift}
-                            shiftLabel={col.label}
-                            cards={boardData[col.shift] ?? []}
-                            editMode={editMode}
-                            onSelect={onSelect}
-                            onStatusToggle={onStatusToggle}
-                        />
-                    ))}
-                </div>
-            </DndContext>
+        <div className="flex gap-4 flex-1 overflow-x-auto pb-2">
+            {STATUS_COLUMNS.map((col) => (
+                <ChecklistBoardColumn
+                    key={col.status}
+                    label={col.label}
+                    icon={col.icon}
+                    color={col.color}
+                    cards={grouped[col.status]}
+                    onSelect={onSelect}
+                    onStatusToggle={onStatusToggle}
+                />
+            ))}
         </div>
     );
 }

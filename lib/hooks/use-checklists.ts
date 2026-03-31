@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Checklist } from "../types";
 
@@ -26,9 +27,11 @@ async function getAuthHeaders() {
     return headers;
 }
 
-// Buscar Checklists
+// Buscar Checklists com Realtime para assumptions
 export function useChecklists(restaurantId: string | undefined) {
-    return useQuery({
+    const queryClient = useQueryClient();
+
+    const query = useQuery({
         queryKey: ["checklists", restaurantId],
         queryFn: async (): Promise<Checklist[]> => {
             if (!restaurantId) return [];
@@ -44,9 +47,37 @@ export function useChecklists(restaurantId: string | undefined) {
             return res.json();
         },
         enabled: !!restaurantId,
-        staleTime: 5 * 60 * 1000,    // estrutura de checklists muda raramente
-        refetchOnWindowFocus: false,  // mutations já invalidam quando necessário
+        staleTime: 5 * 60 * 1000,
+        refetchOnWindowFocus: false,
     });
+
+    // Realtime: atualizar quando assumptions mudam (alguém assumiu/completou)
+    useEffect(() => {
+        if (!restaurantId) return;
+
+        const supabase = createClient();
+        const channel = supabase
+            .channel(`checklists-rt-${restaurantId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'checklist_assumptions',
+                    filter: `restaurant_id=eq.${restaurantId}`,
+                },
+                () => {
+                    queryClient.invalidateQueries({ queryKey: ["checklists", restaurantId] });
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [restaurantId, queryClient]);
+
+    return query;
 }
 
 // Buscar status diário para o Admin (Assumptions + Checklists)

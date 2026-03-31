@@ -27,6 +27,7 @@ export default function ActivityDetailsPage() {
     const [currentTime, setCurrentTime] = useState('');
     const [user, setUser] = useState<{ id: string; name: string } | null>(null);
     const [assuming, setAssuming] = useState(false);
+    const [limitError, setLimitError] = useState<string | null>(null);
 
     useEffect(() => {
         setCurrentTime(new Date().toTimeString().slice(0, 5));
@@ -60,11 +61,17 @@ export default function ActivityDetailsPage() {
     const handleAssume = async () => {
         if (!restaurantId || !checklistId) return;
         setAssuming(true);
+        setLimitError(null);
         try {
             await assumeMutation.mutateAsync({ restaurantId, checklistId });
             router.push(`/turno/atividade/${checklistId}/executar`);
         } catch (e) {
-            console.error('Erro ao assumir atividade:', e);
+            const err = e as Error & { code?: string };
+            if (err.code === 'LIMIT_REACHED') {
+                setLimitError(err.message);
+            } else {
+                console.error('Erro ao assumir atividade:', e);
+            }
             setAssuming(false);
         }
     };
@@ -176,6 +183,17 @@ export default function ActivityDetailsPage() {
                                         ? `Finalizada por: ${assumption.completed_by_user_name}`
                                         : 'Esta atividade foi finalizada com sucesso.'}
                                 </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Limit error banner */}
+                    {limitError && (
+                        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-center gap-3">
+                            <span className="material-symbols-outlined text-red-400 shrink-0">block</span>
+                            <div>
+                                <p className="text-red-400 font-bold text-sm">Limite atingido</p>
+                                <p className="text-red-400/70 text-xs mt-0.5">{limitError}</p>
                             </div>
                         </div>
                     )}

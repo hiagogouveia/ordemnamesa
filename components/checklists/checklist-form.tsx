@@ -20,6 +20,7 @@ interface ChecklistFormProps {
     onSaved: () => void;
     onCancel: () => void;
     disableReorder?: boolean;
+    initialAreaId?: string;
 }
 
 const SHIFTS = [
@@ -44,7 +45,7 @@ const CHECKLIST_TYPES = [
     { value: 'receiving', label: 'Recebimento' }
 ];
 
-export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = false }: ChecklistFormProps) {
+export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = false, initialAreaId }: ChecklistFormProps) {
     const restaurantId = useRestaurantStore((state) => state.restaurantId);
 
     const [name, setName] = useState("");
@@ -183,7 +184,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 setHasTimeWindow(false);
                 setRecurrenceConfig(undefined);
                 setEnforceSequentialOrder(false);
-                setAreaId("");
+                setAreaId(initialAreaId ?? "");
                 setTasks([]);
                 setErrorMsg(null);
                 setShowDeleteModal(false);
@@ -221,7 +222,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 resetForm();
             }
         }
-    }, [checklist]);
+    }, [checklist, initialAreaId]);
 
     useEffect(() => {
         const formState = {
@@ -595,6 +596,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                     <option value="">{areas.length === 0 ? "Nenhuma área cadastrada" : "Qualquer área"}</option>
                                     {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                                 </select>
+                                {!checklist && initialAreaId && areaId === initialAreaId && (
+                                    <p className="mt-1 text-[10px] text-[#5a8a9a]">Área pré-selecionada com base no filtro atual</p>
+                                )}
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Tipo de Rotina</label>

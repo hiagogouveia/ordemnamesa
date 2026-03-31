@@ -451,11 +451,10 @@ function ChecklistsContent() {
                     ) : (
                         <ChecklistBoardView
                             checklists={filtered}
-                            orders={orders}
                             isLoading={isLoading}
+                            currentMinutes={currentMinutes}
                             onSelect={handleSelect}
                             onStatusToggle={handleStatusToggle}
-                            onOrdersSave={handleOrdersSave}
                         />
                     )}
                 </div>
@@ -481,6 +480,7 @@ function ChecklistsContent() {
                         checklist={editorState?.checklist ?? null}
                         onSaved={handleEditorSaved}
                         onCancel={() => setEditorState(null)}
+                        initialAreaId={editorState?.mode === "new" ? selectedAreaId : undefined}
                     />
                 </Modal>
             )}

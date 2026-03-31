@@ -87,10 +87,18 @@ export default function MyActivitiesPage() {
         );
     }, [filtered, selectedAreaPriorityMode]);
 
-    // Modo auto: separado por status
-    const overdue = useMemo(() => filtered.filter((a) => a.activity_status === "overdue"), [filtered]);
-    const pending = useMemo(() => filtered.filter((a) => a.activity_status === "pending"), [filtered]);
-    const inProgress = useMemo(() => filtered.filter((a) => a.activity_status === "in_progress"), [filtered]);
+    // Ordena: atividades do próprio usuário primeiro
+    const sortByOwnership = (list: MyActivity[]) =>
+        [...list].sort((a, b) => {
+            const aIsMine = a.assumed_by_user_id === userId ? 0 : 1;
+            const bIsMine = b.assumed_by_user_id === userId ? 0 : 1;
+            return aIsMine - bIsMine;
+        });
+
+    // Modo auto: separado por status, com atividades do próprio usuário no topo de cada seção
+    const overdue = useMemo(() => sortByOwnership(filtered.filter((a) => a.activity_status === "overdue")), [filtered, userId]);
+    const inProgress = useMemo(() => sortByOwnership(filtered.filter((a) => a.activity_status === "in_progress")), [filtered, userId]);
+    const pending = useMemo(() => sortByOwnership(filtered.filter((a) => a.activity_status === "pending")), [filtered, userId]);
     const doneTodayList = useMemo(() => filtered.filter((a) => a.activity_status === "done_today"), [filtered]);
 
     const totalPending = overdue.length + pending.length + inProgress.length;
@@ -186,6 +194,7 @@ export default function MyActivitiesPage() {
                                 iconColor="#92bbc9"
                                 activities={manualSorted}
                                 currentMinutes={currentMinutes}
+                                currentUserId={userId}
                                 onActivityClick={handleActivityClick}
                             />
                         ) : (

@@ -61,7 +61,7 @@ export async function GET(request: Request) {
                 .order('order_index', { ascending: true }),
             adminSupabase
                 .from('checklist_assumptions')
-                .select('checklist_id, execution_status, completed_at, blocked_reason')
+                .select('checklist_id, user_name, execution_status, completed_at, blocked_reason')
                 .eq('restaurant_id', restaurant_id)
                 .eq('date_key', todayKey),
         ]);
@@ -97,6 +97,7 @@ export async function GET(request: Request) {
         // Mapa de assumptions por checklist_id para derivar execution_status
         type AssumptionRow = {
             checklist_id: string;
+            user_name: string | null;
             execution_status: 'in_progress' | 'blocked' | 'done';
             completed_at: string | null;
             blocked_reason: string | null;
@@ -129,6 +130,7 @@ export async function GET(request: Request) {
                 ...checklist,
                 tasks: (checklist.tasks ?? []).sort((a: { order: number }, b: { order: number }) => a.order - b.order),
                 execution_status,
+                assumed_by_name: assumption?.user_name ?? null,
             };
         });
 

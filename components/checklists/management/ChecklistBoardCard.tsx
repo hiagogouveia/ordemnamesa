@@ -1,120 +1,89 @@
 "use client";
 
-import { useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
 
+const SHIFT_LABELS: Record<string, string> = {
+    morning: "Manhã",
+    afternoon: "Tarde",
+    evening: "Noite",
+    any: "Qualquer",
+};
+
 interface ChecklistBoardCardProps {
-    checklist: ExtendedChecklist & { position: number };
-    shift: "morning" | "afternoon" | "evening";
-    editMode: boolean;
+    checklist: ExtendedChecklist;
     onSelect: () => void;
     onStatusToggle: (active: boolean) => void;
 }
 
 export function ChecklistBoardCard({
     checklist,
-    shift,
-    editMode,
     onSelect,
-    onStatusToggle,
 }: ChecklistBoardCardProps) {
-    const {
-        attributes,
-        listeners,
-        setNodeRef,
-        transform,
-        transition,
-        isDragging,
-    } = useSortable({
-        id: `${checklist.id}-${shift}`,
-        data: { shift, checklist_id: checklist.id },
-        disabled: !editMode,
-    });
-
-    const style = {
-        transform: CSS.Transform.toString(transform),
-        transition,
-        zIndex: isDragging ? 50 : 1,
-        opacity: isDragging ? 0.5 : 1,
-    };
-
     const taskCount = checklist.tasks?.length ?? 0;
+    const responsibleName = checklist.assumed_by_name || checklist.responsible?.name;
 
     return (
         <div
-            ref={setNodeRef}
-            style={style}
-            className={`bg-[#0a1215] border rounded-xl p-3 select-none transition-shadow ${
-                isDragging
-                    ? "border-[#13b6ec]/50 shadow-lg shadow-[#13b6ec]/10"
-                    : "border-[#233f48] hover:border-[#325a67]"
-            }`}
+            onClick={onSelect}
+            className="bg-[#0a1215] border border-[#233f48] hover:border-[#325a67] rounded-xl p-3 cursor-pointer select-none transition-shadow"
         >
-            <div className="flex items-start gap-2">
-                {/* Drag handle (only in edit mode) */}
-                {editMode && (
-                    <button
-                        {...attributes}
-                        {...listeners}
-                        className="mt-0.5 shrink-0 text-[#325a67] hover:text-[#92bbc9] cursor-grab active:cursor-grabbing"
-                    >
-                        <span className="material-symbols-outlined text-[18px]">drag_indicator</span>
-                    </button>
+            {/* Title + active badge */}
+            <div className="flex items-start justify-between gap-2">
+                <p className="font-semibold text-white text-sm leading-snug line-clamp-2">
+                    {checklist.name}
+                </p>
+                <span
+                    className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                        checklist.active
+                            ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                            : "bg-gray-500/20 text-gray-400 border-gray-500/30"
+                    }`}
+                >
+                    {checklist.active ? "Ativo" : "Inativo"}
+                </span>
+            </div>
+
+            {/* Área */}
+            <div className="flex items-center gap-1.5 mt-1.5">
+                {checklist.area ? (
+                    <>
+                        <span
+                            className="w-2 h-2 rounded-full shrink-0"
+                            style={{ backgroundColor: checklist.area.color || "#325a67" }}
+                        />
+                        <span className="text-[#92bbc9] text-xs">{checklist.area.name}</span>
+                    </>
+                ) : (
+                    <span className="text-[#325a67] text-xs italic">Qualquer área</span>
                 )}
+            </div>
 
-                {/* Content */}
-                <div className="flex-1 min-w-0" onClick={editMode ? undefined : onSelect}>
-                    <div className={`flex items-start justify-between gap-2 ${!editMode ? "cursor-pointer" : ""}`}>
-                        <p className="font-semibold text-white text-sm leading-snug line-clamp-2">
-                            {checklist.name}
-                        </p>
-                        {/* Status badge */}
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                if (editMode) onStatusToggle(!checklist.active);
-                            }}
-                            disabled={!editMode}
-                            className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold border transition-colors ${
-                                checklist.active
-                                    ? editMode
-                                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30 cursor-pointer"
-                                        : "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                                    : editMode
-                                        ? "bg-gray-500/20 text-gray-400 border-gray-500/30 hover:bg-gray-500/30 cursor-pointer"
-                                        : "bg-gray-500/20 text-gray-400 border-gray-500/30"
-                            }`}
-                        >
-                            {checklist.active ? "Ativo" : "Inativo"}
-                        </button>
-                    </div>
+            {/* Responsável / Executando */}
+            {responsibleName && (
+                <div className="flex items-center gap-1.5 mt-2">
+                    <span className={`material-symbols-outlined text-[14px] ${checklist.assumed_by_name ? 'text-[#13b6ec]' : 'text-[#5a8a99]'}`}>person</span>
+                    <span className={`text-sm font-bold ${checklist.assumed_by_name ? 'text-white' : 'text-[#92bbc9] text-xs font-normal'}`}>
+                        {responsibleName}
+                    </span>
+                </div>
+            )}
 
-                    {/* Área */}
-                    <div className="flex items-center gap-1.5 mt-1.5">
-                        {checklist.area ? (
-                            <>
-                                <span
-                                    className="w-2 h-2 rounded-full shrink-0"
-                                    style={{ backgroundColor: checklist.area.color || "#325a67" }}
-                                />
-                                <span className="text-[#92bbc9] text-xs">{checklist.area.name}</span>
-                            </>
-                        ) : (
-                            <span className="text-[#325a67] text-xs italic">Qualquer área</span>
-                        )}
-                    </div>
-
-                    {/* Footer: task count + position */}
-                    <div className="flex items-center justify-between mt-2">
-                        <span className="flex items-center gap-1 text-[#92bbc9] text-xs">
-                            <span className="material-symbols-outlined text-[14px]">checklist</span>
-                            {taskCount} {taskCount === 1 ? "tarefa" : "tarefas"}
+            {/* Footer: task count + turno + horário */}
+            <div className="flex items-center justify-between mt-2">
+                <span className="flex items-center gap-1 text-[#92bbc9] text-xs">
+                    <span className="material-symbols-outlined text-[14px]">checklist</span>
+                    {taskCount} {taskCount === 1 ? "tarefa" : "tarefas"}
+                </span>
+                <div className="flex items-center gap-2">
+                    {checklist.start_time && (
+                        <span className="text-[#5a8a99] text-[10px]">
+                            {checklist.start_time}
+                            {checklist.end_time ? ` - ${checklist.end_time}` : ""}
                         </span>
-                        {editMode && checklist.position < 9999 && (
-                            <span className="text-[#325a67] text-[10px] font-bold">#{checklist.position + 1}</span>
-                        )}
-                    </div>
+                    )}
+                    <span className="text-[#325a67] text-[10px] font-bold">
+                        {SHIFT_LABELS[checklist.shift] ?? checklist.shift}
+                    </span>
                 </div>
             </div>
         </div>

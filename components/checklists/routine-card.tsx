@@ -32,6 +32,7 @@ export interface RoutineCardProps {
     flaggedCount?: number;
     assumptionName?: string;
     isAssignedToOther?: boolean;
+    isAssignedToMe?: boolean;
     
     // Events & States
     isSelected?: boolean;
@@ -63,6 +64,7 @@ export function RoutineCard({
     flaggedCount = 0,
     assumptionName,
     isAssignedToOther = false,
+    isAssignedToMe = false,
     area,
     isSelected = false,
     isPreview = false,
@@ -179,6 +181,14 @@ export function RoutineCard({
                             {title}
                         </h3>
                         
+                        {/* Responsável — destaque principal */}
+                        {variant !== 'admin' && assumptionName && (
+                            <div className={`flex items-center gap-1.5 mt-1.5 ${isAssignedToMe ? 'text-[#13b6ec]' : 'text-white'}`}>
+                                <span className={`material-symbols-outlined text-[14px] ${isAssignedToMe ? 'text-[#13b6ec]' : 'text-[#5a8a99]'}`}>person</span>
+                                <span className="text-sm font-bold">{assumptionName}</span>
+                            </div>
+                        )}
+
                         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                             {variant !== 'admin' && (
                                 <span className="bg-[#1a2c32] text-[#92bbc9] border border-[#233f48] px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
@@ -260,11 +270,6 @@ export function RoutineCard({
                 <div className="flex items-center gap-3 mt-1 pt-2 border-t border-[#233f48]/50 text-sm font-bold text-[#92bbc9] w-full">
                     {isAssignedToOther ? (
                         <span className="text-[#325a67]">Atribuída a outro funcionário</span>
-                    ) : assumptionName ? (
-                        <span className="text-[#13b6ec]/80 flex items-center gap-1 text-xs">
-                            <span className="material-symbols-outlined text-[14px]">person</span>
-                            Assumida por {assumptionName}
-                        </span>
                     ) : (
                         <span className="text-[#13b6ec] ml-auto flex items-center gap-1">Ver detalhes <span className="material-symbols-outlined text-[16px]">arrow_right_alt</span></span>
                     )}
@@ -274,12 +279,6 @@ export function RoutineCard({
             {/* Collaborator DOING Footer */}
             {variant === 'collaborator_doing' && (
                 <div className="flex flex-col gap-3 w-full">
-                    {assumptionName && (
-                        <p className="text-[#92bbc9] text-xs flex items-center gap-1">
-                            <span className="material-symbols-outlined text-[14px] text-[#13b6ec]">person</span>
-                            Em execução por: <span className="text-white font-medium ml-0.5">{assumptionName}</span>
-                        </p>
-                    )}
                     <div className="flex items-center gap-3">
                         <div className="flex-1 w-full bg-[#101d22] rounded-full h-2.5 overflow-hidden">
                             <div className="bg-amber-400 h-full rounded-full transition-all" style={{ width: `${progress}%` }}></div>

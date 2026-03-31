@@ -9,6 +9,7 @@ interface ActivitySectionProps {
     iconColor: string;
     activities: MyActivity[];
     currentMinutes: number;
+    currentUserId?: string;
     onActivityClick: (id: string) => void;
     collapsible?: boolean;
     defaultOpen?: boolean;
@@ -20,6 +21,7 @@ export function ActivitySection({
     iconColor,
     activities,
     currentMinutes,
+    currentUserId,
     onActivityClick,
     collapsible = false,
     defaultOpen = true,
@@ -45,6 +47,7 @@ export function ActivitySection({
                     key={activity.id}
                     activity={activity}
                     currentMinutes={currentMinutes}
+                    currentUserId={currentUserId}
                     onClick={() => onActivityClick(activity.id)}
                 />
             ))}

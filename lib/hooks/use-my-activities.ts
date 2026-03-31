@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import type { MyActivity } from "@/lib/types";
@@ -15,7 +16,9 @@ async function getAuthHeaders() {
 }
 
 export function useMyActivities(restaurantId: string | undefined) {
-    return useQuery({
+    const queryClient = useQueryClient();
+
+    const query = useQuery({
         queryKey: ["my-activities", restaurantId],
         queryFn: async (): Promise<MyActivity[]> => {
             if (!restaurantId) return [];
@@ -31,9 +34,52 @@ export function useMyActivities(restaurantId: string | undefined) {
             return res.json();
         },
         enabled: !!restaurantId,
-        staleTime: 2 * 60 * 1000,    // considera fresco por 2 min
+        staleTime: 2 * 60 * 1000,
         refetchOnWindowFocus: true,
     });
+
+    // Realtime: escutar mudanças em checklist_assumptions para atualizar imediatamente
+    useEffect(() => {
+        if (!restaurantId) return;
+
+        const supabase = createClient();
+        const channel = supabase
+            .channel(`my-activities-rt-${restaurantId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'checklist_assumptions',
+                    filter: `restaurant_id=eq.${restaurantId}`,
+                },
+                () => {
+                    // Invalidar para refetch com dados atualizados
+                    queryClient.invalidateQueries({ queryKey: ["my-activities", restaurantId] });
+                    queryClient.invalidateQueries({ queryKey: ["my-activities-badge", restaurantId] });
+                }
+            )
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'task_executions',
+                    filter: `restaurant_id=eq.${restaurantId}`,
+                },
+                () => {
+                    queryClient.invalidateQueries({ queryKey: ["my-activities", restaurantId] });
+                    queryClient.invalidateQueries({ queryKey: ["my-activities-badge", restaurantId] });
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [restaurantId, queryClient]);
+
+    return query;
 }
 
 export function useMyActivitiesBadge(restaurantId: string | undefined) {
@@ -50,7 +96,7 @@ export function useMyActivitiesBadge(restaurantId: string | undefined) {
             return res.json();
         },
         enabled: !!restaurantId,
-        staleTime: 2 * 60 * 1000,    // considera fresco por 2 min
+        staleTime: 2 * 60 * 1000,
         refetchOnWindowFocus: true,
     });
 }

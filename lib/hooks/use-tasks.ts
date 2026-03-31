@@ -60,6 +60,12 @@ export const useChecklistAssumption = (restaurantId: string | undefined, checkli
     });
 };
 
+export interface AssumeChecklistError {
+    error: string;
+    message?: string;
+    code?: string;
+}
+
 export const useAssumeChecklist = () => {
     const queryClient = useQueryClient();
     return useMutation({
@@ -71,14 +77,19 @@ export const useAssumeChecklist = () => {
                 body: JSON.stringify({ restaurant_id: restaurantId }),
             });
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || 'Erro ao assumir atividade');
+                const errorData: AssumeChecklistError = await response.json().catch(() => ({ error: 'Erro ao assumir atividade' }));
+                const err = new Error(errorData.message || errorData.error || 'Erro ao assumir atividade');
+                (err as Error & { code?: string }).code = errorData.code;
+                throw err;
             }
             return response.json();
         },
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ['assumption', variables.restaurantId, variables.checklistId] });
             queryClient.invalidateQueries({ queryKey: ['kanban', variables.restaurantId] });
+            queryClient.invalidateQueries({ queryKey: ['my-activities', variables.restaurantId] });
+            queryClient.invalidateQueries({ queryKey: ['my-activities-badge', variables.restaurantId] });
+            queryClient.invalidateQueries({ queryKey: ['checklists', variables.restaurantId] });
         },
     });
 };

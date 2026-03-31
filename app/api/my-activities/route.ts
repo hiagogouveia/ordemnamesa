@@ -132,19 +132,28 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: executionsError.message }, { status: 500 });
         }
 
-        // Conclusões formais do dia (completed_at definido) — fonte de verdade imutável
+        // Buscar TODAS as assumptions do dia para estes checklists (não só do usuário logado)
         const todayKey = startOfDay.toISOString().split('T')[0];
+        const checklistIds = (checklists ?? []).map((c: { id: string }) => c.id);
 
-        const { data: assumptions } = await adminSupabase
+        const { data: allAssumptions } = await adminSupabase
             .from('checklist_assumptions')
-            .select('checklist_id, completed_at')
+            .select('checklist_id, user_id, user_name, completed_at')
             .eq('restaurant_id', restaurant_id)
-            .eq('user_id', user.id)
             .eq('date_key', todayKey)
-            .not('completed_at', 'is', null);
+            .in('checklist_id', checklistIds);
 
+        // Mapa de assumptions por checklist_id
+        type AssumptionInfo = { user_id: string; user_name: string; completed_at: string | null };
+        const assumptionMap = new Map<string, AssumptionInfo>(
+            (allAssumptions ?? []).map((a: AssumptionInfo & { checklist_id: string }) => [a.checklist_id, a])
+        );
+
+        // Set de conclusões formais (completed_at do próprio usuário)
         const completedSet = new Set<string>(
-            (assumptions ?? []).map((a: { checklist_id: string; completed_at: string }) => a.checklist_id)
+            (allAssumptions ?? [])
+                .filter((a: AssumptionInfo & { checklist_id: string }) => a.user_id === user.id && a.completed_at !== null)
+                .map((a: { checklist_id: string }) => a.checklist_id)
         );
 
         // Mapa de tarefas concluídas por checklist
@@ -176,6 +185,8 @@ export async function GET(request: Request) {
             const area = checklist.area ?? null;
             const fallbackArea = area ? area : role;
             
+            const assumption = assumptionMap.get(checklist.id);
+
             return {
                 id: checklist.id,
                 restaurant_id: checklist.restaurant_id,
@@ -194,6 +205,8 @@ export async function GET(request: Request) {
                 done_count: doneCount,
                 progress_percent: progressPercent,
                 activity_status: computeActivityStatus(checklist.end_time, taskCount, doneCount, completedSet.has(checklist.id)),
+                assumed_by_name: assumption?.user_name ?? null,
+                assumed_by_user_id: assumption?.user_id ?? null,
             };
         });
 

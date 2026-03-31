@@ -51,6 +51,51 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             return NextResponse.json({ assumption: existing, alreadyAssumed: true });
         }
 
+        // ── Validação de limite de atividades simultâneas ──
+        // Buscar role do usuário para obter max_concurrent_tasks
+        const { data: userRoleRows } = await adminSupabase
+            .from('user_roles')
+            .select('role_id, roles:roles(id, max_concurrent_tasks)')
+            .eq('restaurant_id', restaurant_id)
+            .eq('user_id', user.id);
+
+        // Pegar o menor limite entre os cargos do usuário (mais restritivo)
+        let maxConcurrent = Infinity;
+        for (const row of userRoleRows ?? []) {
+            const role = row.roles as unknown as { id: string; max_concurrent_tasks: number } | null;
+            if (role && typeof role.max_concurrent_tasks === 'number') {
+                maxConcurrent = Math.min(maxConcurrent, role.max_concurrent_tasks);
+            }
+        }
+
+        // Se tem pelo menos um cargo com limite, validar
+        if (maxConcurrent !== Infinity) {
+            // Contar assumptions in_progress do dia para este usuário (não concluídas)
+            const { count: activeCount, error: countError } = await adminSupabase
+                .from('checklist_assumptions')
+                .select('id', { count: 'exact', head: true })
+                .eq('restaurant_id', restaurant_id)
+                .eq('user_id', user.id)
+                .eq('date_key', dateKey)
+                .is('completed_at', null);
+
+            if (countError) {
+                console.error('[POST /api/checklists/[id]/assume] Erro ao contar assumptions:', countError);
+                return NextResponse.json({ error: 'Erro ao validar limite' }, { status: 500 });
+            }
+
+            if ((activeCount ?? 0) >= maxConcurrent) {
+                return NextResponse.json(
+                    {
+                        error: 'Limite atingido',
+                        message: `Você já atingiu o limite de ${maxConcurrent} atividade${maxConcurrent > 1 ? 's' : ''} simultânea${maxConcurrent > 1 ? 's' : ''}. Finalize uma atividade antes de assumir outra.`,
+                        code: 'LIMIT_REACHED',
+                    },
+                    { status: 409 }
+                );
+            }
+        }
+
         const { data: assumption, error: insertError } = await adminSupabase
             .from('checklist_assumptions')
             .insert({
