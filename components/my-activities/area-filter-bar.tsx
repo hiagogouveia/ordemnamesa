@@ -4,8 +4,8 @@ import type { Area } from "@/lib/types";
 
 interface AreaFilterBarProps {
     areas: Area[];
-    activeAreaId: string | "all";
-    onSelect: (id: string | "all") => void;
+    activeAreaId: string;
+    onSelect: (id: string) => void;
 }
 
 export function AreaFilterBar({ areas, activeAreaId, onSelect }: AreaFilterBarProps) {
@@ -13,17 +13,19 @@ export function AreaFilterBar({ areas, activeAreaId, onSelect }: AreaFilterBarPr
 
     return (
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide snap-x">
-            <button
-                onClick={() => onSelect("all")}
-                className={`shrink-0 snap-start flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
-                    activeAreaId === "all"
-                        ? "bg-[#13b6ec]/20 text-[#13b6ec] border-[#13b6ec]/40"
-                        : "bg-[#16262c] text-[#92bbc9] border-[#233f48] hover:border-[#325a67]"
-                }`}
-            >
-                Todas
-            </button>
-
+            {/* Opção "Todas" */}
+            {areas.length > 1 && (
+                <button
+                    onClick={() => onSelect("")}
+                    className={`shrink-0 snap-start flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
+                        activeAreaId === ""
+                            ? "bg-[#13b6ec]/20 text-[#13b6ec] border-[#13b6ec]/40"
+                            : "bg-[#16262c] text-[#92bbc9] border-[#233f48] hover:border-[#325a67]"
+                    }`}
+                >
+                    Todas
+                </button>
+            )}
             {areas.map((area) => (
                 <button
                     key={area.id}

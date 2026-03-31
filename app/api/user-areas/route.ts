@@ -46,7 +46,7 @@ export async function GET(request: Request) {
 
         let query = adminSupabase
             .from('user_areas')
-            .select('id, user_id, area_id, created_at, area:areas(id, name, color)')
+            .select('id, user_id, area_id, created_at, area:areas(id, name, color, priority_mode)')
             .eq('restaurant_id', restaurant_id);
 
         if (user_id) {

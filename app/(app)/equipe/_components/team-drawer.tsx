@@ -1,10 +1,12 @@
 "use client";
 
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
-import { useRoles } from "@/lib/hooks/use-roles";
+import { useAllAreas } from "@/lib/hooks/use-areas";
 import { useShifts } from "@/lib/hooks/use-shifts";
 import {
-    useUserRoles, useCreateUserRole, useDeleteUserRole,
+    useMyAreas, useAssignUserArea, useRemoveUserArea
+} from "@/lib/hooks/use-user-areas";
+import {
     useUserShifts, useCreateUserShift, useDeleteUserShift
 } from "@/lib/hooks/use-user-roles-shifts";
 import { useState, useEffect } from "react";
@@ -29,17 +31,17 @@ interface TeamEditModalProps {
 export function TeamDrawer({ isOpen, onClose, member, onUpdated }: TeamEditModalProps) {
     const restaurantId = useRestaurantStore((state) => state.restaurantId);
 
-    const { data: allRoles = [] } = useRoles(restaurantId || undefined);
+    const { data: allAreas = [] } = useAllAreas(restaurantId || undefined);
     const { data: allShifts = [] } = useShifts(restaurantId || undefined);
-    const { data: userRoles = [], isLoading: loadingRoles } = useUserRoles(restaurantId || undefined, member?.user_id || undefined);
+    const { data: userAreas = [], isLoading: loadingAreas } = useMyAreas(restaurantId || undefined, member?.user_id || undefined);
     const { data: userShifts = [], isLoading: loadingShifts } = useUserShifts(restaurantId || undefined, member?.user_id || undefined);
 
-    const assignRole = useCreateUserRole();
-    const removeRole = useDeleteUserRole();
+    const assignArea = useAssignUserArea();
+    const removeArea = useRemoveUserArea();
     const assignShift = useCreateUserShift();
     const removeShift = useDeleteUserShift();
 
-    const [isAddingRole, setIsAddingRole] = useState(false);
+    const [isAddingArea, setIsAddingArea] = useState(false);
     const [isAddingShift, setIsAddingShift] = useState(false);
     const [saving, setSaving] = useState(false);
 
@@ -55,7 +57,7 @@ export function TeamDrawer({ isOpen, onClose, member, onUpdated }: TeamEditModal
             setEditRole(member.role);
             setEditActive(member.active);
         }
-        setIsAddingRole(false);
+        setIsAddingArea(false);
         setIsAddingShift(false);
     }, [member]);
 
@@ -94,24 +96,24 @@ export function TeamDrawer({ isOpen, onClose, member, onUpdated }: TeamEditModal
         }
     };
 
-    const assignedRoleIds = userRoles.map(ur => ur.role_id);
-    const availableRoles = allRoles.filter(r => r.active && !assignedRoleIds.includes(r.id));
+    const assignedAreaIds = userAreas.map(ua => ua.area_id);
+    const availableAreas = allAreas.filter(a => !assignedAreaIds.includes(a.id));
     const assignedShiftIds = userShifts.map(us => us.shift_id);
     const availableShifts = allShifts.filter(s => s.active && !assignedShiftIds.includes(s.id));
 
-    const handleAssignRole = async (roleId: string) => {
+    const handleAssignArea = async (areaId: string) => {
         if (!restaurantId || !member.user_id) return;
         try {
-            await assignRole.mutateAsync({ restaurant_id: restaurantId, user_id: member.user_id, role_id: roleId });
-            setIsAddingRole(false);
-        } catch (error) { console.error("Erro ao atribuir função", error); }
+            await assignArea.mutateAsync({ restaurant_id: restaurantId, user_id: member.user_id, area_id: areaId });
+            setIsAddingArea(false);
+        } catch (error) { console.error("Erro ao atribuir área", error); }
     };
 
-    const handleRemoveRole = async (id: string) => {
+    const handleRemoveArea = async (id: string) => {
         if (!restaurantId || !member.user_id) return;
         try {
-            await removeRole.mutateAsync({ restaurant_id: restaurantId, user_id: member.user_id, id });
-        } catch (error) { console.error("Erro ao remover função", error); }
+            await removeArea.mutateAsync({ id, restaurant_id: restaurantId });
+        } catch (error) { console.error("Erro ao remover área", error); }
     };
 
     const handleAssignShift = async (shiftId: string) => {
@@ -198,44 +200,44 @@ export function TeamDrawer({ isOpen, onClose, member, onUpdated }: TeamEditModal
                         {/* ÁREAS ATRIBUÍDAS */}
                         <div className="flex flex-col gap-3">
                             <h3 className="text-xs font-bold text-[#92bbc9] uppercase tracking-wider">Áreas Atribuídas</h3>
-                            {loadingRoles ? (
+                            {loadingAreas ? (
                                 <div className="animate-pulse flex gap-2"><div className="h-7 w-20 bg-[#233f48] rounded-full"></div></div>
                             ) : (
                                 <div className="flex flex-wrap gap-2">
-                                    {userRoles.map(ur => {
-                                        const role = ur.roles || allRoles.find(r => r.id === ur.role_id);
-                                        if (!role) return null;
+                                    {userAreas.map(ua => {
+                                        const area = ua.area || allAreas.find(a => a.id === ua.area_id);
+                                        if (!area) return null;
                                         return (
-                                            <div key={ur.id} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium" style={{ borderColor: role.color, color: role.color, backgroundColor: `${role.color}15` }}>
-                                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: role.color }} />
-                                                {role.name}
-                                                <button onClick={() => handleRemoveRole(ur.id)} className="hover:opacity-70 transition-opacity ml-0.5">
+                                            <div key={ua.id} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium" style={{ borderColor: area.color, color: area.color, backgroundColor: `${area.color}15` }}>
+                                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: area.color }} />
+                                                {area.name}
+                                                <button onClick={() => handleRemoveArea(ua.id)} className="hover:opacity-70 transition-opacity ml-0.5">
                                                     <span className="material-symbols-outlined text-[14px]">close</span>
                                                 </button>
                                             </div>
                                         );
                                     })}
-                                    {userRoles.length === 0 && <span className="text-xs text-[#325a67]">Nenhuma área atribuída</span>}
+                                    {userAreas.length === 0 && <span className="text-xs text-[#325a67]">Nenhuma área atribuída</span>}
                                 </div>
                             )}
 
                             <div className="relative">
-                                {isAddingRole ? (
+                                {isAddingArea ? (
                                     <div className="bg-[#101d22] border border-[#233f48] rounded-lg p-2 max-h-40 overflow-y-auto">
                                         <div className="flex justify-between items-center px-2 py-1 mb-1 border-b border-[#233f48]">
                                             <span className="text-[10px] text-[#92bbc9] uppercase">Selecionar área</span>
-                                            <button onClick={() => setIsAddingRole(false)}><span className="material-symbols-outlined text-[16px] text-[#92bbc9]">close</span></button>
+                                            <button onClick={() => setIsAddingArea(false)}><span className="material-symbols-outlined text-[16px] text-[#92bbc9]">close</span></button>
                                         </div>
-                                        {availableRoles.length === 0 ? (
+                                        {availableAreas.length === 0 ? (
                                             <p className="text-xs text-[#325a67] px-2 py-2 text-center">Nenhuma área disponível</p>
-                                        ) : availableRoles.map(r => (
-                                            <button key={r.id} onClick={() => handleAssignRole(r.id)} className="w-full text-left px-2 py-2 hover:bg-[#16262c] rounded-md flex items-center gap-2 text-sm text-white">
-                                                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: r.color }} />{r.name}
+                                        ) : availableAreas.map(a => (
+                                            <button key={a.id} onClick={() => handleAssignArea(a.id)} className="w-full text-left px-2 py-2 hover:bg-[#16262c] rounded-md flex items-center gap-2 text-sm text-white">
+                                                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: a.color }} />{a.name}
                                             </button>
                                         ))}
                                     </div>
                                 ) : (
-                                    <button onClick={() => setIsAddingRole(true)} className="flex items-center gap-1.5 text-xs text-[#13b6ec] hover:text-white font-medium py-1 px-2 border border-transparent hover:border-[#233f48] rounded-lg transition-colors w-fit">
+                                    <button onClick={() => setIsAddingArea(true)} className="flex items-center gap-1.5 text-xs text-[#13b6ec] hover:text-white font-medium py-1 px-2 border border-transparent hover:border-[#233f48] rounded-lg transition-colors w-fit">
                                         <span className="material-symbols-outlined text-[16px]">add</span> Adicionar Área
                                     </button>
                                 )}

@@ -4,9 +4,11 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useMyActivities } from "@/lib/hooks/use-my-activities";
+import { useMyAreas } from "@/lib/hooks/use-user-areas";
+import { createClient } from "@/lib/supabase/client";
 import { AreaFilterBar } from "@/components/my-activities/area-filter-bar";
 import { ActivitySection } from "@/components/my-activities/activity-section";
-import type { MyActivity } from "@/lib/types";
+import type { MyActivity, PriorityMode, Area } from "@/lib/types";
 
 const ROLE_LABELS: Record<string, string> = {
     owner: "Proprietário",
@@ -17,8 +19,16 @@ const ROLE_LABELS: Record<string, string> = {
 export default function MyActivitiesPage() {
     const router = useRouter();
     const { restaurantId, userRole } = useRestaurantStore();
-    const [activeAreaId, setActiveAreaId] = useState<string | "all">("all");
+    const [activeAreaId, setActiveAreaId] = useState<string>("");
     const [currentMinutes, setCurrentMinutes] = useState(0);
+    const [userId, setUserId] = useState<string | undefined>();
+
+    // Obter userId do auth
+    useEffect(() => {
+        createClient().auth.getUser().then(({ data }) => {
+            setUserId(data.user?.id ?? undefined);
+        });
+    }, []);
 
     // Update time every minute for priority calculations
     useEffect(() => {
@@ -33,25 +43,51 @@ export default function MyActivitiesPage() {
 
     const { data: activities = [], isLoading, error } = useMyActivities(restaurantId || undefined);
 
-    // Derivar funções únicas das atividades (vêm como 'area' na resposta, estrutura idêntica)
-    const areas = useMemo(() => {
-        const seen = new Set<string>();
-        return activities
-            .filter((a) => a.area != null)
-            .map((a) => a.area!)
-            .filter((area) => {
-                if (seen.has(area.id)) return false;
-                seen.add(area.id);
-                return true;
-            });
-    }, [activities]);
+    // Buscar áreas atribuídas ao usuário (fonte: user_areas)
+    const { data: userAreaAssignments = [] } = useMyAreas(restaurantId || undefined, userId);
 
-    // Client-side filter por função
+    const areas = useMemo<Area[]>(() => {
+        return userAreaAssignments
+            .filter((ua) => ua.area != null)
+            .map((ua) => ({
+                id: ua.area!.id,
+                name: ua.area!.name,
+                color: ua.area!.color,
+                restaurant_id: restaurantId || "",
+                priority_mode: (ua.area!.priority_mode as PriorityMode) ?? "auto",
+                created_at: "",
+            }));
+    }, [userAreaAssignments, restaurantId]);
+
+    // Auto-selecionar primeira área quando carregam
+    useEffect(() => {
+        if (areas.length > 0 && !activeAreaId) {
+            setActiveAreaId(areas[0].id);
+        }
+    }, [areas, activeAreaId]);
+
+    // priority_mode da área selecionada
+    const selectedAreaPriorityMode: PriorityMode = useMemo(() => {
+        if (!activeAreaId) return "auto";
+        const area = areas.find((a) => a.id === activeAreaId);
+        return area?.priority_mode ?? "auto";
+    }, [activeAreaId, areas]);
+
+    // Client-side filter por área
     const filtered = useMemo<MyActivity[]>(() => {
-        if (activeAreaId === "all") return activities;
+        if (!activeAreaId) return activities;
         return activities.filter((a) => a.area_id === activeAreaId);
     }, [activities, activeAreaId]);
 
+    // Modo manual: lista única ordenada por order_index
+    const manualSorted = useMemo<MyActivity[]>(() => {
+        if (selectedAreaPriorityMode !== "manual") return [];
+        return [...filtered].sort(
+            (a, b) => (a.order_index ?? 9999) - (b.order_index ?? 9999)
+        );
+    }, [filtered, selectedAreaPriorityMode]);
+
+    // Modo auto: separado por status
     const overdue = useMemo(() => filtered.filter((a) => a.activity_status === "overdue"), [filtered]);
     const pending = useMemo(() => filtered.filter((a) => a.activity_status === "pending"), [filtered]);
     const inProgress = useMemo(() => filtered.filter((a) => a.activity_status === "in_progress"), [filtered]);
@@ -90,6 +126,26 @@ export default function MyActivitiesPage() {
                     onSelect={setActiveAreaId}
                 />
 
+                {/* Priority mode indicator */}
+                {activeAreaId && (
+                    <div className="flex items-center gap-1.5">
+                        <span
+                            className={`material-symbols-outlined text-[14px] ${
+                                selectedAreaPriorityMode === "auto" ? "text-emerald-400" : "text-amber-400"
+                            }`}
+                        >
+                            {selectedAreaPriorityMode === "auto" ? "auto_mode" : "touch_app"}
+                        </span>
+                        <span
+                            className={`text-xs font-bold ${
+                                selectedAreaPriorityMode === "auto" ? "text-emerald-400" : "text-amber-400"
+                            }`}
+                        >
+                            Ordenação: {selectedAreaPriorityMode === "auto" ? "Automática" : "Manual"}
+                        </span>
+                    </div>
+                )}
+
                 {/* Loading skeleton */}
                 {isLoading && (
                     <div className="flex flex-col gap-3">
@@ -114,50 +170,63 @@ export default function MyActivitiesPage() {
                         <span className="material-symbols-outlined text-[#325a67] text-5xl">task_alt</span>
                         <p className="text-white font-semibold">Nenhuma atividade</p>
                         <p className="text-[#92bbc9] text-sm max-w-xs">
-                            {activeAreaId !== "all"
-                                ? "Nenhuma atividade nesta área."
-                                : "Nenhuma atividade atribuída ao seu perfil no momento."}
+                            Nenhuma atividade nesta área.
                         </p>
                     </div>
                 )}
 
-                {/* Sections */}
+                {/* Content */}
                 {!isLoading && !error && filtered.length > 0 && (
                     <>
-                        <ActivitySection
-                            title="Atrasadas"
-                            icon="alarm_off"
-                            iconColor="#ef4444"
-                            activities={overdue}
-                            currentMinutes={currentMinutes}
-                            onActivityClick={handleActivityClick}
-                        />
-                        <ActivitySection
-                            title="Em Andamento"
-                            icon="pending_actions"
-                            iconColor="#f59e0b"
-                            activities={inProgress}
-                            currentMinutes={currentMinutes}
-                            onActivityClick={handleActivityClick}
-                        />
-                        <ActivitySection
-                            title="Pendentes"
-                            icon="radio_button_unchecked"
-                            iconColor="#92bbc9"
-                            activities={pending}
-                            currentMinutes={currentMinutes}
-                            onActivityClick={handleActivityClick}
-                        />
-                        <ActivitySection
-                            title="Concluídas"
-                            icon="task_alt"
-                            iconColor="#22c55e"
-                            activities={doneTodayList}
-                            currentMinutes={currentMinutes}
-                            onActivityClick={handleActivityClick}
-                            collapsible
-                            defaultOpen={false}
-                        />
+                        {selectedAreaPriorityMode === "manual" ? (
+                            /* Modo manual: lista única na ordem do gestor */
+                            <ActivitySection
+                                title="Rotinas"
+                                icon="checklist"
+                                iconColor="#92bbc9"
+                                activities={manualSorted}
+                                currentMinutes={currentMinutes}
+                                onActivityClick={handleActivityClick}
+                            />
+                        ) : (
+                            /* Modo auto: agrupado por status */
+                            <>
+                                <ActivitySection
+                                    title="Atrasadas"
+                                    icon="alarm_off"
+                                    iconColor="#ef4444"
+                                    activities={overdue}
+                                    currentMinutes={currentMinutes}
+                                    onActivityClick={handleActivityClick}
+                                />
+                                <ActivitySection
+                                    title="Em Andamento"
+                                    icon="pending_actions"
+                                    iconColor="#f59e0b"
+                                    activities={inProgress}
+                                    currentMinutes={currentMinutes}
+                                    onActivityClick={handleActivityClick}
+                                />
+                                <ActivitySection
+                                    title="Pendentes"
+                                    icon="radio_button_unchecked"
+                                    iconColor="#92bbc9"
+                                    activities={pending}
+                                    currentMinutes={currentMinutes}
+                                    onActivityClick={handleActivityClick}
+                                />
+                                <ActivitySection
+                                    title="Concluídas"
+                                    icon="task_alt"
+                                    iconColor="#22c55e"
+                                    activities={doneTodayList}
+                                    currentMinutes={currentMinutes}
+                                    onActivityClick={handleActivityClick}
+                                    collapsible
+                                    defaultOpen={false}
+                                />
+                            </>
+                        )}
                     </>
                 )}
             </div>

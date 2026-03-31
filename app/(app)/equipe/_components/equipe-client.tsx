@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useEquipe, useUpdateEquipeMember, EquipeData } from '@/lib/hooks/use-equipe';
-import { useRoles } from '@/lib/hooks/use-roles';
+import { useAllAreas } from '@/lib/hooks/use-areas';
 import { useShifts } from '@/lib/hooks/use-shifts';
 import { TeamDrawer } from './team-drawer';
 import { Avatar } from '@/components/ui/avatar';
@@ -88,7 +88,7 @@ export function EquipeClient({ restaurantId, userRole }: Props) {
 
     const { data: equipeData, isLoading, error } = useEquipe(restaurantId);
     const updateMember = useUpdateEquipeMember(restaurantId);
-    const { data: roles = [] } = useRoles(restaurantId);
+    const { data: areas = [] } = useAllAreas(restaurantId);
     const { data: shifts = [] } = useShifts(restaurantId);
 
     if (isLoading) {
@@ -186,11 +186,11 @@ export function EquipeClient({ restaurantId, userRole }: Props) {
 
             const { user_id } = await res.json();
 
-            for (const roleId of selectedAreas) {
-                await fetch('/api/user-roles', {
+            for (const areaId of selectedAreas) {
+                await fetch('/api/user-areas', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify({ restaurant_id: restaurantId, user_id, role_id: roleId })
+                    body: JSON.stringify({ restaurant_id: restaurantId, user_id, area_id: areaId })
                 });
             }
 
@@ -485,20 +485,20 @@ export function EquipeClient({ restaurantId, userRole }: Props) {
                                     </select>
                                 </div>
 
-                                {roles.filter(r => r.active).length > 0 && (
+                                {areas.length > 0 && (
                                     <div>
                                         <label className="block text-xs font-medium text-[#92bbc9] mb-1.5">Áreas (opcional)</label>
                                         <div className="flex flex-wrap gap-2">
-                                            {roles.filter(r => r.active).map(r => (
+                                            {areas.map(a => (
                                                 <button
-                                                    key={r.id}
+                                                    key={a.id}
                                                     type="button"
-                                                    onClick={() => setSelectedAreas(prev => prev.includes(r.id) ? prev.filter(id => id !== r.id) : [...prev, r.id])}
-                                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${selectedAreas.includes(r.id) ? 'border-primary bg-primary/10 text-primary' : 'border-[#325a67] text-[#92bbc9] hover:border-primary/50'}`}
+                                                    onClick={() => setSelectedAreas(prev => prev.includes(a.id) ? prev.filter(id => id !== a.id) : [...prev, a.id])}
+                                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${selectedAreas.includes(a.id) ? 'border-primary bg-primary/10 text-primary' : 'border-[#325a67] text-[#92bbc9] hover:border-primary/50'}`}
                                                 >
-                                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: r.color }} />
-                                                    {r.name}
-                                                    {selectedAreas.includes(r.id) && <span className="material-symbols-outlined text-[14px]">check</span>}
+                                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: a.color }} />
+                                                    {a.name}
+                                                    {selectedAreas.includes(a.id) && <span className="material-symbols-outlined text-[14px]">check</span>}
                                                 </button>
                                             ))}
                                         </div>
