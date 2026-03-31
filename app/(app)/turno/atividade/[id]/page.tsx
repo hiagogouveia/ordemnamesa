@@ -309,6 +309,36 @@ export default function ActivityDetailsPage() {
                         </div>
                     )}
 
+                    {/* Observação do colaborador (visível para gestor) */}
+                    {isCompleted && assumption?.observation && (
+                        <div className="bg-[#1a2c32] border border-amber-500/20 rounded-2xl p-5">
+                            <h3 className="text-white font-bold text-sm mb-3 flex items-center gap-2">
+                                <span className="material-symbols-outlined text-amber-400 text-[18px]">chat</span>
+                                Observação do Colaborador
+                            </h3>
+                            <div className="bg-[#16262c] rounded-xl p-4 border border-[#233f48]">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <div className="w-6 h-6 rounded-full bg-[#233f48] flex items-center justify-center">
+                                        <span className="text-white text-[10px] font-bold">
+                                            {(assumption.completed_by_user_name || assumption.user_name || "?").charAt(0).toUpperCase()}
+                                        </span>
+                                    </div>
+                                    <span className="text-white text-xs font-semibold">
+                                        {assumption.completed_by_user_name || assumption.user_name}
+                                    </span>
+                                    <span className="text-[#325a67] text-[11px]">
+                                        {assumption.completed_at
+                                            ? new Date(assumption.completed_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+                                            : ''}
+                                    </span>
+                                </div>
+                                <p className="text-[#92bbc9] text-sm leading-relaxed whitespace-pre-wrap">
+                                    {assumption.observation}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
                 </div>
             </main>
 

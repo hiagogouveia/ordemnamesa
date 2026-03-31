@@ -171,6 +171,7 @@ export interface Area {
     description?: string | null
     color: string
     priority_mode?: PriorityMode
+    max_parallel_tasks?: number | null
     created_at: string
 }
 
@@ -197,6 +198,25 @@ export interface MyActivity {
     activity_status: MyActivityStatus
     assumed_by_name?: string | null
     assumed_by_user_id?: string | null
+}
+
+// ============================================================
+// Sprint 17 — Notifications
+// ============================================================
+
+export type NotificationType = 'TASK_COMPLETED_WITH_NOTE' | 'NEW_TASK_ASSIGNED' | 'NEW_TASK_FOR_AREA'
+
+export interface Notification {
+    id: string
+    restaurant_id: string
+    user_id: string
+    type: NotificationType
+    title: string
+    description?: string | null
+    read: boolean
+    created_at: string
+    metadata?: Record<string, unknown> | null
+    related_id?: string | null
 }
 
 export interface PurchaseItem {

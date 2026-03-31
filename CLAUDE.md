@@ -130,3 +130,20 @@ npx tsc --noEmit     # Type-check sem build
 3. **Migrations** — novas tabelas/colunas precisam de migration SQL. Use o padrão `YYYYMMDD_sNN_descricao.sql`.
 4. **Valide com build** — rode `npm run build` antes de considerar a feature pronta.
 5. **Não quebre multi-tenant** — toda query deve filtrar por `restaurant_id`.
+
+## Validação pré-entrega (OBRIGATÓRIO)
+
+Antes de declarar qualquer feature/fix como pronta, executar estes passos **nesta ordem**:
+
+1. **`npm run build`** — garante que TypeScript e Next.js compilam sem erros.
+2. **Limpar cache do Next.js** — rodar `rm -rf .next` seguido de `npm run dev &` para reiniciar o dev server com cache limpo. Isso é crítico porque o Tailwind CSS v4 + Next.js 15 HMR pode ficar inconsistente quando muitos arquivos são alterados em sequência, causando:
+   - Tela branca / quebrada
+   - Classes CSS não aplicadas
+   - Layout desconfigurado
+3. **Verificar no browser** — se possível, abrir `http://localhost:3000` e navegar até a tela afetada para validar visualmente.
+
+### Por que isso é necessário?
+O Tailwind CSS v4 usa compilação JIT via PostCSS. Quando o Claude Code cria ou altera múltiplos arquivos rapidamente, o HMR do Next.js pode falhar em detectar todas as novas classes CSS, resultando em UI quebrada para o usuário. Limpar `.next` e reiniciar resolve 100% dos casos.
+
+### Regra de ouro
+**NUNCA dizer "está pronto" sem ter rodado `npm run build` com sucesso.** Se o build falhar, corrigir antes de entregar.

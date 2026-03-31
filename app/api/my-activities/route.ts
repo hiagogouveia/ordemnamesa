@@ -149,10 +149,10 @@ export async function GET(request: Request) {
             (allAssumptions ?? []).map((a: AssumptionInfo & { checklist_id: string }) => [a.checklist_id, a])
         );
 
-        // Set de conclusões formais (completed_at do próprio usuário)
+        // Set de conclusões formais (qualquer assumption com completed_at preenchido)
         const completedSet = new Set<string>(
             (allAssumptions ?? [])
-                .filter((a: AssumptionInfo & { checklist_id: string }) => a.user_id === user.id && a.completed_at !== null)
+                .filter((a: AssumptionInfo & { checklist_id: string }) => a.completed_at !== null)
                 .map((a: { checklist_id: string }) => a.checklist_id)
         );
 

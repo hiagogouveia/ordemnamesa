@@ -114,6 +114,8 @@ export const useCompleteChecklist = () => {
             queryClient.invalidateQueries({ queryKey: ['assumption', variables.restaurantId, variables.checklistId] });
             queryClient.invalidateQueries({ queryKey: ['kanban', variables.restaurantId] });
             queryClient.invalidateQueries({ queryKey: ["admin_checklists_status", variables.restaurantId] });
+            queryClient.invalidateQueries({ queryKey: ["my-activities", variables.restaurantId] });
+            queryClient.invalidateQueries({ queryKey: ["my-activities-badge", variables.restaurantId] });
         },
     });
 };

@@ -76,6 +76,54 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             assumption = data;
         }
 
+        // Gerar notificações para managers/owners se houver observação
+        if (observation && observation.trim()) {
+            try {
+                // Buscar nome do checklist
+                const { data: checklist } = await adminSupabase
+                    .from('checklists')
+                    .select('name')
+                    .eq('id', checklistId)
+                    .single();
+
+                const checklistName = checklist?.name || 'Atividade';
+
+                // Buscar managers e owners do restaurante
+                const { data: managers } = await adminSupabase
+                    .from('restaurant_users')
+                    .select('user_id')
+                    .eq('restaurant_id', restaurant_id)
+                    .eq('active', true)
+                    .in('role', ['owner', 'manager']);
+
+                if (managers && managers.length > 0) {
+                    const notifications = managers
+                        .filter((m) => m.user_id !== user.id) // Não notificar a si mesmo
+                        .map((m) => ({
+                            restaurant_id,
+                            user_id: m.user_id,
+                            type: 'TASK_COMPLETED_WITH_NOTE' as const,
+                            title: `${userName} deixou uma observação`,
+                            description: `"${observation.trim().slice(0, 100)}${observation.trim().length > 100 ? '...' : ''}" — ${checklistName}`,
+                            metadata: {
+                                checklist_id: checklistId,
+                                checklist_name: checklistName,
+                                completed_by_name: userName,
+                                completed_by_user_id: user.id,
+                            },
+                            related_id: checklistId,
+                        }));
+
+                    if (notifications.length > 0) {
+                        await adminSupabase.from('notifications').insert(notifications);
+                    }
+                }
+            } catch (notifError) {
+                // Não falhar a finalização por erro na notificação
+                console.error('[POST /api/checklists/[id]/complete] Erro ao criar notificações:', notifError);
+            }
+        }
+
         return NextResponse.json({ assumption });
     } catch (error: unknown) {
         console.error('[POST /api/checklists/[id]/complete] Erro:', error);

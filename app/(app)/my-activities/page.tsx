@@ -10,6 +10,8 @@ import { AreaFilterBar } from "@/components/my-activities/area-filter-bar";
 import { ActivitySection } from "@/components/my-activities/activity-section";
 import type { MyActivity, PriorityMode, Area } from "@/lib/types";
 
+type StatusTab = "active" | "completed";
+
 const ROLE_LABELS: Record<string, string> = {
     owner: "Proprietário",
     manager: "Gerente",
@@ -22,6 +24,7 @@ export default function MyActivitiesPage() {
     const [activeAreaId, setActiveAreaId] = useState<string>("");
     const [currentMinutes, setCurrentMinutes] = useState(0);
     const [userId, setUserId] = useState<string | undefined>();
+    const [activeTab, setActiveTab] = useState<StatusTab>("active");
 
     // Obter userId do auth
     useEffect(() => {
@@ -79,13 +82,23 @@ export default function MyActivitiesPage() {
         return activities.filter((a) => a.area_id === activeAreaId);
     }, [activities, activeAreaId]);
 
-    // Modo manual: lista única ordenada por order_index
+    // Separar ativas de concluídas
+    const activeActivities = useMemo(() =>
+        filtered.filter((a) => a.activity_status !== "done_today"),
+    [filtered]);
+
+    const completedActivities = useMemo(() =>
+        filtered.filter((a) => a.activity_status === "done_today"),
+    [filtered]);
+
+    // Modo manual: lista única ordenada por order_index (apenas ativas)
     const manualSorted = useMemo<MyActivity[]>(() => {
         if (selectedAreaPriorityMode !== "manual") return [];
-        return [...filtered].sort(
+        const source = activeTab === "active" ? activeActivities : completedActivities;
+        return [...source].sort(
             (a, b) => (a.order_index ?? 9999) - (b.order_index ?? 9999)
         );
-    }, [filtered, selectedAreaPriorityMode]);
+    }, [activeActivities, completedActivities, selectedAreaPriorityMode, activeTab]);
 
     // Ordena: atividades do próprio usuário primeiro
     const sortByOwnership = (list: MyActivity[]) =>
@@ -95,13 +108,13 @@ export default function MyActivitiesPage() {
             return aIsMine - bIsMine;
         });
 
-    // Modo auto: separado por status, com atividades do próprio usuário no topo de cada seção
-    const overdue = useMemo(() => sortByOwnership(filtered.filter((a) => a.activity_status === "overdue")), [filtered, userId]);
-    const inProgress = useMemo(() => sortByOwnership(filtered.filter((a) => a.activity_status === "in_progress")), [filtered, userId]);
-    const pending = useMemo(() => sortByOwnership(filtered.filter((a) => a.activity_status === "pending")), [filtered, userId]);
-    const doneTodayList = useMemo(() => filtered.filter((a) => a.activity_status === "done_today"), [filtered]);
+    // Modo auto: separado por status
+    const overdue = useMemo(() => sortByOwnership(activeActivities.filter((a) => a.activity_status === "overdue")), [activeActivities, userId]);
+    const inProgress = useMemo(() => sortByOwnership(activeActivities.filter((a) => a.activity_status === "in_progress")), [activeActivities, userId]);
+    const pending = useMemo(() => sortByOwnership(activeActivities.filter((a) => a.activity_status === "pending")), [activeActivities, userId]);
 
-    const totalPending = overdue.length + pending.length + inProgress.length;
+    const totalActive = activeActivities.length;
+    const totalCompleted = completedActivities.length;
 
     const handleActivityClick = (id: string) => {
         router.push(`/turno/atividade/${id}`);
@@ -110,19 +123,66 @@ export default function MyActivitiesPage() {
     return (
         <div className="min-h-screen bg-[#101d22] pb-24">
             {/* Header */}
-            <div className="sticky top-0 z-10 bg-[#101d22]/95 backdrop-blur-sm border-b border-[#233f48] px-4 pt-6 pb-4">
+            <div className="sticky top-0 z-10 bg-[#101d22]/95 backdrop-blur-sm border-b border-[#233f48] px-4 pt-6 pb-0">
                 <div className="max-w-xl mx-auto">
                     <h1 className="text-2xl font-bold text-white" style={{ fontFamily: "Fraunces, serif" }}>
                         Minhas Atividades
                     </h1>
-                    <p className="text-[#92bbc9] text-sm mt-0.5">
+                    <p className="text-[#92bbc9] text-sm mt-0.5 mb-4">
                         {ROLE_LABELS[userRole ?? "staff"] ?? ""}
-                        {totalPending > 0 && (
-                            <span className="ml-2 bg-[#13b6ec]/20 text-[#13b6ec] text-xs font-bold px-2 py-0.5 rounded-full border border-[#13b6ec]/30">
-                                {totalPending} pendente{totalPending !== 1 ? "s" : ""}
-                            </span>
-                        )}
                     </p>
+
+                    {/* Tabs */}
+                    <div className="flex gap-0 border-b border-[#233f48] -mx-4 px-4">
+                        <button
+                            onClick={() => setActiveTab("active")}
+                            className={`relative px-4 py-3 text-sm font-semibold transition-colors ${
+                                activeTab === "active"
+                                    ? "text-[#13b6ec]"
+                                    : "text-[#92bbc9] hover:text-white"
+                            }`}
+                        >
+                            <span className="flex items-center gap-2">
+                                Pendentes
+                                {totalActive > 0 && (
+                                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-tight ${
+                                        activeTab === "active"
+                                            ? "bg-[#13b6ec] text-[#0a1215]"
+                                            : "bg-[#233f48] text-[#92bbc9]"
+                                    }`}>
+                                        {totalActive}
+                                    </span>
+                                )}
+                            </span>
+                            {activeTab === "active" && (
+                                <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#13b6ec] rounded-full" />
+                            )}
+                        </button>
+                        <button
+                            onClick={() => setActiveTab("completed")}
+                            className={`relative px-4 py-3 text-sm font-semibold transition-colors ${
+                                activeTab === "completed"
+                                    ? "text-emerald-400"
+                                    : "text-[#92bbc9] hover:text-white"
+                            }`}
+                        >
+                            <span className="flex items-center gap-2">
+                                Concluídas
+                                {totalCompleted > 0 && (
+                                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-tight ${
+                                        activeTab === "completed"
+                                            ? "bg-emerald-500 text-[#0a1215]"
+                                            : "bg-[#233f48] text-[#92bbc9]"
+                                    }`}>
+                                        {totalCompleted}
+                                    </span>
+                                )}
+                            </span>
+                            {activeTab === "completed" && (
+                                <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-emerald-400 rounded-full" />
+                            )}
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -135,7 +195,7 @@ export default function MyActivitiesPage() {
                 />
 
                 {/* Priority mode indicator */}
-                {activeAreaId && (
+                {activeAreaId && activeTab === "active" && (
                     <div className="flex items-center gap-1.5">
                         <span
                             className={`material-symbols-outlined text-[14px] ${
@@ -172,22 +232,18 @@ export default function MyActivitiesPage() {
                     </div>
                 )}
 
-                {/* Empty state */}
-                {!isLoading && !error && filtered.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
-                        <span className="material-symbols-outlined text-[#325a67] text-5xl">task_alt</span>
-                        <p className="text-white font-semibold">Nenhuma atividade</p>
-                        <p className="text-[#92bbc9] text-sm max-w-xs">
-                            Nenhuma atividade nesta área.
-                        </p>
-                    </div>
-                )}
-
-                {/* Content */}
-                {!isLoading && !error && filtered.length > 0 && (
+                {/* Tab: Ativas */}
+                {!isLoading && !error && activeTab === "active" && (
                     <>
-                        {selectedAreaPriorityMode === "manual" ? (
-                            /* Modo manual: lista única na ordem do gestor */
+                        {activeActivities.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                                <span className="material-symbols-outlined text-[#325a67] text-5xl">task_alt</span>
+                                <p className="text-white font-semibold">Tudo em dia!</p>
+                                <p className="text-[#92bbc9] text-sm max-w-xs">
+                                    Nenhuma atividade pendente nesta área.
+                                </p>
+                            </div>
+                        ) : selectedAreaPriorityMode === "manual" ? (
                             <ActivitySection
                                 title="Rotinas"
                                 icon="checklist"
@@ -198,7 +254,6 @@ export default function MyActivitiesPage() {
                                 onActivityClick={handleActivityClick}
                             />
                         ) : (
-                            /* Modo auto: agrupado por status */
                             <>
                                 <ActivitySection
                                     title="Atrasadas"
@@ -224,17 +279,31 @@ export default function MyActivitiesPage() {
                                     currentMinutes={currentMinutes}
                                     onActivityClick={handleActivityClick}
                                 />
-                                <ActivitySection
-                                    title="Concluídas"
-                                    icon="task_alt"
-                                    iconColor="#22c55e"
-                                    activities={doneTodayList}
-                                    currentMinutes={currentMinutes}
-                                    onActivityClick={handleActivityClick}
-                                    collapsible
-                                    defaultOpen={false}
-                                />
                             </>
+                        )}
+                    </>
+                )}
+
+                {/* Tab: Concluídas */}
+                {!isLoading && !error && activeTab === "completed" && (
+                    <>
+                        {completedActivities.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                                <span className="material-symbols-outlined text-[#325a67] text-5xl">pending_actions</span>
+                                <p className="text-white font-semibold">Nenhuma atividade concluída</p>
+                                <p className="text-[#92bbc9] text-sm max-w-xs">
+                                    Atividades finalizadas aparecerão aqui.
+                                </p>
+                            </div>
+                        ) : (
+                            <ActivitySection
+                                title="Concluídas Hoje"
+                                icon="task_alt"
+                                iconColor="#22c55e"
+                                activities={completedActivities}
+                                currentMinutes={currentMinutes}
+                                onActivityClick={handleActivityClick}
+                            />
                         )}
                     </>
                 )}
