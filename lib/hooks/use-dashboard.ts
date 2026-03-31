@@ -13,14 +13,9 @@ export interface DashboardMetrics {
     tempo_resposta_diff_mins: number;
 
     tendencias: { date_label: string; percent: number }[];
-    checklist_progresso: { id: string; title: string; icon: string; percent: number; status: string }[];
-    alertas_recentes: { id: string; title: string; time_ago: string; notes: string; severity: 'critical' | 'warning' }[];
+    checklist_progresso: { id: string; title: string; icon: string; percent: number; status: string; area_name?: string | null; area_color?: string | null }[];
+    alertas_recentes: { id: string; title: string; time_ago: string; notes: string; severity: 'critical' | 'warning'; alert_type?: 'critico' | 'atrasado' | 'bloqueado' }[];
     top_performers: { user_id: string; name: string; role: string; avatar: string | null; total_done: number; percent_on_time: number }[];
-
-    // Legacy metrics
-    progresso_geral: number;
-    total_tasks: number;
-    done_tasks: number;
 }
 
 const getAuthToken = async () => {
@@ -47,9 +42,6 @@ export const useDashboard = (restaurantId: string | null) => {
                 checklist_progresso: [],
                 alertas_recentes: [],
                 top_performers: [],
-                progresso_geral: 0,
-                total_tasks: 0,
-                done_tasks: 0
             };
 
             const token = await getAuthToken();

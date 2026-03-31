@@ -101,12 +101,27 @@ export function RelatoriosClient({ restaurantId }: Props) {
 
     const handleExport = async () => {
         try {
-            const response = await fetch(`/api/relatorios?restaurant_id=${restaurantId}&start_date=${startDate}&end_date=${endDate}&format=csv`);
-            if (response.ok) {
-                alert("Relatório CSV gerado com sucesso.");
-            }
+            const supabase = (await import('@/lib/supabase/client')).createClient();
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token || '';
+
+            const response = await fetch(
+                `/api/relatorios?restaurant_id=${restaurantId}&start_date=${startDate}&end_date=${endDate}&format=csv`,
+                { headers: { 'Authorization': `Bearer ${token}` } }
+            );
+            if (!response.ok) return;
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `relatorio.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
         } catch (error) {
-            console.error(error);
+            console.error('Erro ao exportar CSV:', error);
         }
     };
 
@@ -276,6 +291,16 @@ export function RelatoriosClient({ restaurantId }: Props) {
                                                         {reg.status === 'flagged' && (
                                                             <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/10 text-red-400 uppercase tracking-wider">
                                                                 Incidente
+                                                            </span>
+                                                        )}
+                                                        {reg.status === 'skipped' && (
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-yellow-500/10 text-yellow-500 uppercase tracking-wider">
+                                                                Pulada
+                                                            </span>
+                                                        )}
+                                                        {reg.status === 'doing' && (
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/10 text-blue-400 uppercase tracking-wider">
+                                                                Em andamento
                                                             </span>
                                                         )}
                                                         {reg.status === 'partial' && (
