@@ -8,6 +8,7 @@ import { useChecklists, useCreateChecklist, useDeleteChecklist, useToggleCheckli
 import { useChecklistOrders, useUpdateChecklistOrders } from "@/lib/hooks/use-checklist-orders";
 import { createClient } from "@/lib/supabase/client";
 import { useAllAreas } from "@/lib/hooks/use-areas";
+import { useEquipe } from "@/lib/hooks/use-equipe";
 import { ChecklistHeader } from "@/components/checklists/management/ChecklistHeader";
 import { ChecklistFilters } from "@/components/checklists/management/ChecklistFilters";
 import { ChecklistListView } from "@/components/checklists/management/ChecklistListView";
@@ -76,6 +77,7 @@ function ChecklistsContent() {
     const selectedAreaId = searchParams.get("area_id") ?? "";
     const selectedAvailability = searchParams.get("availability") ?? "";
     const selectedExecStatus = searchParams.get("exec_status") ?? "";
+    const selectedCollaboratorId = searchParams.get("collaborator_id") ?? "";
     const sortField = (searchParams.get("sort") as SortField | null) ?? null;
     const sortOrder = (searchParams.get("order") as SortOrder | null) ?? "asc";
 
@@ -89,6 +91,7 @@ function ChecklistsContent() {
     const { data: checklists = [], isLoading } = useChecklists(restaurantId ?? undefined);
     const { data: orders = [] } = useChecklistOrders(restaurantId ?? undefined);
     const { data: areas = [], isLoading: isLoadingAreas } = useAllAreas(restaurantId ?? undefined);
+    const { data: equipeData } = useEquipe(restaurantId ?? null);
 
     // Mutations
     const { mutate: toggleStatus } = useToggleChecklistStatus();
@@ -112,6 +115,15 @@ function ChecklistsContent() {
             if (selectedAreaId && c.area_id !== selectedAreaId) return false;
             if (selectedAvailability === "active" && !c.active) return false;
             if (selectedAvailability === "inactive" && c.active) return false;
+
+            // Filtro por colaborador
+            if (selectedCollaboratorId) {
+                const collaborator = (equipeData?.equipe ?? []).find((m) => m.user_id === selectedCollaboratorId);
+                const collaboratorAreaIds = new Set(collaborator?.areas.map((a) => a.id) ?? []);
+                const directlyAssigned = c.responsible?.id === selectedCollaboratorId;
+                const areaDistributed = !c.assigned_to_user_id && !!c.area_id && collaboratorAreaIds.has(c.area_id);
+                if (!directlyAssigned && !areaDistributed) return false;
+            }
 
             // Filtro por status de execução
             if (selectedExecStatus) {
@@ -172,7 +184,7 @@ function ChecklistsContent() {
             // Tiebreaker: order_index (já está na ordem base)
             return 0;
         });
-    }, [checklists, searchQuery, selectedShift, selectedAreaId, selectedAvailability, selectedExecStatus, currentMinutes, sortField, sortOrder]);
+    }, [checklists, searchQuery, selectedShift, selectedAreaId, selectedAvailability, selectedExecStatus, selectedCollaboratorId, equipeData, currentMinutes, sortField, sortOrder]);
 
     // ─── URL HELPERS ────────────────────────────────────────────────────────────
 
@@ -201,6 +213,13 @@ function ChecklistsContent() {
         const params = new URLSearchParams(searchParams.toString());
         if (value) params.set("exec_status", value);
         else params.delete("exec_status");
+        router.replace(`/checklists?${params.toString()}`);
+    };
+
+    const setCollaboratorFilter = (value: string) => {
+        const params = new URLSearchParams(searchParams.toString());
+        if (value) params.set("collaborator_id", value);
+        else params.delete("collaborator_id");
         router.replace(`/checklists?${params.toString()}`);
     };
 
@@ -413,6 +432,9 @@ function ChecklistsContent() {
                 onAvailabilityChange={setAvailabilityFilter}
                 selectedExecStatus={selectedExecStatus}
                 onExecStatusChange={setExecStatusFilter}
+                collaborators={equipeData?.equipe ?? []}
+                selectedCollaboratorId={selectedCollaboratorId}
+                onCollaboratorChange={setCollaboratorFilter}
             />
 
             <div className="flex flex-1 overflow-hidden">

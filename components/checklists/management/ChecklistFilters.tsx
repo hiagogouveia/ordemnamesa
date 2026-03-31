@@ -2,6 +2,7 @@
 
 import { FilterDropdown } from "@/components/ui/filter-dropdown";
 import type { Area } from "@/lib/types";
+import type { EquipeMember } from "@/lib/hooks/use-equipe";
 
 const SHIFT_OPTIONS = [
     { value: "", label: "Todos" },
@@ -36,6 +37,9 @@ interface ChecklistFiltersProps {
     onAvailabilityChange: (value: string) => void;
     selectedExecStatus: string;
     onExecStatusChange: (value: string) => void;
+    collaborators: EquipeMember[];
+    selectedCollaboratorId: string;
+    onCollaboratorChange: (userId: string) => void;
 }
 
 export function ChecklistFilters({
@@ -49,10 +53,20 @@ export function ChecklistFilters({
     onAvailabilityChange,
     selectedExecStatus,
     onExecStatusChange,
+    collaborators,
+    selectedCollaboratorId,
+    onCollaboratorChange,
 }: ChecklistFiltersProps) {
     const areaOptions = [
         { value: "", label: "Todas" },
         ...(areas ?? []).map((a) => ({ value: a.id, label: a.name })),
+    ];
+
+    const collaboratorOptions = [
+        { value: "", label: "Todos" },
+        ...(collaborators ?? [])
+            .filter((m) => m.active)
+            .map((m) => ({ value: m.user_id, label: m.name })),
     ];
 
     return (
@@ -81,6 +95,12 @@ export function ChecklistFilters({
                 options={EXEC_STATUS_OPTIONS}
                 value={selectedExecStatus}
                 onChange={onExecStatusChange}
+            />
+            <FilterDropdown
+                label="Colaborador"
+                options={collaboratorOptions}
+                value={selectedCollaboratorId}
+                onChange={onCollaboratorChange}
             />
         </div>
     );
