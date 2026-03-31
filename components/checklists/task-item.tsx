@@ -91,6 +91,13 @@ export function TaskItem({ task, equipe, onUpdate, onRemove, onEnter, setInputRe
                         placeholder="Título da tarefa..."
                         className="w-full bg-transparent border-none outline-none text-white font-bold placeholder:text-[#325a67] placeholder:font-normal focus:ring-0"
                     />
+                    <textarea
+                        value={task.description || ""}
+                        onChange={(e) => onUpdate(task.tempId, { description: e.target.value || undefined })}
+                        placeholder="Descrição ou instruções (opcional)..."
+                        rows={2}
+                        className="w-full mt-1 bg-transparent border-none outline-none text-sm text-[#92bbc9] placeholder:text-[#325a67] focus:ring-0 resize-none"
+                    />
                 </div>
 
                 <div className="flex items-center gap-4">

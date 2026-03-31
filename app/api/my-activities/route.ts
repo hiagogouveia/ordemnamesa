@@ -72,14 +72,21 @@ export async function GET(request: Request) {
 
         const areaIds = (userAreaRows ?? []).map((r) => r.area_id);
         const roleIds = (userRoleRows ?? []).map((r) => r.role_id);
-        const effectiveIds = areaIds.length > 0 ? areaIds : roleIds;
 
-        // Sem funções ou áreas atribuídas → sem atividades
-        if (effectiveIds.length === 0) {
-            return NextResponse.json([]);
+        // Filtro: checklists da área/role do usuário (sem atribuição individual) OU atribuídos diretamente
+        // Lógica: (area_id IN user_areas AND assigned_to_user_id IS NULL)
+        //      OR (role_id IN user_roles AND assigned_to_user_id IS NULL)
+        //      OR (assigned_to_user_id = user.id)
+        const checklistFilterParts: string[] = [];
+        if (areaIds.length > 0) {
+            checklistFilterParts.push(`and(area_id.in.(${areaIds.join(',')}),assigned_to_user_id.is.null)`);
         }
+        if (roleIds.length > 0) {
+            checklistFilterParts.push(`and(role_id.in.(${roleIds.join(',')}),assigned_to_user_id.is.null)`);
+        }
+        checklistFilterParts.push(`assigned_to_user_id.eq.${user.id}`);
 
-        // Checklists cuja area_id ou role_id está entre as áreas efetivas do usuário
+        // Checklists cuja area_id ou role_id está entre as áreas efetivas do usuário, ou atribuídos diretamente
         const { data: checklists, error: checklistsError } = await adminSupabase
             .from('checklists')
             .select(`
@@ -103,8 +110,7 @@ export async function GET(request: Request) {
             .eq('restaurant_id', restaurant_id)
             .eq('active', true)
             .eq('status', 'active')
-            .or(`role_id.not.is.null,area_id.not.is.null`)
-            .or(`area_id.in.(${effectiveIds.join(',')}),role_id.in.(${effectiveIds.join(',')})`)
+            .or(checklistFilterParts.join(','))
             .order('order_index', { ascending: true, nullsFirst: false });
 
         if (checklistsError) {

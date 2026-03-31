@@ -53,6 +53,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     const [shift, setShift] = useState("any");
     const [checklistType, setChecklistType] = useState("regular");
     const [assignedToUserId, setAssignedToUserId] = useState("");
+    const [isIndividualMode, setIsIndividualMode] = useState(false);
     const [isRequired, setIsRequired] = useState(true);
     const [recurrence, setRecurrence] = useState("none");
     // Sprint 8: Time window
@@ -132,6 +133,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                     setShift(parsed.shift ?? "any");
                     setChecklistType(parsed.checklistType ?? "regular");
                     setAssignedToUserId(parsed.assignedToUserId ?? "");
+                    setIsIndividualMode(parsed.isIndividualMode ?? !!parsed.assignedToUserId);
                     setIsRequired(parsed.isRequired ?? true);
                     setRecurrence(parsed.recurrence ?? "none");
                     setStartTime(parsed.startTime ?? "");
@@ -154,6 +156,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             setShift(checklist.shift);
             setChecklistType(checklist.checklist_type || "regular");
             setAssignedToUserId(checklist.assigned_to_user_id || "");
+            setIsIndividualMode(!!checklist.assigned_to_user_id);
             setIsRequired(checklist.is_required ?? true);
             setRecurrence(checklist.recurrence || "none");
             // Sprint 8: time window
@@ -177,6 +180,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 setShift("any");
                 setChecklistType("regular");
                 setAssignedToUserId("");
+                setIsIndividualMode(false);
                 setIsRequired(true);
                 setRecurrence("none");
                 setStartTime("");
@@ -200,6 +204,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                     setShift(parsed.shift ?? "any");
                     setChecklistType(parsed.checklistType ?? "regular");
                     setAssignedToUserId(parsed.assignedToUserId ?? "");
+                    setIsIndividualMode(parsed.isIndividualMode ?? !!parsed.assignedToUserId);
                     setIsRequired(parsed.isRequired ?? true);
                     setRecurrence(parsed.recurrence ?? "none");
                     setStartTime(parsed.startTime ?? "");
@@ -226,7 +231,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
 
     useEffect(() => {
         const formState = {
-            name, description, shift, checklistType, assignedToUserId,
+            name, description, shift, checklistType, assignedToUserId, isIndividualMode,
             isRequired, recurrence, startTime, endTime, hasTimeWindow,
             recurrenceConfig, enforceSequentialOrder, areaId, tasks
         };
@@ -291,7 +296,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         }, 1500);
 
         return () => clearTimeout(handler);
-    }, [name, description, shift, checklistType, assignedToUserId, isRequired, recurrence, startTime, endTime, hasTimeWindow, recurrenceConfig, enforceSequentialOrder, areaId, tasks, checklist, restaurantId, updateMutation]);
+    }, [name, description, shift, checklistType, assignedToUserId, isIndividualMode, isRequired, recurrence, startTime, endTime, hasTimeWindow, recurrenceConfig, enforceSequentialOrder, areaId, tasks, checklist, restaurantId, updateMutation]);
 
     const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 8 } });
     const keyboardSensor = useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates });
@@ -613,22 +618,58 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                         </div>
 
                         <div>
-                            <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Responsável (opcional)</label>
-                            <select
-                                value={assignedToUserId}
-                                onChange={(e) => setAssignedToUserId(e.target.value)}
-                                className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
-                            >
-                                <option value="">Disponível para toda a equipe</option>
-                                {filteredEquipe.map(m => (
-                                    <option key={m.user_id} value={m.user_id}>{m.name}</option>
-                                ))}
-                            </select>
-                            {assignedToUserId && (
-                                <p className="text-xs text-[#92bbc9] mt-1.5">Apenas este colaborador verá esta rotina no turno.</p>
-                            )}
-                            {areaId && filteredEquipe.length === 0 && (
-                                <p className="text-xs text-amber-400 mt-1.5">Nenhum colaborador nesta área.</p>
+                            <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Atribuição</label>
+                            <div className="grid grid-cols-2 gap-2 mb-3">
+                                <button
+                                    type="button"
+                                    onClick={() => { setIsIndividualMode(false); setAssignedToUserId(""); }}
+                                    className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${
+                                        !isIndividualMode
+                                            ? 'bg-[#13b6ec]/10 border-[#13b6ec]/40 text-[#13b6ec]'
+                                            : 'bg-[#16262c] border-[#233f48] text-[#92bbc9] hover:border-[#325a67]'
+                                    }`}
+                                >
+                                    <span className="material-symbols-outlined text-[18px]">groups</span>
+                                    Toda a equipe
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsIndividualMode(true)}
+                                    className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${
+                                        isIndividualMode
+                                            ? 'bg-[#13b6ec]/10 border-[#13b6ec]/40 text-[#13b6ec]'
+                                            : 'bg-[#16262c] border-[#233f48] text-[#92bbc9] hover:border-[#325a67]'
+                                    }`}
+                                >
+                                    <span className="material-symbols-outlined text-[18px]">person</span>
+                                    Colaborador específico
+                                </button>
+                            </div>
+
+                            {isIndividualMode ? (
+                                <div>
+                                    <select
+                                        value={assignedToUserId}
+                                        onChange={(e) => setAssignedToUserId(e.target.value)}
+                                        className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
+                                    >
+                                        <option value="">Selecionar colaborador...</option>
+                                        {filteredEquipe.map(m => (
+                                            <option key={m.user_id} value={m.user_id}>{m.name}</option>
+                                        ))}
+                                    </select>
+                                    {!assignedToUserId && (
+                                        <p className="text-xs text-amber-400 mt-1.5">Selecione um colaborador para continuar.</p>
+                                    )}
+                                    {assignedToUserId && (
+                                        <p className="text-xs text-[#92bbc9] mt-1.5">Apenas este colaborador verá esta rotina no turno.</p>
+                                    )}
+                                    {areaId && filteredEquipe.length === 0 && (
+                                        <p className="text-xs text-amber-400 mt-1.5">Nenhum colaborador nesta área.</p>
+                                    )}
+                                </div>
+                            ) : (
+                                <p className="text-xs text-[#92bbc9]">Todos os colaboradores da área terão acesso a esta rotina.</p>
                             )}
                         </div>
 
