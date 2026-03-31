@@ -10,7 +10,7 @@ import { useMyActivitiesBadge } from "@/lib/hooks/use-my-activities";
 
 const managerNavigation = [
     { name: "Dashboard", href: "/dashboard", icon: "dashboard" },
-    { name: "Minhas Atividades", href: "/my-activities", icon: "assignment_ind", badge: true },
+    { name: "Meu Turno", href: "/turno", icon: "assignment_ind", badge: true },
     { name: "Checklists", href: "/checklists", icon: "checklist" },
     { name: "Equipe", href: "/equipe", icon: "group" },
     { name: "Compras", href: "/compras", icon: "shopping_cart" },
@@ -19,8 +19,7 @@ const managerNavigation = [
 ];
 
 const staffNavigation = [
-    { name: "Turno Atual", href: "/turno", icon: "dashboard" },
-    { name: "Minhas Atividades", href: "/my-activities", icon: "assignment_ind", badge: true },
+    { name: "Turno Atual", href: "/turno", icon: "dashboard", badge: true },
     { name: "Histórico", href: "/historico", icon: "history" },
 ];
 

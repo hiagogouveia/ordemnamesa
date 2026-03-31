@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { ChecklistAssumption } from '@/lib/types';
@@ -22,7 +23,9 @@ const getAuthToken = async () => {
 };
 
 export const useKanbanTasks = (restaurantId: string | undefined) => {
-    return useQuery({
+    const queryClient = useQueryClient();
+
+    const query = useQuery({
         queryKey: ['kanban', restaurantId],
         queryFn: async () => {
             if (!restaurantId) return null;
@@ -34,8 +37,51 @@ export const useKanbanTasks = (restaurantId: string | undefined) => {
             return response.json() as Promise<KanbanData>;
         },
         enabled: !!restaurantId,
-        staleTime: 5 * 60 * 1000,   // estrutura do kanban muda só quando checklists são editados
+        staleTime: 2 * 60 * 1000,
+        refetchOnWindowFocus: true,
     });
+
+    // Realtime: atualizar ao mudar assumptions ou execuções de tarefas
+    useEffect(() => {
+        if (!restaurantId) return;
+
+        const supabase = createClient();
+        const channel = supabase
+            .channel(`kanban-rt-${restaurantId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'checklist_assumptions',
+                    filter: `restaurant_id=eq.${restaurantId}`,
+                },
+                () => {
+                    queryClient.invalidateQueries({ queryKey: ['kanban', restaurantId] });
+                    queryClient.invalidateQueries({ queryKey: ['my-activities-badge', restaurantId] });
+                }
+            )
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'task_executions',
+                    filter: `restaurant_id=eq.${restaurantId}`,
+                },
+                () => {
+                    queryClient.invalidateQueries({ queryKey: ['kanban', restaurantId] });
+                    queryClient.invalidateQueries({ queryKey: ['my-activities-badge', restaurantId] });
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [restaurantId, queryClient]);
+
+    return query;
 };
 
 export const useChecklistAssumption = (restaurantId: string | undefined, checklistId: string | undefined) => {

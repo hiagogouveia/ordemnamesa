@@ -14,9 +14,8 @@ const TITLES: Record<string, string> = {
     "/equipe": "Gestão da Equipe",
     "/relatorios": "Relatórios e Análises",
     "/configuracoes": "Configurações do Sistema",
-    "/turno": "Home do Turno",
+    "/turno": "Meu Turno",
     "/historico": "Histórico de Tarefas",
-    "/my-activities": "Minhas Atividades",
     "/compras": "Compras",
 };
 
