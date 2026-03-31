@@ -6,6 +6,7 @@ import { useEquipe, useUpdateEquipeMember, EquipeData } from '@/lib/hooks/use-eq
 import { useAllAreas } from '@/lib/hooks/use-areas';
 import { useShifts } from '@/lib/hooks/use-shifts';
 import { TeamDrawer } from './team-drawer';
+import { ChangePasswordModal } from './change-password-modal';
 import { Avatar } from '@/components/ui/avatar';
 import { useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
@@ -85,6 +86,10 @@ export function EquipeClient({ restaurantId, userRole }: Props) {
     } | null>(null);
 
     const [loadingAction, setLoadingAction] = useState<string | null>(null);
+
+    // Modal Alterar Senha
+    const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+    const [passwordTargetMember, setPasswordTargetMember] = useState<{ user_id: string; name: string } | null>(null);
 
     const { data: equipeData, isLoading, error } = useEquipe(restaurantId);
     const updateMember = useUpdateEquipeMember(restaurantId);
@@ -412,6 +417,11 @@ export function EquipeClient({ restaurantId, userRole }: Props) {
                                                     <button onClick={(e) => { e.stopPropagation(); openEditModal(member); }} className="p-1.5 text-[#92bbc9] hover:text-primary hover:bg-primary/10 rounded-md transition-colors" title="Editar">
                                                         <span className="material-symbols-outlined text-[20px]">edit</span>
                                                     </button>
+                                                    {userRole === 'owner' && (
+                                                        <button onClick={(e) => { e.stopPropagation(); setPasswordTargetMember({ user_id: member.user_id, name: member.name }); setIsChangePasswordOpen(true); }} className="p-1.5 text-[#92bbc9] hover:text-yellow-400 hover:bg-yellow-400/10 rounded-md transition-colors" title="Alterar Senha">
+                                                            <span className="material-symbols-outlined text-[20px]">key</span>
+                                                        </button>
+                                                    )}
                                                     {member.active && (
                                                         <button onClick={(e) => { e.stopPropagation(); handleDeactivate(member.id, member.name); }} disabled={loadingAction === member.id} className="p-1.5 text-[#92bbc9] hover:text-red-400 hover:bg-red-400/10 rounded-md transition-colors disabled:opacity-50" title="Desativar Acesso">
                                                             <span className="material-symbols-outlined text-[20px]">{loadingAction === member.id ? 'hourglass_empty' : 'block'}</span>
@@ -534,6 +544,14 @@ export function EquipeClient({ restaurantId, userRole }: Props) {
                 onClose={() => setIsDrawerOpen(false)}
                 member={selectedMember}
                 onUpdated={handleMemberUpdated}
+            />
+
+            {/* Modal Alterar Senha (apenas owner) */}
+            <ChangePasswordModal
+                isOpen={isChangePasswordOpen}
+                onClose={() => { setIsChangePasswordOpen(false); setPasswordTargetMember(null); }}
+                member={passwordTargetMember}
+                restaurantId={restaurantId}
             />
         </div>
     );

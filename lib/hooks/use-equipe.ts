@@ -84,6 +84,36 @@ export const useUpdateEquipeName = (restaurantId: string | null) => {
     });
 };
 
+export const useChangeCollaboratorPassword = (restaurantId: string | null) => {
+    return useMutation({
+        mutationFn: async ({ targetUserId, newPassword, confirmPassword }: {
+            targetUserId: string;
+            newPassword: string;
+            confirmPassword: string;
+        }) => {
+            const token = await getAuthToken();
+            const response = await fetch('/api/equipe/change-password', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    target_user_id: targetUserId,
+                    new_password: newPassword,
+                    confirm_password: confirmPassword,
+                    restaurant_id: restaurantId,
+                }),
+            });
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Erro ao alterar senha');
+            }
+            return response.json();
+        },
+    });
+};
+
 export const useUpdateEquipeMember = (restaurantId: string | null) => {
     const queryClient = useQueryClient();
 
