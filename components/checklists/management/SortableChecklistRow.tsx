@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
@@ -66,7 +67,9 @@ export function SortableChecklistRow({
     onDelete,
 }: SortableChecklistRowProps) {
     const [menuOpen, setMenuOpen] = useState(false);
-    const menuRef = useRef<HTMLDivElement>(null);
+    const buttonRef = useRef<HTMLButtonElement>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
 
     const {
         attributes,
@@ -88,13 +91,32 @@ export function SortableChecklistRow({
     useEffect(() => {
         if (!menuOpen) return;
         function handleClick(e: MouseEvent) {
-            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+            const target = e.target as Node;
+            if (!buttonRef.current?.contains(target) && !dropdownRef.current?.contains(target)) {
                 setMenuOpen(false);
+                setMenuPos(null);
             }
         }
         document.addEventListener("mousedown", handleClick);
         return () => document.removeEventListener("mousedown", handleClick);
     }, [menuOpen]);
+
+    const handleMenuToggle = () => {
+        if (menuOpen) {
+            setMenuOpen(false);
+            setMenuPos(null);
+            return;
+        }
+        const rect = buttonRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        const MENU_HEIGHT = 180;
+        const openUp = rect.bottom + MENU_HEIGHT > window.innerHeight;
+        setMenuPos({
+            top: openUp ? rect.top - MENU_HEIGHT : rect.bottom + 4,
+            left: rect.right - 160,
+        });
+        setMenuOpen(true);
+    };
 
     const handleDelete = () => {
         setMenuOpen(false);
@@ -195,32 +217,37 @@ export function SortableChecklistRow({
 
             {/* Ações */}
             <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
-                <div ref={menuRef} className="relative">
+                <div className="relative">
                     <button
-                        onClick={() => setMenuOpen((v) => !v)}
+                        ref={buttonRef}
+                        onClick={handleMenuToggle}
                         className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#233f48] text-[#92bbc9] hover:text-white transition-colors"
                     >
                         <span className="material-symbols-outlined text-[20px]">more_vert</span>
                     </button>
 
-                    {menuOpen && (
-                        <div className="absolute right-0 top-full mt-1 z-20 bg-[#16262c] border border-[#233f48] rounded-xl shadow-xl min-w-[160px] py-1 overflow-hidden">
+                    {menuOpen && menuPos && createPortal(
+                        <div
+                            ref={dropdownRef}
+                            style={{ position: "fixed", top: menuPos.top, left: menuPos.left, zIndex: 9999 }}
+                            className="bg-[#16262c] border border-[#233f48] rounded-xl shadow-xl min-w-[160px] py-1 overflow-hidden"
+                        >
                             <button
-                                onClick={() => { setMenuOpen(false); onSelect(); }}
+                                onClick={() => { setMenuOpen(false); setMenuPos(null); onSelect(); }}
                                 className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-[#92bbc9] hover:bg-[#233f48] hover:text-white transition-colors"
                             >
                                 <span className="material-symbols-outlined text-[16px]">visibility</span>
                                 Visualizar
                             </button>
                             <button
-                                onClick={() => { setMenuOpen(false); onEdit(); }}
+                                onClick={() => { setMenuOpen(false); setMenuPos(null); onEdit(); }}
                                 className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-[#92bbc9] hover:bg-[#233f48] hover:text-white transition-colors"
                             >
                                 <span className="material-symbols-outlined text-[16px]">edit</span>
                                 Editar
                             </button>
                             <button
-                                onClick={() => { setMenuOpen(false); onDuplicate(); }}
+                                onClick={() => { setMenuOpen(false); setMenuPos(null); onDuplicate(); }}
                                 className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-[#92bbc9] hover:bg-[#233f48] hover:text-white transition-colors"
                             >
                                 <span className="material-symbols-outlined text-[16px]">content_copy</span>
@@ -234,7 +261,8 @@ export function SortableChecklistRow({
                                 <span className="material-symbols-outlined text-[16px]">delete</span>
                                 Excluir
                             </button>
-                        </div>
+                        </div>,
+                        document.body
                     )}
                 </div>
             </td>

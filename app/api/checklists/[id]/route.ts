@@ -267,15 +267,27 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
             return NextResponse.json({ error: 'Permissões insuficientes' }, { status: 403 });
         }
 
-        // Soft Delete
+        // Deletar task_executions antes (sem cascade automático)
+        const { error: execError } = await adminSupabase
+            .from('task_executions')
+            .delete()
+            .eq('checklist_id', id)
+            .eq('restaurant_id', restaurant_id);
+
+        if (execError) {
+            console.error('[DELETE /api/checklists/[id]] Erro ao deletar task_executions:', execError);
+            return NextResponse.json({ error: execError.message }, { status: 500 });
+        }
+
+        // Hard delete (cascata para tasks, assumptions e orders)
         const { error } = await adminSupabase
             .from('checklists')
-            .update({ active: false })
+            .delete()
             .eq('id', id)
             .eq('restaurant_id', restaurant_id);
 
         if (error) {
-            console.error('[DELETE /api/checklists/[id]] Erro ao soft-delete:', error);
+            console.error('[DELETE /api/checklists/[id]] Erro ao deletar checklist:', error);
             return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
