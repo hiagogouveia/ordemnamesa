@@ -57,7 +57,7 @@ export default function KanbanPage() {
     // Derived states
     const currentShift = useMemo(() => getCurrentShift(shifts, timeNow), [shifts, timeNow]);
     const userRoleIds = useMemo(() => userRolesData.map(ur => ur.role_id), [userRolesData]);
-    const hasNoRoles = !userLoading && user !== null && !loadingUserRoles && userRolesData.length === 0;
+    const hasNoRoles = !userLoading && user !== null && !loadingKanban && (kanbanData?.checklists?.length ?? 0) === 0 && !loadingUserRoles && userRolesData.length === 0;
 
     const activePurchaseList = useMemo(() => {
         if (!userRoleIds.length) return null;
@@ -143,12 +143,12 @@ export default function KanbanPage() {
     }, [kanbanData]);
 
     const userAreas = useMemo(() => {
-        if (!userRolesData) return [];
-        const areas = userRolesData
-            .map(ur => ur.role?.name)
+        if (!kanbanData?.checklists) return [];
+        const labels = kanbanData.checklists
+            .map(cl => cl.roles?.name || cl.areas?.name)
             .filter((name): name is string => Boolean(name));
-        return Array.from(new Set(areas)).sort();
-    }, [userRolesData]);
+        return Array.from(new Set(labels)).sort();
+    }, [kanbanData]);
 
     const [activeArea, setActiveArea] = useState<string>('');
 
@@ -158,10 +158,9 @@ export default function KanbanPage() {
         }
     }, [userAreas, activeArea]);
 
-    const getFiltered = <T extends { role_id?: string }>(activities: T[]): T[] => {
-        const activeRole = userRolesData.find(ur => ur.role?.name === activeArea);
-        if (!activeRole) return [];
-        return activities.filter(a => a.role_id === activeRole.role_id);
+    const getFiltered = <T extends { roles?: { name: string }; areas?: { name: string } }>(activities: T[]): T[] => {
+        if (!activeArea) return [];
+        return activities.filter(a => a.roles?.name === activeArea || a.areas?.name === activeArea);
     };
 
     const filteredTodo = useMemo(() => getFiltered(todoActivities), [todoActivities, activeArea, userRolesData]);
@@ -284,7 +283,7 @@ export default function KanbanPage() {
                                                 isRequired={activity.is_required}
                                                 isAssignedToOther={isAssignedToOther}
                                                 assumptionName={assumption?.user_name}
-                                                area={activity.roles?.name}
+                                                area={activity.roles?.name || activity.areas?.name}
                                                 onClick={() => router.push(`/turno/atividade/${activity.id}`)}
                                             />
                                         );
@@ -316,7 +315,7 @@ export default function KanbanPage() {
                                                 progress={activity.progress}
                                                 flaggedCount={activity.flaggedTasksCount}
                                                 assumptionName={assumption?.user_name}
-                                                area={activity.roles?.name}
+                                                area={activity.roles?.name || activity.areas?.name}
                                                 onClick={() => router.push(`/turno/atividade/${activity.id}`)}
                                             />
                                         );

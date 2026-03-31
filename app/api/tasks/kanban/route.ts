@@ -64,6 +64,7 @@ export async function GET(request: Request) {
             .select('id, name, description, is_required, recurrence, last_reset_at, assigned_to_user_id, role_id, area_id, roles(id, name, color), areas(id, name, color), checklist_type, start_time, end_time')
             .eq('restaurant_id', restaurant_id)
             .eq('active', true)
+            .eq('status', 'active')
             .or(checklistFilterParts.join(','));
 
         const checklistIds = activeChecklists?.map(c => c.id) || [];
