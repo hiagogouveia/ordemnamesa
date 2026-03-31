@@ -41,6 +41,7 @@ export function AreasTab() {
     const [formName, setFormName] = useState("");
     const [formDescription, setFormDescription] = useState("");
     const [formColor, setFormColor] = useState(AREA_COLORS[0]);
+    const [formMaxTasks, setFormMaxTasks] = useState("");
 
     // User assignment modal
     const [assignModalAreaId, setAssignModalAreaId] = useState<string | null>(null);
@@ -59,11 +60,13 @@ export function AreasTab() {
             setFormName(area.name);
             setFormDescription(area.description || "");
             setFormColor(area.color);
+            setFormMaxTasks(area.max_parallel_tasks != null ? String(area.max_parallel_tasks) : "");
         } else {
             setEditingArea(null);
             setFormName("");
             setFormDescription("");
             setFormColor(AREA_COLORS[0]);
+            setFormMaxTasks("");
         }
         setIsAreaModalOpen(true);
     };
@@ -71,6 +74,13 @@ export function AreasTab() {
     const handleSaveArea = async () => {
         if (!restaurantId || !formName.trim()) return;
         setErrorMsg(null);
+
+        const maxParallelTasks = formMaxTasks.trim() === "" ? null : parseInt(formMaxTasks, 10);
+        if (maxParallelTasks !== null && (isNaN(maxParallelTasks) || maxParallelTasks < 1)) {
+            setErrorMsg("O limite deve ser vazio (ilimitado) ou um número inteiro >= 1.");
+            return;
+        }
+
         try {
             if (editingArea) {
                 await updateArea.mutateAsync({
@@ -79,6 +89,7 @@ export function AreasTab() {
                     name: formName.trim(),
                     description: formDescription.trim() || undefined,
                     color: formColor,
+                    max_parallel_tasks: maxParallelTasks,
                 });
             } else {
                 await createArea.mutateAsync({
@@ -86,6 +97,7 @@ export function AreasTab() {
                     name: formName.trim(),
                     description: formDescription.trim() || undefined,
                     color: formColor,
+                    max_parallel_tasks: maxParallelTasks,
                 });
             }
             setIsAreaModalOpen(false);
@@ -202,9 +214,17 @@ export function AreasTab() {
                                 {area.description && (
                                     <p className="text-[#92bbc9] text-xs truncate mt-0.5">{area.description}</p>
                                 )}
-                                <p className="text-[#325a67] text-xs mt-0.5">
-                                    {members.length} membro{members.length !== 1 ? "s" : ""}
-                                </p>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                    <span className="text-[#325a67] text-xs">
+                                        {members.length} membro{members.length !== 1 ? "s" : ""}
+                                    </span>
+                                    <span className="text-[#325a67] text-xs">·</span>
+                                    <span className="text-[#325a67] text-xs">
+                                        {area.max_parallel_tasks != null
+                                            ? `Até ${area.max_parallel_tasks} atividade${area.max_parallel_tasks > 1 ? "s" : ""}/pessoa`
+                                            : "Ilimitado"}
+                                    </span>
+                                </div>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
                                 <button
@@ -337,6 +357,24 @@ export function AreasTab() {
                                         />
                                     ))}
                                 </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">
+                                    Máximo de atividades simultâneas por colaborador
+                                </label>
+                                <input
+                                    type="number"
+                                    min={1}
+                                    value={formMaxTasks}
+                                    onChange={(e) => setFormMaxTasks(e.target.value)}
+                                    placeholder="Deixe vazio para ilimitado"
+                                    className="w-full bg-[#101d22] border border-[#233f48] rounded-xl px-4 py-3 text-white placeholder-[#325a67] focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all text-sm"
+                                />
+                                <p className="text-xs text-[#92bbc9] mt-1.5">
+                                    {formMaxTasks.trim() === ""
+                                        ? "Ilimitado — colaboradores podem assumir quantas atividades quiserem nesta área"
+                                        : `Até ${formMaxTasks} atividade${parseInt(formMaxTasks) > 1 ? "s" : ""} por pessoa nesta área`}
+                                </p>
                             </div>
                         </div>
 

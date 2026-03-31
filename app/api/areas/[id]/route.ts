@@ -38,6 +38,7 @@ export async function PUT(
 
         const body = await request.json();
         const { restaurant_id, name, description, color } = body as Partial<Area>;
+        const rawMaxTasks = body.max_parallel_tasks;
 
         if (!restaurant_id) {
             return NextResponse.json({ error: 'restaurant_id é obrigatório.' }, { status: 400 });
@@ -51,10 +52,19 @@ export async function PUT(
             return NextResponse.json({ error: 'Permissão negada.' }, { status: 403 });
         }
 
-        const updateData: Partial<Area> = {};
+        const updateData: Record<string, unknown> = {};
         if (name !== undefined) updateData.name = name.trim();
         if (description !== undefined) updateData.description = description?.trim() || null;
         if (color !== undefined) updateData.color = color;
+
+        // max_parallel_tasks: aceita null (ilimitado) ou inteiro >= 1
+        if (rawMaxTasks !== undefined) {
+            const maxParallelTasks = rawMaxTasks == null ? null : Number(rawMaxTasks);
+            if (maxParallelTasks !== null && (!Number.isInteger(maxParallelTasks) || maxParallelTasks < 1)) {
+                return NextResponse.json({ error: 'max_parallel_tasks deve ser null ou um inteiro >= 1.' }, { status: 400 });
+            }
+            updateData.max_parallel_tasks = maxParallelTasks;
+        }
 
         const { data: area, error } = await adminSupabase
             .from('areas')
