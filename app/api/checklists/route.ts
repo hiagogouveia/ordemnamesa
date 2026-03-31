@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import type { ExecutionStatus } from '@/lib/types';
 
 const getAdminSupabase = () => {
     return createClient(
@@ -43,20 +44,32 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Permissões do restaurante não encontradas' }, { status: 403 });
         }
 
-        let { data: checklists, error } = await adminSupabase
-            .from('checklists')
-            .select(`
-                *,
-                roles ( id, name, color ),
-                area:areas!area_id ( id, name, color ),
-                responsible:users!assigned_to_user_id ( id, name ),
-                tasks:checklist_tasks (*)
-            `)
-            .eq('restaurant_id', restaurant_id)
-            .order('order_index', { ascending: true });
+        // Buscar checklists e assumptions de hoje em paralelo
+        const todayKey = new Date().toISOString().split('T')[0];
+
+        const [checklistsResult, assumptionsResult] = await Promise.all([
+            adminSupabase
+                .from('checklists')
+                .select(`
+                    *,
+                    roles ( id, name, color ),
+                    area:areas!area_id ( id, name, color ),
+                    responsible:users!assigned_to_user_id ( id, name ),
+                    tasks:checklist_tasks (*)
+                `)
+                .eq('restaurant_id', restaurant_id)
+                .order('order_index', { ascending: true }),
+            adminSupabase
+                .from('checklist_assumptions')
+                .select('checklist_id, execution_status, completed_at, blocked_reason')
+                .eq('restaurant_id', restaurant_id)
+                .eq('date_key', todayKey),
+        ]);
+
+        let { data: checklists, error } = checklistsResult;
 
         if (error) {
-            // Em caso de fallback (ex: coluna order_index inexistente)
+            // Fallback se order_index não existir
             if (error.code === '42703' || error.message.includes('order_index')) {
                 const fallbackFetch = await adminSupabase
                     .from('checklists')
@@ -81,14 +94,45 @@ export async function GET(request: Request) {
             }
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const formattedChecklists = checklists?.map((checklist: any) => ({
-            ...checklist,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            tasks: checklist.tasks?.sort((a: any, b: any) => a.order - b.order) || []
-        }));
+        // Mapa de assumptions por checklist_id para derivar execution_status
+        type AssumptionRow = {
+            checklist_id: string;
+            execution_status: 'in_progress' | 'blocked' | 'done';
+            completed_at: string | null;
+            blocked_reason: string | null;
+        };
+        const assumptionMap = new Map<string, AssumptionRow>(
+            (assumptionsResult.data ?? []).map((a: AssumptionRow) => [a.checklist_id, a])
+        );
 
-        return NextResponse.json(formattedChecklists || []);
+        interface ChecklistRow {
+            id: string;
+            tasks?: { order: number }[];
+            [key: string]: unknown;
+        }
+
+        const formattedChecklists = (checklists ?? []).map((checklist: ChecklistRow) => {
+            const assumption = assumptionMap.get(checklist.id);
+
+            let execution_status: ExecutionStatus;
+            if (!assumption) {
+                execution_status = 'not_started';
+            } else if (assumption.execution_status === 'blocked') {
+                execution_status = 'blocked';
+            } else if (assumption.completed_at !== null || assumption.execution_status === 'done') {
+                execution_status = 'done';
+            } else {
+                execution_status = 'in_progress';
+            }
+
+            return {
+                ...checklist,
+                tasks: (checklist.tasks ?? []).sort((a: { order: number }, b: { order: number }) => a.order - b.order),
+                execution_status,
+            };
+        });
+
+        return NextResponse.json(formattedChecklists);
     } catch (error: unknown) {
         console.error('[GET /api/checklists] Erro inesperado:', error);
         return NextResponse.json({ error: (error as Error).message }, { status: 500 });

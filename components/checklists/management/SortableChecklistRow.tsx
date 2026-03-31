@@ -25,8 +25,8 @@ const RECURRENCE_LABELS: Record<string, string> = {
 };
 
 const EXECUTION_STATUS_CONFIG: Record<ExecutionStatus, { label: string; className: string }> = {
-    pending: {
-        label: "Pendente",
+    not_started: {
+        label: "Disponível",
         className: "bg-[#16262c] text-[#92bbc9] border-[#233f48]",
     },
     in_progress: {
@@ -34,15 +34,15 @@ const EXECUTION_STATUS_CONFIG: Record<ExecutionStatus, { label: string; classNam
         className: "bg-blue-500/20 text-blue-400 border-blue-500/30",
     },
     done: {
-        label: "Concluído",
+        label: "Finalizada",
         className: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
     },
     overdue: {
-        label: "Atrasado",
+        label: "Atrasada",
         className: "bg-red-500/20 text-red-400 border-red-500/30",
     },
     blocked: {
-        label: "Impedido",
+        label: "Com impedimento",
         className: "bg-amber-500/20 text-amber-400 border-amber-500/30",
     },
 };
@@ -55,6 +55,7 @@ interface SortableChecklistRowProps {
     onStatusToggle: (active: boolean) => void;
     onDuplicate: () => void;
     onDelete: () => void;
+    currentMinutes: number;
 }
 
 export function SortableChecklistRow({
@@ -65,6 +66,7 @@ export function SortableChecklistRow({
     onStatusToggle,
     onDuplicate,
     onDelete,
+    currentMinutes,
 }: SortableChecklistRowProps) {
     const [menuOpen, setMenuOpen] = useState(false);
     const buttonRef = useRef<HTMLButtonElement>(null);
@@ -125,8 +127,12 @@ export function SortableChecklistRow({
         }
     };
 
-    const execStatus = (checklist.execution_status ?? "pending") as ExecutionStatus;
-    const execConfig = EXECUTION_STATUS_CONFIG[execStatus] ?? EXECUTION_STATUS_CONFIG.pending;
+    let execStatus = (checklist.execution_status ?? "not_started") as ExecutionStatus;
+    if (execStatus !== "done" && checklist.end_time) {
+        const [h, m] = checklist.end_time.split(":").map(Number);
+        if (currentMinutes > h * 60 + m) execStatus = "overdue";
+    }
+    const execConfig = EXECUTION_STATUS_CONFIG[execStatus] ?? EXECUTION_STATUS_CONFIG.not_started;
 
     return (
         <tr

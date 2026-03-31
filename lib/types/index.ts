@@ -13,7 +13,7 @@ export interface Restaurant {
 }
 
 export type ChecklistStatus = 'active' | 'draft' | 'archived'
-export type ExecutionStatus = 'pending' | 'in_progress' | 'done' | 'blocked' | 'overdue'
+export type ExecutionStatus = 'not_started' | 'in_progress' | 'done' | 'blocked' | 'overdue'
 export type ShiftType = 'morning' | 'afternoon' | 'evening' | 'any' // Rename to avoid conflict with Shift table or keep? Let's keep it Shift for now, but the new table is 'shifts'
 export type UserRole = 'owner' | 'manager' | 'staff'
 
@@ -40,6 +40,8 @@ export interface ChecklistAssumption {
     completed_by_user_id?: string
     completed_by_user_name?: string
     observation?: string
+    execution_status: 'in_progress' | 'blocked' | 'done'
+    blocked_reason?: string | null
 }
 
 export interface Checklist {

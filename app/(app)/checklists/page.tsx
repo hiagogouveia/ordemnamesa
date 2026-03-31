@@ -14,8 +14,10 @@ import { ChecklistListView } from "@/components/checklists/management/ChecklistL
 import { ChecklistBoardView } from "@/components/checklists/management/ChecklistBoardView";
 import { ChecklistEditorPanel } from "@/components/checklists/management/ChecklistEditorPanel";
 import { ChecklistPreviewView } from "@/components/checklists/management/ChecklistPreviewView";
+import { ChecklistForm } from "@/components/checklists/checklist-form";
+import { Modal } from "@/components/ui/modal";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
-import type { ChecklistOrder } from "@/lib/types";
+import type { ChecklistOrder, ExecutionStatus } from "@/lib/types";
 
 type SortField = "name" | "shift" | "area" | "responsible" | "status";
 type SortOrder = "asc" | "desc";
@@ -31,6 +33,19 @@ const SHIFT_SORT_ORDER: Record<string, number> = {
     evening: 2,
     any: 3,
 };
+
+function isOverdue(checklist: ExtendedChecklist, currentMinutes: number): boolean {
+    if (!checklist.end_time) return false;
+    if (checklist.execution_status === 'done') return false;
+    const [h, m] = checklist.end_time.split(':').map(Number);
+    return currentMinutes > h * 60 + m;
+}
+
+function getComputedExecStatus(checklist: ExtendedChecklist, currentMinutes: number): ExecutionStatus {
+    const apiStatus = (checklist.execution_status ?? 'not_started') as ExecutionStatus;
+    if (apiStatus !== 'done' && isOverdue(checklist, currentMinutes)) return 'overdue';
+    return apiStatus;
+}
 
 function ChecklistsContent() {
     // ─── ALL HOOKS MUST BE BEFORE ANY CONDITIONAL RETURN ───────────────────────
@@ -60,6 +75,7 @@ function ChecklistsContent() {
     const selectedShift = searchParams.get("shift") ?? "";
     const selectedAreaId = searchParams.get("area_id") ?? "";
     const selectedAvailability = searchParams.get("availability") ?? "";
+    const selectedExecStatus = searchParams.get("exec_status") ?? "";
     const sortField = (searchParams.get("sort") as SortField | null) ?? null;
     const sortOrder = (searchParams.get("order") as SortOrder | null) ?? "asc";
 
@@ -89,6 +105,23 @@ function ChecklistsContent() {
             if (selectedAreaId && c.area_id !== selectedAreaId) return false;
             if (selectedAvailability === "active" && !c.active) return false;
             if (selectedAvailability === "inactive" && c.active) return false;
+
+            // Filtro por status de execução
+            if (selectedExecStatus) {
+                const computed = getComputedExecStatus(c, currentMinutes);
+                if (selectedExecStatus === "overdue") {
+                    if (computed !== "overdue") return false;
+                } else if (selectedExecStatus === "not_started") {
+                    if (computed !== "not_started") return false;
+                } else if (selectedExecStatus === "in_progress") {
+                    if (computed !== "in_progress") return false;
+                } else if (selectedExecStatus === "blocked") {
+                    if (computed !== "blocked") return false;
+                } else if (selectedExecStatus === "done") {
+                    if (computed !== "done") return false;
+                }
+            }
+
             return true;
         });
 
@@ -128,7 +161,7 @@ function ChecklistsContent() {
             if (valA > valB) return 1 * mult;
             return 0;
         });
-    }, [checklists, searchQuery, selectedShift, selectedAreaId, selectedAvailability, sortField, sortOrder]);
+    }, [checklists, searchQuery, selectedShift, selectedAreaId, selectedAvailability, selectedExecStatus, currentMinutes, sortField, sortOrder]);
 
     // ─── URL HELPERS ────────────────────────────────────────────────────────────
 
@@ -150,6 +183,13 @@ function ChecklistsContent() {
         const params = new URLSearchParams(searchParams.toString());
         if (value) params.set("availability", value);
         else params.delete("availability");
+        router.replace(`/checklists?${params.toString()}`);
+    };
+
+    const setExecStatusFilter = (value: string) => {
+        const params = new URLSearchParams(searchParams.toString());
+        if (value) params.set("exec_status", value);
+        else params.delete("exec_status");
         router.replace(`/checklists?${params.toString()}`);
     };
 
@@ -265,6 +305,9 @@ function ChecklistsContent() {
         setEditorState(null);
     };
 
+    const showSidePanel = editorState?.mode === "view";
+    const showEditModal = editorState?.mode === "edit" || editorState?.mode === "new";
+
     // ─── MAIN RENDER ────────────────────────────────────────────────────────────
 
     return (
@@ -286,13 +329,15 @@ function ChecklistsContent() {
                 isLoadingAreas={isLoadingAreas}
                 selectedAvailability={selectedAvailability}
                 onAvailabilityChange={setAvailabilityFilter}
+                selectedExecStatus={selectedExecStatus}
+                onExecStatusChange={setExecStatusFilter}
             />
 
             <div className="flex flex-1 overflow-hidden">
                 {/* Painel esquerdo: lista/board */}
                 <div
                     className={`${
-                        editorState ? "hidden md:flex md:flex-col md:min-w-0 md:flex-1" : "flex-1"
+                        showSidePanel ? "hidden md:flex md:flex-col md:min-w-0 md:flex-1" : "flex-1"
                     } overflow-auto p-4`}
                 >
                     {view === "preview" ? (
@@ -315,6 +360,7 @@ function ChecklistsContent() {
                             onDelete={handleDelete}
                             selectedAreaId={selectedAreaId}
                             onReorder={handleReorder}
+                            currentMinutes={currentMinutes}
                         />
                     ) : (
                         <ChecklistBoardView
@@ -328,12 +374,12 @@ function ChecklistsContent() {
                     )}
                 </div>
 
-                {/* Painel direito: editor */}
-                {editorState && (
+                {/* Painel direito: visualização */}
+                {showSidePanel && editorState && (
                     <div className="flex-1 md:flex-none md:w-[560px] shrink-0 border-l border-[#233f48] h-full overflow-hidden">
                         <ChecklistEditorPanel
                             checklist={editorState.checklist}
-                            mode={editorState.mode}
+                            mode="view"
                             onModeChange={(mode) => setEditorState((s) => (s ? { ...s, mode } : null))}
                             onClose={() => setEditorState(null)}
                             onSaved={handleEditorSaved}
@@ -341,6 +387,17 @@ function ChecklistsContent() {
                     </div>
                 )}
             </div>
+
+            {/* Modal de edição/criação */}
+            {mounted && (
+                <Modal isOpen={showEditModal} onClose={() => setEditorState(null)}>
+                    <ChecklistForm
+                        checklist={editorState?.checklist ?? null}
+                        onSaved={handleEditorSaved}
+                        onCancel={() => setEditorState(null)}
+                    />
+                </Modal>
+            )}
         </div>
     );
 }

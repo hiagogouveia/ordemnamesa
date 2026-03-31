@@ -83,6 +83,7 @@ interface ChecklistListViewProps {
     onDelete: (id: string) => void;
     onReorder: (items: Array<{ id: string; order_index: number }>) => Promise<void>;
     selectedAreaId: string;
+    currentMinutes: number;
 }
 
 export function ChecklistListView({
@@ -99,6 +100,7 @@ export function ChecklistListView({
     onDelete,
     onReorder,
     selectedAreaId,
+    currentMinutes,
 }: ChecklistListViewProps) {
     const [reorderMode, setReorderMode] = useState(false);
     const [localItems, setLocalItems] = useState<ExtendedChecklist[]>([]);
@@ -302,6 +304,7 @@ export function ChecklistListView({
                                         onStatusToggle={(active) => onStatusToggle(checklist.id, active)}
                                         onDuplicate={() => onDuplicate(checklist)}
                                         onDelete={() => onDelete(checklist.id)}
+                                        currentMinutes={currentMinutes}
                                     />
                                 ))}
                             </SortableContext>
@@ -316,6 +319,7 @@ export function ChecklistListView({
                                     onStatusToggle={(active) => onStatusToggle(checklist.id, active)}
                                     onDuplicate={() => onDuplicate(checklist)}
                                     onDelete={() => onDelete(checklist.id)}
+                                    currentMinutes={currentMinutes}
                                 />
                             ))
                         )}
