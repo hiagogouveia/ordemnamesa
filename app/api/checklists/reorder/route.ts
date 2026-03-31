@@ -13,6 +13,12 @@ interface ChecklistOrderEntry {
     order_index: number;
 }
 
+interface ReorderBody {
+    restaurant_id: string;
+    checklist_orders: ChecklistOrderEntry[];
+    area_id?: string;
+}
+
 export async function PATCH(request: Request) {
     try {
         const authHeader = request.headers.get('Authorization');
@@ -29,10 +35,7 @@ export async function PATCH(request: Request) {
         }
 
         const body = await request.json();
-        const { restaurant_id, checklist_orders } = body as {
-            restaurant_id: string;
-            checklist_orders: ChecklistOrderEntry[];
-        };
+        const { restaurant_id, checklist_orders, area_id } = body as ReorderBody;
 
         if (!restaurant_id) {
             return NextResponse.json({ error: 'restaurant_id é obrigatório.' }, { status: 400 });
@@ -90,6 +93,15 @@ export async function PATCH(request: Request) {
             if (result.status === 'fulfilled' && result.value.error) {
                 return NextResponse.json({ error: result.value.error.message }, { status: 500 });
             }
+        }
+
+        // If area_id provided, set priority_mode to manual
+        if (area_id) {
+            await adminSupabase
+                .from('areas')
+                .update({ priority_mode: 'manual' })
+                .eq('id', area_id)
+                .eq('restaurant_id', restaurant_id);
         }
 
         return NextResponse.json({ success: true });

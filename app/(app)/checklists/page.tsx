@@ -17,7 +17,7 @@ import { ChecklistPreviewView } from "@/components/checklists/management/Checkli
 import { ChecklistForm } from "@/components/checklists/checklist-form";
 import { Modal } from "@/components/ui/modal";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
-import type { ChecklistOrder, ExecutionStatus } from "@/lib/types";
+import type { ChecklistOrder, ExecutionStatus, PriorityMode } from "@/lib/types";
 
 type SortField = "name" | "shift" | "area" | "responsible" | "status";
 type SortOrder = "asc" | "desc";
@@ -95,6 +95,13 @@ function ChecklistsContent() {
     const { mutate: deleteChecklist } = useDeleteChecklist();
     const { mutate: createChecklist } = useCreateChecklist();
     const { mutateAsync: updateOrders } = useUpdateChecklistOrders();
+
+    // Derived: priority_mode for the selected area
+    const selectedAreaPriorityMode: PriorityMode = useMemo(() => {
+        if (!selectedAreaId) return "auto";
+        const area = areas.find((a) => a.id === selectedAreaId);
+        return area?.priority_mode ?? "auto";
+    }, [selectedAreaId, areas]);
 
     // Derived: filtered + sorted list (MUST be before any conditional return)
     const filtered = useMemo(() => {
@@ -285,7 +292,11 @@ function ChecklistsContent() {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ restaurant_id: restaurantId, checklist_orders: items }),
+            body: JSON.stringify({
+                restaurant_id: restaurantId,
+                checklist_orders: items,
+                area_id: selectedAreaId || undefined,
+            }),
         });
         if (!res.ok) {
             const errData = await res.json().catch(() => ({}));
@@ -297,10 +308,77 @@ function ChecklistsContent() {
             (old: ExtendedChecklist[] | undefined) => {
                 if (!old) return old;
                 const orderMap = new Map(items.map((i) => [i.id, i.order_index]));
-                const updated = old.map((c) =>
-                    orderMap.has(c.id) ? { ...c, order_index: orderMap.get(c.id) } : c
-                );
+                const updated = old.map((c) => {
+                    const newIdx = orderMap.get(c.id);
+                    return newIdx !== undefined ? { ...c, order_index: newIdx } : c;
+                });
                 return [...updated].sort((a, b) => (a.order_index ?? 9999) - (b.order_index ?? 9999));
+            }
+        );
+
+        // Optimistic update: set area to manual mode
+        if (selectedAreaId) {
+            queryClient.setQueryData(
+                ["areas-all", restaurantId],
+                (old: typeof areas | undefined) => {
+                    if (!old) return old;
+                    return old.map((a) =>
+                        a.id === selectedAreaId ? { ...a, priority_mode: "manual" as const } : a
+                    );
+                }
+            );
+        }
+    };
+
+    const handleAutoReprioritize = async () => {
+        if (!restaurantId || !selectedAreaId) return;
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (!token) throw new Error("Sessão expirada");
+
+        const res = await fetch("/api/checklists/auto-prioritize", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ restaurant_id: restaurantId, area_id: selectedAreaId }),
+        });
+
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || "Erro ao repriorizar");
+        }
+
+        const result = await res.json();
+
+        // Update checklists cache with new order
+        if (result.new_order) {
+            queryClient.setQueryData(
+                ["checklists", restaurantId],
+                (old: ExtendedChecklist[] | undefined) => {
+                    if (!old) return old;
+                    const orderMap = new Map(
+                        result.new_order.map((o: { id: string; order_index: number }) => [o.id, o.order_index])
+                    );
+                    const updated = old.map((c) => {
+                        const newIdx = orderMap.get(c.id);
+                        return newIdx !== undefined ? { ...c, order_index: newIdx } : c;
+                    });
+                    return [...updated].sort((a, b) => ((a.order_index as number) ?? 9999) - ((b.order_index as number) ?? 9999));
+                }
+            );
+        }
+
+        // Set area back to auto mode
+        queryClient.setQueryData(
+            ["areas-all", restaurantId],
+            (old: typeof areas | undefined) => {
+                if (!old) return old;
+                return old.map((a) =>
+                    a.id === selectedAreaId ? { ...a, priority_mode: "auto" as const } : a
+                );
             }
         );
     };
@@ -348,6 +426,7 @@ function ChecklistsContent() {
                         <ChecklistPreviewView
                             checklists={filtered}
                             currentMinutes={currentMinutes}
+                            priorityMode={selectedAreaPriorityMode}
                         />
                     ) : view === "list" ? (
                         <ChecklistListView
@@ -365,7 +444,9 @@ function ChecklistsContent() {
                             selectedAreaId={selectedAreaId}
                             hasReducingFilters={!!(selectedShift || selectedAvailability || selectedExecStatus)}
                             onReorder={handleReorder}
+                            onAutoReprioritize={handleAutoReprioritize}
                             currentMinutes={currentMinutes}
+                            priorityMode={selectedAreaPriorityMode}
                         />
                     ) : (
                         <ChecklistBoardView

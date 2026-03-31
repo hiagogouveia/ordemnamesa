@@ -18,7 +18,9 @@ import {
 } from "@dnd-kit/sortable";
 import { ChecklistRow } from "./ChecklistRow";
 import { SortableChecklistRow } from "./SortableChecklistRow";
+import { detectReorderConflict } from "@/lib/utils/auto-prioritize";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
+import type { PriorityMode } from "@/lib/types";
 
 type SortField = "name" | "shift" | "area" | "responsible" | "status";
 type SortOrder = "asc" | "desc";
@@ -82,9 +84,11 @@ interface ChecklistListViewProps {
     onDuplicate: (checklist: ExtendedChecklist) => void;
     onDelete: (id: string) => void;
     onReorder: (items: Array<{ id: string; order_index: number }>) => Promise<void>;
+    onAutoReprioritize: () => Promise<void>;
     selectedAreaId: string;
     hasReducingFilters: boolean;
     currentMinutes: number;
+    priorityMode: PriorityMode;
 }
 
 export function ChecklistListView({
@@ -100,13 +104,18 @@ export function ChecklistListView({
     onDuplicate,
     onDelete,
     onReorder,
+    onAutoReprioritize,
     selectedAreaId,
     hasReducingFilters,
     currentMinutes,
+    priorityMode,
 }: ChecklistListViewProps) {
     const [reorderMode, setReorderMode] = useState(false);
     const [localItems, setLocalItems] = useState<ExtendedChecklist[]>([]);
     const [isSaving, setIsSaving] = useState(false);
+    const [isReprioritizing, setIsReprioritizing] = useState(false);
+    const [conflictWarning, setConflictWarning] = useState<string | null>(null);
+    const [showConfirmAuto, setShowConfirmAuto] = useState(false);
     const beforeReorderRef = useRef<ExtendedChecklist[]>([]);
 
     const sensors = useSensors(
@@ -121,11 +130,13 @@ export function ChecklistListView({
         beforeReorderRef.current = sorted;
         setLocalItems(sorted);
         setReorderMode(true);
+        setConflictWarning(null);
     };
 
     const handleCancelReorder = () => {
         setLocalItems(beforeReorderRef.current);
         setReorderMode(false);
+        setConflictWarning(null);
     };
 
     const handleDragEnd = useCallback((event: DragEndEvent) => {
@@ -136,9 +147,22 @@ export function ChecklistListView({
             const activeIdx = prev.findIndex((c) => c.id === String(active.id));
             const overIdx = prev.findIndex((c) => c.id === String(over.id));
             if (activeIdx === -1 || overIdx === -1) return prev;
-            return arrayMove(prev, activeIdx, overIdx);
+
+            const newItems = arrayMove(prev, activeIdx, overIdx);
+
+            // Detect conflict
+            const movedItem = prev[activeIdx];
+            const warning = detectReorderConflict(
+                movedItem,
+                overIdx,
+                newItems,
+                currentMinutes
+            );
+            setConflictWarning(warning);
+
+            return newItems;
         });
-    }, []);
+    }, [currentMinutes]);
 
     const handleSave = async () => {
         setIsSaving(true);
@@ -146,8 +170,21 @@ export function ChecklistListView({
             const payload = localItems.map((item, index) => ({ id: item.id, order_index: index }));
             await onReorder(payload);
             setReorderMode(false);
+            setConflictWarning(null);
+        } catch (err) {
+            console.error("Erro ao salvar reordenação:", err);
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    const handleAutoReprioritize = async () => {
+        setShowConfirmAuto(false);
+        setIsReprioritizing(true);
+        try {
+            await onAutoReprioritize();
+        } finally {
+            setIsReprioritizing(false);
         }
     };
 
@@ -182,13 +219,34 @@ export function ChecklistListView({
         <div className="overflow-x-auto">
             {/* Toolbar */}
             <div className="flex items-center justify-between px-1 pb-2">
-                <div className="flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-[#325a67] text-[14px]">info</span>
-                    <span className="text-[#325a67] text-xs">
-                        {reorderMode
-                            ? "Arraste as linhas para reordenar. A ordem é salva por turno."
-                            : "Ative o modo de reordenação para ajustar a ordem das rotinas."}
-                    </span>
+                <div className="flex items-center gap-3">
+                    {/* Priority mode indicator */}
+                    {selectedAreaId && (
+                        <div className="flex items-center gap-1.5">
+                            <span
+                                className={`material-symbols-outlined text-[14px] ${
+                                    priorityMode === "auto" ? "text-emerald-400" : "text-amber-400"
+                                }`}
+                            >
+                                {priorityMode === "auto" ? "auto_mode" : "touch_app"}
+                            </span>
+                            <span
+                                className={`text-xs font-bold ${
+                                    priorityMode === "auto" ? "text-emerald-400" : "text-amber-400"
+                                }`}
+                            >
+                                Ordenação: {priorityMode === "auto" ? "Automática" : "Manual"}
+                            </span>
+                        </div>
+                    )}
+
+                    {!reorderMode && (
+                        <span className="text-[#325a67] text-xs">
+                            {reorderMode
+                                ? "Arraste as linhas para reordenar."
+                                : "Ative o modo de reordenação para ajustar a ordem das rotinas."}
+                        </span>
+                    )}
                 </div>
                 <div className="flex items-center gap-2">
                     {reorderMode ? (
@@ -214,28 +272,90 @@ export function ChecklistListView({
                             </button>
                         </>
                     ) : (
-                        <button
-                            onClick={handleEnterReorder}
-                            disabled={!selectedAreaId || hasReducingFilters}
-                            title={
-                                !selectedAreaId
-                                    ? "Selecione uma área para reordenar"
-                                    : hasReducingFilters
-                                    ? "Remova os filtros de disponibilidade, turno e status para reordenar"
-                                    : undefined
-                            }
-                            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-[#16262c] border border-[#233f48] rounded-lg transition-colors ${
-                                selectedAreaId && !hasReducingFilters
-                                    ? "text-[#92bbc9] hover:text-white"
-                                    : "text-[#325a67] cursor-not-allowed opacity-50"
-                            }`}
-                        >
-                            <span className="material-symbols-outlined text-[14px]">swap_vert</span>
-                            Reordenar
-                        </button>
+                        <>
+                            {/* Auto-reprioritize button — visible only when manual */}
+                            {priorityMode === "manual" && selectedAreaId && (
+                                <button
+                                    onClick={() => setShowConfirmAuto(true)}
+                                    disabled={isReprioritizing}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 rounded-lg transition-colors disabled:opacity-60"
+                                >
+                                    {isReprioritizing ? (
+                                        <span className="material-symbols-outlined text-[14px] animate-spin">refresh</span>
+                                    ) : (
+                                        <span className="material-symbols-outlined text-[14px]">auto_mode</span>
+                                    )}
+                                    Repriorizar automaticamente
+                                </button>
+                            )}
+
+                            <button
+                                onClick={handleEnterReorder}
+                                disabled={!selectedAreaId || hasReducingFilters}
+                                title={
+                                    !selectedAreaId
+                                        ? "Selecione uma área para reordenar"
+                                        : hasReducingFilters
+                                        ? "Remova os filtros de disponibilidade, turno e status para reordenar"
+                                        : undefined
+                                }
+                                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-[#16262c] border border-[#233f48] rounded-lg transition-colors ${
+                                    selectedAreaId && !hasReducingFilters
+                                        ? "text-[#92bbc9] hover:text-white"
+                                        : "text-[#325a67] cursor-not-allowed opacity-50"
+                                }`}
+                            >
+                                <span className="material-symbols-outlined text-[14px]">swap_vert</span>
+                                Reordenar
+                            </button>
+                        </>
                     )}
                 </div>
             </div>
+
+            {/* Conflict warning — non-blocking */}
+            {reorderMode && conflictWarning && (
+                <div className="flex items-center gap-2 px-3 py-2 mb-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                    <span className="material-symbols-outlined text-[16px] text-amber-400">warning</span>
+                    <span className="text-xs font-medium text-amber-300">{conflictWarning}</span>
+                </div>
+            )}
+
+            {/* Reorder mode info */}
+            {reorderMode && (
+                <div className="flex items-center gap-1.5 px-1 pb-2">
+                    <span className="material-symbols-outlined text-[#325a67] text-[14px]">info</span>
+                    <span className="text-[#325a67] text-xs">
+                        Arraste as linhas para reordenar. Ao salvar, a ordenação será definida como manual.
+                    </span>
+                </div>
+            )}
+
+            {/* Confirmation dialog for auto-reprioritize */}
+            {showConfirmAuto && (
+                <div className="flex items-center justify-between gap-3 px-3 py-3 mb-2 rounded-lg bg-[#16262c] border border-emerald-500/30">
+                    <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[18px] text-emerald-400">auto_mode</span>
+                        <span className="text-sm text-white">
+                            Isso irá aplicar a priorização automática do sistema. Deseja continuar?
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                        <button
+                            onClick={() => setShowConfirmAuto(false)}
+                            className="px-3 py-1.5 text-xs font-bold text-[#92bbc9] hover:text-white bg-[#0a1215] border border-[#233f48] rounded-lg transition-colors"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            onClick={handleAutoReprioritize}
+                            className="px-3 py-1.5 text-xs font-bold text-[#0a1215] bg-emerald-500 hover:bg-emerald-400 rounded-lg transition-colors"
+                        >
+                            Confirmar
+                        </button>
+                    </div>
+                </div>
+            )}
 
             <DndContext
                 sensors={sensors}

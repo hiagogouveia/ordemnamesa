@@ -1,8 +1,11 @@
 import { useMemo, useEffect, useState } from 'react';
-import { Checklist } from '@/lib/types';
+import { Checklist, PriorityMode } from '@/lib/types';
 import { sortChecklistsByPriority } from '@/lib/utils/checklist-priority';
 
-export function useSortedChecklists<T extends Partial<Checklist>>(checklists: T[] | undefined) {
+export function useSortedChecklists<T extends Partial<Checklist>>(
+    checklists: T[] | undefined,
+    priorityMode: PriorityMode = 'auto'
+) {
     // Tick de horário a cada um minuto para reagir à mudança de prioridade
     const [currentMinutes, setCurrentMinutes] = useState(() => {
         const d = new Date();
@@ -19,13 +22,19 @@ export function useSortedChecklists<T extends Partial<Checklist>>(checklists: T[
 
     const sortedChecklists = useMemo(() => {
         if (!checklists) return [];
-        // Clona para não mutar array original
+
+        // Modo manual: respeitar apenas order_index
+        if (priorityMode === 'manual') {
+            return [...checklists].sort((a, b) => {
+                return (a.order_index ?? 9999) - (b.order_index ?? 9999);
+            });
+        }
+
+        // Modo auto: prioridade inteligente + desempate por order_index
         return [...checklists].sort((a, b) => {
-            // Prioridade do sistema é sempre o critério primário
             const priorityDiff = sortChecklistsByPriority(a, b, currentMinutes);
             if (priorityDiff !== 0) return priorityDiff;
 
-            // Mesmo grupo de prioridade: desempatar por order_index (manual)
             const hasManualA = a.order_index !== null && a.order_index !== undefined;
             const hasManualB = b.order_index !== null && b.order_index !== undefined;
 
@@ -36,7 +45,7 @@ export function useSortedChecklists<T extends Partial<Checklist>>(checklists: T[
             if (hasManualB) return 1;
             return 0;
         });
-    }, [checklists, currentMinutes]);
+    }, [checklists, currentMinutes, priorityMode]);
 
     return { sortedChecklists, currentMinutes };
 }

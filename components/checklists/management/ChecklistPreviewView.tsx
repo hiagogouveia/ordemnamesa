@@ -4,10 +4,12 @@ import { useMemo } from "react";
 import { RoutineCard } from "@/components/checklists/routine-card";
 import { IphoneMockup } from "@/components/ui/iphone-mockup";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
+import type { PriorityMode } from "@/lib/types";
 
 interface ChecklistPreviewViewProps {
     checklists: ExtendedChecklist[];
     currentMinutes: number;
+    priorityMode?: PriorityMode;
 }
 
 function minutesToHHMM(minutes: number): string {
@@ -23,32 +25,63 @@ interface PreviewSection {
     items: ExtendedChecklist[];
 }
 
-export function ChecklistPreviewView({ checklists, currentMinutes }: ChecklistPreviewViewProps) {
+export function ChecklistPreviewView({ checklists, currentMinutes, priorityMode = "auto" }: ChecklistPreviewViewProps) {
     const nowHHMM = minutesToHHMM(currentMinutes);
 
-    const { overdue, pending } = useMemo(() => {
+    const sections: PreviewSection[] = useMemo(() => {
+        // When manual mode, show all items in a single "Rotinas" section preserving order_index
+        if (priorityMode === "manual") {
+            return [
+                {
+                    title: "Rotinas",
+                    icon: "checklist",
+                    iconColor: "#92bbc9",
+                    items: [...checklists].sort(
+                        (a, b) => (a.order_index ?? 9999) - (b.order_index ?? 9999)
+                    ),
+                },
+            ];
+        }
+
+        // Auto mode: split into overdue/pending
         const overdue: ExtendedChecklist[] = [];
         const pending: ExtendedChecklist[] = [];
 
         for (const c of checklists) {
-            if (c.end_time && nowHHMM > c.end_time) {
+            if (c.end_time && nowHHMM > c.end_time && c.execution_status !== "done") {
                 overdue.push(c);
             } else {
                 pending.push(c);
             }
         }
 
-        return { overdue, pending };
-    }, [checklists, nowHHMM]);
-
-    const sections: PreviewSection[] = [
-        { title: "Atrasadas",  icon: "alarm_off",             iconColor: "#ef4444", items: overdue },
-        { title: "Pendentes",  icon: "radio_button_unchecked", iconColor: "#92bbc9", items: pending },
-    ];
+        return [
+            { title: "Atrasadas", icon: "alarm_off", iconColor: "#ef4444", items: overdue },
+            { title: "Pendentes", icon: "radio_button_unchecked", iconColor: "#92bbc9", items: pending },
+        ];
+    }, [checklists, nowHHMM, priorityMode]);
 
     /** Content rendered inside the mockup (and in plain flow on mobile) */
     const content = (
         <div className="px-4 pt-2 pb-10 flex flex-col gap-6">
+            {/* Priority mode indicator */}
+            <div className="flex items-center justify-center gap-1.5 py-1">
+                <span
+                    className={`material-symbols-outlined text-[12px] ${
+                        priorityMode === "auto" ? "text-emerald-400" : "text-amber-400"
+                    }`}
+                >
+                    {priorityMode === "auto" ? "auto_mode" : "touch_app"}
+                </span>
+                <span
+                    className={`text-[10px] font-bold ${
+                        priorityMode === "auto" ? "text-emerald-400" : "text-amber-400"
+                    }`}
+                >
+                    {priorityMode === "auto" ? "Ordenação automática" : "Ordenação manual"}
+                </span>
+            </div>
+
             {/* Empty state */}
             {checklists.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-16 text-center gap-3">

@@ -161,12 +161,15 @@ export interface ChecklistOrder {
 // Sprint 13 — Areas & My Activities
 // ============================================================
 
+export type PriorityMode = 'auto' | 'manual'
+
 export interface Area {
     id: string
     restaurant_id: string
     name: string
     description?: string | null
     color: string
+    priority_mode?: PriorityMode
     created_at: string
 }
 
@@ -186,6 +189,7 @@ export interface MyActivity {
     target_role: TargetRole
     area_id?: string | null
     area?: Area | null
+    order_index?: number | null
     task_count: number
     done_count: number
     progress_percent: number

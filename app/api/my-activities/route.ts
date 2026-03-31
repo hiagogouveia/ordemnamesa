@@ -95,7 +95,8 @@ export async function GET(request: Request) {
                 target_role,
                 area_id,
                 role_id,
-                area:areas(id, name, color),
+                order_index,
+                area:areas(id, name, color, priority_mode),
                 role:roles(id, name, color),
                 task_count:checklist_tasks(count)
             `)
@@ -187,7 +188,8 @@ export async function GET(request: Request) {
                 end_time: checklist.end_time ?? null,
                 target_role: (checklist.target_role ?? 'all') as TargetRole,
                 area_id: checklist.area_id ?? checklist.role_id ?? null,
-                area: fallbackArea ? { id: fallbackArea.id, name: fallbackArea.name, color: fallbackArea.color, restaurant_id: checklist.restaurant_id, created_at: '' } : null,
+                order_index: checklist.order_index ?? null,
+                area: fallbackArea ? { id: fallbackArea.id, name: fallbackArea.name, color: fallbackArea.color, restaurant_id: checklist.restaurant_id, priority_mode: fallbackArea.priority_mode ?? 'auto', created_at: '' } : null,
                 task_count: taskCount,
                 done_count: doneCount,
                 progress_percent: progressPercent,
