@@ -17,6 +17,7 @@ import { ChecklistEditorPanel } from "@/components/checklists/management/Checkli
 import { ChecklistPreviewView } from "@/components/checklists/management/ChecklistPreviewView";
 import { ChecklistForm } from "@/components/checklists/checklist-form";
 import { Modal } from "@/components/ui/modal";
+import { filterChecklistsByCollaborator } from "@/lib/utils/filter-checklists-by-collaborator";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
 import type { ChecklistOrder, ExecutionStatus, PriorityMode } from "@/lib/types";
 
@@ -109,21 +110,22 @@ function ChecklistsContent() {
     // Derived: filtered + sorted list (MUST be before any conditional return)
     const filtered = useMemo(() => {
         const q = searchQuery.trim().toLowerCase();
-        const result = (checklists as ExtendedChecklist[]).filter((c) => {
+
+        // Aplicar filtro por colaborador usando função pura (fonte de verdade)
+        const collaboratorFiltered = selectedCollaboratorId
+            ? filterChecklistsByCollaborator(
+                checklists as ExtendedChecklist[],
+                selectedCollaboratorId,
+                equipeData?.equipe ?? []
+            ) as ExtendedChecklist[]
+            : checklists as ExtendedChecklist[];
+
+        const result = collaboratorFiltered.filter((c) => {
             if (q && !c.name.toLowerCase().includes(q)) return false;
             if (selectedShift && c.shift !== selectedShift && c.shift !== "any") return false;
             if (selectedAreaId && c.area_id !== selectedAreaId) return false;
             if (selectedAvailability === "active" && !c.active) return false;
             if (selectedAvailability === "inactive" && c.active) return false;
-
-            // Filtro por colaborador
-            if (selectedCollaboratorId) {
-                const collaborator = (equipeData?.equipe ?? []).find((m) => m.user_id === selectedCollaboratorId);
-                const collaboratorAreaIds = new Set(collaborator?.areas.map((a) => a.id) ?? []);
-                const directlyAssigned = c.responsible?.id === selectedCollaboratorId;
-                const areaDistributed = !c.assigned_to_user_id && !!c.area_id && collaboratorAreaIds.has(c.area_id);
-                if (!directlyAssigned && !areaDistributed) return false;
-            }
 
             // Filtro por status de execução
             if (selectedExecStatus) {

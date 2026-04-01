@@ -75,6 +75,7 @@ export interface Checklist {
     responsible?: { id: string; name: string } | null
     execution_status?: ExecutionStatus
     assumed_by_name?: string | null
+    assumed_by_user_id?: string | null
 }
 
 export interface ChecklistTask {
