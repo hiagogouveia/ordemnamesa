@@ -30,6 +30,7 @@ export function useAreas(restaurantId: string | undefined) {
         },
         enabled: !!restaurantId,
         staleTime: 0,
+        refetchOnMount: "always",
     });
 }
 
@@ -53,6 +54,7 @@ export function useAllAreas(restaurantId: string | undefined) {
         },
         enabled: !!restaurantId,
         staleTime: 0,
+        refetchOnMount: "always",
     });
 }
 
