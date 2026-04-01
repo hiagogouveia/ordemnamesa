@@ -19,6 +19,7 @@ import { ChecklistForm } from "@/components/checklists/checklist-form";
 import { Modal } from "@/components/ui/modal";
 import { filterChecklistsByCollaborator } from "@/lib/utils/filter-checklists-by-collaborator";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
+import { getOperationalStatus } from "@/lib/utils/get-operational-status";
 import type { ChecklistOrder, ExecutionStatus, PriorityMode } from "@/lib/types";
 
 type SortField = "name" | "shift" | "area" | "responsible" | "status";
@@ -35,19 +36,6 @@ const SHIFT_SORT_ORDER: Record<string, number> = {
     evening: 2,
     any: 3,
 };
-
-function isOverdue(checklist: ExtendedChecklist, currentMinutes: number): boolean {
-    if (!checklist.end_time) return false;
-    if (checklist.execution_status === 'done') return false;
-    const [h, m] = checklist.end_time.split(':').map(Number);
-    return currentMinutes > h * 60 + m;
-}
-
-function getComputedExecStatus(checklist: ExtendedChecklist, currentMinutes: number): ExecutionStatus {
-    const apiStatus = (checklist.execution_status ?? 'not_started') as ExecutionStatus;
-    if (apiStatus !== 'done' && isOverdue(checklist, currentMinutes)) return 'overdue';
-    return apiStatus;
-}
 
 function ChecklistsContent() {
     // ─── ALL HOOKS MUST BE BEFORE ANY CONDITIONAL RETURN ───────────────────────
@@ -130,18 +118,8 @@ function ChecklistsContent() {
 
             // Filtro por status de execução
             if (selectedExecStatus) {
-                const computed = getComputedExecStatus(c, currentMinutes);
-                if (selectedExecStatus === "overdue") {
-                    if (computed !== "overdue") return false;
-                } else if (selectedExecStatus === "not_started") {
-                    if (computed !== "not_started") return false;
-                } else if (selectedExecStatus === "in_progress") {
-                    if (computed !== "in_progress") return false;
-                } else if (selectedExecStatus === "blocked") {
-                    if (computed !== "blocked") return false;
-                } else if (selectedExecStatus === "done") {
-                    if (computed !== "done") return false;
-                }
+                const computed = getOperationalStatus(c, currentMinutes);
+                if (computed !== selectedExecStatus) return false;
             }
 
             return true;

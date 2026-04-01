@@ -55,7 +55,10 @@ export function ChecklistBoardCard({
                         <span className="text-[#92bbc9] text-xs">{checklist.area.name}</span>
                     </>
                 ) : (
-                    <span className="text-[#325a67] text-xs italic">Qualquer área</span>
+                    <span className="flex items-center gap-1 text-orange-400" title="Essa rotina não está vinculada a nenhuma área e não pode ser executada">
+                        <span className="material-symbols-outlined text-[14px]">warning</span>
+                        <span className="text-xs font-medium">Sem área</span>
+                    </span>
                 )}
             </div>
 

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
 import type { ExecutionStatus } from "@/lib/types";
+import { getOperationalStatus } from "@/lib/utils/get-operational-status";
 
 const SHIFT_LABELS: Record<string, string> = {
     morning: "Manhã",
@@ -23,6 +24,10 @@ const RECURRENCE_LABELS: Record<string, string> = {
 };
 
 const EXECUTION_STATUS_CONFIG: Record<ExecutionStatus, { label: string; className: string }> = {
+    incomplete: {
+        label: "Sem área",
+        className: "bg-orange-500/20 text-orange-400 border-orange-500/30",
+    },
     not_started: {
         label: "Disponível",
         className: "bg-[#16262c] text-[#92bbc9] border-[#233f48]",
@@ -108,12 +113,8 @@ export function ChecklistRow({
         }
     };
 
-    // Derivar status computado com promoção para "overdue"
-    let execStatus = (checklist.execution_status ?? "not_started") as ExecutionStatus;
-    if (execStatus !== "done" && checklist.end_time) {
-        const [h, m] = checklist.end_time.split(":").map(Number);
-        if (currentMinutes > h * 60 + m) execStatus = "overdue";
-    }
+    // Derivar status operacional centralizado
+    const execStatus = getOperationalStatus(checklist, currentMinutes);
     const execConfig = EXECUTION_STATUS_CONFIG[execStatus] ?? EXECUTION_STATUS_CONFIG.not_started;
 
     return (
@@ -146,7 +147,10 @@ export function ChecklistRow({
                         <span className="text-[#92bbc9] text-sm">{checklist.area.name}</span>
                     </span>
                 ) : (
-                    <span className="text-[#325a67] text-sm italic">—</span>
+                    <span className="flex items-center gap-1.5 text-orange-400">
+                        <span className="material-symbols-outlined text-[14px]">warning</span>
+                        <span className="text-sm font-medium">Sem área</span>
+                    </span>
                 )}
             </td>
 
@@ -210,7 +214,13 @@ export function ChecklistRow({
 
             {/* Status (execução) */}
             <td className="px-3 py-3 hidden lg:table-cell" onClick={onSelect}>
-                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border ${execConfig.className}`}>
+                <span
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border ${execConfig.className}`}
+                    title={execStatus === "incomplete" ? "Essa rotina não está vinculada a nenhuma área e não pode ser executada" : undefined}
+                >
+                    {execStatus === "incomplete" && (
+                        <span className="material-symbols-outlined text-[12px]">error_outline</span>
+                    )}
                     {execConfig.label}
                 </span>
             </td>

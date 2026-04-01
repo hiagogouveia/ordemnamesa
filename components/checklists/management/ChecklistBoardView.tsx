@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { ChecklistBoardColumn } from "./ChecklistBoardColumn";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
 import type { ExecutionStatus } from "@/lib/types";
+import { getOperationalStatus } from "@/lib/utils/get-operational-status";
 
 const STATUS_COLUMNS: {
     status: ExecutionStatus;
@@ -11,25 +12,13 @@ const STATUS_COLUMNS: {
     icon: string;
     color: string;
 }[] = [
+    { status: "incomplete", label: "Sem área", icon: "error_outline", color: "#f97316" },
     { status: "not_started", label: "Disponível", icon: "radio_button_unchecked", color: "#92bbc9" },
     { status: "in_progress", label: "Em execução", icon: "pending_actions", color: "#3b82f6" },
     { status: "overdue", label: "Atrasada", icon: "alarm_off", color: "#ef4444" },
     { status: "blocked", label: "Com impedimento", icon: "warning", color: "#eab308" },
     { status: "done", label: "Finalizada", icon: "task_alt", color: "#22c55e" },
 ];
-
-function isOverdue(checklist: ExtendedChecklist, currentMinutes: number): boolean {
-    if (!checklist.end_time) return false;
-    if (checklist.execution_status === "done") return false;
-    const [h, m] = checklist.end_time.split(":").map(Number);
-    return currentMinutes > h * 60 + m;
-}
-
-function getComputedStatus(checklist: ExtendedChecklist, currentMinutes: number): ExecutionStatus {
-    const apiStatus = (checklist.execution_status ?? "not_started") as ExecutionStatus;
-    if (apiStatus !== "done" && isOverdue(checklist, currentMinutes)) return "overdue";
-    return apiStatus;
-}
 
 interface ChecklistBoardViewProps {
     checklists: ExtendedChecklist[];
@@ -48,6 +37,7 @@ export function ChecklistBoardView({
 }: ChecklistBoardViewProps) {
     const grouped = useMemo(() => {
         const map: Record<ExecutionStatus, ExtendedChecklist[]> = {
+            incomplete: [],
             not_started: [],
             in_progress: [],
             overdue: [],
@@ -56,7 +46,7 @@ export function ChecklistBoardView({
         };
 
         for (const c of checklists) {
-            const status = getComputedStatus(c, currentMinutes);
+            const status = getOperationalStatus(c, currentMinutes);
             map[status].push(c);
         }
 

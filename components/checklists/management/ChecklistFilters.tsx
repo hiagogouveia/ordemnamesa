@@ -20,6 +20,7 @@ const AVAILABILITY_OPTIONS = [
 
 const EXEC_STATUS_OPTIONS = [
     { value: "",            label: "Todos" },
+    { value: "incomplete",  label: "Sem área" },
     { value: "not_started", label: "Disponível" },
     { value: "in_progress", label: "Em execução" },
     { value: "overdue",     label: "Atrasada" },

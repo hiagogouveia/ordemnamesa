@@ -76,17 +76,16 @@ export async function GET(request: Request) {
         const roleIds = (userRoleRows ?? []).map((r) => r.role_id);
 
         // Filtro: checklists da área/role do usuário (sem atribuição individual),
-        //         atribuídos diretamente, OU globais (sem área/role/user)
+        //         OU atribuídos diretamente ao usuário.
+        // INVARIANTE: rotinas sem área (area_id = null) NÃO são executáveis e NÃO aparecem no turno.
         const checklistFilterParts: string[] = [];
         if (areaIds.length > 0) {
             checklistFilterParts.push(`and(area_id.in.(${areaIds.join(',')}),assigned_to_user_id.is.null)`);
         }
         if (roleIds.length > 0) {
-            checklistFilterParts.push(`and(role_id.in.(${roleIds.join(',')}),assigned_to_user_id.is.null)`);
+            checklistFilterParts.push(`and(role_id.in.(${roleIds.join(',')}),assigned_to_user_id.is.null,area_id.not.is.null)`);
         }
-        checklistFilterParts.push(`assigned_to_user_id.eq.${user.id}`);
-        // Checklists globais: sem área, sem role, sem atribuição individual
-        checklistFilterParts.push(`and(assigned_to_user_id.is.null,area_id.is.null,role_id.is.null)`);
+        checklistFilterParts.push(`and(assigned_to_user_id.eq.${user.id},area_id.not.is.null)`);
 
         // Checklists cuja area_id ou role_id está entre as áreas efetivas do usuário, ou atribuídos diretamente
         const { data: checklists, error: checklistsError } = await adminSupabase

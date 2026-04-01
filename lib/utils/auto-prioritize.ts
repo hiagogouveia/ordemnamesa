@@ -11,6 +11,7 @@ import { Checklist, ExecutionStatus } from "@/lib/types";
 
 type ChecklistWithExec = Partial<Checklist> & {
     execution_status?: ExecutionStatus;
+    area_id?: string | null;
 };
 
 function parseTimeToMinutes(timeStr: string): number {
@@ -19,6 +20,9 @@ function parseTimeToMinutes(timeStr: string): number {
 }
 
 function getAutoPriorityBucket(c: ChecklistWithExec, currentMinutes: number): number {
+    // 0. Incompleta (sem área) — prioridade mais baixa, não executável
+    if (!c.area_id) return 6;
+
     const start = c.start_time ? parseTimeToMinutes(c.start_time) : null;
     const end = c.end_time ? parseTimeToMinutes(c.end_time) : null;
     const status = c.execution_status ?? "not_started";
