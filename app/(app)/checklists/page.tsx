@@ -76,7 +76,7 @@ function ChecklistsContent() {
 
     const selectedShift = searchParams.get("shift") ?? "";
     const selectedAreaId = searchParams.get("area_id") ?? "";
-    const selectedAvailability = searchParams.get("availability") ?? "";
+    const selectedAvailability = searchParams.get("availability") ?? "active";
     const selectedExecStatus = searchParams.get("exec_status") ?? "";
     const selectedCollaboratorId = searchParams.get("collaborator_id") ?? "";
     const sortField = (searchParams.get("sort") as SortField | null) ?? null;
@@ -124,8 +124,9 @@ function ChecklistsContent() {
             if (q && !c.name.toLowerCase().includes(q)) return false;
             if (selectedShift && c.shift !== selectedShift && c.shift !== "any") return false;
             if (selectedAreaId && c.area_id !== selectedAreaId) return false;
-            if (selectedAvailability === "active" && !c.active) return false;
-            if (selectedAvailability === "inactive" && c.active) return false;
+            if (selectedAvailability === "active" && (!c.active || c.status === "draft")) return false;
+            if (selectedAvailability === "inactive" && (c.active || c.status === "draft")) return false;
+            if (selectedAvailability === "draft" && c.status !== "draft") return false;
 
             // Filtro por status de execução
             if (selectedExecStatus) {
@@ -146,12 +147,26 @@ function ChecklistsContent() {
             return true;
         });
 
+        // Separar rascunhos das outras rotinas
+        const drafts = result.filter(c => c.status === "draft");
+        const nonDrafts = result.filter(c => c.status !== "draft");
+
         // Sempre ordenar por order_index como base
-        const sorted = [...result].sort((a, b) => (a.order_index ?? 9999) - (b.order_index ?? 9999));
+        const sortedNonDrafts = [...nonDrafts].sort((a, b) => (a.order_index ?? 9999) - (b.order_index ?? 9999));
+        const sortedDrafts = [...drafts].sort((a, b) => (a.order_index ?? 9999) - (b.order_index ?? 9999));
 
-        if (!sortField) return sorted;
+        if (!sortField) {
+            // Se não houver sort explícito, garantir drafts por último
+            return [...sortedNonDrafts, ...sortedDrafts];
+        }
 
-        return sorted.sort((a, b) => {
+        const sortedResult = [...nonDrafts, ...drafts].sort((a, b) => {
+            // Sempre enviar drafts pro final a não ser que tenhamos escolhido um field diferente e seja uma exigência estrita (?)
+            // Mas a regra diz: quando o filtro "Todas" estiver ativo, Rascunhos sempre por último.
+            // Implementando: se a estiver draft e b não, envia a para o fim.
+            if (a.status === "draft" && b.status !== "draft") return 1;
+            if (a.status !== "draft" && b.status === "draft") return -1;
+
             let valA: string | number;
             let valB: string | number;
 
@@ -173,8 +188,8 @@ function ChecklistsContent() {
                     valB = b.responsible?.name?.toLowerCase() ?? "\uffff";
                     break;
                 case "status":
-                    valA = a.active ? 0 : 1;
-                    valB = b.active ? 0 : 1;
+                    valA = a.status === "draft" ? 2 : (!a.active ? 1 : 0);
+                    valB = b.status === "draft" ? 2 : (!b.active ? 1 : 0);
                     break;
                 default:
                     return 0;
@@ -183,9 +198,11 @@ function ChecklistsContent() {
             const mult = sortOrder === "asc" ? 1 : -1;
             if (valA < valB) return -1 * mult;
             if (valA > valB) return 1 * mult;
-            // Tiebreaker: order_index (já está na ordem base)
-            return 0;
+            // Tiebreaker: order_index
+            return (a.order_index ?? 9999) - (b.order_index ?? 9999);
         });
+        
+        return sortedResult;
     }, [checklists, searchQuery, selectedShift, selectedAreaId, selectedAvailability, selectedExecStatus, selectedCollaboratorId, equipeData, currentMinutes, sortField, sortOrder]);
 
     // ─── URL HELPERS ────────────────────────────────────────────────────────────
@@ -466,7 +483,7 @@ function ChecklistsContent() {
                             onDuplicate={handleDuplicate}
                             onDelete={handleDelete}
                             selectedAreaId={selectedAreaId}
-                            hasReducingFilters={!!(selectedShift || selectedAvailability || selectedExecStatus)}
+                            hasReducingFilters={!!(selectedShift || (selectedAvailability !== "all" && selectedAvailability !== "") || selectedExecStatus)}
                             onReorder={handleReorder}
                             onAutoReprioritize={handleAutoReprioritize}
                             currentMinutes={currentMinutes}

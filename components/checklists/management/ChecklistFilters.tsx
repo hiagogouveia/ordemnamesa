@@ -12,9 +12,10 @@ const SHIFT_OPTIONS = [
 ];
 
 const AVAILABILITY_OPTIONS = [
-    { value: "", label: "Todas" },
     { value: "active", label: "Ativas" },
     { value: "inactive", label: "Inativas" },
+    { value: "draft", label: "Rascunhos" },
+    { value: "all", label: "Todas" },
 ];
 
 const EXEC_STATUS_OPTIONS = [
