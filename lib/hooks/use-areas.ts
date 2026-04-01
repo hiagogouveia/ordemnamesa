@@ -29,7 +29,7 @@ export function useAreas(restaurantId: string | undefined) {
             return res.json();
         },
         enabled: !!restaurantId,
-        staleTime: 300_000,
+        staleTime: 0,
     });
 }
 
@@ -52,7 +52,7 @@ export function useAllAreas(restaurantId: string | undefined) {
             return res.json();
         },
         enabled: !!restaurantId,
-        staleTime: 300_000,
+        staleTime: 0,
     });
 }
 
