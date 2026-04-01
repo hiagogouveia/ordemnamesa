@@ -112,6 +112,10 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
 
     const [areaId, setAreaId] = useState<string>("");
 
+    // Snapshot do estado original da rotina carregada do banco
+    // Usado para: (1) preservar status original no auto-save, (2) comparação de dirty state
+    const originalChecklistRef = useRef<{ status: string; area_id: string | null } | null>(null);
+
     const { data: equipeData } = useEquipe(restaurantId || null);
     const { data: areas = [] } = useAllAreas(restaurantId || undefined);
     const equipe = equipeData?.equipe || [];
@@ -163,8 +167,13 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                     setEnforceSequentialOrder(parsed.enforceSequentialOrder ?? false);
                     setTasks(parsed.tasks ?? []);
                     setSaveState("saved");
-                    isFirstLoad.current = false; // Prevents autosave on initial draft load
+                    isFirstLoad.current = false;
                     previousStateRef.current = parsed;
+                    // Sempre capturar status/area_id original do banco (não do draft)
+                    originalChecklistRef.current = {
+                        status: checklist.status || 'draft',
+                        area_id: checklist.area_id || null,
+                    };
                     return; // Skip setting from props since we used draft
                 } catch {
                     localStorage.removeItem(draftKey);
@@ -188,10 +197,15 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             // Sprint 8: recurrence config
             setRecurrenceConfig(checklist.recurrence_config as RecurrenceConfig | undefined);
             setEnforceSequentialOrder(checklist.enforce_sequential_order ?? false);
-            setAreaId(checklist.area_id || checklist.role_id || ""); // fallback map to areaId
+            setAreaId(checklist.area_id || ""); // BUG FIX: role_id é cargo, NÃO área — não usar como fallback
             setTasks(
                 (checklist.tasks || []).map((t) => ({ ...t, tempId: t.id }))
             );
+            // Capturar snapshot original para preservar status e proteger campos críticos
+            originalChecklistRef.current = {
+                status: checklist.status || 'draft',
+                area_id: checklist.area_id || null,
+            };
             setSaveState("idle");
         } else {
             const resetForm = () => {
@@ -255,7 +269,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             isRequired, recurrence, startTime, endTime, hasTimeWindow,
             recurrenceConfig, enforceSequentialOrder, areaId, tasks
         };
-        
+
         if (isFirstLoad.current) {
             isFirstLoad.current = false;
             previousStateRef.current = formState; // Sync inicial
@@ -264,30 +278,45 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
 
         if (!name.trim() && tasks.length === 0) return;
         if (!tasks || tasks.length === 0) return; // Prevent deleting tasks by accidentally sending empty list
-        
+
+        // FIX: Comparação profunda — só prosseguir se houve mudança REAL
         if (isEqual(previousStateRef.current, formState)) return;
         if (isPublishingRef.current) return;
-        
+
         const draftKey = checklist ? `ordem_na_mesa_draft_rotina_${checklist.id}` : "ordem_na_mesa_draft_rotina";
         localStorage.setItem(draftKey, JSON.stringify(formState));
-        
+
         const handler = setTimeout(async () => {
             if (isSavingRef.current) return;
-            
+
             setSaveState("saving");
-            
+
             try {
                 if (checklist?.id && restaurantId && updateMutation) {
                     isSavingRef.current = true;
+
+                    // FIX: Montar payload explícito com campos snake_case do banco
+                    // Nunca usar ...formState (contém camelCase que polui o payload)
                     const payload = {
                         id: checklist.id,
                         restaurant_id: restaurantId,
-                        ...formState,
+                        name,
+                        description,
+                        shift,
+                        checklist_type: checklistType,
+                        assigned_to_user_id: assignedToUserId || null,
+                        is_required: isRequired,
+                        recurrence,
+                        start_time: hasTimeWindow && startTime ? startTime : null,
+                        end_time: hasTimeWindow && endTime ? endTime : null,
+                        recurrence_config: recurrence === 'custom' ? recurrenceConfig : null,
+                        enforce_sequential_order: enforceSequentialOrder,
                         area_id: areaId || null,
                         target_role: checklist.target_role || 'all',
                         assignment_type: (isIndividualMode && assignedToUserId) ? 'user' : (areaId ? 'area' : 'all'),
-                        status: 'draft',
-                        skipInvalidation: true, // AUTO-SAVE skips invalidation!
+                        // FIX BUG 1: Preservar status original — auto-save NUNCA deve mudar o status
+                        status: originalChecklistRef.current?.status || checklist.status || 'draft',
+                        skipInvalidation: true,
                         tasks: tasks.map(t => ({
                             id: t.id || undefined,
                             title: t.title,
@@ -297,12 +326,10 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                             assigned_to_user_id: t.assigned_to_user_id || undefined
                         }))
                     };
-                    
-                    console.log("AUTOSAVE PAYLOAD:", payload);
+
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const response = await updateMutation.mutateAsync(payload as any);
-                    console.log("BACKEND RESPONSE:", response);
-                    
+                    await updateMutation.mutateAsync(payload as any);
+
                     previousStateRef.current = formState;
                     setSaveState("saved");
                 } else {
@@ -388,18 +415,16 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             description,
             shift: shift as "morning" | "afternoon" | "evening" | "any",
             checklist_type: checklistType as "regular" | "opening" | "closing" | "receiving",
-            assigned_to_user_id: assignedToUserId || undefined,
+            assigned_to_user_id: assignedToUserId || null,
             is_required: isRequired,
             recurrence,
-            // Sprint 8: time window
             start_time: hasTimeWindow && startTime ? startTime : null,
             end_time: hasTimeWindow && endTime ? endTime : null,
-            // Sprint 8: custom recurrence config
             recurrence_config: recurrence === 'custom' ? recurrenceConfig : null,
             enforce_sequential_order: enforceSequentialOrder,
             area_id: areaId || null,
             assignment_type: (isIndividualMode && assignedToUserId) ? 'user' : (areaId ? 'area' : 'all'),
-            status: (isPublishing ? 'active' : 'draft') as "active" | "draft" | "archived",
+            status: (isPublishing ? 'active' : (originalChecklistRef.current?.status || 'draft')) as "active" | "draft" | "archived",
             target_role: checklist?.target_role || 'all',
             tasks: tasks.map(t => ({
                 id: t.id || undefined,
