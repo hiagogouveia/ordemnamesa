@@ -369,14 +369,6 @@ export default function ActivityDetailsPage() {
                                 ? `Disponível entre ${checklist.start_time} e ${checklist.end_time}`
                                 : `Indisponível — abre às ${checklist.start_time}`}
                         </button>
-                    ) : timeWindowStatus === 'after' ? (
-                        <button
-                            disabled
-                            className="w-full bg-[#1a2c32] text-[#325a67] font-bold text-base py-4 rounded-xl border border-[#233f48] cursor-not-allowed flex items-center justify-center gap-2"
-                        >
-                            <span className="material-symbols-outlined text-[20px]">lock</span>
-                            Janela encerrada
-                        </button>
                     ) : isAssumedByMe ? (
                         <button
                             onClick={() => router.push(`/turno/atividade/${checklistId}/executar`)}
