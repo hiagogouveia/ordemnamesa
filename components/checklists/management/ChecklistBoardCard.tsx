@@ -20,6 +20,7 @@ export function ChecklistBoardCard({
     onSelect,
 }: ChecklistBoardCardProps) {
     const taskCount = checklist.tasks?.length ?? 0;
+    const isExecuting = Boolean(checklist.assumed_by_name);
     const responsibleName = checklist.assumed_by_name || checklist.responsible?.name;
 
     return (
@@ -61,10 +62,13 @@ export function ChecklistBoardCard({
             {/* Responsável / Executando */}
             {responsibleName && (
                 <div className="flex items-center gap-1.5 mt-2">
-                    <span className={`material-symbols-outlined text-[14px] ${checklist.assumed_by_name ? 'text-[#13b6ec]' : 'text-[#5a8a99]'}`}>person</span>
-                    <span className={`text-sm font-bold ${checklist.assumed_by_name ? 'text-white' : 'text-[#92bbc9] text-xs font-normal'}`}>
-                        {responsibleName}
-                    </span>
+                    <span className={`material-symbols-outlined text-[14px] shrink-0 ${isExecuting ? 'text-[#13b6ec]' : 'text-[#5a8a99]'}`}>person</span>
+                    <span className="text-[#92bbc9] text-sm truncate">{responsibleName}</span>
+                    {isExecuting && (
+                        <span className="shrink-0 text-[9px] font-bold text-[#13b6ec] bg-[#13b6ec]/10 border border-[#13b6ec]/20 px-1.5 py-0.5 rounded-full uppercase tracking-wide">
+                            Executando
+                        </span>
+                    )}
                 </div>
             )}
 
