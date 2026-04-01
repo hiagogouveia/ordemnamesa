@@ -131,6 +131,50 @@ npx tsc --noEmit     # Type-check sem build
 4. **Valide com build** — rode `npm run build` antes de considerar a feature pronta.
 5. **Não quebre multi-tenant** — toda query deve filtrar por `restaurant_id`.
 
+## Antigravity Kit Integration
+
+Projeto utiliza **Google Antigravity Kit** (`.agent/`) para acelerar desenvolvimento com agents e skills especializados.
+
+### Workflow com Antigravity Kit (OBRIGATÓRIO)
+
+**Ao receber uma feature:**
+1. **Classificar request** (GEMINI.md: REQUEST CLASSIFIER)
+   - QUESTION → responder com context
+   - SIMPLE CODE → implementar inline
+   - COMPLEX CODE / DESIGN → consultar agent relevante
+
+2. **Selecionar agent** baseado no tipo:
+   - **UI/componentes** → `@frontend-specialist` (skills: frontend-design, clean-code)
+   - **API/backend** → `@backend-specialist` (skills: api-patterns, clean-code)
+   - **Schema/DB** → `@database-architect` (skills: database-design, clean-code)
+   - **Performance** → `@performance-optimizer` (skills: performance-profiling)
+   - **Refactor/arquitetura** → `@orchestrator` (skills: clean-code, app-builder)
+
+3. **Ler agent + skills** antes de implementar (caminho: `.agent/agents/<agent>.md`)
+
+4. **Implementar** seguindo os princípios do agent
+
+**Antes de entregar** (validação multi-layer):
+```bash
+npm run build                                    # Always first
+python .agent/skills/lint-and-validate/scripts/lint_runner.py        # Code quality
+
+# Se mudou UI:
+python .agent/skills/frontend-design/scripts/ux_audit.py
+python .agent/skills/frontend-design/scripts/accessibility_checker.py
+
+# Se mudou DB:
+python .agent/skills/database-design/scripts/schema_validator.py
+
+# Se é crítico (segurança):
+python .agent/skills/vulnerability-scanner/scripts/security_scan.py
+
+# Final check (all validations):
+python .agent/scripts/checklist.py .
+```
+
+**Regra:** Feature NÃO está pronta até `checklist.py` passar.
+
 ## Validação pré-entrega (OBRIGATÓRIO)
 
 Antes de declarar qualquer feature/fix como pronta, executar estes passos **nesta ordem**:
