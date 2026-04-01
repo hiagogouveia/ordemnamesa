@@ -27,7 +27,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         }
 
         const body = await request.json();
-        const { restaurant_id, name, description, shift, status, tasks, category, role_id, is_required, checklist_type, assigned_to_user_id, recurrence, start_time, end_time, recurrence_config, enforce_sequential_order, area_id, target_role } = body;
+        const { restaurant_id, name, description, shift, status, tasks, category, role_id, is_required, checklist_type, assigned_to_user_id, recurrence, start_time, end_time, recurrence_config, enforce_sequential_order, area_id, target_role, assignment_type } = body;
 
         if (!restaurant_id || !name) {
             return NextResponse.json({ error: 'restaurant_id e name são obrigatórios.' }, { status: 400 });
@@ -60,6 +60,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
                 enforce_sequential_order: enforce_sequential_order !== undefined ? enforce_sequential_order : false,
                 area_id: area_id || null,
                 target_role: target_role || 'all',
+                assignment_type: assignment_type || (assigned_to_user_id ? 'user' : (area_id ? 'area' : 'all')),
             })
             .eq('id', id)
             .eq('restaurant_id', restaurant_id);

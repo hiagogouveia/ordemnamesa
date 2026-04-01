@@ -82,21 +82,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     const { data: areas = [] } = useAllAreas(restaurantId || undefined);
     const equipe = equipeData?.equipe || [];
 
-    const filteredEquipe = equipe.filter(m => {
-        if (!m.active) return false;
-        if (areaId && !m.areas.some(a => a.id === areaId)) return false;
-        return true;
-    });
-
-    // Auto-clear responsible if they no longer belong to the selected area/role filter
-    useEffect(() => {
-        if (!assignedToUserId) return;
-        if (equipe.length === 0) return;
-        if (!filteredEquipe.some(m => m.user_id === assignedToUserId)) {
-            setAssignedToUserId("");
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [filteredEquipe]);
+    const filteredEquipe = equipe.filter(m => m.active);
 
     const createMutation = useCreateChecklist();
     const updateMutation = useUpdateChecklist();
@@ -156,7 +142,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             setShift(checklist.shift);
             setChecklistType(checklist.checklist_type || "regular");
             setAssignedToUserId(checklist.assigned_to_user_id || "");
-            setIsIndividualMode(!!checklist.assigned_to_user_id);
+            setIsIndividualMode(checklist.assignment_type === 'user' || !!checklist.assigned_to_user_id);
             setIsRequired(checklist.is_required ?? true);
             setRecurrence(checklist.recurrence || "none");
             // Sprint 8: time window
@@ -263,8 +249,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                         id: checklist.id,
                         restaurant_id: restaurantId,
                         ...formState,
-                        area_id: checklist.area_id || undefined,
+                        area_id: areaId || null,
                         target_role: checklist.target_role || 'all',
+                        assignment_type: (isIndividualMode && assignedToUserId) ? 'user' : (areaId ? 'area' : 'all'),
                         status: 'draft',
                         skipInvalidation: true, // AUTO-SAVE skips invalidation!
                         tasks: tasks.map(t => ({
@@ -377,6 +364,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             recurrence_config: recurrence === 'custom' ? recurrenceConfig : null,
             enforce_sequential_order: enforceSequentialOrder,
             area_id: areaId || null,
+            assignment_type: (isIndividualMode && assignedToUserId) ? 'user' : (areaId ? 'area' : 'all'),
             status: (isPublishing ? 'active' : 'draft') as "active" | "draft" | "archived",
             target_role: checklist?.target_role || 'all',
             tasks: tasks.map(t => ({
@@ -594,7 +582,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                 <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Área</label>
                                 <select
                                     value={areaId}
-                                    onChange={(e) => { setAreaId(e.target.value); setAssignedToUserId(""); }}
+                                    onChange={(e) => setAreaId(e.target.value)}
                                     className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
                                     disabled={areas.length === 0}
                                 >

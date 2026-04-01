@@ -71,6 +71,8 @@ export interface Checklist {
     // Sprint 13: My Activities
     area_id?: string | null
     target_role?: TargetRole
+    // Sprint 21: Assignment type independente
+    assignment_type?: AssignmentType
     area?: Area | null
     responsible?: { id: string; name: string } | null
     execution_status?: ExecutionStatus
@@ -176,6 +178,7 @@ export interface Area {
     created_at: string
 }
 
+export type AssignmentType = 'area' | 'user' | 'all'
 export type TargetRole = 'staff' | 'manager' | 'owner' | 'all'
 export type MyActivityStatus = 'pending' | 'in_progress' | 'done_today' | 'overdue'
 

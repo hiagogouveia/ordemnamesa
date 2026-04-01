@@ -256,4 +256,129 @@ describe("filterChecklistsByCollaborator", () => {
 
         expect(checklists).toEqual(original);
     });
+
+    // ─── Sprint 21: Rotinas globais (assignment_type = 'all') ─────────────────
+
+    it("retorna checklist global (sem área e sem usuário) para qualquer colaborador", () => {
+        const checklists = [
+            makeChecklist({
+                id: "cl-global",
+                area_id: undefined,
+                assigned_to_user_id: undefined,
+                assumed_by_user_id: undefined,
+            }),
+        ];
+
+        const result = filterChecklistsByCollaborator(checklists, THALYTA_ID, collaborators);
+        expect(result).toHaveLength(1);
+        expect(result[0].id).toBe("cl-global");
+    });
+
+    it("retorna checklist global assumido pelo próprio colaborador", () => {
+        const checklists = [
+            makeChecklist({
+                id: "cl-global-assumido",
+                area_id: undefined,
+                assigned_to_user_id: undefined,
+                assumed_by_user_id: THALYTA_ID,
+            }),
+        ];
+
+        const result = filterChecklistsByCollaborator(checklists, THALYTA_ID, collaborators);
+        expect(result).toHaveLength(1);
+    });
+
+    it("NÃO retorna checklist global assumido por OUTRO colaborador", () => {
+        const checklists = [
+            makeChecklist({
+                id: "cl-global-outro",
+                area_id: undefined,
+                assigned_to_user_id: undefined,
+                assumed_by_user_id: LARISSA_ID,
+            }),
+        ];
+
+        const result = filterChecklistsByCollaborator(checklists, THALYTA_ID, collaborators);
+        expect(result).toHaveLength(0);
+    });
+
+    // ─── Sprint 21: Atribuição direta SEM área ───────────────────────────────
+
+    it("retorna checklist atribuído diretamente ao usuário mesmo sem área", () => {
+        const checklists = [
+            makeChecklist({
+                id: "cl-user-sem-area",
+                area_id: undefined,
+                assigned_to_user_id: THALYTA_ID,
+                responsible: { id: THALYTA_ID, name: "Thalyta" },
+            }),
+        ];
+
+        const result = filterChecklistsByCollaborator(checklists, THALYTA_ID, collaborators);
+        expect(result).toHaveLength(1);
+        expect(result[0].id).toBe("cl-user-sem-area");
+    });
+
+    it("NÃO retorna checklist atribuído a outro usuário sem área", () => {
+        const checklists = [
+            makeChecklist({
+                id: "cl-user-outro-sem-area",
+                area_id: undefined,
+                assigned_to_user_id: LARISSA_ID,
+                responsible: { id: LARISSA_ID, name: "Larissa" },
+            }),
+        ];
+
+        const result = filterChecklistsByCollaborator(checklists, THALYTA_ID, collaborators);
+        expect(result).toHaveLength(0);
+    });
+
+    // ─── Sprint 21: Cenário misto completo com globais ────────────────────────
+
+    it("filtra corretamente cenário misto incluindo checklists globais", () => {
+        const checklists = [
+            // 1. Direto para Thalyta → deve aparecer
+            makeChecklist({
+                id: "cl-direto-thalyta",
+                assigned_to_user_id: THALYTA_ID,
+                responsible: { id: THALYTA_ID, name: "Thalyta" },
+            }),
+            // 2. Global sem ninguém assumir → deve aparecer
+            makeChecklist({
+                id: "cl-global-livre",
+                area_id: undefined,
+                assigned_to_user_id: undefined,
+                assumed_by_user_id: undefined,
+            }),
+            // 3. Global assumido por outro → NÃO deve aparecer
+            makeChecklist({
+                id: "cl-global-larissa",
+                area_id: undefined,
+                assigned_to_user_id: undefined,
+                assumed_by_user_id: LARISSA_ID,
+            }),
+            // 4. Área Cozinha livre → deve aparecer
+            makeChecklist({
+                id: "cl-area-livre",
+                area_id: AREA_COZINHA_ID,
+                assigned_to_user_id: undefined,
+            }),
+            // 5. Direto para Thalyta SEM área → deve aparecer
+            makeChecklist({
+                id: "cl-user-sem-area",
+                area_id: undefined,
+                assigned_to_user_id: THALYTA_ID,
+            }),
+        ];
+
+        const result = filterChecklistsByCollaborator(checklists, THALYTA_ID, collaborators);
+        const resultIds = result.map((c) => c.id);
+
+        expect(resultIds).toEqual([
+            "cl-direto-thalyta",
+            "cl-global-livre",
+            "cl-area-livre",
+            "cl-user-sem-area",
+        ]);
+    });
 });

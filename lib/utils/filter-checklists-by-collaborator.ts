@@ -40,7 +40,15 @@ export function filterChecklistsByCollaborator(
 
         if (directlyAssigned) return true;
 
-        // 2. Distribuído por área (sem atribuição direta)
+        // 2. Global (sem área e sem atribuição direta) — visível para todos
+        const isGlobal = !c.assigned_to_user_id && !c.area_id;
+        if (isGlobal) {
+            if (!c.assumed_by_user_id) return true;
+            if (c.assumed_by_user_id === collaboratorId) return true;
+            return false;
+        }
+
+        // 3. Distribuído por área (sem atribuição direta)
         const isAreaDistributed = !c.assigned_to_user_id
             && !!c.area_id
             && collaboratorAreaIds.has(c.area_id);
