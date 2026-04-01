@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ShiftsTab } from "./_components/shifts-tab";
-import { RolesTab } from "./_components/roles-tab";
+import { AreasTab } from "./_components/areas-tab";
 
 type TabId = "turnos" | "funcoes" | "geral";
 
@@ -48,7 +48,7 @@ export default function ConfiguracoesPage() {
             {/* Content Area */}
             <div className="flex-1 overflow-y-auto p-6 lg:p-8">
                 {activeTab === "turnos" && <ShiftsTab />}
-                {activeTab === "funcoes" && <RolesTab />}
+                {activeTab === "funcoes" && <AreasTab />}
                 {activeTab === "geral" && (
                     <div className="flex items-center justify-center h-full min-h-[400px]">
                         <div className="flex flex-col items-center justify-center max-w-sm text-center">
