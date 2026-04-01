@@ -154,11 +154,13 @@ export function ChecklistRow({
             <td className="px-3 py-3 hidden md:table-cell" onClick={onSelect}>
                 {checklist.assumed_by_name ? (
                     <span className="flex items-center gap-1.5">
-                        <span className="material-symbols-outlined text-[14px] text-[#13b6ec] shrink-0">person</span>
+                        <span className={`material-symbols-outlined text-[14px] shrink-0 ${execStatus !== "done" ? "text-[#13b6ec]" : "text-[#5a8a99]"}`}>person</span>
                         <span className="text-white text-sm font-medium truncate">{checklist.assumed_by_name}</span>
-                        <span className="shrink-0 text-[9px] font-bold text-[#13b6ec] bg-[#13b6ec]/10 border border-[#13b6ec]/20 px-1.5 py-0.5 rounded-full uppercase tracking-wide">
-                            Executando
-                        </span>
+                        {execStatus !== "done" && (
+                            <span className="shrink-0 text-[9px] font-bold text-[#13b6ec] bg-[#13b6ec]/10 border border-[#13b6ec]/20 px-1.5 py-0.5 rounded-full uppercase tracking-wide">
+                                Executando
+                            </span>
+                        )}
                     </span>
                 ) : checklist.responsible?.name ? (
                     <span className="flex items-center gap-1.5">

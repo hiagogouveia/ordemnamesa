@@ -20,7 +20,7 @@ export function ChecklistBoardCard({
     onSelect,
 }: ChecklistBoardCardProps) {
     const taskCount = checklist.tasks?.length ?? 0;
-    const isExecuting = Boolean(checklist.assumed_by_name);
+    const isExecuting = Boolean(checklist.assumed_by_name) && checklist.execution_status !== "done";
     const responsibleName = checklist.assumed_by_name || checklist.responsible?.name;
 
     return (
