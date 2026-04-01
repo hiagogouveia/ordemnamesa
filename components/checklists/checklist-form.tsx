@@ -29,15 +29,49 @@ const SHIFTS = [
     { value: 'evening', label: 'Noite' },
     { value: 'any', label: 'Qualquer turno' }
 ];
-const RECURRENCE_OPTIONS = [
-    { value: 'none', label: 'Não se repete' },
-    { value: 'daily', label: 'Todos os dias' },
-    { value: 'weekdays', label: 'Dias úteis (seg-sex)' },
-    { value: 'weekly', label: 'Semanal' },
-    { value: 'monthly', label: 'Mensal' },
-    { value: 'yearly', label: 'Anual' },
-    { value: 'custom', label: 'Personalizar...' },
-];
+const getDynamicRecurrenceOptions = () => {
+    const now = new Date();
+    
+    const dayOfWeek = now.getDay();
+    const daysOfWeek = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+    const dayOfWeekStr = daysOfWeek[dayOfWeek];
+    
+    // Check gender (domingo and sábado are masculine)
+    const isMasculine = dayOfWeek === 0 || dayOfWeek === 6;
+    const prefix = isMasculine ? 'todo' : 'toda';
+
+    const currentDate = now.getDate();
+    const ordinalNum = Math.ceil(currentDate / 7);
+    
+    // Check if it's the last occurrence of the weekday in the current month
+    const nextWeekDate = new Date(now.getTime());
+    nextWeekDate.setDate(currentDate + 7);
+    const isLastOccurrence = nextWeekDate.getMonth() !== now.getMonth();
+
+    let ordinalStr = '';
+    if (isLastOccurrence) {
+        ordinalStr = isMasculine ? 'último' : 'última';
+        ordinalStr += ` ${dayOfWeekStr} do mês`;
+    } else {
+        const ordinalsM = ['primeiro', 'segundo', 'terceiro', 'quarto', 'quinto'];
+        const ordinalsF = ['primeira', 'segunda', 'terceira', 'quarta', 'quinta'];
+        const ordinals = isMasculine ? ordinalsM : ordinalsF;
+        ordinalStr = `${ordinals[ordinalNum - 1]} ${dayOfWeekStr}`;
+    }
+    
+    const months = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+    const monthStr = months[now.getMonth()];
+
+    return [
+        { value: 'none', label: 'Não se repete' },
+        { value: 'daily', label: 'Todos os dias' },
+        { value: 'weekdays', label: 'Dias úteis (seg-sex)' },
+        { value: 'weekly', label: `Semanal: ${prefix} ${dayOfWeekStr}` },
+        { value: 'monthly', label: `Mensal (${ordinalStr})` },
+        { value: 'yearly', label: `Anual em ${currentDate} de ${monthStr}` },
+        { value: 'custom', label: 'Personalizar...' },
+    ];
+};
 const CHECKLIST_TYPES = [
     { value: 'regular', label: 'Regular' },
     { value: 'opening', label: 'Abertura' },
@@ -562,7 +596,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                     onChange={(e) => handleRecurrenceChange(e.target.value)}
                                     className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
                                 >
-                                    {RECURRENCE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                                    {getDynamicRecurrenceOptions().map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                                 </select>
                                 {recurrence === 'custom' && recurrenceConfig && (
                                     <button
