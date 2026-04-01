@@ -59,7 +59,7 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
     }, [restaurantId, markAllReadMutation]);
 
     return (
-        <header className="sticky top-0 z-10 w-full h-[72px] bg-[#111e22]/80 backdrop-blur-md border-b border-[#233f48] px-6 flex items-center justify-between shrink-0">
+        <header className="sticky top-0 z-40 w-full h-[72px] bg-[#111e22]/80 backdrop-blur-md border-b border-[#233f48] px-6 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-4">
                 {/* Hamburger pro mobile */}
                 <button
