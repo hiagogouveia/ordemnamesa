@@ -73,8 +73,9 @@ export default function KanbanPage() {
     const { todoActivities, doingActivities, doneActivities } = useMemo(() => {
         if (!kanbanData || !user) return { todoActivities: [], doingActivities: [], doneActivities: [] };
 
-        const { checklists, tasks, executions } = kanbanData;
+        const { checklists, tasks, executions, assumptions } = kanbanData;
         const execMapByTaskId = new Map(executions.map(e => [e.task_id, e]));
+        const assumptionByChecklistId = new Map((assumptions || []).map(a => [a.checklist_id, a]));
 
         const todo: (KanbanChecklist & { taskCount: number; progress: number; flaggedTasksCount: number })[] = [];
         const doing: (KanbanChecklist & { taskCount: number; progress: number; flaggedTasksCount: number })[] = [];
@@ -83,6 +84,11 @@ export default function KanbanPage() {
         for (const cl of checklists) {
             const clTasks = tasks.filter(t => t.checklist_id === cl.id);
             if (clTasks.length === 0) continue; // Skip empty checklists
+
+            // REGRA CRÍTICA: Se a assumption tem completed_at, a atividade está CONCLUÍDA
+            // independente do estado das execuções do usuário atual
+            const clAssumption = assumptionByChecklistId.get(cl.id);
+            const isCompletedByAssumption = Boolean(clAssumption?.completed_at);
 
             const doneTasksCount = clTasks.filter(t => {
                 const exec = execMapByTaskId.get(t.id);
@@ -99,10 +105,12 @@ export default function KanbanPage() {
                 return exec && exec.status === 'doing';
             }).length;
 
-            const progress = Math.round((doneTasksCount / clTasks.length) * 100);
+            const progress = isCompletedByAssumption
+                ? 100
+                : Math.round((doneTasksCount / clTasks.length) * 100);
             const enriched = { ...cl, taskCount: clTasks.length, progress, flaggedTasksCount };
 
-            if (doneTasksCount === clTasks.length) {
+            if (isCompletedByAssumption || doneTasksCount === clTasks.length) {
                 done.push(enriched);
             } else if (doneTasksCount > 0 || doingTasksCount > 0 || flaggedTasksCount > 0) {
                 doing.push(enriched);
@@ -131,8 +139,12 @@ export default function KanbanPage() {
         if (!kanbanData) return false;
         const requiredChecklists = kanbanData.checklists.filter(c => c.is_required);
         if (requiredChecklists.length === 0) return false;
-        
+
         return requiredChecklists.every(c => {
+            // Checar assumption.completed_at primeiro
+            const assumption = (kanbanData.assumptions || []).find(a => a.checklist_id === c.id);
+            if (assumption?.completed_at) return true;
+
             const clTasks = kanbanData.tasks.filter(t => t.checklist_id === c.id);
             if (clTasks.length === 0) return true;
             return clTasks.every(t => {
@@ -174,6 +186,25 @@ export default function KanbanPage() {
         if (h < 18) return 'Boa tarde';
         return 'Boa noite';
     };
+
+    // Guard: aguardar dados essenciais antes de renderizar
+    if (!restaurantId || userLoading) {
+        return (
+            <div className="min-h-full bg-[#101d22] font-sans pb-20">
+                <header className="sticky top-0 z-30 bg-[#101d22]/95 backdrop-blur border-b border-[#233f48] px-4 py-4 md:px-8">
+                    <div className="max-w-[480px] mx-auto w-full animate-pulse">
+                        <div className="h-7 w-48 rounded bg-[#233f48] mb-2" />
+                        <div className="h-4 w-32 rounded bg-[#233f48]" />
+                    </div>
+                </header>
+                <main className="max-w-[480px] mx-auto w-full p-4 flex flex-col gap-3 animate-pulse">
+                    <div className="h-10 bg-[#1a2c32] rounded-lg w-full mb-4" />
+                    <div className="h-24 bg-[#1a2c32] rounded-xl w-full" />
+                    <div className="h-24 bg-[#1a2c32] rounded-xl w-full" />
+                </main>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-full bg-[#101d22] font-sans pb-20">

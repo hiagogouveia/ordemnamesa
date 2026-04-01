@@ -50,7 +50,7 @@ export default function ActivityDetailsPage() {
     const { data: assumption } = useChecklistAssumption(restaurantId || undefined, checklistId);
     const assumeMutation = useAssumeChecklist();
 
-    const { checklist, tasks } = activityData || {};
+    const { checklist, tasks, executions } = activityData || {};
 
     const timeWindowStatus = getTimeWindowStatus(
         checklist?.start_time as string | undefined,
@@ -291,15 +291,21 @@ export default function ActivityDetailsPage() {
                                 Itens do Checklist
                             </h3>
                             <ul className="flex flex-col gap-2">
-                                {tasks.slice(0, 5).map((task) => (
-                                    <li key={task.id} className="flex items-center gap-2 text-[#92bbc9] text-sm">
-                                        <span className="material-symbols-outlined text-[#325a67] text-[16px]">radio_button_unchecked</span>
-                                        <span className="truncate">{task.title}</span>
-                                        {task.is_critical && (
-                                            <span className="shrink-0 text-[10px] text-amber-400 font-bold bg-amber-400/10 px-1.5 py-0.5 rounded">Crítico</span>
-                                        )}
-                                    </li>
-                                ))}
+                                {tasks.slice(0, 5).map((task) => {
+                                    const taskExec = executions?.find(e => e.task_id === task.id);
+                                    const taskIsDone = isCompleted || (taskExec && taskExec.status === 'done');
+                                    return (
+                                        <li key={task.id} className={`flex items-center gap-2 text-sm ${taskIsDone ? 'text-emerald-400/80' : 'text-[#92bbc9]'}`}>
+                                            <span className={`material-symbols-outlined text-[16px] ${taskIsDone ? 'text-emerald-400' : 'text-[#325a67]'}`}>
+                                                {taskIsDone ? 'check_circle' : 'radio_button_unchecked'}
+                                            </span>
+                                            <span className="truncate">{task.title}</span>
+                                            {task.is_critical && !taskIsDone && (
+                                                <span className="shrink-0 text-[10px] text-amber-400 font-bold bg-amber-400/10 px-1.5 py-0.5 rounded">Crítico</span>
+                                            )}
+                                        </li>
+                                    );
+                                })}
                                 {tasks.length > 5 && (
                                     <li className="text-[#325a67] text-xs mt-1">
                                         + {tasks.length - 5} {tasks.length - 5 === 1 ? 'item adicional' : 'itens adicionais'}
