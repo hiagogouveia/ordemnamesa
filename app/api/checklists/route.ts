@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { ExecutionStatus } from '@/lib/types';
+import { getBrazilDateKey } from '@/lib/utils/brazil-date';
 
 const getAdminSupabase = () => {
     return createClient(
@@ -45,7 +46,7 @@ export async function GET(request: Request) {
         }
 
         // Buscar checklists e assumptions de hoje em paralelo
-        const todayKey = new Date().toISOString().split('T')[0];
+        const todayKey = getBrazilDateKey();
 
         const [checklistsResult, assumptionsResult] = await Promise.all([
             adminSupabase

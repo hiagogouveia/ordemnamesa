@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getBrazilNow, getBrazilStartAndEndOfDay } from '@/lib/utils/brazil-date';
+import { filterChecklistsByRecurrence } from '@/lib/utils/should-checklist-appear-today';
 
 const getAdminSupabase = () => {
     return createClient(
@@ -65,22 +67,34 @@ export async function GET(request: Request) {
 
         const { data: activeChecklists } = await adminSupabase
             .from('checklists')
-            .select('id, name, description, is_required, recurrence, last_reset_at, assigned_to_user_id, role_id, area_id, roles(id, name, color), areas(id, name, color), checklist_type, start_time, end_time')
+            .select('id, name, description, is_required, recurrence, recurrence_config, last_reset_at, assigned_to_user_id, role_id, area_id, roles(id, name, color), areas(id, name, color), checklist_type, start_time, end_time')
             .eq('restaurant_id', restaurant_id)
             .eq('active', true)
             .eq('status', 'active')
             .or(checklistFilterParts.join(','));
 
-        const checklistIds = activeChecklists?.map(c => c.id) || [];
-        const checklistMeta = new Map(activeChecklists?.map(c => [c.id, { is_required: c.is_required, recurrence: c.recurrence, last_reset_at: c.last_reset_at }]) || []);
+        // Timezone Brasil para todas as operações de data
+        const brazil = getBrazilNow();
+        const { start: brazilDayStart, end: brazilDayEnd } = getBrazilStartAndEndOfDay();
+
+        // Filtrar checklists por regras de recorrência (dia da semana, custom, etc.)
+        const visibleChecklists = filterChecklistsByRecurrence(
+            activeChecklists || [],
+            brazil.dayOfWeek,
+            brazil.dateKey,
+        );
+
+        const checklistIds = visibleChecklists.map(c => c.id);
+        const checklistMeta = new Map(visibleChecklists.map(c => [c.id, { is_required: c.is_required, recurrence: c.recurrence, last_reset_at: c.last_reset_at }]));
 
         // Reset de recorrência: apagar execuções antigas conforme o ciclo do checklist
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const startOfWeek = new Date(today);
-        startOfWeek.setDate(today.getDate() - today.getDay());
-        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-        const startOfYear = new Date(today.getFullYear(), 0, 1);
+        // (opera sobre TODOS os checklists, não apenas visíveis — reset é manutenção)
+        const [yearStr, monthStr, dayStr] = brazil.dateKey.split('-');
+        const todayLocal = new Date(Number(yearStr), Number(monthStr) - 1, Number(dayStr));
+        const startOfWeek = new Date(todayLocal);
+        startOfWeek.setDate(todayLocal.getDate() - todayLocal.getDay());
+        const startOfMonth = new Date(todayLocal.getFullYear(), todayLocal.getMonth(), 1);
+        const startOfYear = new Date(todayLocal.getFullYear(), 0, 1);
 
         for (const cl of (activeChecklists || [])) {
             if (!cl.recurrence || cl.recurrence === 'none') continue;
@@ -89,7 +103,7 @@ export async function GET(request: Request) {
             const lastReset = cl.last_reset_at ? new Date(cl.last_reset_at) : null;
 
             if (cl.recurrence === 'daily' || cl.recurrence === 'weekdays') {
-                periodStart = today;
+                periodStart = todayLocal;
             } else if (cl.recurrence === 'weekly') {
                 periodStart = startOfWeek;
             } else if (cl.recurrence === 'monthly') {
@@ -150,21 +164,16 @@ export async function GET(request: Request) {
         }));
 
         // 3. Buscar execuções de HOJE para ESTE USUÁRIO neste restaurante
-        const startOfDay = new Date();
-        startOfDay.setHours(0, 0, 0, 0);
-        const endOfDay = new Date();
-        endOfDay.setHours(23, 59, 59, 999);
-
         const { data: executions } = await adminSupabase
             .from('task_executions')
             .select('*')
             .eq('restaurant_id', restaurant_id)
             .eq('user_id', user.id)
-            .gte('executed_at', startOfDay.toISOString())
-            .lte('executed_at', endOfDay.toISOString());
+            .gte('executed_at', brazilDayStart)
+            .lte('executed_at', brazilDayEnd);
 
         // 4. Buscar assumptions de HOJE para este restaurante
-        const todayKey = new Date().toISOString().split('T')[0];
+        const todayKey = brazil.dateKey;
         const { data: assumptions } = await adminSupabase
             .from('checklist_assumptions')
             .select('*')
@@ -172,7 +181,7 @@ export async function GET(request: Request) {
             .eq('date_key', todayKey);
 
         return NextResponse.json({
-            checklists: activeChecklists || [],
+            checklists: visibleChecklists,
             tasks: tasksData || [],
             executions: executions || [],
             assumptions: assumptions || [],

@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getBrazilNow, getBrazilStartAndEndOfDay, getBrazilDateKey } from '@/lib/utils/brazil-date';
+import { filterChecklistsByRecurrence } from '@/lib/utils/should-checklist-appear-today';
+import type { RecurrenceConfig } from '@/lib/types';
 
 // ─── Tipos internos ──────────────────────────────────────────────────────────
 
@@ -21,6 +24,9 @@ interface ChecklistRow {
     area_id: string | null;
     end_time: string | null;
     start_time: string | null;
+    recurrence?: string | null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recurrence_config?: any;
     areas: { id: string; name: string; color: string } | null;
     checklist_tasks: { id: string; is_critical: boolean }[];
 }
@@ -101,29 +107,25 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
         }
 
-        // ── Datas ─────────────────────────────────────────────────────────
-        const now = new Date();
-        const todayKey = now.toISOString().slice(0, 10);
+        // ── Datas (timezone Brasil) ────────────────────────────────────────
+        const brazil = getBrazilNow();
+        const todayKey = brazil.dateKey;
+        const { start: todayStartISO, end: todayEndISO } = getBrazilStartAndEndOfDay();
 
-        const yesterday = new Date(now);
-        yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayKey = yesterday.toISOString().slice(0, 10);
+        const yesterdayDate = new Date();
+        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+        const yesterdayKey = getBrazilDateKey(yesterdayDate);
 
-        const sevenDaysAgo = new Date(now);
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
-        const sevenDaysAgoKey = sevenDaysAgo.toISOString().slice(0, 10);
-
-        const todayStart = new Date(now);
-        todayStart.setHours(0, 0, 0, 0);
-        const todayEnd = new Date(now);
-        todayEnd.setHours(23, 59, 59, 999);
+        const sevenDaysAgoDate = new Date();
+        sevenDaysAgoDate.setDate(sevenDaysAgoDate.getDate() - 6);
+        const sevenDaysAgoKey = getBrazilDateKey(sevenDaysAgoDate);
 
         // ── Round 1: Queries paralelas ────────────────────────────────────
         const [checklistsRes, assumptionsRes, taskExecsRes] = await Promise.all([
             // Checklists ativos — apenas metadados (nome, área, tasks, horários)
             adminSupabase
                 .from('checklists')
-                .select('id, name, area_id, end_time, start_time, areas(id, name, color), checklist_tasks(id, is_critical)')
+                .select('id, name, area_id, end_time, start_time, recurrence, recurrence_config, areas(id, name, color), checklist_tasks(id, is_critical)')
                 .eq('restaurant_id', restaurant_id)
                 .eq('active', true)
                 .eq('status', 'active'),
@@ -141,13 +143,17 @@ export async function GET(request: Request) {
                 .from('task_executions')
                 .select('checklist_id, task_id, status')
                 .eq('restaurant_id', restaurant_id)
-                .gte('executed_at', todayStart.toISOString())
-                .lte('executed_at', todayEnd.toISOString()),
+                .gte('executed_at', todayStartISO)
+                .lte('executed_at', todayEndISO),
         ]);
 
-        const checklists: ChecklistRow[] = checklistsRes.data || [];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const allChecklists = (checklistsRes.data || []) as any as ChecklistRow[];
         const allAssumptions: AssumptionRow[] = assumptionsRes.data || [];
         const taskExecs: TaskExecRow[] = taskExecsRes.data || [];
+
+        // Filtrar checklists por regras de recorrência (dia da semana, custom, etc.)
+        const checklists = filterChecklistsByRecurrence(allChecklists, brazil.dayOfWeek, brazil.dateKey);
 
         // Mapa de checklists para lookup rápido (metadados apenas)
         const checklistsMap = new Map<string, ChecklistRow>();
@@ -199,7 +205,7 @@ export async function GET(request: Request) {
             alert_type: 'critico' | 'atrasado' | 'bloqueado';
         }> = [];
 
-        const nowHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        const nowHHMM = brazil.timeHHMM;
 
         todayAssumptions.forEach(a => {
             const cl = checklistsMap.get(a.checklist_id);
@@ -331,7 +337,7 @@ export async function GET(request: Request) {
                 availableAt = new Date(`${todayKey}T${cl.start_time}:00`);
             } else {
                 // Fallback: início do dia como momento de disponibilidade
-                availableAt = new Date(todayStart);
+                availableAt = new Date(todayStartISO);
             }
 
             const diffMins = (assumedAt.getTime() - availableAt.getTime()) / 60000;
@@ -354,9 +360,7 @@ export async function GET(request: Request) {
             if (cl.start_time) {
                 availableAt = new Date(`${yesterdayKey}T${cl.start_time}:00`);
             } else {
-                const yesterdayStart = new Date(yesterday);
-                yesterdayStart.setHours(0, 0, 0, 0);
-                availableAt = yesterdayStart;
+                availableAt = new Date(`${yesterdayKey}T00:00:00-03:00`);
             }
 
             const diffMins = (assumedAt.getTime() - availableAt.getTime()) / 60000;
@@ -375,9 +379,10 @@ export async function GET(request: Request) {
         const tendencias = [];
 
         for (let i = 6; i >= 0; i--) {
-            const d = new Date(now);
+            const d = new Date();
             d.setDate(d.getDate() - i);
-            const dateKey = d.toISOString().slice(0, 10);
+            const dateKey = getBrazilDateKey(d);
+            const dayOfWeek = getBrazilNow(d).dayOfWeek;
 
             const dayAssumptions = allAssumptions.filter(a => a.date_key === dateKey);
             const dayCompleted = dayAssumptions.filter(isCompleted).length;
@@ -386,7 +391,7 @@ export async function GET(request: Request) {
             const pct = dayTotal > 0 ? Math.round((dayCompleted / dayTotal) * 100) : 0;
 
             tendencias.push({
-                date_label: dayNames[d.getDay()],
+                date_label: dayNames[dayOfWeek],
                 percent: Math.min(pct, 100),
             });
         }

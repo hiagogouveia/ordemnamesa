@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { MyActivity, MyActivityStatus, TargetRole } from '@/lib/types';
+import { getBrazilNow, getBrazilStartAndEndOfDay } from '@/lib/utils/brazil-date';
+import { filterChecklistsByRecurrence } from '@/lib/utils/should-checklist-appear-today';
 
 const getAdminSupabase = () =>
     createClient(
@@ -12,12 +14,12 @@ function computeActivityStatus(
     endTime: string | null | undefined,
     taskCount: number,
     doneCount: number,
-    isFormallyConcluded: boolean
+    isFormallyConcluded: boolean,
+    nowHHMM: string,
 ): MyActivityStatus {
     if (isFormallyConcluded) return 'done_today';
     if (taskCount === 0) return 'pending';
     if (doneCount >= taskCount) return 'done_today';
-    const nowHHMM = new Date().toTimeString().slice(0, 5);
     if (endTime && nowHHMM > endTime && doneCount < taskCount) return 'overdue';
     if (doneCount > 0) return 'in_progress';
     return 'pending';
@@ -103,6 +105,8 @@ export async function GET(request: Request) {
                 area_id,
                 role_id,
                 order_index,
+                recurrence,
+                recurrence_config,
                 area:areas(id, name, color, priority_mode),
                 role:roles(id, name, color),
                 task_count:checklist_tasks(count)
@@ -122,16 +126,27 @@ export async function GET(request: Request) {
             return NextResponse.json([]);
         }
 
-        // Execuções do dia para calcular progresso
-        const startOfDay = new Date();
-        startOfDay.setHours(0, 0, 0, 0);
+        // Timezone Brasil e filtragem de recorrência
+        const brazil = getBrazilNow();
+        const { start: brazilDayStart } = getBrazilStartAndEndOfDay();
 
+        const visibleChecklists = filterChecklistsByRecurrence(
+            checklists,
+            brazil.dayOfWeek,
+            brazil.dateKey,
+        );
+
+        if (visibleChecklists.length === 0) {
+            return NextResponse.json([]);
+        }
+
+        // Execuções do dia para calcular progresso
         const { data: executions, error: executionsError } = await adminSupabase
             .from('task_executions')
             .select('checklist_id, task_id, status')
             .eq('restaurant_id', restaurant_id)
             .eq('user_id', user.id)
-            .gte('executed_at', startOfDay.toISOString());
+            .gte('executed_at', brazilDayStart);
 
         if (executionsError) {
             console.error('[GET /api/my-activities] Erro ao buscar execuções:', executionsError);
@@ -139,8 +154,8 @@ export async function GET(request: Request) {
         }
 
         // Buscar TODAS as assumptions do dia para estes checklists (não só do usuário logado)
-        const todayKey = startOfDay.toISOString().split('T')[0];
-        const checklistIds = (checklists ?? []).map((c: { id: string }) => c.id);
+        const todayKey = brazil.dateKey;
+        const checklistIds = visibleChecklists.map((c: { id: string }) => c.id);
 
         const { data: allAssumptions } = await adminSupabase
             .from('checklist_assumptions')
@@ -174,7 +189,7 @@ export async function GET(request: Request) {
         }
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const activities: MyActivity[] = (checklists as any[]).map((checklist) => {
+        const activities: MyActivity[] = (visibleChecklists as any[]).map((checklist) => {
             const rawCount = checklist.task_count;
             const taskCount = Array.isArray(rawCount)
                 ? (rawCount[0]?.count ?? 0)
@@ -210,7 +225,7 @@ export async function GET(request: Request) {
                 task_count: taskCount,
                 done_count: doneCount,
                 progress_percent: progressPercent,
-                activity_status: computeActivityStatus(checklist.end_time, taskCount, doneCount, completedSet.has(checklist.id)),
+                activity_status: computeActivityStatus(checklist.end_time, taskCount, doneCount, completedSet.has(checklist.id), brazil.timeHHMM),
                 assumed_by_name: assumption?.user_name ?? null,
                 assumed_by_user_id: assumption?.user_id ?? null,
             };
