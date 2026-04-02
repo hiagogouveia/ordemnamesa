@@ -46,6 +46,18 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
             return NextResponse.json({ error: 'Permissões insuficientes.' }, { status: 403 });
         }
 
+        // 1. Buscar estado atual para proteger campos críticos contra remoção acidental
+        const { data: currentChecklist } = await adminSupabase
+            .from('checklists')
+            .select('area_id, status')
+            .eq('id', id)
+            .eq('restaurant_id', restaurant_id)
+            .single();
+
+        // Proteção: area_id só é removido se explicitamente enviado como null no body
+        // Se o campo não veio no payload (undefined), preserva o valor atual
+        const safeAreaId = area_id !== undefined ? (area_id || null) : (currentChecklist?.area_id ?? null);
+
         // 1. Atualizar Checklist
         const { error: updateError } = await adminSupabase
             .from('checklists')
@@ -58,7 +70,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
                 end_time: end_time || null,
                 recurrence_config: recurrence_config || null,
                 enforce_sequential_order: enforce_sequential_order !== undefined ? enforce_sequential_order : false,
-                area_id: area_id || null,
+                area_id: safeAreaId,
                 target_role: target_role || 'all',
                 assignment_type: assignment_type || (assigned_to_user_id ? 'user' : (area_id ? 'area' : 'all')),
             })

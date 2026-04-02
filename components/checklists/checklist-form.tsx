@@ -165,10 +165,30 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                     setHasTimeWindow(parsed.hasTimeWindow ?? false);
                     setRecurrenceConfig(parsed.recurrenceConfig ?? undefined);
                     setEnforceSequentialOrder(parsed.enforceSequentialOrder ?? false);
+                    // FIX BUG: areaId estava ausente — draft era carregado sem restaurar área,
+                    // causando area_id=null no auto-save e perda da associação com área
+                    setAreaId(parsed.areaId ?? checklist.area_id ?? "");
                     setTasks(parsed.tasks ?? []);
                     setSaveState("saved");
                     isFirstLoad.current = false;
-                    previousStateRef.current = parsed;
+                    // FIX: Reconstruir snapshot com areaId incluído para evitar falso diff
+                    previousStateRef.current = {
+                        name: parsed.name ?? "",
+                        description: parsed.description ?? "",
+                        shift: parsed.shift ?? "any",
+                        checklistType: parsed.checklistType ?? "regular",
+                        assignedToUserId: parsed.assignedToUserId ?? "",
+                        isIndividualMode: parsed.isIndividualMode ?? !!parsed.assignedToUserId,
+                        isRequired: parsed.isRequired ?? true,
+                        recurrence: parsed.recurrence ?? "none",
+                        startTime: parsed.startTime ?? "",
+                        endTime: parsed.endTime ?? "",
+                        hasTimeWindow: parsed.hasTimeWindow ?? false,
+                        recurrenceConfig: parsed.recurrenceConfig ?? undefined,
+                        enforceSequentialOrder: parsed.enforceSequentialOrder ?? false,
+                        areaId: parsed.areaId ?? checklist.area_id ?? "",
+                        tasks: parsed.tasks ?? [],
+                    };
                     // Sempre capturar status/area_id original do banco (não do draft)
                     originalChecklistRef.current = {
                         status: checklist.status || 'draft',
@@ -180,27 +200,63 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 }
             }
 
-            setName(checklist.name);
-            setDescription(checklist.description || "");
-            setShift(checklist.shift);
-            setChecklistType(checklist.checklist_type || "regular");
-            setAssignedToUserId(checklist.assigned_to_user_id || "");
-            setIsIndividualMode(checklist.assignment_type === 'user' || !!checklist.assigned_to_user_id);
-            setIsRequired(checklist.is_required ?? true);
-            setRecurrence(checklist.recurrence || "none");
+            const loadedName = checklist.name;
+            const loadedDescription = checklist.description || "";
+            const loadedShift = checklist.shift;
+            const loadedChecklistType = checklist.checklist_type || "regular";
+            const loadedAssignedToUserId = checklist.assigned_to_user_id || "";
+            const loadedIsIndividualMode = checklist.assignment_type === 'user' || !!checklist.assigned_to_user_id;
+            const loadedIsRequired = checklist.is_required ?? true;
+            const loadedRecurrence = checklist.recurrence || "none";
             // Sprint 8: time window
             const st = checklist.start_time as string | undefined;
             const et = checklist.end_time as string | undefined;
-            setStartTime(st || "");
-            setEndTime(et || "");
-            setHasTimeWindow(!!(st || et));
+            const loadedStartTime = st || "";
+            const loadedEndTime = et || "";
+            const loadedHasTimeWindow = !!(st || et);
             // Sprint 8: recurrence config
-            setRecurrenceConfig(checklist.recurrence_config as RecurrenceConfig | undefined);
-            setEnforceSequentialOrder(checklist.enforce_sequential_order ?? false);
-            setAreaId(checklist.area_id || ""); // BUG FIX: role_id é cargo, NÃO área — não usar como fallback
-            setTasks(
-                (checklist.tasks || []).map((t) => ({ ...t, tempId: t.id }))
-            );
+            const loadedRecurrenceConfig = checklist.recurrence_config as RecurrenceConfig | undefined;
+            const loadedEnforceSequentialOrder = checklist.enforce_sequential_order ?? false;
+            const loadedAreaId = checklist.area_id || "";
+            const loadedTasks = (checklist.tasks || []).map((t) => ({ ...t, tempId: t.id }));
+
+            setName(loadedName);
+            setDescription(loadedDescription);
+            setShift(loadedShift);
+            setChecklistType(loadedChecklistType);
+            setAssignedToUserId(loadedAssignedToUserId);
+            setIsIndividualMode(loadedIsIndividualMode);
+            setIsRequired(loadedIsRequired);
+            setRecurrence(loadedRecurrence);
+            setStartTime(loadedStartTime);
+            setEndTime(loadedEndTime);
+            setHasTimeWindow(loadedHasTimeWindow);
+            setRecurrenceConfig(loadedRecurrenceConfig);
+            setEnforceSequentialOrder(loadedEnforceSequentialOrder);
+            setAreaId(loadedAreaId);
+            setTasks(loadedTasks);
+
+            // FIX: Capturar snapshot IDÊNTICO ao formState que será gerado após o re-render
+            // Isso garante que isEqual() retorne true no auto-save, impedindo save sem interação
+            previousStateRef.current = {
+                name: loadedName,
+                description: loadedDescription,
+                shift: loadedShift,
+                checklistType: loadedChecklistType,
+                assignedToUserId: loadedAssignedToUserId,
+                isIndividualMode: loadedIsIndividualMode,
+                isRequired: loadedIsRequired,
+                recurrence: loadedRecurrence,
+                startTime: loadedStartTime,
+                endTime: loadedEndTime,
+                hasTimeWindow: loadedHasTimeWindow,
+                recurrenceConfig: loadedRecurrenceConfig,
+                enforceSequentialOrder: loadedEnforceSequentialOrder,
+                areaId: loadedAreaId,
+                tasks: loadedTasks,
+            };
+            isFirstLoad.current = false;
+
             // Capturar snapshot original para preservar status e proteger campos críticos
             originalChecklistRef.current = {
                 status: checklist.status || 'draft',
@@ -233,26 +289,51 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             if (savedDraft) {
                 try {
                     const parsed = JSON.parse(savedDraft);
-                    setName(parsed.name ?? "");
-                    setDescription(parsed.description ?? "");
-                    setShift(parsed.shift ?? "any");
-                    setChecklistType(parsed.checklistType ?? "regular");
-                    setAssignedToUserId(parsed.assignedToUserId ?? "");
-                    setIsIndividualMode(parsed.isIndividualMode ?? !!parsed.assignedToUserId);
-                    setIsRequired(parsed.isRequired ?? true);
-                    setRecurrence(parsed.recurrence ?? "none");
-                    setStartTime(parsed.startTime ?? "");
-                    setEndTime(parsed.endTime ?? "");
-                    setHasTimeWindow(parsed.hasTimeWindow ?? false);
-                    setRecurrenceConfig(parsed.recurrenceConfig ?? undefined);
-                    setEnforceSequentialOrder(parsed.enforceSequentialOrder ?? false);
-                    setAreaId(parsed.areaId ?? "");
-                    setTasks(parsed.tasks ?? []);
+                    const draftName = parsed.name ?? "";
+                    const draftDescription = parsed.description ?? "";
+                    const draftShift = parsed.shift ?? "any";
+                    const draftChecklistType = parsed.checklistType ?? "regular";
+                    const draftAssignedToUserId = parsed.assignedToUserId ?? "";
+                    const draftIsIndividualMode = parsed.isIndividualMode ?? !!parsed.assignedToUserId;
+                    const draftIsRequired = parsed.isRequired ?? true;
+                    const draftRecurrence = parsed.recurrence ?? "none";
+                    const draftStartTime = parsed.startTime ?? "";
+                    const draftEndTime = parsed.endTime ?? "";
+                    const draftHasTimeWindow = parsed.hasTimeWindow ?? false;
+                    const draftRecurrenceConfig = parsed.recurrenceConfig ?? undefined;
+                    const draftEnforceSequentialOrder = parsed.enforceSequentialOrder ?? false;
+                    const draftAreaId = parsed.areaId ?? "";
+                    const draftTasks = parsed.tasks ?? [];
+
+                    setName(draftName);
+                    setDescription(draftDescription);
+                    setShift(draftShift);
+                    setChecklistType(draftChecklistType);
+                    setAssignedToUserId(draftAssignedToUserId);
+                    setIsIndividualMode(draftIsIndividualMode);
+                    setIsRequired(draftIsRequired);
+                    setRecurrence(draftRecurrence);
+                    setStartTime(draftStartTime);
+                    setEndTime(draftEndTime);
+                    setHasTimeWindow(draftHasTimeWindow);
+                    setRecurrenceConfig(draftRecurrenceConfig);
+                    setEnforceSequentialOrder(draftEnforceSequentialOrder);
+                    setAreaId(draftAreaId);
+                    setTasks(draftTasks);
                     setErrorMsg(null);
                     setShowDeleteModal(false);
                     setSaveState("saved");
                     isFirstLoad.current = false;
-                    previousStateRef.current = parsed;
+                    // FIX: Snapshot com forma idêntica ao formState do auto-save
+                    previousStateRef.current = {
+                        name: draftName, description: draftDescription, shift: draftShift,
+                        checklistType: draftChecklistType, assignedToUserId: draftAssignedToUserId,
+                        isIndividualMode: draftIsIndividualMode, isRequired: draftIsRequired,
+                        recurrence: draftRecurrence, startTime: draftStartTime, endTime: draftEndTime,
+                        hasTimeWindow: draftHasTimeWindow, recurrenceConfig: draftRecurrenceConfig,
+                        enforceSequentialOrder: draftEnforceSequentialOrder, areaId: draftAreaId,
+                        tasks: draftTasks,
+                    };
                 } catch {
                     localStorage.removeItem("ordem_na_mesa_draft_rotina");
                     resetForm();
@@ -270,16 +351,27 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             recurrenceConfig, enforceSequentialOrder, areaId, tasks
         };
 
+        // GUARD 1: Primeira execução — apenas capturar snapshot se init não o fez
+        // (caso de new checklist sem draft, onde init não define previousStateRef)
         if (isFirstLoad.current) {
             isFirstLoad.current = false;
-            previousStateRef.current = formState; // Sync inicial
+            if (!previousStateRef.current) {
+                previousStateRef.current = formState;
+            }
+            return;
+        }
+
+        // GUARD 2: Snapshot ainda não definido (init useEffect não rodou ainda)
+        // Isso acontece quando o auto-save effect executa antes do init no mesmo render cycle
+        if (!previousStateRef.current) {
+            previousStateRef.current = formState;
             return;
         }
 
         if (!name.trim() && tasks.length === 0) return;
         if (!tasks || tasks.length === 0) return; // Prevent deleting tasks by accidentally sending empty list
 
-        // FIX: Comparação profunda — só prosseguir se houve mudança REAL
+        // GUARD 3: Comparação profunda — só prosseguir se houve mudança REAL
         if (isEqual(previousStateRef.current, formState)) return;
         if (isPublishingRef.current) return;
 
