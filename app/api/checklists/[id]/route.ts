@@ -58,6 +58,24 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         // Se o campo não veio no payload (undefined), preserva o valor atual
         const safeAreaId = area_id !== undefined ? (area_id || null) : (currentChecklist?.area_id ?? null);
 
+        // Validação de domínio: responsável deve pertencer à área selecionada
+        const effectiveUserId = assigned_to_user_id || null;
+        if (effectiveUserId && safeAreaId) {
+            const { data: userArea } = await adminSupabase
+                .from('user_areas')
+                .select('id')
+                .eq('user_id', effectiveUserId)
+                .eq('area_id', safeAreaId)
+                .maybeSingle();
+
+            if (!userArea) {
+                return NextResponse.json(
+                    { error: 'O colaborador selecionado não pertence à área escolhida.' },
+                    { status: 422 }
+                );
+            }
+        }
+
         // 1. Atualizar Checklist
         const { error: updateError } = await adminSupabase
             .from('checklists')

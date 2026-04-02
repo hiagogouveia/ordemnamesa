@@ -179,6 +179,23 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Permissão negada' }, { status: 403 });
         }
 
+        // Validação de domínio: responsável deve pertencer à área selecionada
+        if (assigned_to_user_id && area_id) {
+            const { data: userArea } = await adminSupabase
+                .from('user_areas')
+                .select('id')
+                .eq('user_id', assigned_to_user_id)
+                .eq('area_id', area_id)
+                .maybeSingle();
+
+            if (!userArea) {
+                return NextResponse.json(
+                    { error: 'O colaborador selecionado não pertence à área escolhida.' },
+                    { status: 422 }
+                );
+            }
+        }
+
         // 1. Criar o Checklist
         const { data: newChecklist, error: checklistError } = await adminSupabase
             .from('checklists')

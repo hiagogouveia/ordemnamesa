@@ -120,7 +120,12 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     const { data: areas = [] } = useAllAreas(restaurantId || undefined);
     const equipe = equipeData?.equipe || [];
 
-    const filteredEquipe = equipe.filter(m => m.active);
+    const activeEquipe = equipe.filter(m => m.active);
+
+    // Filtrar colaboradores pela área selecionada (regra de domínio: responsável ∈ área)
+    const filteredEquipe = areaId
+        ? activeEquipe.filter(m => m.areas?.some(a => a.id === areaId))
+        : activeEquipe;
 
     const createMutation = useCreateChecklist();
     const updateMutation = useUpdateChecklist();
@@ -733,7 +738,19 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                 <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Área</label>
                                 <select
                                     value={areaId}
-                                    onChange={(e) => setAreaId(e.target.value)}
+                                    onChange={(e) => {
+                                        const newAreaId = e.target.value;
+                                        setAreaId(newAreaId);
+                                        // Reset responsável se não pertence à nova área
+                                        if (assignedToUserId && newAreaId) {
+                                            const userBelongsToArea = activeEquipe.some(
+                                                m => m.user_id === assignedToUserId && m.areas?.some(a => a.id === newAreaId)
+                                            );
+                                            if (!userBelongsToArea) {
+                                                setAssignedToUserId("");
+                                            }
+                                        }
+                                    }}
                                     className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
                                     disabled={areas.length === 0}
                                 >
@@ -804,7 +821,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                         <p className="text-xs text-[#92bbc9] mt-1.5">Apenas este colaborador verá esta rotina no turno.</p>
                                     )}
                                     {areaId && filteredEquipe.length === 0 && (
-                                        <p className="text-xs text-amber-400 mt-1.5">Nenhum colaborador nesta área.</p>
+                                        <p className="text-xs text-amber-400 mt-1.5">
+                                            Nenhum colaborador vinculado a esta área. Adicione colaboradores na tela de Equipe.
+                                        </p>
                                     )}
                                 </div>
                             ) : (
