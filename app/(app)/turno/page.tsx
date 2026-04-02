@@ -6,7 +6,7 @@ import { useKanbanTasks, KanbanChecklist } from '@/lib/hooks/use-tasks';
 import { usePurchaseLists } from '@/lib/hooks/use-purchases';
 import { useUserRoles } from '@/lib/hooks/use-user-roles-shifts';
 import { useShifts } from '@/lib/hooks/use-shifts';
-import { useAreas } from '@/lib/hooks/use-areas';
+import { useMyAreas } from '@/lib/hooks/use-user-areas';
 import { getCurrentShift } from '@/lib/utils';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -47,7 +47,7 @@ export default function KanbanPage() {
     const { data: shifts = [] } = useShifts(restaurantId || undefined);
     const { data: userRolesData = [], isLoading: loadingUserRoles } = useUserRoles(restaurantId || undefined, user?.id);
     const { data: purchaseLists = [] } = usePurchaseLists(restaurantId || undefined, 'open');
-    const { data: myAreas = [] } = useAreas(restaurantId || undefined, userId || undefined);
+    const { data: myAreaAssignments = [] } = useMyAreas(restaurantId || undefined, userId || undefined);
 
     const [timeNow, setTimeNow] = useState<string>('');
 
@@ -157,11 +157,14 @@ export default function KanbanPage() {
         });
     }, [kanbanData]);
 
-    // Tabs de área derivadas das áreas REAIS do usuário (via useAreas), não dos checklists
+    // Tabs de área derivadas das atribuições REAIS do usuário (user_areas), sem exceção de owner
     const userAreas = useMemo(() => {
-        if (!myAreas.length) return [];
-        return myAreas.map(a => a.name).sort();
-    }, [myAreas]);
+        if (!myAreaAssignments.length) return [];
+        return myAreaAssignments
+            .map(a => a.area?.name)
+            .filter((name): name is string => Boolean(name))
+            .sort();
+    }, [myAreaAssignments]);
 
     const [activeArea, setActiveArea] = useState<string>('');
 
