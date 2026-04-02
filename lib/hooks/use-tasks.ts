@@ -22,11 +22,11 @@ const getAuthToken = async () => {
     return session?.access_token || '';
 };
 
-export const useKanbanTasks = (restaurantId: string | undefined) => {
+export const useKanbanTasks = (restaurantId: string | undefined, userId?: string) => {
     const queryClient = useQueryClient();
 
     const query = useQuery({
-        queryKey: ['kanban', restaurantId],
+        queryKey: ['kanban', restaurantId, userId],
         queryFn: async () => {
             if (!restaurantId) return null;
             const token = await getAuthToken();

@@ -48,22 +48,31 @@ export async function GET(request: Request) {
         const areaIds = userAreas?.map(ua => ua.area_id) || [];
         const roleIds = userRoles?.map(ur => ur.role_id) || [];
 
-        // 2. Buscar checklists ativos: da área/role do usuário (sem atribuição individual),
-        //    atribuídos diretamente, OU globais (assignment_type = 'all')
-        // Lógica: (area_id IN user_areas AND assigned_to_user_id IS NULL)
-        //      OR (role_id IN user_roles AND assigned_to_user_id IS NULL)
-        //      OR (assigned_to_user_id = user.id)
-        //      OR (assigned_to_user_id IS NULL AND area_id IS NULL AND role_id IS NULL)
+        // 2. Buscar checklists ativos visíveis para este usuário:
+        //    - Da área do usuário (sem atribuição individual)
+        //    - Do role do usuário E com area_id nas áreas do usuário (sem atribuição individual)
+        //    - Atribuídos diretamente ao usuário (com area_id válida)
+        //    INVARIANTE: checklists sem area_id NÃO aparecem no turno (não são executáveis)
         const checklistFilterParts: string[] = [];
         if (areaIds.length > 0) {
             checklistFilterParts.push(`and(area_id.in.(${areaIds.join(',')}),assigned_to_user_id.is.null)`);
         }
-        if (roleIds.length > 0) {
-            checklistFilterParts.push(`and(role_id.in.(${roleIds.join(',')}),assigned_to_user_id.is.null)`);
+        if (roleIds.length > 0 && areaIds.length > 0) {
+            checklistFilterParts.push(`and(role_id.in.(${roleIds.join(',')}),assigned_to_user_id.is.null,area_id.in.(${areaIds.join(',')}))`);
         }
-        checklistFilterParts.push(`assigned_to_user_id.eq.${user.id}`);
-        // Checklists globais: sem área, sem role, sem atribuição individual
-        checklistFilterParts.push(`and(assigned_to_user_id.is.null,area_id.is.null,role_id.is.null)`);
+        if (areaIds.length > 0) {
+            checklistFilterParts.push(`and(assigned_to_user_id.eq.${user.id},area_id.in.(${areaIds.join(',')}))`);
+        }
+
+        // Sem áreas atribuídas = sem checklists visíveis no turno
+        if (checklistFilterParts.length === 0) {
+            return NextResponse.json({
+                checklists: [],
+                tasks: [],
+                executions: [],
+                assumptions: [],
+            });
+        }
 
         const { data: activeChecklists } = await adminSupabase
             .from('checklists')
@@ -156,11 +165,12 @@ export async function GET(request: Request) {
             const allUserEffectiveIds = [...areaIds, ...roleIds];
 
             // Filtro manual das areas/roles (tasks de checklists diretos sempre passam)
+            // Tasks sem area/role herdam visibilidade do checklist pai (já filtrado por área)
             tasksData = (tasks || []).filter((task: Record<string, unknown>) => {
                 if (directlyAssignedChecklistIds.has(task.checklist_id as string)) return true;
                 if (!task.role_id && !task.area_id) return true;
-                if (task.area_id && allUserEffectiveIds.includes(task.area_id as string)) return true;
-                if (task.role_id && allUserEffectiveIds.includes(task.role_id as string)) return true;
+                if (task.area_id && areaIds.includes(task.area_id as string)) return true;
+                if (task.role_id && roleIds.includes(task.role_id as string) && (!task.area_id || areaIds.includes(task.area_id as string))) return true;
                 return false;
             });
         }

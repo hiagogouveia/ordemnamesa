@@ -21,6 +21,7 @@ interface RestaurantData {
 export default function SelecionarRestaurantePage() {
     const [restaurants, setRestaurants] = useState<RestaurantData[]>([]);
     const [loading, setLoading] = useState(true);
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const router = useRouter();
     const setRestaurant = useRestaurantStore((state) => state.setRestaurant);
 
@@ -33,6 +34,7 @@ export default function SelecionarRestaurantePage() {
                 router.push("/login");
                 return;
             }
+            setCurrentUserId(user.id);
 
             // Buscar restaurantes onde o usuário está ativo
             // O RLS já filtra `restaurant_users` por auth.uid()
@@ -73,6 +75,7 @@ export default function SelecionarRestaurantePage() {
             name: restaurant.restaurants.name,
             slug: restaurant.restaurants.slug,
             role: restaurant.role,
+            userId: currentUserId || undefined,
         });
 
         // Setar cookies de contexto para uso em Server Components e middleware

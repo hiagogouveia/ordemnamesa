@@ -15,9 +15,9 @@ async function getAuthHeaders() {
 }
 
 // Returns only the user's own areas (for filter bars and activity visibility)
-export function useAreas(restaurantId: string | undefined) {
+export function useAreas(restaurantId: string | undefined, userId?: string) {
     return useQuery({
-        queryKey: ["areas", restaurantId],
+        queryKey: ["areas", restaurantId, userId],
         queryFn: async (): Promise<Area[]> => {
             if (!restaurantId) return [];
             const headers = await getAuthHeaders();

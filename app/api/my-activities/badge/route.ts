@@ -33,25 +33,38 @@ export async function GET(request: Request) {
 
         if (!membership) return NextResponse.json({ pending: 0 });
 
-        // Buscar funções atribuídas ao usuário
+        // Buscar áreas e funções atribuídas ao usuário
+        const { data: userAreaRows } = await adminSupabase
+            .from('user_areas')
+            .select('area_id')
+            .eq('restaurant_id', restaurant_id)
+            .eq('user_id', user.id);
+
         const { data: userRoleRows } = await adminSupabase
             .from('user_roles')
             .select('role_id')
             .eq('restaurant_id', restaurant_id)
             .eq('user_id', user.id);
 
+        const userAreaIds = (userAreaRows ?? []).map((r) => r.area_id);
         const userRoleIds = (userRoleRows ?? []).map((r) => r.role_id);
-        if (userRoleIds.length === 0) return NextResponse.json({ pending: 0 });
+        if (userAreaIds.length === 0) return NextResponse.json({ pending: 0 });
 
-        // Checklists ativos nas funções do usuário
+        // Checklists ativos nas áreas/funções do usuário
+        const filterParts: string[] = [];
+        filterParts.push(`and(area_id.in.(${userAreaIds.join(',')}),assigned_to_user_id.is.null)`);
+        if (userRoleIds.length > 0) {
+            filterParts.push(`and(role_id.in.(${userRoleIds.join(',')}),assigned_to_user_id.is.null,area_id.in.(${userAreaIds.join(',')}))`);
+        }
+        filterParts.push(`and(assigned_to_user_id.eq.${user.id},area_id.in.(${userAreaIds.join(',')}))`);
+
         const { data: checklists } = await adminSupabase
             .from('checklists')
             .select('id, end_time, task_count:checklist_tasks(count)')
             .eq('restaurant_id', restaurant_id)
             .eq('active', true)
             .eq('status', 'active')
-            .not('role_id', 'is', null)
-            .in('role_id', userRoleIds);
+            .or(filterParts.join(','));
 
         if (!checklists || checklists.length === 0) return NextResponse.json({ pending: 0 });
 

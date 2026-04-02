@@ -33,7 +33,8 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
     const [userEmail, setUserEmail] = useState("");
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const [canLaunchPurchases, setCanLaunchPurchases] = useState(false);
-    const { data: badgeData } = useMyActivitiesBadge(restaurantId || undefined);
+    const userId = useRestaurantStore((state) => state.userId);
+    const { data: badgeData } = useMyActivitiesBadge(restaurantId || undefined, userId || undefined);
     const pendingCount = badgeData?.pending ?? 0;
 
     const handleSignOut = async () => {

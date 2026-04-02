@@ -6,7 +6,8 @@ export interface RestaurantStore {
     restaurantName: string | null
     restaurantSlug: string | null
     userRole: 'owner' | 'manager' | 'staff' | null
-    setRestaurant: (data: { id: string; name: string; slug: string; role: 'owner' | 'manager' | 'staff' }) => void
+    userId: string | null
+    setRestaurant: (data: { id: string; name: string; slug: string; role: 'owner' | 'manager' | 'staff'; userId?: string }) => void
     clearRestaurant: () => void
 }
 
@@ -17,12 +18,14 @@ export const useRestaurantStore = create<RestaurantStore>()(
             restaurantName: null,
             restaurantSlug: null,
             userRole: null,
+            userId: null,
             setRestaurant: (data) =>
                 set({
                     restaurantId: data.id,
                     restaurantName: data.name,
                     restaurantSlug: data.slug,
                     userRole: data.role,
+                    userId: data.userId ?? null,
                 }),
             clearRestaurant: () =>
                 set({
@@ -30,6 +33,7 @@ export const useRestaurantStore = create<RestaurantStore>()(
                     restaurantName: null,
                     restaurantSlug: null,
                     userRole: null,
+                    userId: null,
                 }),
         }),
         {
@@ -40,6 +44,7 @@ export const useRestaurantStore = create<RestaurantStore>()(
                 restaurantName: state.restaurantName,
                 restaurantSlug: state.restaurantSlug,
                 userRole: state.userRole,
+                userId: state.userId,
             }),
         }
     )

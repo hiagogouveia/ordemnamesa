@@ -15,11 +15,11 @@ async function getAuthHeaders() {
     return headers;
 }
 
-export function useMyActivities(restaurantId: string | undefined) {
+export function useMyActivities(restaurantId: string | undefined, userId?: string) {
     const queryClient = useQueryClient();
 
     const query = useQuery({
-        queryKey: ["my-activities", restaurantId],
+        queryKey: ["my-activities", restaurantId, userId],
         queryFn: async (): Promise<MyActivity[]> => {
             if (!restaurantId) return [];
             const headers = await getAuthHeaders();
@@ -82,9 +82,9 @@ export function useMyActivities(restaurantId: string | undefined) {
     return query;
 }
 
-export function useMyActivitiesBadge(restaurantId: string | undefined) {
+export function useMyActivitiesBadge(restaurantId: string | undefined, userId?: string) {
     return useQuery({
-        queryKey: ["my-activities-badge", restaurantId],
+        queryKey: ["my-activities-badge", restaurantId, userId],
         queryFn: async (): Promise<{ pending: number }> => {
             if (!restaurantId) return { pending: 0 };
             const headers = await getAuthHeaders();

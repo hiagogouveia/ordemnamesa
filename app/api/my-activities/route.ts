@@ -82,10 +82,17 @@ export async function GET(request: Request) {
         if (areaIds.length > 0) {
             checklistFilterParts.push(`and(area_id.in.(${areaIds.join(',')}),assigned_to_user_id.is.null)`);
         }
-        if (roleIds.length > 0) {
-            checklistFilterParts.push(`and(role_id.in.(${roleIds.join(',')}),assigned_to_user_id.is.null,area_id.not.is.null)`);
+        if (roleIds.length > 0 && areaIds.length > 0) {
+            checklistFilterParts.push(`and(role_id.in.(${roleIds.join(',')}),assigned_to_user_id.is.null,area_id.in.(${areaIds.join(',')}))`);
         }
-        checklistFilterParts.push(`and(assigned_to_user_id.eq.${user.id},area_id.not.is.null)`);
+        if (areaIds.length > 0) {
+            checklistFilterParts.push(`and(assigned_to_user_id.eq.${user.id},area_id.in.(${areaIds.join(',')}))`);
+        }
+
+        // Sem áreas atribuídas = sem atividades visíveis
+        if (checklistFilterParts.length === 0) {
+            return NextResponse.json([]);
+        }
 
         // Checklists cuja area_id ou role_id está entre as áreas efetivas do usuário, ou atribuídos diretamente
         const { data: checklists, error: checklistsError } = await adminSupabase
