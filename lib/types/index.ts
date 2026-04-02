@@ -209,7 +209,11 @@ export interface MyActivity {
 // Sprint 17 — Notifications
 // ============================================================
 
-export type NotificationType = 'TASK_COMPLETED_WITH_NOTE' | 'NEW_TASK_ASSIGNED' | 'NEW_TASK_FOR_AREA'
+export type NotificationType =
+    | 'TASK_COMPLETED_WITH_NOTE'
+    | 'NEW_TASK_ASSIGNED'
+    | 'NEW_TASK_FOR_AREA'
+    | 'PASSWORD_CHANGED_BY_ADMIN'
 
 export interface Notification {
     id: string

@@ -1,15 +1,45 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
+import { useNotifications, useMarkNotificationRead } from "@/lib/hooks/use-notifications";
+
+function PasswordChangedBanner({ restaurantId }: { restaurantId: string }) {
+    const { data } = useNotifications(restaurantId);
+    const markRead = useMarkNotificationRead();
+    const [dismissedId, setDismissedId] = useState<string | null>(null);
+
+    const notification = data?.notifications.find(
+        (n) => n.type === 'PASSWORD_CHANGED_BY_ADMIN' && !n.read
+    ) ?? null;
+
+    // Disparar marcação de lida quando a notificação aparecer
+    useEffect(() => {
+        if (!notification || dismissedId === notification.id) return;
+        if (markRead.isPending) return;
+
+        setDismissedId(notification.id);
+        markRead.mutate({ notificationId: notification.id, restaurantId });
+    }, [notification, restaurantId, dismissedId, markRead]);
+
+    if (!notification || dismissedId !== notification.id) return null;
+
+    return (
+        <div className="flex items-center justify-center gap-3 bg-amber-500/15 border-b border-amber-500/30 px-4 py-2.5 text-sm text-amber-300">
+            <span className="material-symbols-outlined text-[18px] shrink-0">info</span>
+            <span>Sua senha foi redefinida por um gestor. Se não foi você, contate o responsável.</span>
+        </div>
+    );
+}
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const userRole = useRestaurantStore((state) => state.userRole);
+    const restaurantId = useRestaurantStore((state) => state.restaurantId);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     // Rotas que não devem exibir o layout do painel interno
@@ -35,6 +65,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
             <div className={`flex flex-col flex-1 min-w-0 h-full relative ${userRole === 'staff' ? 'pb-16 lg:pb-0' : ''}`}>
                 <Header onMenuClick={() => setIsMobileMenuOpen(true)} />
+
+                {restaurantId && <PasswordChangedBanner restaurantId={restaurantId} />}
+
                 <main className="flex-1 overflow-x-hidden overflow-y-auto">
                     {children}
                 </main>

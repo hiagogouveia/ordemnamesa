@@ -86,10 +86,9 @@ export const useUpdateEquipeName = (restaurantId: string | null) => {
 
 export const useChangeCollaboratorPassword = (restaurantId: string | null) => {
     return useMutation({
-        mutationFn: async ({ targetUserId, newPassword, confirmPassword }: {
+        mutationFn: async ({ targetUserId, newPassword }: {
             targetUserId: string;
             newPassword: string;
-            confirmPassword: string;
         }) => {
             const token = await getAuthToken();
             const response = await fetch('/api/equipe/change-password', {
@@ -101,13 +100,19 @@ export const useChangeCollaboratorPassword = (restaurantId: string | null) => {
                 body: JSON.stringify({
                     target_user_id: targetUserId,
                     new_password: newPassword,
-                    confirm_password: confirmPassword,
                     restaurant_id: restaurantId,
                 }),
             });
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || 'Erro ao alterar senha');
+                const errorMessages: Record<string, string> = {
+                    SESSION_EXPIRED: 'Sua sessão expirou. Faça login novamente.',
+                    USER_INACTIVE: 'Não é possível alterar a senha de um usuário inativo.',
+                    FORBIDDEN: 'Apenas proprietários podem alterar senhas de colaboradores.',
+                    VALIDATION_ERROR: 'Dados inválidos. Verifique a senha informada.',
+                    INTERNAL_ERROR: 'Erro interno. Tente novamente.',
+                };
+                throw new Error(errorMessages[errorData.error] ?? 'Erro ao alterar senha');
             }
             return response.json();
         },

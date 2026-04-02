@@ -38,6 +38,8 @@ export function ChangePasswordModal({ isOpen, onClose, member, restaurantId }: C
         setClientError('');
         setSuccessMsg('');
 
+        // confirmPassword é usado apenas para validação client-side (UX).
+        // O backend valida apenas a senha final — não recebe confirmPassword.
         if (newPassword.length < 6) {
             setClientError('A senha deve ter no mínimo 6 caracteres.');
             return;
@@ -51,7 +53,6 @@ export function ChangePasswordModal({ isOpen, onClose, member, restaurantId }: C
             await changePassword.mutateAsync({
                 targetUserId: member.user_id,
                 newPassword,
-                confirmPassword,
             });
             setSuccessMsg('Senha alterada com sucesso!');
             setNewPassword('');
