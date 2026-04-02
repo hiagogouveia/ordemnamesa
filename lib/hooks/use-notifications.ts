@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import type { Notification } from "@/lib/types";
@@ -21,9 +21,7 @@ interface NotificationsResponse {
 }
 
 export function useNotifications(restaurantId: string | undefined) {
-    const queryClient = useQueryClient();
-
-    const query = useQuery({
+    return useQuery({
         queryKey: ["notifications", restaurantId],
         queryFn: async (): Promise<NotificationsResponse> => {
             if (!restaurantId) return { notifications: [], unread_count: 0 };
@@ -39,14 +37,20 @@ export function useNotifications(restaurantId: string | undefined) {
         staleTime: 30 * 1000,
         refetchOnWindowFocus: true,
     });
+}
 
-    // Realtime: escutar novas notificações
+// Hook separado para realtime — deve ser chamado UMA ÚNICA VEZ no layout raiz.
+// Múltiplas instâncias com o mesmo restaurantId causam erro no Supabase:
+// "cannot add postgres_changes callbacks after subscribe()"
+export function useNotificationsRealtime(restaurantId: string | undefined) {
+    const queryClient = useQueryClient();
+    const channelRef = useRef<ReturnType<ReturnType<typeof createClient>['channel']> | null>(null);
+
     useEffect(() => {
         if (!restaurantId) return;
 
         const supabase = createClient();
 
-        // Obter user_id para filtrar
         let userId: string | undefined;
         supabase.auth.getUser().then(({ data }) => {
             userId = data.user?.id;
@@ -63,7 +67,6 @@ export function useNotifications(restaurantId: string | undefined) {
                     filter: `restaurant_id=eq.${restaurantId}`,
                 },
                 (payload) => {
-                    // Apenas invalidar se a notificação é para este usuário
                     if (!userId || payload.new.user_id === userId) {
                         queryClient.invalidateQueries({ queryKey: ["notifications", restaurantId] });
                     }
@@ -83,12 +86,13 @@ export function useNotifications(restaurantId: string | undefined) {
             )
             .subscribe();
 
+        channelRef.current = channel;
+
         return () => {
             supabase.removeChannel(channel);
+            channelRef.current = null;
         };
     }, [restaurantId, queryClient]);
-
-    return query;
 }
 
 export function useMarkNotificationRead() {

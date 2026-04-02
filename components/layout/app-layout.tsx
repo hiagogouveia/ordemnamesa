@@ -6,9 +6,12 @@ import Link from "next/link";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
-import { useNotifications, useMarkNotificationRead } from "@/lib/hooks/use-notifications";
+import { useNotifications, useNotificationsRealtime, useMarkNotificationRead } from "@/lib/hooks/use-notifications";
 
 function PasswordChangedBanner({ restaurantId }: { restaurantId: string }) {
+    // Ponto único de realtime para notificações — evita múltiplas subscriptions
+    useNotificationsRealtime(restaurantId);
+
     const { data } = useNotifications(restaurantId);
     const markRead = useMarkNotificationRead();
     const [dismissedId, setDismissedId] = useState<string | null>(null);
