@@ -83,7 +83,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
                 name, description, shift, status, category,
                 role_id, is_required: is_required !== undefined ? is_required : true, checklist_type: checklist_type || 'regular',
                 assigned_to_user_id: assigned_to_user_id || null,
-                recurrence: recurrence || 'none',
+                recurrence: recurrence && recurrence !== 'none' ? recurrence : 'daily',
                 start_time: start_time || null,
                 end_time: end_time || null,
                 recurrence_config: recurrence_config || null,

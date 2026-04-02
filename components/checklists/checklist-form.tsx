@@ -13,7 +13,10 @@ import { ChecklistTask } from "@/lib/types";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useEquipe } from "@/lib/hooks/use-equipe";
 import { useAllAreas } from "@/lib/hooks/use-areas";
+import { useShifts } from "@/lib/hooks/use-shifts";
 import isEqual from "lodash/isEqual";
+
+const DAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 interface ChecklistFormProps {
     checklist: ExtendedChecklist | null;
@@ -63,7 +66,7 @@ const getDynamicRecurrenceOptions = () => {
     const monthStr = months[now.getMonth()];
 
     return [
-        { value: 'none', label: 'Não se repete' },
+        { value: 'shift_days', label: 'Dias do turno' },
         { value: 'daily', label: 'Todos os dias' },
         { value: 'weekdays', label: 'Dias úteis (seg-sex)' },
         { value: 'weekly', label: `Semanal: ${prefix} ${dayOfWeekStr}` },
@@ -89,7 +92,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     const [assignedToUserId, setAssignedToUserId] = useState("");
     const [isIndividualMode, setIsIndividualMode] = useState(false);
     const [isRequired, setIsRequired] = useState(true);
-    const [recurrence, setRecurrence] = useState("none");
+    const [recurrence, setRecurrence] = useState("daily");
     // Sprint 8: Time window
     const [hasTimeWindow, setHasTimeWindow] = useState(false);
     const [startTime, setStartTime] = useState("");
@@ -118,6 +121,32 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
 
     const { data: equipeData } = useEquipe(restaurantId || null);
     const { data: areas = [] } = useAllAreas(restaurantId || undefined);
+    const { data: shiftsData = [] } = useShifts(restaurantId || undefined);
+
+    // Resolver os dias do turno para recurrence='shift_days'
+    const resolvedShiftDays = (() => {
+        if (shift === 'any' || !shift) return null;
+        const matching = shiftsData.filter(s => s.shift_type === shift);
+        if (matching.length === 0) return null;
+        const allDays = [...new Set(matching.flatMap(s => s.days_of_week))].sort();
+        return allDays;
+    })();
+
+    // Smart default: quando shift muda, sugerir recurrence adequada
+    const prevShiftRef = useRef(shift);
+    useEffect(() => {
+        if (prevShiftRef.current === shift) return;
+        const prevShift = prevShiftRef.current;
+        prevShiftRef.current = shift;
+        // Só auto-alterar se a recurrence atual é um dos defaults automáticos
+        const autoRecurrences = ['daily', 'shift_days'];
+        if (!autoRecurrences.includes(recurrence)) return;
+        if (shift !== 'any' && prevShift !== shift) {
+            setRecurrence('shift_days');
+        } else if (shift === 'any') {
+            setRecurrence('daily');
+        }
+    }, [shift, recurrence]);
     const equipe = equipeData?.equipe || [];
 
     const activeEquipe = equipe.filter(m => m.active);
@@ -164,7 +193,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                     setAssignedToUserId(parsed.assignedToUserId ?? "");
                     setIsIndividualMode(parsed.isIndividualMode ?? !!parsed.assignedToUserId);
                     setIsRequired(parsed.isRequired ?? true);
-                    setRecurrence(parsed.recurrence ?? "none");
+                    setRecurrence(parsed.recurrence === 'none' ? 'daily' : (parsed.recurrence ?? "daily"));
                     setStartTime(parsed.startTime ?? "");
                     setEndTime(parsed.endTime ?? "");
                     setHasTimeWindow(parsed.hasTimeWindow ?? false);
@@ -185,7 +214,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                         assignedToUserId: parsed.assignedToUserId ?? "",
                         isIndividualMode: parsed.isIndividualMode ?? !!parsed.assignedToUserId,
                         isRequired: parsed.isRequired ?? true,
-                        recurrence: parsed.recurrence ?? "none",
+                        recurrence: parsed.recurrence === 'none' ? 'daily' : (parsed.recurrence ?? "daily"),
                         startTime: parsed.startTime ?? "",
                         endTime: parsed.endTime ?? "",
                         hasTimeWindow: parsed.hasTimeWindow ?? false,
@@ -212,7 +241,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             const loadedAssignedToUserId = checklist.assigned_to_user_id || "";
             const loadedIsIndividualMode = checklist.assignment_type === 'user' || !!checklist.assigned_to_user_id;
             const loadedIsRequired = checklist.is_required ?? true;
-            const loadedRecurrence = checklist.recurrence || "none";
+            const loadedRecurrence = (!checklist.recurrence || checklist.recurrence === 'none') ? 'daily' : checklist.recurrence;
             // Sprint 8: time window
             const st = checklist.start_time as string | undefined;
             const et = checklist.end_time as string | undefined;
@@ -277,7 +306,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 setAssignedToUserId("");
                 setIsIndividualMode(false);
                 setIsRequired(true);
-                setRecurrence("none");
+                setRecurrence("daily");
                 setStartTime("");
                 setEndTime("");
                 setHasTimeWindow(false);
@@ -301,7 +330,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                     const draftAssignedToUserId = parsed.assignedToUserId ?? "";
                     const draftIsIndividualMode = parsed.isIndividualMode ?? !!parsed.assignedToUserId;
                     const draftIsRequired = parsed.isRequired ?? true;
-                    const draftRecurrence = parsed.recurrence ?? "none";
+                    const draftRecurrence = parsed.recurrence === 'none' ? 'daily' : (parsed.recurrence ?? "daily");
                     const draftStartTime = parsed.startTime ?? "";
                     const draftEndTime = parsed.endTime ?? "";
                     const draftHasTimeWindow = parsed.hasTimeWindow ?? false;
@@ -730,6 +759,23 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                         <span className="material-symbols-outlined text-[14px] shrink-0">edit</span>
                                     </button>
                                 )}
+                                {recurrence === 'shift_days' && (
+                                    <div className="mt-2 px-3 py-2 bg-[#13b6ec]/10 border border-[#13b6ec]/30 rounded-lg text-xs">
+                                        {resolvedShiftDays && resolvedShiftDays.length > 0 ? (
+                                            <span className="text-[#13b6ec] font-medium">
+                                                Executada nos dias: {resolvedShiftDays.map(d => DAYS_SHORT[d]).join(', ')}
+                                            </span>
+                                        ) : shift === 'any' ? (
+                                            <span className="text-[#92bbc9]">
+                                                Turno &quot;Qualquer&quot; selecionado — aparecerá todos os dias
+                                            </span>
+                                        ) : (
+                                            <span className="text-amber-400">
+                                                Nenhum turno configurado para este período. Configure em Configurações &gt; Turnos.
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -989,9 +1035,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                     }}
                     onCancel={() => {
                         setShowRecurrencePicker(false);
-                        // If no config was set before, revert to 'none'
+                        // If no config was set before, revert to 'daily'
                         if (!recurrenceConfig) {
-                            setRecurrence('none');
+                            setRecurrence('daily');
                         }
                     }}
                 />

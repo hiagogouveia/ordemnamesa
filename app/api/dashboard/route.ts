@@ -21,6 +21,7 @@ interface AssumptionRow {
 interface ChecklistRow {
     id: string;
     name: string;
+    shift?: string | null;
     area_id: string | null;
     end_time: string | null;
     start_time: string | null;
@@ -125,7 +126,7 @@ export async function GET(request: Request) {
             // Checklists ativos — apenas metadados (nome, área, tasks, horários)
             adminSupabase
                 .from('checklists')
-                .select('id, name, area_id, end_time, start_time, recurrence, recurrence_config, areas(id, name, color), checklist_tasks(id, is_critical)')
+                .select('id, name, shift, area_id, end_time, start_time, recurrence, recurrence_config, areas(id, name, color), checklist_tasks(id, is_critical)')
                 .eq('restaurant_id', restaurant_id)
                 .eq('active', true)
                 .eq('status', 'active'),
@@ -152,8 +153,15 @@ export async function GET(request: Request) {
         const allAssumptions: AssumptionRow[] = assumptionsRes.data || [];
         const taskExecs: TaskExecRow[] = taskExecsRes.data || [];
 
+        // Buscar shifts para resolver recurrence='shift_days'
+        const { data: shifts } = await adminSupabase
+            .from('shifts')
+            .select('shift_type, days_of_week')
+            .eq('restaurant_id', restaurant_id)
+            .eq('active', true);
+
         // Filtrar checklists por regras de recorrência (dia da semana, custom, etc.)
-        const checklists = filterChecklistsByRecurrence(allChecklists, brazil.dayOfWeek, brazil.dateKey);
+        const checklists = filterChecklistsByRecurrence(allChecklists, brazil.dayOfWeek, brazil.dateKey, shifts || []);
 
         // Mapa de checklists para lookup rápido (metadados apenas)
         const checklistsMap = new Map<string, ChecklistRow>();

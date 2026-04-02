@@ -70,7 +70,7 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json();
-        const { restaurant_id, name, start_time, end_time, days_of_week } = body;
+        const { restaurant_id, name, start_time, end_time, days_of_week, shift_type } = body;
 
         if (!restaurant_id || !name || !start_time || !end_time) {
             return NextResponse.json({ error: 'Campos obrigatórios: restaurant_id, name, start_time, end_time' }, { status: 400 });
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
 
         const { data, error } = await adminSupabase
             .from('shifts')
-            .insert({ restaurant_id, name, start_time, end_time, days_of_week: days_of_week || [] })
+            .insert({ restaurant_id, name, start_time, end_time, days_of_week: days_of_week || [], shift_type: shift_type || null })
             .select()
             .single();
 

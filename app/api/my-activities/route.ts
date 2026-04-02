@@ -129,10 +129,18 @@ export async function GET(request: Request) {
         const brazil = getBrazilNow();
         const { start: brazilDayStart } = getBrazilStartAndEndOfDay();
 
+        // Buscar shifts para resolver recurrence='shift_days'
+        const { data: shifts } = await adminSupabase
+            .from('shifts')
+            .select('shift_type, days_of_week')
+            .eq('restaurant_id', restaurant_id)
+            .eq('active', true);
+
         const visibleChecklists = filterChecklistsByRecurrence(
             checklists,
             brazil.dayOfWeek,
             brazil.dateKey,
+            shifts || [],
         );
 
         if (visibleChecklists.length === 0) {

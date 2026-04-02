@@ -3,6 +3,12 @@ import type { RecurrenceConfig } from '@/lib/types'
 interface ChecklistForRecurrence {
     recurrence?: string | null
     recurrence_config?: RecurrenceConfig | null
+    shift?: string | null
+}
+
+interface ShiftForRecurrence {
+    shift_type?: string | null
+    days_of_week: number[]
 }
 
 /**
@@ -11,25 +17,46 @@ interface ChecklistForRecurrence {
  * @param checklist - Checklist com campos de recorrência
  * @param brazilDayOfWeek - Dia da semana em São Paulo (0=Dom, 1=Seg, ..., 6=Sab)
  * @param brazilDateKey - Data atual em São Paulo no formato YYYY-MM-DD
+ * @param shifts - Turnos ativos do restaurante (necessário para recurrence='shift_days')
  */
 export function shouldChecklistAppearToday(
     checklist: ChecklistForRecurrence,
     brazilDayOfWeek: number,
     brazilDateKey: string,
+    shifts?: ShiftForRecurrence[],
 ): boolean {
     const { recurrence, recurrence_config } = checklist
 
-    // Sem recorrência ou tipo simples que aparece todo dia
-    if (!recurrence || recurrence === 'none') return true
+    // Fallback defensivo: sem recorrência definida → mostra (não deveria acontecer pós-migration)
+    if (!recurrence) return true
+
     if (recurrence === 'daily') return true
-    if (recurrence === 'weekly') return true
-    if (recurrence === 'monthly') return true
-    if (recurrence === 'yearly') return true
 
     // Dias úteis: segunda a sexta (1-5)
     if (recurrence === 'weekdays') {
         return brazilDayOfWeek >= 1 && brazilDayOfWeek <= 5
     }
+
+    // Dias do turno: vincula dinamicamente aos dias configurados no turno
+    if (recurrence === 'shift_days') {
+        const shiftLabel = checklist.shift
+        // Turno 'any' ou sem turno → mostra todo dia
+        if (!shiftLabel || shiftLabel === 'any') return true
+        // Sem dados de shifts → fallback defensivo (mostra)
+        if (!shifts || shifts.length === 0) return true
+
+        const matchingShifts = shifts.filter(s => s.shift_type === shiftLabel)
+        // Nenhum shift com shift_type configurado → fallback (mostra)
+        if (matchingShifts.length === 0) return true
+
+        const allDays = new Set(matchingShifts.flatMap(s => s.days_of_week))
+        return allDays.has(brazilDayOfWeek)
+    }
+
+    // Semanal/Mensal/Anual simples: aparece todo dia (lógica simplificada atual)
+    if (recurrence === 'weekly') return true
+    if (recurrence === 'monthly') return true
+    if (recurrence === 'yearly') return true
 
     // Recorrência personalizada
     if (recurrence === 'custom') {
@@ -74,6 +101,7 @@ export function filterChecklistsByRecurrence<T extends ChecklistForRecurrence>(
     checklists: T[],
     brazilDayOfWeek: number,
     brazilDateKey: string,
+    shifts?: ShiftForRecurrence[],
 ): T[] {
-    return checklists.filter(c => shouldChecklistAppearToday(c, brazilDayOfWeek, brazilDateKey))
+    return checklists.filter(c => shouldChecklistAppearToday(c, brazilDayOfWeek, brazilDateKey, shifts))
 }

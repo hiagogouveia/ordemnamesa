@@ -67,7 +67,7 @@ export async function GET(request: Request) {
 
         const { data: activeChecklists } = await adminSupabase
             .from('checklists')
-            .select('id, name, description, is_required, recurrence, recurrence_config, last_reset_at, assigned_to_user_id, role_id, area_id, roles(id, name, color), areas(id, name, color), checklist_type, start_time, end_time')
+            .select('id, name, description, shift, is_required, recurrence, recurrence_config, last_reset_at, assigned_to_user_id, role_id, area_id, roles(id, name, color), areas(id, name, color), checklist_type, start_time, end_time')
             .eq('restaurant_id', restaurant_id)
             .eq('active', true)
             .eq('status', 'active')
@@ -77,11 +77,19 @@ export async function GET(request: Request) {
         const brazil = getBrazilNow();
         const { start: brazilDayStart, end: brazilDayEnd } = getBrazilStartAndEndOfDay();
 
+        // Buscar shifts para resolver recurrence='shift_days'
+        const { data: shifts } = await adminSupabase
+            .from('shifts')
+            .select('shift_type, days_of_week')
+            .eq('restaurant_id', restaurant_id)
+            .eq('active', true);
+
         // Filtrar checklists por regras de recorrência (dia da semana, custom, etc.)
         const visibleChecklists = filterChecklistsByRecurrence(
             activeChecklists || [],
             brazil.dayOfWeek,
             brazil.dateKey,
+            shifts || [],
         );
 
         const checklistIds = visibleChecklists.map(c => c.id);
@@ -97,7 +105,7 @@ export async function GET(request: Request) {
         const startOfYear = new Date(todayLocal.getFullYear(), 0, 1);
 
         for (const cl of (activeChecklists || [])) {
-            if (!cl.recurrence || cl.recurrence === 'none') continue;
+            if (!cl.recurrence) continue;
 
             let periodStart: Date | null = null;
             const lastReset = cl.last_reset_at ? new Date(cl.last_reset_at) : null;

@@ -59,7 +59,7 @@ export interface Checklist {
     assigned_to_user_id?: string
     is_required?: boolean
     checklist_type?: 'regular' | 'opening' | 'closing' | 'receiving'
-    recurrence?: 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekdays' | 'custom'
+    recurrence?: 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekdays' | 'custom' | 'shift_days'
     last_reset_at?: string
     start_time?: string        // Sprint 8: formato HH:mm
     end_time?: string          // Sprint 8: formato HH:mm
@@ -101,6 +101,7 @@ export interface Shift {
     start_time: string
     end_time: string
     days_of_week: number[] // 0=Sunday, 6=Saturday
+    shift_type?: 'morning' | 'afternoon' | 'evening' | null
     active: boolean
     created_at: string
     updated_at: string

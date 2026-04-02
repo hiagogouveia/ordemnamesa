@@ -11,13 +11,13 @@ const SHIFT_LABELS: Record<string, string> = {
 };
 
 const RECURRENCE_LABELS: Record<string, string> = {
-    none: "Não se repete",
     daily: "Diária",
     weekly: "Semanal",
     monthly: "Mensal",
     yearly: "Anual",
     weekdays: "Dias úteis",
     custom: "Personalizada",
+    shift_days: "Dias do turno",
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -97,7 +97,7 @@ function ChecklistViewPanel({ checklist, onEdit, onClose }: ChecklistViewPanelPr
                         <div className="flex items-center justify-between">
                             <span className="text-[#92bbc9] text-sm">Recorrência</span>
                             <span className="text-white text-sm font-medium">
-                                {RECURRENCE_LABELS[checklist.recurrence ?? "none"] ?? "—"}
+                                {RECURRENCE_LABELS[checklist.recurrence ?? "daily"] ?? "—"}
                             </span>
                         </div>
                         <div className="flex items-center justify-between">

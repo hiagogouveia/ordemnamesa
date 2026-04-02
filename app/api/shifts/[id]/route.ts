@@ -44,7 +44,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
             return NextResponse.json({ error: 'Permissão negada' }, { status: 403 });
         }
 
-        const allowed = ['name', 'start_time', 'end_time', 'days_of_week', 'active'];
+        const allowed = ['name', 'start_time', 'end_time', 'days_of_week', 'active', 'shift_type'];
         const payload = Object.fromEntries(
             Object.entries(updates).filter(([k]) => allowed.includes(k))
         );

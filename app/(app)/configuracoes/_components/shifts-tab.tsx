@@ -6,6 +6,12 @@ import { Shift } from "@/lib/types";
 import { useState } from "react";
 
 const DAYS_OF_WEEK = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const SHIFT_TYPES = [
+    { value: 'morning', label: 'Manhã' },
+    { value: 'afternoon', label: 'Tarde' },
+    { value: 'evening', label: 'Noite' },
+];
+const SHIFT_TYPE_LABELS: Record<string, string> = { morning: 'Manhã', afternoon: 'Tarde', evening: 'Noite' };
 
 export function ShiftsTab() {
     const restaurantId = useRestaurantStore((state) => state.restaurantId);
@@ -20,6 +26,7 @@ export function ShiftsTab() {
     const [formStart, setFormStart] = useState("");
     const [formEnd, setFormEnd] = useState("");
     const [formDays, setFormDays] = useState<number[]>([]);
+    const [formShiftType, setFormShiftType] = useState<string>("");
 
     const activeShifts = shifts.filter(s => s.active);
 
@@ -30,12 +37,14 @@ export function ShiftsTab() {
             setFormStart(shift.start_time);
             setFormEnd(shift.end_time);
             setFormDays(shift.days_of_week);
+            setFormShiftType(shift.shift_type || "");
         } else {
             setEditingShift(null);
             setFormName("");
             setFormStart("");
             setFormEnd("");
             setFormDays([1, 2, 3, 4, 5]); // Default: Segunda a Sexta
+            setFormShiftType("");
         }
         setIsModalOpen(true);
     };
@@ -60,6 +69,7 @@ export function ShiftsTab() {
                     start_time: formStart,
                     end_time: formEnd,
                     days_of_week: formDays,
+                    shift_type: formShiftType || null,
                 });
             } else {
                 await createShift.mutateAsync({
@@ -68,6 +78,7 @@ export function ShiftsTab() {
                     start_time: formStart,
                     end_time: formEnd,
                     days_of_week: formDays,
+                    shift_type: formShiftType || null,
                     active: true,
                 });
             }
@@ -136,6 +147,11 @@ export function ShiftsTab() {
                                     <span className="material-symbols-outlined text-[18px]">schedule</span>
                                     {shift.start_time.slice(0, 5)} - {shift.end_time.slice(0, 5)}
                                 </div>
+                                {shift.shift_type && (
+                                    <span className="inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-[#13b6ec]/15 text-[#13b6ec] border border-[#13b6ec]/25">
+                                        {SHIFT_TYPE_LABELS[shift.shift_type]}
+                                    </span>
+                                )}
                             </div>
                             <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                                 <button
@@ -200,6 +216,26 @@ export function ShiftsTab() {
                                     placeholder="Ex: Almoço, Jantar..."
                                     className="bg-[#101d22] border border-[#233f48] text-white rounded-lg px-4 py-3 focus:outline-none focus:border-[#13b6ec] transition-colors"
                                 />
+                            </div>
+
+                            <div className="flex flex-col gap-2">
+                                <label className="text-sm font-medium text-[#92bbc9]">Período do Dia</label>
+                                <div className="flex gap-2">
+                                    {SHIFT_TYPES.map(st => (
+                                        <button
+                                            key={st.value}
+                                            type="button"
+                                            onClick={() => setFormShiftType(formShiftType === st.value ? "" : st.value)}
+                                            className={`flex-1 px-3 py-2.5 rounded-lg text-sm font-bold transition-all ${formShiftType === st.value
+                                                ? 'bg-[#13b6ec] text-[#101d22] ring-2 ring-[#13b6ec]/30'
+                                                : 'bg-[#1a2c32] border border-[#233f48] text-[#92bbc9] hover:border-[#325a67] hover:text-white'
+                                            }`}
+                                        >
+                                            {st.label}
+                                        </button>
+                                    ))}
+                                </div>
+                                <p className="text-[10px] text-[#325a67]">Vincula este turno às rotinas do período correspondente</p>
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">

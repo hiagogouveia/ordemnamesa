@@ -14,13 +14,13 @@ const SHIFT_LABELS: Record<string, string> = {
 };
 
 const RECURRENCE_LABELS: Record<string, string> = {
-    none: "—",
     daily: "Diária",
     weekly: "Semanal",
     monthly: "Mensal",
     yearly: "Anual",
     weekdays: "Dias úteis",
     custom: "Personalizada",
+    shift_days: "Dias do turno",
 };
 
 const EXECUTION_STATUS_CONFIG: Record<ExecutionStatus, { label: string; className: string }> = {
@@ -179,7 +179,7 @@ export function ChecklistRow({
             {/* Recorrência */}
             <td className="px-3 py-3 hidden lg:table-cell" onClick={onSelect}>
                 <span className="text-[#92bbc9] text-sm">
-                    {RECURRENCE_LABELS[checklist.recurrence ?? "none"] ?? "—"}
+                    {RECURRENCE_LABELS[checklist.recurrence ?? "daily"] ?? "—"}
                 </span>
             </td>
 
