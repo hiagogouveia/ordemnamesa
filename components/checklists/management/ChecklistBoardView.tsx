@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { ChecklistBoardColumn } from "./ChecklistBoardColumn";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
 import type { ExecutionStatus } from "@/lib/types";
@@ -35,6 +35,32 @@ export function ChecklistBoardView({
     onSelect,
     onStatusToggle,
 }: ChecklistBoardViewProps) {
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const dragState = useRef({ startX: 0, scrollLeft: 0, hasMoved: false });
+
+    const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+        if (e.pointerType === "touch") return;
+        const el = scrollRef.current;
+        if (!el) return;
+        setIsDragging(true);
+        dragState.current = { startX: e.clientX, scrollLeft: el.scrollLeft, hasMoved: false };
+        el.setPointerCapture(e.pointerId);
+    }, []);
+
+    const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+        if (!isDragging || e.pointerType === "touch") return;
+        const el = scrollRef.current;
+        if (!el) return;
+        const dx = e.clientX - dragState.current.startX;
+        if (Math.abs(dx) > 3) dragState.current.hasMoved = true;
+        el.scrollLeft = dragState.current.scrollLeft - dx;
+    }, [isDragging]);
+
+    const handlePointerUp = useCallback(() => {
+        setIsDragging(false);
+    }, []);
+
     const grouped = useMemo(() => {
         const map: Record<ExecutionStatus, ExtendedChecklist[]> = {
             incomplete: [],
@@ -75,7 +101,14 @@ export function ChecklistBoardView({
     }
 
     return (
-        <div className="flex gap-4 flex-1 overflow-x-auto pb-2">
+        <div
+            ref={scrollRef}
+            className={`flex gap-4 flex-1 overflow-x-auto pb-2 ${isDragging ? "cursor-grabbing select-none" : "cursor-grab"}`}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerUp}
+        >
             {STATUS_COLUMNS.map((col) => (
                 <ChecklistBoardColumn
                     key={col.status}
