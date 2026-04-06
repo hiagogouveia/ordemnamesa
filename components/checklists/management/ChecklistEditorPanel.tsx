@@ -1,7 +1,13 @@
 "use client";
 
+import { useState } from "react";
+import Image from "next/image";
+import { useQuery } from "@tanstack/react-query";
+import { createClient } from "@/lib/supabase/client";
+import { getPhotoPublicUrl } from "@/lib/supabase/storage";
 import { ChecklistForm } from "@/components/checklists/checklist-form";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
+import { getBrazilDateKey } from "@/lib/utils/brazil-date";
 
 const SHIFT_LABELS: Record<string, string> = {
     morning: "Manhã",
@@ -27,13 +33,154 @@ const TYPE_LABELS: Record<string, string> = {
     receiving: "Recebimento",
 };
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface TaskExecution {
+    id: string;
+    task_id: string;
+    status: string;
+    photo_url: string | null;
+    executed_at: string;
+}
+
+interface AssumptionDetail {
+    user_name: string | null;
+    observation: string | null;
+    completed_at: string | null;
+    execution_status: string;
+}
+
+// ── Hooks ─────────────────────────────────────────────────────────────────────
+
+function useChecklistExecutions(checklistId: string, restaurantId: string) {
+    return useQuery({
+        queryKey: ["checklist-executions-panel", checklistId],
+        queryFn: async (): Promise<TaskExecution[]> => {
+            const supabase = createClient();
+            const todayStart = new Date();
+            todayStart.setHours(0, 0, 0, 0);
+
+            const { data } = await supabase
+                .from("task_executions")
+                .select("id, task_id, status, photo_url, executed_at")
+                .eq("checklist_id", checklistId)
+                .eq("restaurant_id", restaurantId)
+                .gte("executed_at", todayStart.toISOString());
+
+            return data ?? [];
+        },
+        enabled: !!checklistId && !!restaurantId,
+    });
+}
+
+function useAssumptionDetail(checklistId: string, restaurantId: string) {
+    return useQuery({
+        queryKey: ["checklist-assumption-panel", checklistId],
+        queryFn: async (): Promise<AssumptionDetail | null> => {
+            const supabase = createClient();
+            const dateKey = getBrazilDateKey();
+
+            const { data } = await supabase
+                .from("checklist_assumptions")
+                .select("user_name, observation, completed_at, execution_status")
+                .eq("checklist_id", checklistId)
+                .eq("restaurant_id", restaurantId)
+                .eq("date_key", dateKey)
+                .maybeSingle();
+
+            return data;
+        },
+        enabled: !!checklistId && !!restaurantId,
+    });
+}
+
+// ── Photo Modal ───────────────────────────────────────────────────────────────
+
+interface PhotoModalProps {
+    photoUrl: string;
+    taskTitle: string;
+    onClose: () => void;
+}
+
+function PhotoModal({ photoUrl, taskTitle, onClose }: PhotoModalProps) {
+    return (
+        <div
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80"
+            onClick={onClose}
+        >
+            <div
+                className="relative max-w-2xl w-full flex flex-col gap-4"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <button
+                    onClick={onClose}
+                    className="absolute -top-4 right-0 size-9 flex items-center justify-center rounded-full bg-[#1a2c32] border border-[#325a67] text-[#92bbc9] hover:text-white hover:bg-[#233f48] transition-colors z-10"
+                >
+                    <span className="material-symbols-outlined text-[18px]">close</span>
+                </button>
+
+                <div
+                    className="relative w-full rounded-xl overflow-hidden"
+                    style={{ maxHeight: "70vh", minHeight: "200px" }}
+                >
+                    <Image
+                        src={photoUrl}
+                        alt={taskTitle}
+                        fill
+                        sizes="(max-width: 768px) 100vw, 600px"
+                        className="object-contain"
+                    />
+                </div>
+
+                <div className="bg-[#16262c] border border-[#325a67] rounded-xl px-5 py-3">
+                    <p className="text-white font-bold text-sm">{taskTitle}</p>
+                    <p className="text-[#92bbc9] text-xs mt-0.5">Evidência fotográfica</p>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ── ChecklistViewPanel ────────────────────────────────────────────────────────
+
 interface ChecklistViewPanelProps {
     checklist: ExtendedChecklist;
+    restaurantId?: string;
     onEdit: () => void;
     onClose: () => void;
 }
 
-function ChecklistViewPanel({ checklist, onEdit, onClose }: ChecklistViewPanelProps) {
+function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose }: ChecklistViewPanelProps) {
+    const [selectedPhoto, setSelectedPhoto] = useState<{ url: string; title: string } | null>(null);
+
+    const { data: executions = [], isLoading: execLoading } = useChecklistExecutions(
+        checklist.id,
+        restaurantId ?? ""
+    );
+
+    const { data: assumptionDetail } = useAssumptionDetail(
+        checklist.id,
+        restaurantId ?? ""
+    );
+
+    const executionMap = new Map(executions.map((e) => [e.task_id, e]));
+    const hasExecution = executions.length > 0 || !!assumptionDetail;
+    const hasPhotos = executions.some((e) => !!e.photo_url);
+
+    const statusLabel: Record<string, string> = {
+        done: "Concluída",
+        in_progress: "Em andamento",
+        blocked: "Com impedimento",
+        not_started: "Não iniciada",
+    };
+
+    const statusColor: Record<string, string> = {
+        done: "text-emerald-400",
+        in_progress: "text-[#13b6ec]",
+        blocked: "text-amber-400",
+        not_started: "text-[#92bbc9]",
+    };
+
     return (
         <div className="flex flex-col h-full bg-[#101d22]">
             {/* Header */}
@@ -76,6 +223,77 @@ function ChecklistViewPanel({ checklist, onEdit, onClose }: ChecklistViewPanelPr
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto">
+
+                {/* ── Execução de hoje ───────────────────────────────────────── */}
+                {restaurantId && hasExecution && (
+                    <div className="p-4 border-b border-[#1a2c32]">
+                        <div className="flex items-center justify-between mb-3">
+                            <p className="text-[#92bbc9] text-xs font-bold uppercase tracking-wide">
+                                Execução de hoje
+                            </p>
+                            {assumptionDetail?.execution_status && (
+                                <span className={`text-xs font-bold ${statusColor[assumptionDetail.execution_status] ?? "text-[#92bbc9]"}`}>
+                                    {statusLabel[assumptionDetail.execution_status] ?? assumptionDetail.execution_status}
+                                </span>
+                            )}
+                        </div>
+
+                        {/* Executor */}
+                        {assumptionDetail?.user_name && (
+                            <div className="flex items-center gap-2 mb-3">
+                                <div className="w-7 h-7 rounded-full bg-[#13b6ec]/20 flex items-center justify-center shrink-0">
+                                    <span className="material-symbols-outlined text-[#13b6ec] text-[16px]">person</span>
+                                </div>
+                                <div>
+                                    <p className="text-white text-sm font-medium">{assumptionDetail.user_name}</p>
+                                    {assumptionDetail.completed_at && (
+                                        <p className="text-[#92bbc9] text-xs">
+                                            Concluída às{" "}
+                                            {new Date(assumptionDetail.completed_at).toLocaleTimeString("pt-BR", {
+                                                hour: "2-digit",
+                                                minute: "2-digit",
+                                            })}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Observação */}
+                        {assumptionDetail?.observation && (
+                            <div className="bg-[#1a2c32] border border-[#325a67] rounded-xl p-3 mb-3">
+                                <div className="flex items-center gap-1.5 mb-1.5">
+                                    <span className="material-symbols-outlined text-[#92bbc9] text-[14px]">chat</span>
+                                    <p className="text-[#92bbc9] text-xs font-bold uppercase tracking-wide">Observação</p>
+                                </div>
+                                <p className="text-white text-sm leading-relaxed whitespace-pre-wrap">
+                                    {assumptionDetail.observation}
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Badge de fotos enviadas */}
+                        {hasPhotos && (
+                            <div className="flex items-center gap-1.5 text-[#13b6ec] text-xs font-semibold mb-2">
+                                <span className="material-symbols-outlined text-[14px]">photo_camera</span>
+                                {executions.filter((e) => e.photo_url).length}{" "}
+                                {executions.filter((e) => e.photo_url).length === 1
+                                    ? "foto enviada"
+                                    : "fotos enviadas"}
+                            </div>
+                        )}
+
+                        {/* Loading execuções */}
+                        {execLoading && (
+                            <div className="flex justify-center py-4">
+                                <span className="material-symbols-outlined animate-spin text-xl text-[#13b6ec]">
+                                    progress_activity
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Informações básicas */}
                 {checklist.description && (
                     <div className="p-4 border-b border-[#1a2c32]">
@@ -121,13 +339,15 @@ function ChecklistViewPanel({ checklist, onEdit, onClose }: ChecklistViewPanelPr
                         {checklist.responsible?.name && (
                             <div className="flex items-center justify-between">
                                 <span className="text-[#92bbc9] text-sm">Responsável</span>
-                                <span className="text-white text-sm font-medium">{checklist.responsible.name}</span>
+                                <span className="text-white text-sm font-medium">
+                                    {checklist.responsible.name}
+                                </span>
                             </div>
                         )}
                     </div>
                 </div>
 
-                {/* Tarefas */}
+                {/* ── Tarefas (com status de execução e fotos) ──────────────── */}
                 <div className="p-4">
                     <div className="flex items-center justify-between mb-3">
                         <p className="text-[#92bbc9] text-xs font-bold uppercase tracking-wide">Tarefas</p>
@@ -146,40 +366,94 @@ function ChecklistViewPanel({ checklist, onEdit, onClose }: ChecklistViewPanelPr
                         <div className="flex flex-col gap-2">
                             {[...checklist.tasks]
                                 .sort((a, b) => a.order - b.order)
-                                .map((task, idx) => (
-                                    <div
-                                        key={task.id}
-                                        className="flex items-start gap-3 p-3 bg-[#0a1215] border border-[#233f48] rounded-xl"
-                                    >
-                                        <span className="text-[#325a67] text-xs font-bold w-5 shrink-0 mt-0.5 text-right">
-                                            {idx + 1}
-                                        </span>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-white text-sm font-medium leading-snug">{task.title}</p>
-                                            {task.description && (
-                                                <p className="text-[#92bbc9] text-xs mt-0.5">{task.description}</p>
-                                            )}
-                                            <div className="flex items-center gap-2 mt-1.5">
-                                                {task.requires_photo && (
-                                                    <span className="flex items-center gap-1 text-amber-400 text-[10px] font-bold">
-                                                        <span className="material-symbols-outlined text-[12px]">
-                                                            photo_camera
+                                .map((task, idx) => {
+                                    const execution = executionMap.get(task.id);
+                                    const isDone = execution?.status === "done";
+                                    const photoPath = execution?.photo_url ?? null;
+                                    const photoUrl = photoPath ? getPhotoPublicUrl(photoPath) : null;
+
+                                    return (
+                                        <div
+                                            key={task.id}
+                                            className={`flex items-start gap-3 p-3 border rounded-xl transition-colors ${
+                                                isDone
+                                                    ? "bg-emerald-500/5 border-emerald-500/20"
+                                                    : "bg-[#0a1215] border-[#233f48]"
+                                            }`}
+                                        >
+                                            {/* Status icon */}
+                                            <div className="flex flex-col items-center gap-1 shrink-0 mt-0.5">
+                                                <span
+                                                    className={`text-xs font-bold w-5 text-right ${
+                                                        isDone ? "text-emerald-400" : "text-[#325a67]"
+                                                    }`}
+                                                >
+                                                    {isDone ? (
+                                                        <span className="material-symbols-outlined text-[16px] text-emerald-400">
+                                                            check_circle
                                                         </span>
-                                                        Foto obrigatória
-                                                    </span>
+                                                    ) : (
+                                                        <span className="text-[#325a67]">{idx + 1}</span>
+                                                    )}
+                                                </span>
+                                            </div>
+
+                                            <div className="flex-1 min-w-0">
+                                                <p
+                                                    className={`text-sm font-medium leading-snug ${
+                                                        isDone ? "text-emerald-300" : "text-white"
+                                                    }`}
+                                                >
+                                                    {task.title}
+                                                </p>
+                                                {task.description && (
+                                                    <p className="text-[#92bbc9] text-xs mt-0.5">{task.description}</p>
                                                 )}
-                                                {task.is_critical && (
-                                                    <span className="flex items-center gap-1 text-red-400 text-[10px] font-bold">
-                                                        <span className="material-symbols-outlined text-[12px]">
-                                                            priority_high
+                                                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                                    {task.requires_photo && !isDone && (
+                                                        <span className="flex items-center gap-1 text-amber-400 text-[10px] font-bold">
+                                                            <span className="material-symbols-outlined text-[12px]">
+                                                                photo_camera
+                                                            </span>
+                                                            Foto obrigatória
                                                         </span>
-                                                        Crítica
-                                                    </span>
+                                                    )}
+                                                    {task.is_critical && (
+                                                        <span className="flex items-center gap-1 text-red-400 text-[10px] font-bold">
+                                                            <span className="material-symbols-outlined text-[12px]">
+                                                                priority_high
+                                                            </span>
+                                                            Crítica
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                {/* Thumbnail da foto */}
+                                                {photoUrl && (
+                                                    <button
+                                                        onClick={() =>
+                                                            setSelectedPhoto({ url: photoUrl, title: task.title })
+                                                        }
+                                                        className="mt-2 block relative w-full max-w-[120px] h-16 rounded-lg overflow-hidden border border-[#13b6ec]/30 hover:border-[#13b6ec] transition-colors group"
+                                                    >
+                                                        <Image
+                                                            src={photoUrl}
+                                                            alt={task.title}
+                                                            fill
+                                                            sizes="120px"
+                                                            className="object-cover"
+                                                        />
+                                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                                            <span className="material-symbols-outlined text-white text-[18px] opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                zoom_in
+                                                            </span>
+                                                        </div>
+                                                    </button>
                                                 )}
                                             </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                         </div>
                     )}
                 </div>
@@ -195,9 +469,20 @@ function ChecklistViewPanel({ checklist, onEdit, onClose }: ChecklistViewPanelPr
                     Editar rotina
                 </button>
             </div>
+
+            {/* Photo modal */}
+            {selectedPhoto && (
+                <PhotoModal
+                    photoUrl={selectedPhoto.url}
+                    taskTitle={selectedPhoto.title}
+                    onClose={() => setSelectedPhoto(null)}
+                />
+            )}
         </div>
     );
 }
+
+// ── ChecklistEditorPanel (exported) ──────────────────────────────────────────
 
 export interface ChecklistEditorPanelProps {
     checklist: ExtendedChecklist | null;
@@ -205,6 +490,7 @@ export interface ChecklistEditorPanelProps {
     onModeChange: (mode: "view" | "edit" | "new") => void;
     onClose: () => void;
     onSaved: () => void;
+    restaurantId?: string;
 }
 
 export function ChecklistEditorPanel({
@@ -213,11 +499,13 @@ export function ChecklistEditorPanel({
     onModeChange,
     onClose,
     onSaved,
+    restaurantId,
 }: ChecklistEditorPanelProps) {
     if (mode === "view" && checklist) {
         return (
             <ChecklistViewPanel
                 checklist={checklist}
+                restaurantId={restaurantId}
                 onEdit={() => onModeChange("edit")}
                 onClose={onClose}
             />

@@ -1,5 +1,11 @@
 import { createClient } from './client';
 
+export function getPhotoPublicUrl(filePath: string): string {
+    const supabase = createClient();
+    const { data } = supabase.storage.from('photos').getPublicUrl(filePath);
+    return data.publicUrl;
+}
+
 export async function uploadEvidencePhoto(
     file: File,
     restaurantId: string,

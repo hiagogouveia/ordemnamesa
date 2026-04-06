@@ -77,10 +77,21 @@ export function ChecklistBoardCard({
 
             {/* Footer: task count + turno + horário */}
             <div className="flex items-center justify-between mt-2">
-                <span className="flex items-center gap-1 text-[#92bbc9] text-xs">
-                    <span className="material-symbols-outlined text-[14px]">checklist</span>
-                    {taskCount} {taskCount === 1 ? "tarefa" : "tarefas"}
-                </span>
+                <div className="flex items-center gap-2">
+                    <span className="flex items-center gap-1 text-[#92bbc9] text-xs">
+                        <span className="material-symbols-outlined text-[14px]">checklist</span>
+                        {taskCount} {taskCount === 1 ? "tarefa" : "tarefas"}
+                    </span>
+                    {checklist.execution_status === "done" && checklist.tasks?.some(t => t.requires_photo) && (
+                        <span
+                            className="flex items-center gap-0.5 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded-full"
+                            title="Fotos enviadas"
+                        >
+                            <span className="material-symbols-outlined text-[11px]">photo_camera</span>
+                            Fotos
+                        </span>
+                    )}
+                </div>
                 <div className="flex items-center gap-2">
                     {checklist.start_time && (
                         <span className="text-[#5a8a99] text-[10px]">

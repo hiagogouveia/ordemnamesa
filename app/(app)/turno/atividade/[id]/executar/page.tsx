@@ -16,6 +16,7 @@ export default function ActivityExecutionPage() {
     const [showFinalizeModal, setShowFinalizeModal] = useState(false);
     const [finalizing, setFinalizing] = useState(false);
     const [observation, setObservation] = useState("");
+    const [photoValidationError, setPhotoValidationError] = useState<string | null>(null);
 
     const { data: activityData, isLoading, isError } = useActivityData(restaurantId || undefined, checklistId);
     const { data: assumption } = useChecklistAssumption(restaurantId || undefined, checklistId);
@@ -36,10 +37,12 @@ export default function ActivityExecutionPage() {
 
     const isAllDone = progress === 100;
 
-    const handleToggle = async (taskId: string, executionId: string | undefined, isDone: boolean) => {
+    const handleToggle = async (taskId: string, executionId: string | undefined, isDone: boolean, photoUrl?: string) => {
         if (!restaurantId || !checklistId || isCompleted) return;
+        const task = tasks?.find(t => t.id === taskId);
+        const requiresPhoto = Boolean(task?.requires_photo);
         try {
-            await toggleTask.mutateAsync({ restaurantId, checklistId, taskId, executionId, isDone });
+            await toggleTask.mutateAsync({ restaurantId, checklistId, taskId, executionId, isDone, photoUrl, requiresPhoto });
         } catch (e) {
             console.error('Erro ao alternar tarefa:', e);
         }
@@ -47,6 +50,20 @@ export default function ActivityExecutionPage() {
 
     const handleConfirmFinalize = async () => {
         if (!restaurantId || !checklistId) return;
+
+        // Validação de segurança: tasks que exigem foto e não têm photo_url na execução
+        const missingPhotoTasks = (tasks ?? []).filter(t =>
+            t.requires_photo &&
+            !executions?.some(e => e.task_id === t.id && e.status === 'done' && e.photo_url)
+        );
+        if (missingPhotoTasks.length > 0) {
+            setPhotoValidationError(
+                `${missingPhotoTasks.length === 1 ? '1 tarefa exige' : `${missingPhotoTasks.length} tarefas exigem`} foto e ainda não ${missingPhotoTasks.length === 1 ? 'foi registrada' : 'foram registradas'}.`
+            );
+            return;
+        }
+
+        setPhotoValidationError(null);
         setFinalizing(true);
         try {
             await completeMutation.mutateAsync({ restaurantId, checklistId, observation: observation || undefined });
@@ -198,6 +215,7 @@ export default function ActivityExecutionPage() {
                                     onToggle={handleToggle}
                                     locked={isCompleted || isAccessBlocked}
                                     isBlockedSequential={isAccessBlocked}
+                                    restaurantId={restaurantId ?? ''}
                                 />
                             );
                         })}
@@ -280,6 +298,12 @@ export default function ActivityExecutionPage() {
                                 Você tem certeza que deseja finalizar esta atividade?
                                 Após finalizar, as tarefas não poderão mais ser alteradas.
                             </p>
+                            {photoValidationError && (
+                                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 flex items-start gap-2">
+                                    <span className="material-symbols-outlined text-red-400 text-[16px] shrink-0 mt-0.5">error</span>
+                                    <p className="text-red-400 text-xs font-semibold leading-snug">{photoValidationError}</p>
+                                </div>
+                            )}
                         </div>
                         <div className="flex border-t border-[#233f48]">
                             <button

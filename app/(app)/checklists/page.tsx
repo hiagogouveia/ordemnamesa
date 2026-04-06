@@ -487,6 +487,7 @@ function ChecklistsContent() {
                             onModeChange={(mode) => setEditorState((s) => (s ? { ...s, mode } : null))}
                             onClose={() => setEditorState(null)}
                             onSaved={handleEditorSaved}
+                            restaurantId={restaurantId ?? undefined}
                         />
                     </div>
                 )}

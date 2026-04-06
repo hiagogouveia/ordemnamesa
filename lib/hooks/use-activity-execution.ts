@@ -120,20 +120,34 @@ export const useToggleActivityTask = () => {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: async ({ restaurantId, checklistId, taskId, executionId, isDone }: { 
-            restaurantId: string; 
-            checklistId: string; 
-            taskId: string; 
-            executionId?: string; 
-            isDone: boolean; 
+        mutationFn: async ({ restaurantId, checklistId, taskId, executionId, isDone, photoUrl, requiresPhoto }: {
+            restaurantId: string;
+            checklistId: string;
+            taskId: string;
+            executionId?: string;
+            isDone: boolean;
+            photoUrl?: string;
+            requiresPhoto?: boolean;
         }) => {
+            // Bloquear conclusão de task que exige foto sem foto
+            if (isDone && requiresPhoto && !photoUrl) {
+                throw new Error('Essa tarefa exige uma foto.');
+            }
+
             const supabase = createClient();
-            
+
             if (isDone) {
                 if (executionId) {
+                    const updatePayload: Record<string, unknown> = {
+                        status: 'done',
+                        executed_at: new Date().toISOString(),
+                    };
+                    if (photoUrl !== undefined) updatePayload.photo_url = photoUrl;
+                    if (requiresPhoto !== undefined) updatePayload.requires_photo_snapshot = requiresPhoto;
+
                     const { data, error } = await supabase
                         .from('task_executions')
-                        .update({ status: 'done', executed_at: new Date().toISOString() })
+                        .update(updatePayload)
                         .eq('id', executionId)
                         .select()
                         .single();
@@ -151,7 +165,9 @@ export const useToggleActivityTask = () => {
                             checklist_id: checklistId,
                             user_id: user.id,
                             status: 'done',
-                            executed_at: new Date().toISOString()
+                            executed_at: new Date().toISOString(),
+                            photo_url: photoUrl ?? null,
+                            requires_photo_snapshot: requiresPhoto ?? false,
                         })
                         .select()
                         .single();
@@ -193,17 +209,22 @@ export const useToggleActivityTask = () => {
                 queryClient.setQueryData<ActivityData>(queryKey, (old) => {
                     if (!old) return old;
                     let newExecs = [...old.executions];
-                    
+
                     if (variables.isDone) {
                         if (variables.executionId) {
-                            newExecs = newExecs.map(e => e.id === variables.executionId ? { ...e, status: 'done' } : e);
+                            newExecs = newExecs.map(e => e.id === variables.executionId
+                                ? { ...e, status: 'done', photo_url: variables.photoUrl ?? e.photo_url }
+                                : e
+                            );
                         } else {
                             // Fake execution ID for optimistic UI
                             newExecs.push({
                                 id: `optimistic-${Date.now()}`,
                                 task_id: variables.taskId,
                                 status: 'done',
-                                executed_at: new Date().toISOString()
+                                executed_at: new Date().toISOString(),
+                                photo_url: variables.photoUrl ?? null,
+                                requires_photo_snapshot: variables.requiresPhoto ?? false,
                             } as KanbanExecution);
                         }
                     } else {

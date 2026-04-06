@@ -36,6 +36,7 @@ export async function GET(request: Request) {
         const limit  = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') ?? String(PAGE_SIZE), 10)));
         const filter = searchParams.get('filter') ?? 'all';   // 'all' | 'done' | 'skipped' | 'flagged'
         const date   = searchParams.get('date')   ?? '';       // 'YYYY-MM-DD' ou ''
+        const checklist_id = searchParams.get('checklist_id') ?? '';  // Filtro opcional para admin
 
         const from = page * limit;
         const to   = from + limit - 1;
@@ -73,14 +74,24 @@ export async function GET(request: Request) {
             const dateEnd   = `${date}T23:59:59.999Z`;
             dataQuery = dataQuery.gte('executed_at', dateStart).lte('executed_at', dateEnd);
         }
+        if (checklist_id) {
+            dataQuery = dataQuery.eq('checklist_id', checklist_id);
+        }
 
         // Base para queries de contagem (compartilha os mesmos filtros de escopo)
-        const baseCount = () =>
-            adminSupabase
+        const baseCount = () => {
+            let query = adminSupabase
                 .from('task_executions')
                 .select('*', { count: 'exact', head: true })
                 .eq('restaurant_id', restaurant_id)
                 .eq('user_id', user.id);
+
+            if (checklist_id) {
+                query = query.eq('checklist_id', checklist_id);
+            }
+
+            return query;
+        };
 
         // 6 queries disparadas em paralelo:
         // [0] dados paginados + total filtrado

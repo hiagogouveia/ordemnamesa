@@ -17,7 +17,8 @@ interface ExecRow {
     status: string;
     executed_at: string;
     checklist_id: string;
-    executor_id: string;
+    user_id: string;
+    photo_url: string | null;
     checklist_tasks: { title?: string } | null;
     user: { user: { id?: string; name?: string; avatar_url?: string | null } | null } | null;
 }
@@ -145,9 +146,9 @@ export async function GET(request: Request) {
             adminSupabase
                 .from('task_executions')
                 .select(`
-                    id, status, executed_at, checklist_id, executor_id,
+                    id, status, executed_at, checklist_id, user_id, photo_url,
                     checklist_tasks(title),
-                    user:restaurant_users!executor_id(user:users(id, name, avatar_url))
+                    user:restaurant_users!user_id(user:users(id, name, avatar_url))
                 `)
                 .eq('restaurant_id', restaurant_id)
                 .gte('executed_at', startD.toISOString())
@@ -220,7 +221,7 @@ export async function GET(request: Request) {
         const activeUserIds = new Set<string>();
         assumptions.forEach(a => activeUserIds.add(a.user_id));
         execucoes.forEach(e => {
-            if (e.executor_id) activeUserIds.add(e.executor_id);
+            if (e.user_id) activeUserIds.add(e.user_id);
         });
         const colaboradoresAtivos = activeUserIds.size;
 
@@ -228,7 +229,7 @@ export async function GET(request: Request) {
         // For each active user, calculate their individual completion rate
         const userCompletionMap: Record<string, { done: number; total: number }> = {};
         execucoes.forEach(e => {
-            const uid = e.executor_id;
+            const uid = e.user_id;
             if (!uid) return;
             if (!userCompletionMap[uid]) userCompletionMap[uid] = { done: 0, total: 0 };
             userCompletionMap[uid].total++;
@@ -277,7 +278,7 @@ export async function GET(request: Request) {
         const topPerformersMap: Record<string, { name: string; avatar: string | null; total_done: number; total: number }> = {};
 
         execucoes.forEach(ex => {
-            const uid = ex.executor_id;
+            const uid = ex.user_id;
             if (!uid) return;
 
             const { name, avatar } = getUserInfo(ex);
