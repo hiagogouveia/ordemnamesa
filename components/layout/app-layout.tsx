@@ -44,6 +44,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     const userRole = useRestaurantStore((state) => state.userRole);
     const restaurantId = useRestaurantStore((state) => state.restaurantId);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [collapsed, setCollapsed] = useState(false);
+
+    useEffect(() => {
+        const saved = localStorage.getItem("sidebar-collapsed");
+        if (saved !== null) setCollapsed(saved === "true");
+    }, []);
+
+    useEffect(() => {
+        localStorage.setItem("sidebar-collapsed", String(collapsed));
+    }, [collapsed]);
 
     // Rotas que não devem exibir o layout do painel interno
     const isNoLayoutRoute =
@@ -64,7 +74,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     onClick={() => setIsMobileMenuOpen(false)}
                 />
             )}
-            <Sidebar isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
+            <Sidebar
+                isOpen={isMobileMenuOpen}
+                onClose={() => setIsMobileMenuOpen(false)}
+                collapsed={collapsed}
+                onToggle={() => setCollapsed(prev => !prev)}
+            />
 
             <div className={`flex flex-col flex-1 min-w-0 h-full relative ${userRole === 'staff' ? 'pb-16 lg:pb-0' : ''}`}>
                 <Header onMenuClick={() => setIsMobileMenuOpen(true)} />

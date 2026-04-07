@@ -23,7 +23,14 @@ const staffNavigation = [
     { name: "Histórico", href: "/historico", icon: "history" },
 ];
 
-export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
+type SidebarProps = {
+    isOpen?: boolean;
+    onClose?: () => void;
+    collapsed?: boolean;
+    onToggle?: () => void;
+};
+
+export function Sidebar({ isOpen, onClose, collapsed = false, onToggle }: SidebarProps) {
     const pathname = usePathname();
     const router = useRouter();
     const restaurantName = useRestaurantStore((state) => state.restaurantName);
@@ -74,28 +81,38 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
     }, [userRole, restaurantId]);
 
     return (
-        <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#111e22] border-r border-[#233f48] flex flex-col h-full shrink-0 transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-            <div className="w-full px-6 flex items-center justify-between mb-8 pt-6">
-                <div className="flex items-center gap-3">
-                    <Logo width={40} height={40} />
-                    <div className="flex flex-col">
+        <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#111e22] border-r border-[#233f48] flex flex-col h-full shrink-0 transform transition-all duration-300 ease-in-out lg:relative lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'} ${collapsed ? 'lg:w-20' : 'lg:w-64'}`}>
+            <div className="w-full px-4 flex items-center justify-between mb-8 pt-6">
+                <div className="flex items-center gap-3 min-w-0">
+                    <Logo width={40} height={40} className="shrink-0" />
+                    <div className={`flex flex-col min-w-0 ${collapsed ? 'lg:hidden' : ''}`}>
                         <span className="text-white font-bold text-sm leading-tight">
                             Ordem na Mesa
                         </span>
                         {restaurantName && (
-                            <span className="text-[#92bbc9] text-xs">
+                            <span className="text-[#92bbc9] text-xs truncate">
                                 {restaurantName}
                             </span>
                         )}
                     </div>
                 </div>
-                <button onClick={onClose} className="lg:hidden p-1 text-[#92bbc9] hover:text-white rounded-lg hover:bg-[#1a2c32] transition-colors">
+                {/* Fechar drawer — somente mobile */}
+                <button onClick={onClose} className="lg:hidden p-1 text-[#92bbc9] hover:text-white rounded-lg hover:bg-[#1a2c32] transition-colors shrink-0">
                     <span className="material-symbols-outlined text-[20px]">close</span>
+                </button>
+                {/* Toggle colapso — somente desktop */}
+                <button
+                    onClick={onToggle}
+                    className="hidden lg:flex p-1 text-[#92bbc9] hover:text-white rounded-lg hover:bg-[#1a2c32] transition-colors shrink-0"
+                >
+                    <span className="material-symbols-outlined text-[20px]">
+                        {collapsed ? 'chevron_right' : 'chevron_left'}
+                    </span>
                 </button>
             </div>
 
             {restaurantName && (
-                <div className="w-full px-6 mb-8">
+                <div className={`w-full px-4 mb-8 ${collapsed ? 'lg:hidden' : ''}`}>
                     <div className="w-full bg-[#16262c] rounded-lg p-3 border border-[#233f48] flex items-center justify-between group cursor-pointer hover:border-[#13b6ec]/50 transition-colors">
                         <div className="flex flex-col min-w-0">
                             <span className="text-xs text-[#92bbc9] mb-0.5">Restaurante Atual</span>
@@ -107,8 +124,8 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
             )}
 
             {/* Navegação */}
-            <nav className="flex-1 overflow-y-auto px-4 py-6 flex flex-col gap-1.5">
-                <span className="text-[11px] font-bold text-[#325a67] uppercase tracking-wider mb-2 px-3">Menu Principal</span>
+            <nav className="flex-1 overflow-y-auto px-3 py-6 flex flex-col gap-1.5">
+                <span className={`text-[11px] font-bold text-[#325a67] uppercase tracking-wider mb-2 px-3 ${collapsed ? 'lg:hidden' : ''}`}>Menu Principal</span>
                 {(userRole === 'staff'
                     ? canLaunchPurchases
                         ? [...staffNavigation, { name: "Compras", href: "/compras", icon: "shopping_cart" }]
@@ -120,17 +137,18 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
                         <Link
                             key={item.name}
                             href={item.href}
+                            title={collapsed ? item.name : undefined}
                             className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${isActive
                                 ? "bg-[#13b6ec]/20 text-[#13b6ec]"
                                 : "text-[#92bbc9] hover:bg-[#233f48]"
-                                }`}
+                            } ${collapsed ? 'lg:justify-center lg:px-2' : ''}`}
                         >
-                            <span className={`material-symbols-outlined text-[20px] ${isActive ? "text-[#13b6ec]" : ""}`}>
+                            <span className={`material-symbols-outlined text-[20px] shrink-0 ${isActive ? "text-[#13b6ec]" : ""}`}>
                                 {item.icon}
                             </span>
-                            {item.name}
+                            <span className={collapsed ? 'lg:hidden' : ''}>{item.name}</span>
                             {'badge' in item && item.badge && pendingCount > 0 && (
-                                <span className="ml-auto bg-[#13b6ec] text-[#0a1215] text-[10px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-tight">
+                                <span className={`bg-[#13b6ec] text-[#0a1215] text-[10px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-tight ${collapsed ? 'lg:hidden' : 'ml-auto'}`}>
                                     {pendingCount > 99 ? "99+" : pendingCount}
                                 </span>
                             )}
@@ -149,7 +167,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
                             <span className="material-symbols-outlined text-[#325a67] text-[20px]">person</span>
                         )}
                     </div>
-                    <div className="flex flex-col min-w-0">
+                    <div className={`flex flex-col min-w-0 ${collapsed ? 'lg:hidden' : ''}`}>
                         <span className="text-sm font-semibold text-white truncate">
                             {userEmail ? userEmail.split('@')[0] : 'Usuário'}
                         </span>
@@ -161,12 +179,13 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
                 <button
                     onClick={handleSignOut}
                     disabled={isLoggingOut}
+                    title={collapsed ? (isLoggingOut ? 'Saindo...' : 'Sair da conta') : undefined}
                     className="mt-4 w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium text-red-400 hover:text-white hover:bg-red-500 hover:border-red-400 border border-transparent transition-all disabled:opacity-50"
                 >
                     <span className="material-symbols-outlined text-[18px]">
                         {isLoggingOut ? 'hourglass_empty' : 'logout'}
                     </span>
-                    {isLoggingOut ? 'Saindo...' : 'Sair da conta'}
+                    <span className={collapsed ? 'lg:hidden' : ''}>{isLoggingOut ? 'Saindo...' : 'Sair da conta'}</span>
                 </button>
             </div>
         </aside>
