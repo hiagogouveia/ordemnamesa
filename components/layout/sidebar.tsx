@@ -82,8 +82,8 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggle }: Sideba
 
     return (
         <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#111e22] border-r border-[#233f48] flex flex-col h-full shrink-0 transform transition-all duration-300 ease-in-out lg:relative lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'} ${collapsed ? 'lg:w-20' : 'lg:w-64'}`}>
-            {/* Header expandido: logo + nome à esquerda, botões à direita */}
-            <div className={`w-full mb-8 pt-6 ${collapsed ? 'lg:hidden' : 'px-4 flex items-center justify-between'}`}>
+            {/* Header expandido: visível no mobile (sempre) e desktop expandido */}
+            <div className={`w-full mb-8 pt-6 px-4 flex items-center justify-between ${collapsed ? 'lg:hidden' : ''}`}>
                 <div className="flex items-center gap-3 min-w-0">
                     <Logo width={40} height={40} className="shrink-0" />
                     <div className="flex flex-col min-w-0">
@@ -110,8 +110,8 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggle }: Sideba
                 </button>
             </div>
 
-            {/* Header colapsado: logo + toggle empilhados e centralizados */}
-            <div className={`w-full mb-4 pt-6 flex-col items-center gap-2 ${collapsed ? 'lg:flex' : 'hidden'}`}>
+            {/* Header colapsado: visível somente no desktop quando colapsado */}
+            <div className={`w-full mb-4 pt-6 hidden flex-col items-center gap-2 ${collapsed ? 'lg:flex' : ''}`}>
                 <Logo width={36} height={36} className="shrink-0" />
                 <button
                     onClick={onToggle}
@@ -158,7 +158,7 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggle }: Sideba
                             </span>
                             <span className={collapsed ? 'lg:hidden' : ''}>{item.name}</span>
                             {'badge' in item && item.badge && pendingCount > 0 && (
-                                <span className={`bg-[#13b6ec] text-[#0a1215] text-[10px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-tight ${collapsed ? 'lg:hidden' : 'ml-auto'}`}>
+                                <span className={`ml-auto bg-[#13b6ec] text-[#0a1215] text-[10px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-tight ${collapsed ? 'lg:hidden' : ''}`}>
                                     {pendingCount > 99 ? "99+" : pendingCount}
                                 </span>
                             )}
