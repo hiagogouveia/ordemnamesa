@@ -45,7 +45,6 @@ export function ChecklistBoardView({
         if (!el) return;
         setIsDragging(true);
         dragState.current = { startX: e.clientX, scrollLeft: el.scrollLeft, hasMoved: false };
-        el.setPointerCapture(e.pointerId);
     }, []);
 
     const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -53,7 +52,12 @@ export function ChecklistBoardView({
         const el = scrollRef.current;
         if (!el) return;
         const dx = e.clientX - dragState.current.startX;
-        if (Math.abs(dx) > 3) dragState.current.hasMoved = true;
+        if (Math.abs(dx) > 3) {
+            dragState.current.hasMoved = true;
+            if (!el.hasPointerCapture(e.pointerId)) {
+                el.setPointerCapture(e.pointerId);
+            }
+        }
         el.scrollLeft = dragState.current.scrollLeft - dx;
     }, [isDragging]);
 
