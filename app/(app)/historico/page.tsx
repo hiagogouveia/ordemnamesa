@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
-import Image from 'next/image';
 import { useRestaurantStore } from '@/lib/store/restaurant-store';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useHistorico, HistoricoEntry, HistoricoFilter, PAGE_SIZE } from '@/lib/hooks/use-historico';
+import { getPhotoPublicUrl } from '@/lib/supabase/storage';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -71,6 +71,8 @@ interface PhotoModalProps {
 }
 
 function PhotoModal({ entry, onClose }: PhotoModalProps) {
+    const photoUrl = entry.photo_url ? getPhotoPublicUrl(entry.photo_url) : '';
+
     useEffect(() => {
         const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
         window.addEventListener('keydown', handler);
@@ -98,13 +100,13 @@ function PhotoModal({ entry, onClose }: PhotoModalProps) {
                 </button>
 
                 {/* Image */}
-                <div className="relative w-full rounded-xl overflow-hidden" style={{ maxHeight: '70vh', minHeight: '200px' }}>
-                    <Image
-                        src={entry.photo_url!}
+                <div className="relative w-full rounded-xl overflow-hidden flex items-center justify-center bg-black/40" style={{ maxHeight: '70vh', minHeight: '200px' }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                        src={photoUrl}
                         alt={entry.checklist_tasks?.title || 'Foto da tarefa'}
-                        fill
-                        sizes="(max-width: 768px) 100vw, 600px"
-                        className="object-contain"
+                        className="max-w-full max-h-[70vh] object-contain"
+                        onError={(e) => { e.currentTarget.src = '/image-error-placeholder.png'; }}
                     />
                 </div>
 
