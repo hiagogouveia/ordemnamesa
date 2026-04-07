@@ -82,10 +82,11 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggle }: Sideba
 
     return (
         <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#111e22] border-r border-[#233f48] flex flex-col h-full shrink-0 transform transition-all duration-300 ease-in-out lg:relative lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'} ${collapsed ? 'lg:w-20' : 'lg:w-64'}`}>
-            <div className="w-full px-4 flex items-center justify-between mb-8 pt-6">
+            {/* Header expandido: logo + nome à esquerda, botões à direita */}
+            <div className={`w-full mb-8 pt-6 ${collapsed ? 'lg:hidden' : 'px-4 flex items-center justify-between'}`}>
                 <div className="flex items-center gap-3 min-w-0">
                     <Logo width={40} height={40} className="shrink-0" />
-                    <div className={`flex flex-col min-w-0 ${collapsed ? 'lg:hidden' : ''}`}>
+                    <div className="flex flex-col min-w-0">
                         <span className="text-white font-bold text-sm leading-tight">
                             Ordem na Mesa
                         </span>
@@ -105,9 +106,18 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggle }: Sideba
                     onClick={onToggle}
                     className="hidden lg:flex p-1 text-[#92bbc9] hover:text-white rounded-lg hover:bg-[#1a2c32] transition-colors shrink-0"
                 >
-                    <span className="material-symbols-outlined text-[20px]">
-                        {collapsed ? 'chevron_right' : 'chevron_left'}
-                    </span>
+                    <span className="material-symbols-outlined text-[20px]">chevron_left</span>
+                </button>
+            </div>
+
+            {/* Header colapsado: logo + toggle empilhados e centralizados */}
+            <div className={`w-full mb-4 pt-6 flex-col items-center gap-2 ${collapsed ? 'lg:flex' : 'hidden'}`}>
+                <Logo width={36} height={36} className="shrink-0" />
+                <button
+                    onClick={onToggle}
+                    className="p-1 text-[#92bbc9] hover:text-white rounded-lg hover:bg-[#1a2c32] transition-colors"
+                >
+                    <span className="material-symbols-outlined text-[20px]">chevron_right</span>
                 </button>
             </div>
 
