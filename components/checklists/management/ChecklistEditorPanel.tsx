@@ -40,6 +40,7 @@ interface TaskExecution {
     status: string;
     photo_url: string | null;
     executed_at: string;
+    blocked_reason: string | null;
 }
 
 interface AssumptionDetail {
@@ -61,7 +62,7 @@ function useChecklistExecutions(checklistId: string, restaurantId: string) {
 
             const { data } = await supabase
                 .from("task_executions")
-                .select("id, task_id, status, photo_url, executed_at")
+                .select("id, task_id, status, photo_url, executed_at, blocked_reason")
                 .eq("checklist_id", checklistId)
                 .eq("restaurant_id", restaurantId)
                 .gte("executed_at", todayStart.toISOString());
@@ -392,25 +393,32 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose }: Checkl
                                 .map((task, idx) => {
                                     const execution = executionMap.get(task.id);
                                     const isDone = execution?.status === "done";
+                                    const isBlocked = execution?.status === "blocked";
                                     const photoUrl = signedUrls[task.id] ?? null;
 
                                     return (
                                         <div
                                             key={task.id}
                                             className={`flex items-start gap-3 p-3 border rounded-xl transition-colors ${
-                                                isDone
-                                                    ? "bg-emerald-500/5 border-emerald-500/20"
-                                                    : "bg-[#0a1215] border-[#233f48]"
+                                                isBlocked
+                                                    ? "bg-amber-500/5 border-amber-500/20"
+                                                    : isDone
+                                                        ? "bg-emerald-500/5 border-emerald-500/20"
+                                                        : "bg-[#0a1215] border-[#233f48]"
                                             }`}
                                         >
                                             {/* Status icon */}
                                             <div className="flex flex-col items-center gap-1 shrink-0 mt-0.5">
                                                 <span
                                                     className={`text-xs font-bold w-5 text-right ${
-                                                        isDone ? "text-emerald-400" : "text-[#325a67]"
+                                                        isBlocked ? "text-amber-400" : isDone ? "text-emerald-400" : "text-[#325a67]"
                                                     }`}
                                                 >
-                                                    {isDone ? (
+                                                    {isBlocked ? (
+                                                        <span className="material-symbols-outlined text-[16px] text-amber-400">
+                                                            warning
+                                                        </span>
+                                                    ) : isDone ? (
                                                         <span className="material-symbols-outlined text-[16px] text-emerald-400">
                                                             check_circle
                                                         </span>
@@ -423,13 +431,20 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose }: Checkl
                                             <div className="flex-1 min-w-0">
                                                 <p
                                                     className={`text-sm font-medium leading-snug ${
-                                                        isDone ? "text-emerald-300" : "text-white"
+                                                        isBlocked ? "text-amber-300" : isDone ? "text-emerald-300" : "text-white"
                                                     }`}
                                                 >
                                                     {task.title}
                                                 </p>
                                                 {task.description && (
                                                     <p className="text-[#92bbc9] text-xs mt-0.5">{task.description}</p>
+                                                )}
+                                                {isBlocked && execution?.blocked_reason && (
+                                                    <div className="mt-1.5 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2">
+                                                        <p className="text-amber-300/90 text-[11px] leading-relaxed">
+                                                            <span className="font-bold">Impedimento:</span> {execution.blocked_reason}
+                                                        </p>
+                                                    </div>
                                                 )}
                                                 <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                                                     {task.requires_photo && !isDone && (

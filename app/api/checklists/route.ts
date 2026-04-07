@@ -45,10 +45,10 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Permissões do restaurante não encontradas' }, { status: 403 });
         }
 
-        // Buscar checklists e assumptions de hoje em paralelo
+        // Buscar checklists, assumptions de hoje e task_executions bloqueadas em paralelo
         const todayKey = getBrazilDateKey();
 
-        const [checklistsResult, assumptionsResult] = await Promise.all([
+        const [checklistsResult, assumptionsResult, blockedTasksResult] = await Promise.all([
             adminSupabase
                 .from('checklists')
                 .select(`
@@ -62,9 +62,16 @@ export async function GET(request: Request) {
                 .order('order_index', { ascending: true }),
             adminSupabase
                 .from('checklist_assumptions')
-                .select('checklist_id, user_id, user_name, execution_status, completed_at, blocked_reason')
+                .select('id, checklist_id, user_id, user_name, execution_status, completed_at, blocked_reason')
                 .eq('restaurant_id', restaurant_id)
                 .eq('date_key', todayKey),
+            // Buscar task_executions com status='blocked' de hoje para derivar impedimento
+            adminSupabase
+                .from('task_executions')
+                .select('checklist_id, checklist_assumption_id')
+                .eq('restaurant_id', restaurant_id)
+                .eq('status', 'blocked')
+                .gte('executed_at', new Date(todayKey).toISOString()),
         ]);
 
         let { data: checklists, error } = checklistsResult;
@@ -97,6 +104,7 @@ export async function GET(request: Request) {
 
         // Mapa de assumptions por checklist_id para derivar execution_status
         type AssumptionRow = {
+            id: string;
             checklist_id: string;
             user_id: string;
             user_name: string | null;
@@ -106,6 +114,13 @@ export async function GET(request: Request) {
         };
         const assumptionMap = new Map<string, AssumptionRow>(
             (assumptionsResult.data ?? []).map((a: AssumptionRow) => [a.checklist_id, a])
+        );
+
+        // Set de assumption_ids que têm task_executions bloqueadas
+        const assumptionIdsWithBlockedTasks = new Set<string>(
+            (blockedTasksResult.data ?? [])
+                .filter((te: { checklist_assumption_id: string | null }) => te.checklist_assumption_id)
+                .map((te: { checklist_assumption_id: string }) => te.checklist_assumption_id)
         );
 
         interface ChecklistRow {
@@ -120,10 +135,11 @@ export async function GET(request: Request) {
             let execution_status: ExecutionStatus;
             if (!assumption) {
                 execution_status = 'not_started';
-            } else if (assumption.execution_status === 'blocked') {
-                execution_status = 'blocked';
             } else if (assumption.completed_at !== null || assumption.execution_status === 'done') {
                 execution_status = 'done';
+            } else if (assumptionIdsWithBlockedTasks.has(assumption.id)) {
+                // Derivar "blocked" a partir das task_executions, não da assumption
+                execution_status = 'blocked';
             } else {
                 execution_status = 'in_progress';
             }

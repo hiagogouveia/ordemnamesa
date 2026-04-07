@@ -3,6 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { KanbanTask, KanbanExecution, KanbanChecklist } from './use-tasks';
 
+const getAuthToken = async () => {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token || '';
+};
+
 export interface ActivityData {
     checklist: KanbanChecklist;
     tasks: KanbanTask[];
@@ -249,5 +255,139 @@ export const useToggleActivityTask = () => {
             // However, Realtime will mostly handle this. We can trigger a soft invalidate.
             queryClient.invalidateQueries({ queryKey: ['activity', variables.restaurantId, variables.checklistId] });
         }
+    });
+};
+
+export const useBlockTask = () => {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async ({ restaurantId, checklistId, taskId, reason }: {
+            restaurantId: string;
+            checklistId: string;
+            taskId: string;
+            reason: string;
+        }) => {
+            const token = await getAuthToken();
+            const response = await fetch(`/api/checklists/${checklistId}/tasks/${taskId}/block`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ restaurant_id: restaurantId, reason }),
+            });
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Erro ao reportar problema');
+            }
+            return response.json();
+        },
+        onMutate: async (variables) => {
+            const queryKey = ['activity', variables.restaurantId, variables.checklistId];
+            await queryClient.cancelQueries({ queryKey });
+
+            const previousData = queryClient.getQueryData<ActivityData>(queryKey);
+
+            // Optimistic update: marcar task como blocked
+            if (previousData) {
+                queryClient.setQueryData<ActivityData>(queryKey, (old) => {
+                    if (!old) return old;
+                    let newExecs = [...old.executions];
+
+                    // Remover execução existente para essa task (se houver)
+                    newExecs = newExecs.filter(e => e.task_id !== variables.taskId);
+
+                    // Adicionar execução blocked otimista
+                    newExecs.push({
+                        id: `optimistic-blocked-${Date.now()}`,
+                        task_id: variables.taskId,
+                        status: 'blocked',
+                        executed_at: new Date().toISOString(),
+                        blocked_reason: variables.reason,
+                        blocked_at: new Date().toISOString(),
+                        photo_url: null,
+                    } as KanbanExecution);
+
+                    return { ...old, executions: newExecs };
+                });
+            }
+
+            return { previousData, queryKey };
+        },
+        onError: (_err, _variables, context) => {
+            if (context?.previousData) {
+                queryClient.setQueryData(context.queryKey, context.previousData);
+            }
+        },
+        onSettled: (_data, _error, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['activity', variables.restaurantId, variables.checklistId] });
+            queryClient.invalidateQueries({ queryKey: ['checklists', variables.restaurantId] });
+            queryClient.invalidateQueries({ queryKey: ['kanban', variables.restaurantId] });
+        },
+    });
+};
+
+export const useResumeTask = () => {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async ({ restaurantId, checklistId, taskId, executionId }: {
+            restaurantId: string;
+            checklistId: string;
+            taskId: string;
+            executionId: string;
+        }) => {
+            // Deletar a execução bloqueada (mesmo padrão do toggle ao desmarcar)
+            const supabase = createClient();
+
+            // Buscar ID real se for otimista
+            let realId = executionId;
+            if (realId.startsWith('optimistic-')) {
+                const { data: exec } = await supabase
+                    .from('task_executions')
+                    .select('id')
+                    .eq('task_id', taskId)
+                    .eq('checklist_id', checklistId)
+                    .eq('status', 'blocked')
+                    .maybeSingle();
+                realId = exec?.id;
+            }
+
+            if (realId) {
+                const { error } = await supabase
+                    .from('task_executions')
+                    .delete()
+                    .eq('id', realId);
+                if (error) throw error;
+            }
+            return { deleted: true, taskId };
+        },
+        onMutate: async (variables) => {
+            const queryKey = ['activity', variables.restaurantId, variables.checklistId];
+            await queryClient.cancelQueries({ queryKey });
+
+            const previousData = queryClient.getQueryData<ActivityData>(queryKey);
+
+            // Optimistic: remover a execução bloqueada
+            if (previousData) {
+                queryClient.setQueryData<ActivityData>(queryKey, (old) => {
+                    if (!old) return old;
+                    return {
+                        ...old,
+                        executions: old.executions.filter(e => e.task_id !== variables.taskId),
+                    };
+                });
+            }
+
+            return { previousData, queryKey };
+        },
+        onError: (_err, _variables, context) => {
+            if (context?.previousData) {
+                queryClient.setQueryData(context.queryKey, context.previousData);
+            }
+        },
+        onSettled: (_data, _error, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['activity', variables.restaurantId, variables.checklistId] });
+            queryClient.invalidateQueries({ queryKey: ['checklists', variables.restaurantId] });
+            queryClient.invalidateQueries({ queryKey: ['kanban', variables.restaurantId] });
+        },
     });
 };

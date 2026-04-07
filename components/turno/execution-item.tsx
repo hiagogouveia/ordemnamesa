@@ -7,13 +7,16 @@ interface ExecutionItemProps {
     task: KanbanTask;
     execution?: KanbanExecution;
     onToggle: (taskId: string, executionId: string | undefined, isDone: boolean, photoUrl?: string) => void;
+    onReportProblem: (taskId: string) => void;
+    onResumeTask?: (taskId: string, executionId: string) => void;
     locked?: boolean;
     isBlockedSequential?: boolean;
     restaurantId: string;
 }
 
-export function ExecutionItem({ task, execution, onToggle, locked = false, isBlockedSequential = false, restaurantId }: ExecutionItemProps) {
+export function ExecutionItem({ task, execution, onToggle, onReportProblem, onResumeTask, locked = false, isBlockedSequential = false, restaurantId }: ExecutionItemProps) {
     const isDone = Boolean(execution && execution.status === 'done');
+    const isBlocked = Boolean(execution && execution.status === 'blocked');
     const [isAnimating, setIsAnimating] = useState(false);
     const [pendingPhotoPath, setPendingPhotoPath] = useState<string | null>(null);
     const [photoError, setPhotoError] = useState<string | null>(null);
@@ -25,7 +28,7 @@ export function ExecutionItem({ task, execution, onToggle, locked = false, isBlo
 
     // Task simples (sem exigência de foto): comportamento original — o card inteiro é clicável
     const handleSimpleToggle = () => {
-        if (locked) return;
+        if (locked || isBlocked) return;
         setIsAnimating(true);
         setTimeout(() => setIsAnimating(false), 300);
         onToggle(task.id, execution?.id, !isDone);
@@ -52,6 +55,57 @@ export function ExecutionItem({ task, execution, onToggle, locked = false, isBlo
     };
 
     const donePhotoUrl = useSignedUrl(isDone ? existingPhotoPath : undefined);
+
+    // ── RENDER: task bloqueada (com impedimento) ──────────────────
+    if (isBlocked) {
+        return (
+            <div className="w-full flex flex-col gap-0 rounded-2xl border text-left bg-amber-500/5 border-amber-500/30 shadow-[0_4px_12px_rgba(234,179,8,0.05)] overflow-hidden relative">
+                <div className="absolute inset-0 bg-gradient-to-r from-amber-500/10 to-transparent pointer-events-none" />
+
+                <div className="relative flex items-center gap-4 p-4 min-h-[64px]">
+                    <div className="shrink-0 flex items-center justify-center">
+                        <div className="w-7 h-7 rounded-full border-[2px] flex items-center justify-center bg-amber-500/20 border-amber-500 text-amber-400">
+                            <span className="material-symbols-outlined text-[16px] font-bold">warning</span>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 py-1">
+                        <div className="flex items-start justify-between gap-3">
+                            <span className="text-base font-semibold leading-snug text-white">
+                                {task.title}
+                            </span>
+                            <span className="shrink-0 bg-amber-500/15 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-amber-500/30">
+                                Impedimento
+                            </span>
+                        </div>
+                        {task.description && (
+                            <p className="text-sm mt-1 text-[#92bbc9]/70">{task.description}</p>
+                        )}
+                        {execution?.blocked_reason && (
+                            <div className="mt-2 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5">
+                                <p className="text-amber-300/90 text-xs leading-relaxed">
+                                    <span className="font-bold">Motivo:</span> {execution.blocked_reason}
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Botão Retomar tarefa */}
+                {!locked && onResumeTask && execution && (
+                    <div className="relative px-4 pb-3">
+                        <button
+                            onClick={() => onResumeTask(task.id, execution.id)}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/15 transition-colors active:scale-[0.98]"
+                        >
+                            <span className="material-symbols-outlined text-[16px]">play_arrow</span>
+                            Retomar tarefa
+                        </button>
+                    </div>
+                )}
+            </div>
+        );
+    }
 
     // ── RENDER: task concluída ────────────────────────────────
     if (isDone) {
@@ -185,6 +239,15 @@ export function ExecutionItem({ task, execution, onToggle, locked = false, isBlo
                         </span>
                         {pendingPhotoPath ? 'Concluir tarefa' : 'Adicione a foto para concluir'}
                     </button>
+
+                    {/* Botão Reportar Problema */}
+                    <button
+                        onClick={() => onReportProblem(task.id)}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15 transition-colors active:scale-[0.98]"
+                    >
+                        <span className="material-symbols-outlined text-[16px]">warning</span>
+                        Reportar problema
+                    </button>
                 </div>
             </div>
         );
@@ -192,52 +255,65 @@ export function ExecutionItem({ task, execution, onToggle, locked = false, isBlo
 
     // ── RENDER: task sem exigência de foto (comportamento original) ──
     return (
-        <button
-            onClick={handleSimpleToggle}
-            disabled={locked}
-            className={`
-                w-full flex items-center gap-4 p-4 min-h-[64px] rounded-2xl border text-left
-                transition-all duration-200 ease-out relative overflow-hidden group
-                ${locked ? 'cursor-default opacity-75' : 'active:scale-[0.98]'}
-                ${locked
-                    ? 'bg-[#16262c] border-[#233f48]'
-                    : 'bg-[#16262c] border-[#233f48] shadow-sm hover:border-[#325a67]'
-                }
-            `}
-        >
-            <div className="relative shrink-0 flex items-center justify-center">
-                <div
-                    className={`
-                        w-7 h-7 rounded-full border-[2px] flex items-center justify-center
-                        transition-colors duration-200 border-[#325a67] bg-transparent text-transparent
-                        ${isAnimating ? 'scale-110' : 'scale-100'}
-                    `}
-                >
-                    <span className="material-symbols-outlined text-[16px] font-bold opacity-0 scale-50">check</span>
+        <div className="w-full flex flex-col gap-0">
+            <button
+                onClick={handleSimpleToggle}
+                disabled={locked}
+                className={`
+                    w-full flex items-center gap-4 p-4 min-h-[64px] rounded-2xl border text-left
+                    transition-all duration-200 ease-out relative overflow-hidden group
+                    ${locked ? 'cursor-default opacity-75' : 'active:scale-[0.98]'}
+                    ${locked
+                        ? 'bg-[#16262c] border-[#233f48]'
+                        : 'bg-[#16262c] border-[#233f48] shadow-sm hover:border-[#325a67]'
+                    }
+                `}
+            >
+                <div className="relative shrink-0 flex items-center justify-center">
+                    <div
+                        className={`
+                            w-7 h-7 rounded-full border-[2px] flex items-center justify-center
+                            transition-colors duration-200 border-[#325a67] bg-transparent text-transparent
+                            ${isAnimating ? 'scale-110' : 'scale-100'}
+                        `}
+                    >
+                        <span className="material-symbols-outlined text-[16px] font-bold opacity-0 scale-50">check</span>
+                    </div>
                 </div>
-            </div>
 
-            <div className="relative flex-1 py-1">
-                <div className="flex items-start justify-between gap-3">
-                    <span className="text-base font-semibold leading-snug text-[#e0e0e0]">
-                        {task.title}
-                    </span>
-                    {task.is_critical && !locked && (
-                        <span className="shrink-0 bg-red-500/10 text-red-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                            Crítica
+                <div className="relative flex-1 py-1">
+                    <div className="flex items-start justify-between gap-3">
+                        <span className="text-base font-semibold leading-snug text-[#e0e0e0]">
+                            {task.title}
                         </span>
+                        {task.is_critical && !locked && (
+                            <span className="shrink-0 bg-red-500/10 text-red-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                Crítica
+                            </span>
+                        )}
+                    </div>
+                    {task.description && (
+                        <p className="text-sm mt-1 text-[#92bbc9]">{task.description}</p>
+                    )}
+                    {isBlockedSequential && (
+                        <div className="flex items-center gap-1 mt-2 text-[#92bbc9]/70 text-xs font-semibold">
+                            <span className="material-symbols-outlined text-[14px]">lock</span>
+                            Conclua a tarefa acima para habilitar
+                        </div>
                     )}
                 </div>
-                {task.description && (
-                    <p className="text-sm mt-1 text-[#92bbc9]">{task.description}</p>
-                )}
-                {isBlockedSequential && (
-                    <div className="flex items-center gap-1 mt-2 text-[#92bbc9]/70 text-xs font-semibold">
-                        <span className="material-symbols-outlined text-[14px]">lock</span>
-                        Conclua a tarefa acima para habilitar
-                    </div>
-                )}
-            </div>
-        </button>
+            </button>
+
+            {/* Botão Reportar Problema — abaixo do card, apenas se não locked */}
+            {!locked && !isBlockedSequential && (
+                <button
+                    onClick={() => onReportProblem(task.id)}
+                    className="mt-1 self-start ml-11 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-amber-400/70 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
+                >
+                    <span className="material-symbols-outlined text-[14px]">warning</span>
+                    Reportar problema
+                </button>
+            )}
+        </div>
     );
 }

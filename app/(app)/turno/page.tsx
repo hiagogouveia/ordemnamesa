@@ -73,16 +73,18 @@ export default function KanbanPage() {
         return h * 60 + m;
     }, [timeNow]);
 
-    const { todoActivities, doingActivities, doneActivities } = useMemo(() => {
-        if (!kanbanData || !user) return { todoActivities: [], doingActivities: [], doneActivities: [] };
+    const { todoActivities, doingActivities, blockedActivities, doneActivities } = useMemo(() => {
+        if (!kanbanData || !user) return { todoActivities: [], doingActivities: [], blockedActivities: [], doneActivities: [] };
 
         const { checklists, tasks, executions, assumptions } = kanbanData;
         const execMapByTaskId = new Map(executions.map(e => [e.task_id, e]));
         const assumptionByChecklistId = new Map((assumptions || []).map(a => [a.checklist_id, a]));
 
-        const todo: (KanbanChecklist & { taskCount: number; progress: number; flaggedTasksCount: number })[] = [];
-        const doing: (KanbanChecklist & { taskCount: number; progress: number; flaggedTasksCount: number })[] = [];
-        const done: (KanbanChecklist & { taskCount: number; progress: number; flaggedTasksCount: number })[] = [];
+        type EnrichedChecklist = KanbanChecklist & { taskCount: number; progress: number; flaggedTasksCount: number };
+        const todo: EnrichedChecklist[] = [];
+        const doing: EnrichedChecklist[] = [];
+        const blocked: EnrichedChecklist[] = [];
+        const done: EnrichedChecklist[] = [];
 
         for (const cl of checklists) {
             const clTasks = tasks.filter(t => t.checklist_id === cl.id);
@@ -108,6 +110,11 @@ export default function KanbanPage() {
                 return exec && exec.status === 'doing';
             }).length;
 
+            const blockedTasksCount = clTasks.filter(t => {
+                const exec = execMapByTaskId.get(t.id);
+                return exec && exec.status === 'blocked';
+            }).length;
+
             const progress = isCompletedByAssumption
                 ? 100
                 : Math.round((doneTasksCount / clTasks.length) * 100);
@@ -115,6 +122,8 @@ export default function KanbanPage() {
 
             if (isCompletedByAssumption || doneTasksCount === clTasks.length) {
                 done.push(enriched);
+            } else if (blockedTasksCount > 0) {
+                blocked.push(enriched);
             } else if (doneTasksCount > 0 || doingTasksCount > 0 || flaggedTasksCount > 0) {
                 doing.push(enriched);
             } else {
@@ -122,20 +131,16 @@ export default function KanbanPage() {
             }
         }
 
-        // Smart sort
-        todo.sort((a, b) => {
+        const prioritySort = (a: EnrichedChecklist, b: EnrichedChecklist) => {
             const diff = sortChecklistsByPriority(a as any, b as any, currentMinutes);
             if (diff !== 0) return diff;
             return (b.is_required ? 1 : 0) - (a.is_required ? 1 : 0);
-        });
+        };
+        todo.sort(prioritySort);
+        doing.sort(prioritySort);
+        blocked.sort(prioritySort);
 
-        doing.sort((a, b) => {
-            const diff = sortChecklistsByPriority(a as any, b as any, currentMinutes);
-            if (diff !== 0) return diff;
-            return (b.is_required ? 1 : 0) - (a.is_required ? 1 : 0);
-        });
-
-        return { todoActivities: todo, doingActivities: doing, doneActivities: done };
+        return { todoActivities: todo, doingActivities: doing, blockedActivities: blocked, doneActivities: done };
     }, [kanbanData, user, timeNow, currentMinutes]);
 
     const allRequiredDone = useMemo(() => {
@@ -181,6 +186,7 @@ export default function KanbanPage() {
 
     const filteredTodo = useMemo(() => getFiltered(todoActivities), [todoActivities, activeArea, userRolesData]);
     const filteredDoing = useMemo(() => getFiltered(doingActivities), [doingActivities, activeArea, userRolesData]);
+    const filteredBlocked = useMemo(() => getFiltered(blockedActivities), [blockedActivities, activeArea, userRolesData]);
     const filteredDone = useMemo(() => getFiltered(doneActivities), [doneActivities, activeArea, userRolesData]);
 
     // UI Helpers
@@ -326,6 +332,38 @@ export default function KanbanPage() {
                                 </div>
                             )}
                         </section>
+
+                        {/* COM IMPEDIMENTO */}
+                        {filteredBlocked.length > 0 && (
+                            <section className="flex flex-col gap-3">
+                                <div className="flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-amber-400">warning</span>
+                                    <h2 className="text-amber-400 font-bold tracking-wide uppercase text-sm">Com Impedimento</h2>
+                                    <span className="ml-auto bg-amber-400/20 text-amber-400 text-xs px-2 py-0.5 rounded-full">{filteredBlocked.length}</span>
+                                </div>
+                                <div className="flex flex-col gap-3">
+                                    {filteredBlocked.map(activity => {
+                                        const assumption = kanbanData?.assumptions?.find(a => a.checklist_id === activity.id);
+                                        return (
+                                            <RoutineCard
+                                                key={activity.id}
+                                                variant="collaborator_doing"
+                                                title={activity.name}
+                                                itemsCount={activity.taskCount}
+                                                start_time={activity.start_time as string | undefined}
+                                                end_time={activity.end_time as string | undefined}
+                                                currentMinutes={currentMinutes}
+                                                progress={activity.progress}
+                                                flaggedCount={activity.flaggedTasksCount}
+                                                assumptionName={assumption?.user_name}
+                                                area={activity.roles?.name || activity.areas?.name}
+                                                onClick={() => router.push(`/turno/atividade/${activity.id}`)}
+                                            />
+                                        );
+                                    })}
+                                </div>
+                            </section>
+                        )}
 
                         {/* EM ANDAMENTO */}
                         {filteredDoing.length > 0 && (
