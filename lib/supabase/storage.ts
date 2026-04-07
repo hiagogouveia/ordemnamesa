@@ -1,9 +1,27 @@
 import { createClient } from './client';
 
+/**
+ * @deprecated Bucket 'photos' é privado — usar getPhotoSignedUrl() em vez disso.
+ */
 export function getPhotoPublicUrl(filePath: string): string {
     const supabase = createClient();
     const { data } = supabase.storage.from('photos').getPublicUrl(filePath);
     return data.publicUrl;
+}
+
+/** Gera uma signed URL válida por 1 hora para o bucket privado 'photos'. */
+export async function getPhotoSignedUrl(filePath: string): Promise<string | null> {
+    const supabase = createClient();
+    const { data, error } = await supabase.storage
+        .from('photos')
+        .createSignedUrl(filePath, 60 * 60); // 1h
+
+    if (error) {
+        console.error('[Storage SignedUrl Error]', error);
+        return null;
+    }
+
+    return data?.signedUrl ?? null;
 }
 
 export async function uploadEvidencePhoto(

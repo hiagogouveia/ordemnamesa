@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { KanbanTask, KanbanExecution } from '@/lib/hooks/use-tasks';
 import { PhotoUpload } from '@/components/tasks/photo-upload';
-import { getPhotoPublicUrl } from '@/lib/supabase/storage';
+import { useSignedUrl } from '@/lib/hooks/use-signed-url';
 
 interface ExecutionItemProps {
     task: KanbanTask;
@@ -51,9 +51,10 @@ export function ExecutionItem({ task, execution, onToggle, locked = false, isBlo
         setPhotoError(null);
     };
 
+    const donePhotoUrl = useSignedUrl(isDone ? existingPhotoPath : undefined);
+
     // ── RENDER: task concluída ────────────────────────────────
     if (isDone) {
-        const donePhotoUrl = existingPhotoPath ? getPhotoPublicUrl(existingPhotoPath) : null;
         return (
             <div className={`
                 w-full flex flex-col gap-0 rounded-2xl border text-left

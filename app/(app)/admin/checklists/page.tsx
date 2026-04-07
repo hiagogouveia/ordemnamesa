@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { createClient } from "@/lib/supabase/client";
-import { getPhotoPublicUrl } from "@/lib/supabase/storage";
+import { useSignedUrl } from "@/lib/hooks/use-signed-url";
 import { useQuery } from "@tanstack/react-query";
 import { Checklist, ChecklistAssumption } from "@/lib/types";
 import { RoutineCard } from "@/components/checklists/routine-card";
@@ -366,7 +366,8 @@ interface PhotoModalAdminProps {
 }
 
 function PhotoModalAdmin({ entry, onClose }: PhotoModalAdminProps) {
-    const photoUrl = entry.photo_url ? getPhotoPublicUrl(entry.photo_url) : '';
+    const photoUrl = useSignedUrl(entry.photo_url);
+
     useEffect(() => {
         const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
         window.addEventListener('keydown', handler);
@@ -395,13 +396,17 @@ function PhotoModalAdmin({ entry, onClose }: PhotoModalAdminProps) {
 
                 {/* Image */}
                 <div className="relative w-full rounded-xl overflow-hidden flex items-center justify-center bg-black/40" style={{ maxHeight: '70vh', minHeight: '200px' }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                        src={photoUrl}
-                        alt={entry.checklist_tasks?.title || 'Foto da tarefa'}
-                        className="max-w-full max-h-[70vh] object-contain"
-                        onError={(e) => { e.currentTarget.src = '/image-error-placeholder.png'; }}
-                    />
+                    {photoUrl ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                            src={photoUrl}
+                            alt={entry.checklist_tasks?.title || 'Foto da tarefa'}
+                            className="max-w-full max-h-[70vh] object-contain"
+                            onError={(e) => { e.currentTarget.src = '/image-error-placeholder.png'; }}
+                        />
+                    ) : (
+                        <span className="material-symbols-outlined animate-spin text-2xl text-[#13b6ec]">progress_activity</span>
+                    )}
                 </div>
 
                 {/* Caption */}

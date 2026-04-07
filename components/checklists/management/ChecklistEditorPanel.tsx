@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import Image from "next/image";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
-import { getPhotoPublicUrl } from "@/lib/supabase/storage";
+import { getPhotoSignedUrl } from "@/lib/supabase/storage";
 import { ChecklistForm } from "@/components/checklists/checklist-form";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
 import { getBrazilDateKey } from "@/lib/utils/brazil-date";
@@ -120,15 +119,15 @@ function PhotoModal({ photoUrl, taskTitle, onClose }: PhotoModalProps) {
                 </button>
 
                 <div
-                    className="relative w-full rounded-xl overflow-hidden"
+                    className="relative w-full rounded-xl overflow-hidden flex items-center justify-center bg-black/40"
                     style={{ maxHeight: "70vh", minHeight: "200px" }}
                 >
-                    <Image
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
                         src={photoUrl}
                         alt={taskTitle}
-                        fill
-                        sizes="(max-width: 768px) 100vw, 600px"
-                        className="object-contain"
+                        className="max-w-full max-h-[70vh] object-contain"
+                        onError={(e) => { e.currentTarget.src = '/image-error-placeholder.png'; }}
                     />
                 </div>
 
@@ -152,11 +151,35 @@ interface ChecklistViewPanelProps {
 
 function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose }: ChecklistViewPanelProps) {
     const [selectedPhoto, setSelectedPhoto] = useState<{ url: string; title: string } | null>(null);
+    const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
 
     const { data: executions = [], isLoading: execLoading } = useChecklistExecutions(
         checklist.id,
         restaurantId ?? ""
     );
+
+    // Resolve signed URLs para todas as execuções com foto
+    useEffect(() => {
+        const photoPaths = executions.filter((e) => e.photo_url).map((e) => ({ id: e.task_id, path: e.photo_url! }));
+        if (photoPaths.length === 0) return;
+
+        let cancelled = false;
+        Promise.all(
+            photoPaths.map(async ({ id, path }) => {
+                const url = await getPhotoSignedUrl(path);
+                return { id, url };
+            })
+        ).then((results) => {
+            if (cancelled) return;
+            const map: Record<string, string> = {};
+            for (const { id, url } of results) {
+                if (url) map[id] = url;
+            }
+            setSignedUrls(map);
+        });
+
+        return () => { cancelled = true; };
+    }, [executions]);
 
     const { data: assumptionDetail } = useAssumptionDetail(
         checklist.id,
@@ -369,8 +392,7 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose }: Checkl
                                 .map((task, idx) => {
                                     const execution = executionMap.get(task.id);
                                     const isDone = execution?.status === "done";
-                                    const photoPath = execution?.photo_url ?? null;
-                                    const photoUrl = photoPath ? getPhotoPublicUrl(photoPath) : null;
+                                    const photoUrl = signedUrls[task.id] ?? null;
 
                                     return (
                                         <div
@@ -436,12 +458,11 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose }: Checkl
                                                         }
                                                         className="mt-2 block relative w-full max-w-[120px] h-16 rounded-lg overflow-hidden border border-[#13b6ec]/30 hover:border-[#13b6ec] transition-colors group"
                                                     >
-                                                        <Image
+                                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                        <img
                                                             src={photoUrl}
                                                             alt={task.title}
-                                                            fill
-                                                            sizes="120px"
-                                                            className="object-cover"
+                                                            className="w-full h-full object-cover"
                                                         />
                                                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
                                                             <span className="material-symbols-outlined text-white text-[18px] opacity-0 group-hover:opacity-100 transition-opacity">

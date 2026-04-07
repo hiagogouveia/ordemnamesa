@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
-import { uploadEvidencePhoto, getPhotoPublicUrl } from '@/lib/supabase/storage';
+import React, { useRef, useState, useEffect } from 'react';
+import { uploadEvidencePhoto, getPhotoSignedUrl } from '@/lib/supabase/storage';
 
 interface PhotoUploadProps {
     restaurantId: string;
@@ -14,9 +14,13 @@ export function PhotoUpload({ restaurantId, onUpload, existingFilePath, disabled
     const inputRef = useRef<HTMLInputElement>(null);
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [previewUrl, setPreviewUrl] = useState<string | null>(
-        existingFilePath ? getPhotoPublicUrl(existingFilePath) : null
-    );
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+    // Resolve signed URL para foto existente
+    useEffect(() => {
+        if (!existingFilePath) return;
+        getPhotoSignedUrl(existingFilePath).then((url) => setPreviewUrl(url));
+    }, [existingFilePath]);
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -26,17 +30,15 @@ export function PhotoUpload({ restaurantId, onUpload, existingFilePath, disabled
         setUploading(true);
 
         try {
-            // Gera um ID único para o caminho do arquivo no storage
             const uploadId = crypto.randomUUID();
             const filePath = await uploadEvidencePhoto(file, restaurantId, uploadId);
-            const publicUrl = getPhotoPublicUrl(filePath);
-            setPreviewUrl(publicUrl);
-            onUpload(filePath, publicUrl);
+            const signedUrl = await getPhotoSignedUrl(filePath);
+            setPreviewUrl(signedUrl);
+            onUpload(filePath, signedUrl ?? '');
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Erro ao enviar foto.');
         } finally {
             setUploading(false);
-            // Limpar o input para permitir reenvio do mesmo arquivo
             if (inputRef.current) inputRef.current.value = '';
         }
     };
