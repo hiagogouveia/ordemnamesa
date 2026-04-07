@@ -198,15 +198,15 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json();
-        const { name, email, password, role, restaurant_id } = body;
+        const { name, email: rawEmail, password, role, restaurant_id } = body;
 
-        if (!name || !email || !password || !role || !restaurant_id) {
+        // password é opcional: só obrigatório para usuários novos
+        if (!name || !rawEmail || !role || !restaurant_id) {
             return NextResponse.json({ error: 'Campos obrigatórios faltando' }, { status: 400 });
         }
 
-        if (password.length < 6) {
-            return NextResponse.json({ error: 'Senha deve ter no mínimo 6 caracteres' }, { status: 400 });
-        }
+        // Normalizar email para evitar duplicatas por capitalização ou espaços
+        const email = rawEmail.trim().toLowerCase();
 
         // Verificar que o chamador é owner ou manager
         const { data: membership } = await adminSupabase
@@ -231,36 +231,96 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Gerência só pode convidar colaboradores.' }, { status: 403 });
         }
 
-        // 1. Criar usuário no Auth sem confirmação de e-mail
-        const { data: authUser, error: authError } = await adminSupabase.auth.admin.createUser({
-            email,
-            password,
-            email_confirm: true,
-            user_metadata: { name },
-        });
+        // --- ETAPA 1: Resolver user_id ---
+        // Verificar se o usuário já existe em public.users pelo email
+        let { data: existingUser } = await adminSupabase
+            .from('users')
+            .select('id')
+            .eq('email', email)
+            .maybeSingle();
 
-        if (authError) {
-            if (authError.message.toLowerCase().includes('already')) {
-                return NextResponse.json({ error: 'E-mail já cadastrado' }, { status: 409 });
+        if (!existingUser) {
+            // Usuário novo: criar no Auth (o trigger sincroniza para public.users)
+            if (!password || password.length < 6) {
+                return NextResponse.json(
+                    { error: 'Senha é obrigatória para novos colaboradores (mínimo 6 caracteres)' },
+                    { status: 400 }
+                );
             }
-            throw authError;
+
+            const { data: authUser, error: authError } = await adminSupabase.auth.admin.createUser({
+                email,
+                password,
+                email_confirm: true,
+                user_metadata: { name },
+            });
+
+            if (authError) {
+                // Corrida: outra requisição criou o usuário entre o select e o createUser
+                if (authError.message.toLowerCase().includes('already')) {
+                    const { data: fallbackUser } = await adminSupabase
+                        .from('users')
+                        .select('id')
+                        .eq('email', email)
+                        .maybeSingle();
+
+                    if (!fallbackUser) {
+                        // Auth tem o usuário mas public.users não — trigger falhou
+                        console.error('USER_SYNC_INCONSISTENCY', { email });
+                        return NextResponse.json(
+                            { error: 'Inconsistência de dados. Contate o suporte.' },
+                            { status: 500 }
+                        );
+                    }
+
+                    existingUser = fallbackUser;
+                } else {
+                    throw authError;
+                }
+            } else {
+                // Confiar na trigger on_auth_user_created para sincronizar public.users.
+                // Lê o id do authUser diretamente — sem upsert manual para não mascarar falha da trigger.
+                existingUser = { id: authUser.user.id };
+            }
+        }
+        // Se usuário já existia: reutiliza o id sem criar novo no Auth
+        // (senha enviada é ignorada — não sobrescrever credenciais existentes)
+
+        const userId = existingUser.id;
+
+        // --- ETAPA 2: Resolver vínculo com restaurante (idempotente) ---
+        const { data: existingLink } = await adminSupabase
+            .from('restaurant_users')
+            .select('id, active')
+            .eq('user_id', userId)
+            .eq('restaurant_id', restaurant_id)
+            .maybeSingle();
+
+        if (existingLink) {
+            if (existingLink.active) {
+                // Já está ativo neste restaurante — idempotência
+                return NextResponse.json({ success: true, user_id: userId });
+            }
+
+            // Vínculo inativo: reativar (recontratação)
+            const { error: reactivateError } = await adminSupabase
+                .from('restaurant_users')
+                .update({ active: true, role, left_at: null })
+                .eq('id', existingLink.id);
+
+            if (reactivateError) throw reactivateError;
+
+            return NextResponse.json({ success: true, user_id: userId });
         }
 
-        const newUserId = authUser.user.id;
-
-        // 2. Garantir entrada em public.users (trigger já faz isso, mas upsert por segurança)
-        await adminSupabase
-            .from('users')
-            .upsert({ id: newUserId, email, name }, { onConflict: 'id' });
-
-        // 3. Inserir em restaurant_users
+        // Vínculo não existe: criar
         const { error: ruError } = await adminSupabase
             .from('restaurant_users')
-            .insert({ restaurant_id, user_id: newUserId, role, active: true });
+            .insert({ restaurant_id, user_id: userId, role, active: true });
 
         if (ruError) throw ruError;
 
-        return NextResponse.json({ success: true, user_id: newUserId });
+        return NextResponse.json({ success: true, user_id: userId });
 
     } catch (err: unknown) {
         console.error('[POST /api/equipe]', err);
