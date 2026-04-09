@@ -1,11 +1,27 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getBrazilDateKey } from '@/lib/utils/brazil-date';
 
 const getAdminSupabase = () =>
     createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
+
+// Retorna IDs de assumptions que têm ao menos uma task_execution bloqueada.
+// Assumptions com impedimento NÃO devem consumir o limite de rotinas simultâneas.
+async function getBlockedAssumptionIds(
+    supabase: ReturnType<typeof getAdminSupabase>,
+    assumptionIds: string[]
+): Promise<Set<string>> {
+    if (assumptionIds.length === 0) return new Set();
+    const { data } = await supabase
+        .from('task_executions')
+        .select('checklist_assumption_id')
+        .in('checklist_assumption_id', assumptionIds)
+        .eq('status', 'blocked');
+    return new Set((data ?? []).map((e) => e.checklist_assumption_id as string));
+}
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
@@ -36,7 +52,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             .eq('id', user.id)
             .maybeSingle();
         const userName = userRecord?.name || user.user_metadata?.name || user.email || 'Funcionário';
-        const dateKey = new Date().toISOString().split('T')[0];
+        const dateKey = getBrazilDateKey();
 
         // Verificar se já existe assumption para hoje (por qualquer pessoa)
         const { data: existing } = await adminSupabase
@@ -69,9 +85,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         }
 
         if (maxConcurrentByRole !== Infinity) {
-            const { count: activeCount, error: countError } = await adminSupabase
+            const { data: roleAssumptions, error: countError } = await adminSupabase
                 .from('checklist_assumptions')
-                .select('id', { count: 'exact', head: true })
+                .select('id')
                 .eq('restaurant_id', restaurant_id)
                 .eq('user_id', user.id)
                 .eq('date_key', dateKey)
@@ -82,7 +98,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
                 return NextResponse.json({ error: 'Erro ao validar limite' }, { status: 500 });
             }
 
-            if ((activeCount ?? 0) >= maxConcurrentByRole) {
+            const roleIds = (roleAssumptions ?? []).map((a) => a.id);
+            const roleBlockedIds = await getBlockedAssumptionIds(adminSupabase, roleIds);
+            // Apenas rotinas em execução (doing) consomem o limite — blocked não contam
+            const activeCount = roleIds.filter((id) => !roleBlockedIds.has(id)).length;
+
+            if (activeCount >= maxConcurrentByRole) {
                 return NextResponse.json(
                     {
                         error: 'Limite atingido',
@@ -112,31 +133,36 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
             // NULL = ilimitado, pular validação
             if (maxByArea != null) {
+                // Buscar checklists da mesma área
+                const areaChecklistIds =
+                    (await adminSupabase
+                        .from('checklists')
+                        .select('id')
+                        .eq('restaurant_id', restaurant_id)
+                        .eq('area_id', checklist.area_id)
+                    ).data?.map((c: { id: string }) => c.id) ?? [];
+
                 // Contar assumptions in_progress deste usuário nesta área hoje
-                const { count: areaActiveCount, error: areaCountError } = await adminSupabase
+                const { data: areaAssumptions, error: areaCountError } = await adminSupabase
                     .from('checklist_assumptions')
-                    .select('id', { count: 'exact', head: true })
+                    .select('id')
                     .eq('restaurant_id', restaurant_id)
                     .eq('user_id', user.id)
                     .eq('date_key', dateKey)
                     .is('completed_at', null)
-                    .in(
-                        'checklist_id',
-                        // Subquery: checklists da mesma área
-                        (await adminSupabase
-                            .from('checklists')
-                            .select('id')
-                            .eq('restaurant_id', restaurant_id)
-                            .eq('area_id', checklist.area_id)
-                        ).data?.map((c: { id: string }) => c.id) ?? []
-                    );
+                    .in('checklist_id', areaChecklistIds);
 
                 if (areaCountError) {
                     console.error('[POST /api/checklists/[id]/assume] Erro ao contar assumptions por área:', areaCountError);
                     return NextResponse.json({ error: 'Erro ao validar limite por área' }, { status: 500 });
                 }
 
-                if ((areaActiveCount ?? 0) >= maxByArea) {
+                const areaIds = (areaAssumptions ?? []).map((a) => a.id);
+                const areaBlockedIds = await getBlockedAssumptionIds(adminSupabase, areaIds);
+                // Apenas rotinas em execução (doing) consomem o limite — blocked não contam
+                const areaActiveCount = areaIds.filter((id) => !areaBlockedIds.has(id)).length;
+
+                if (areaActiveCount >= maxByArea) {
                     return NextResponse.json(
                         {
                             error: 'Limite por área atingido',
@@ -194,7 +220,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
             return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
         }
 
-        const dateKey = new Date().toISOString().split('T')[0];
+        const dateKey = getBrazilDateKey();
 
         const { data: assumption } = await adminSupabase
             .from('checklist_assumptions')
