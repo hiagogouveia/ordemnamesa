@@ -19,12 +19,14 @@ const TYPE_ICONS: Record<string, string> = {
     TASK_COMPLETED_WITH_NOTE: "chat",
     NEW_TASK_ASSIGNED: "assignment_ind",
     NEW_TASK_FOR_AREA: "add_task",
+    BLOCKED_ROUTINE: "report_problem",
 };
 
 const TYPE_COLORS: Record<string, string> = {
     TASK_COMPLETED_WITH_NOTE: "#f59e0b",
     NEW_TASK_ASSIGNED: "#13b6ec",
     NEW_TASK_FOR_AREA: "#22c55e",
+    BLOCKED_ROUTINE: "#ef4444",
 };
 
 interface NotificationDropdownProps {
@@ -57,11 +59,14 @@ export function NotificationDropdown({
     }, [onClose]);
 
     const handleNotificationClick = (notification: Notification) => {
-        if (!notification.read) {
+        // Alertas de bloqueio são sintéticos (sem ID real no banco), não marcar como lida
+        if (!notification.read && notification.type !== 'BLOCKED_ROUTINE') {
             onMarkRead(notification.id);
         }
-        // Navegar para o contexto, se aplicável
-        if (notification.related_id) {
+        if (notification.type === 'BLOCKED_ROUTINE') {
+            router.push('/checklists');
+            onClose();
+        } else if (notification.related_id) {
             router.push(`/turno/atividade/${notification.related_id}`);
             onClose();
         }

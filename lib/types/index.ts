@@ -214,6 +214,7 @@ export type NotificationType =
     | 'NEW_TASK_ASSIGNED'
     | 'NEW_TASK_FOR_AREA'
     | 'PASSWORD_CHANGED_BY_ADMIN'
+    | 'BLOCKED_ROUTINE'
 
 export interface Notification {
     id: string

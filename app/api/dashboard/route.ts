@@ -36,6 +36,7 @@ interface TaskExecRow {
     checklist_id: string;
     task_id: string;
     status: string;
+    checklist_assumption_id: string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -139,10 +140,10 @@ export async function GET(request: Request) {
                 .gte('date_key', sevenDaysAgoKey)
                 .lte('date_key', todayKey),
 
-            // Task executions de hoje — para progresso granular por tarefa
+            // Task executions de hoje — para progresso granular por tarefa e detecção de bloqueios
             adminSupabase
                 .from('task_executions')
-                .select('checklist_id, task_id, status')
+                .select('checklist_id, task_id, status, checklist_assumption_id')
                 .eq('restaurant_id', restaurant_id)
                 .gte('executed_at', todayStartISO)
                 .lte('executed_at', todayEndISO),
@@ -171,13 +172,17 @@ export async function GET(request: Request) {
         const todayAssumptions = allAssumptions.filter(a => a.date_key === todayKey);
         const yesterdayAssumptions = allAssumptions.filter(a => a.date_key === yesterdayKey);
 
-        // Sets de tasks concluídas hoje
+        // Sets de tasks concluídas hoje + assumptions com tasks bloqueadas
         const doneTaskIds = new Set<string>();
         const taskDoneByChecklist: Record<string, number> = {};
+        const assumptionIdsWithBlockedTasks = new Set<string>();
         taskExecs.forEach(te => {
             if (te.status === 'done' || te.status === 'completed') {
                 doneTaskIds.add(te.task_id);
                 taskDoneByChecklist[te.checklist_id] = (taskDoneByChecklist[te.checklist_id] || 0) + 1;
+            }
+            if (te.status === 'blocked' && te.checklist_assumption_id) {
+                assumptionIdsWithBlockedTasks.add(te.checklist_assumption_id);
             }
         });
 
@@ -219,8 +224,8 @@ export async function GET(request: Request) {
             const cl = checklistsMap.get(a.checklist_id);
             if (!cl) return;
 
-            // ── BLOQUEADO ──
-            if (a.execution_status === 'blocked') {
+            // ── BLOQUEADO ── (derivado de task_executions, não do campo armazenado)
+            if (assumptionIdsWithBlockedTasks.has(a.id)) {
                 alertasAbertos++;
                 alertasRecentes.push({
                     id: a.id,
