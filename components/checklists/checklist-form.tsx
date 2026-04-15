@@ -541,6 +541,11 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 return;
             }
 
+            if (tasks.length === 0) {
+                setErrorMsg('Adicione ao menos uma tarefa para publicar a rotina.');
+                return;
+            }
+
             if (recurrence === 'custom') {
                 const days = recurrenceConfig?.days_of_week;
                 if (!Array.isArray(days) || days.length === 0) {
@@ -701,8 +706,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                     </button>
                     <button
                         onClick={() => handleSave(true)}
-                        disabled={isLoading || !name.trim()}
-                        className="px-4 py-2 rounded-lg font-bold text-sm bg-[#13b6ec] text-[#111e22] hover:bg-[#10a0d0] shadow-[0_4px_14px_0_rgba(19,182,236,0.2)] disabled:opacity-50 transition-all"
+                        disabled={isLoading || !name.trim() || tasks.length === 0}
+                        title={tasks.length === 0 ? 'Adicione ao menos uma tarefa para publicar' : undefined}
+                        className="px-4 py-2 rounded-lg font-bold text-sm bg-[#13b6ec] text-[#111e22] hover:bg-[#10a0d0] shadow-[0_4px_14px_0_rgba(19,182,236,0.2)] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                     >
                         {isLoading ? "Salvando..." : "Publicar"}
                     </button>

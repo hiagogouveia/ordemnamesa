@@ -62,6 +62,25 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
             return NextResponse.json({ error: 'Selecione uma área para a rotina.' }, { status: 400 });
         }
 
+        if (status === 'active') {
+            let effectiveTasksCount = 0;
+            if (Array.isArray(tasks)) {
+                effectiveTasksCount = tasks.length;
+            } else {
+                const { count } = await adminSupabase
+                    .from('checklist_tasks')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('checklist_id', id);
+                effectiveTasksCount = count ?? 0;
+            }
+            if (effectiveTasksCount === 0) {
+                return NextResponse.json(
+                    { error: 'Adicione ao menos uma tarefa para publicar a rotina.', code: 'NO_TASKS' },
+                    { status: 400 }
+                );
+            }
+        }
+
         if (recurrence === 'custom') {
             const days = recurrence_config?.days_of_week;
             if (!Array.isArray(days) || days.length === 0) {

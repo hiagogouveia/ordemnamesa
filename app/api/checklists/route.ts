@@ -187,6 +187,13 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Selecione uma área para a rotina.' }, { status: 400 });
         }
 
+        if (status === 'active' && (!Array.isArray(tasks) || tasks.length === 0)) {
+            return NextResponse.json(
+                { error: 'Adicione ao menos uma tarefa para publicar a rotina.', code: 'NO_TASKS' },
+                { status: 400 }
+            );
+        }
+
         if (recurrence === 'custom') {
             const days = recurrence_config?.days_of_week;
             if (!Array.isArray(days) || days.length === 0) {
