@@ -76,11 +76,13 @@ export async function GET(request: Request) {
 
         const { data: activeChecklists } = await adminSupabase
             .from('checklists')
-            .select('id, name, description, shift, is_required, recurrence, recurrence_config, last_reset_at, assigned_to_user_id, role_id, area_id, roles(id, name, color), areas(id, name, color), checklist_type, start_time, end_time')
+            .select('id, name, description, shift, is_required, recurrence, recurrence_config, last_reset_at, assigned_to_user_id, role_id, area_id, order_index, roles(id, name, color), areas(id, name, color), checklist_type, start_time, end_time')
             .eq('restaurant_id', restaurant_id)
             .eq('active', true)
             .eq('status', 'active')
-            .or(checklistFilterParts.join(','));
+            .or(checklistFilterParts.join(','))
+            .order('order_index', { ascending: true, nullsFirst: false })
+            .order('id', { ascending: true });
 
         // Timezone Brasil para todas as operações de data
         const brazil = getBrazilNow();

@@ -11,7 +11,6 @@ import { getCurrentShift } from '@/lib/utils';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { sortChecklistsByPriority } from '@/lib/utils/checklist-priority';
 import { RoutineCard } from '@/components/checklists/routine-card';
 
 function getActivityTimeStatus(
@@ -131,17 +130,10 @@ export default function KanbanPage() {
             }
         }
 
-        const prioritySort = (a: EnrichedChecklist, b: EnrichedChecklist) => {
-            const diff = sortChecklistsByPriority(a as any, b as any, currentMinutes);
-            if (diff !== 0) return diff;
-            return (b.is_required ? 1 : 0) - (a.is_required ? 1 : 0);
-        };
-        todo.sort(prioritySort);
-        doing.sort(prioritySort);
-        blocked.sort(prioritySort);
-
+        // Ordem preservada do backend (order_index ASC, id ASC como desempate).
+        // Buckets mantêm a ordem de iteração dos checklists originais.
         return { todoActivities: todo, doingActivities: doing, blockedActivities: blocked, doneActivities: done };
-    }, [kanbanData, user, timeNow, currentMinutes]);
+    }, [kanbanData, user]);
 
     const allRequiredDone = useMemo(() => {
         if (!kanbanData) return false;
@@ -165,29 +157,36 @@ export default function KanbanPage() {
     // Tabs de área derivadas das atribuições REAIS do usuário (user_areas), sem exceção de owner
     const userAreas = useMemo(() => {
         if (!myAreaAssignments.length) return [];
-        return myAreaAssignments
-            .map(a => a.area?.name)
-            .filter((name): name is string => Boolean(name))
-            .sort();
+        const seen = new Set<string>();
+        const result: Array<{ id: string; name: string }> = [];
+        for (const a of myAreaAssignments) {
+            const id = a.area?.id;
+            const name = a.area?.name;
+            if (!id || !name || seen.has(id)) continue;
+            seen.add(id);
+            result.push({ id, name });
+        }
+        return result.sort((a, b) => a.name.localeCompare(b.name));
     }, [myAreaAssignments]);
 
-    const [activeArea, setActiveArea] = useState<string>('');
+    const [activeAreaId, setActiveAreaId] = useState<string>('');
 
     useEffect(() => {
-        if (userAreas.length > 0 && !userAreas.includes(activeArea)) {
-            setActiveArea(userAreas[0]);
+        if (userAreas.length > 0 && !userAreas.some(a => a.id === activeAreaId)) {
+            setActiveAreaId(userAreas[0].id);
         }
-    }, [userAreas, activeArea]);
+    }, [userAreas, activeAreaId]);
 
-    const getFiltered = <T extends { roles?: { name: string }; areas?: { name: string } }>(activities: T[]): T[] => {
-        if (!activeArea) return [];
-        return activities.filter(a => a.roles?.name === activeArea || a.areas?.name === activeArea);
+    // Filtro por área REAL do checklist (area_id). Roles nunca definem a aba.
+    const getFiltered = <T extends { area_id?: string }>(activities: T[]): T[] => {
+        if (!activeAreaId) return [];
+        return activities.filter(a => a.area_id === activeAreaId);
     };
 
-    const filteredTodo = useMemo(() => getFiltered(todoActivities), [todoActivities, activeArea, userRolesData]);
-    const filteredDoing = useMemo(() => getFiltered(doingActivities), [doingActivities, activeArea, userRolesData]);
-    const filteredBlocked = useMemo(() => getFiltered(blockedActivities), [blockedActivities, activeArea, userRolesData]);
-    const filteredDone = useMemo(() => getFiltered(doneActivities), [doneActivities, activeArea, userRolesData]);
+    const filteredTodo = useMemo(() => getFiltered(todoActivities), [todoActivities, activeAreaId]);
+    const filteredDoing = useMemo(() => getFiltered(doingActivities), [doingActivities, activeAreaId]);
+    const filteredBlocked = useMemo(() => getFiltered(blockedActivities), [blockedActivities, activeAreaId]);
+    const filteredDone = useMemo(() => getFiltered(doneActivities), [doneActivities, activeAreaId]);
 
     // UI Helpers
     const getGreeting = () => {
@@ -278,18 +277,18 @@ export default function KanbanPage() {
                             <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide snap-x">
                                 {userAreas.map((area) => (
                                     <button
-                                        key={area}
-                                        onClick={() => setActiveArea(area)}
+                                        key={area.id}
+                                        onClick={() => setActiveAreaId(area.id)}
                                         className={`
                                             snap-start whitespace-nowrap px-6 py-3 rounded-full text-sm font-semibold transition-colors
-                                            ${activeArea === area
+                                            ${activeAreaId === area.id
                                                 ? 'bg-[#00c6d2] text-[#0f1b21]'
                                                 : 'bg-[#182a32] text-[#92bbc9] border border-[#233f48] hover:bg-[#233f48]'
                                             }
                                         `}
                                         style={{ minHeight: '44px' }}
                                     >
-                                        {area}
+                                        {area.name}
                                     </button>
                                 ))}
                             </div>
