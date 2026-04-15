@@ -4,6 +4,14 @@ import { getBrazilNow, getBrazilStartAndEndOfDay, getBrazilDateKey } from '@/lib
 import { filterChecklistsByRecurrence } from '@/lib/utils/should-checklist-appear-today';
 import type { RecurrenceConfig } from '@/lib/types';
 
+// ─── Constantes operacionais ─────────────────────────────────────────────────
+
+/** Minutos de carência antes de uma tarefa crítica não executada virar alerta */
+const CRITICAL_GRACE_MINUTES = 10;
+
+/** Cap em minutos para considerar no tempo médio de conclusão (4h) */
+const CONCLUSION_TIME_CAP_MINUTES = 240;
+
 // ─── Tipos internos ──────────────────────────────────────────────────────────
 
 interface AssumptionRow {
@@ -192,22 +200,33 @@ export async function GET(request: Request) {
         // ══════════════════════════════════════════════════════════════════
 
         // ── 1. Conclusão Diária (%) ───────────────────────────────────────
-        // Base: assumptions do dia, NÃO total de checklists
-        const totalAssumptionsToday = todayAssumptions.length;
-        const completedToday = todayAssumptions.filter(isCompleted).length;
+        // Denominador: total de checklists esperados para o dia (via recorrência)
+        // Numerador: checklists com pelo menos 1 assumption concluída (deduplicado)
+        const totalRoutinesToday = checklists.length;
+        const completedChecklistIdsToday = new Set(
+            todayAssumptions.filter(isCompleted).map(a => a.checklist_id)
+        );
+        const completedToday = completedChecklistIdsToday.size;
 
-        const totalAssumptionsYesterday = yesterdayAssumptions.length;
-        const completedYesterday = yesterdayAssumptions.filter(isCompleted).length;
+        // Yesterday: filtrar checklists esperados por recorrência de ontem
+        const yesterdayBrazil = getBrazilNow(yesterdayDate);
+        const checklistsYesterday = filterChecklistsByRecurrence(allChecklists, yesterdayBrazil.dayOfWeek, yesterdayKey, shifts || []);
+        const totalRoutinesYesterday = checklistsYesterday.length;
+        const completedChecklistIdsYesterday = new Set(
+            yesterdayAssumptions.filter(isCompleted).map(a => a.checklist_id)
+        );
+        const completedYesterday = completedChecklistIdsYesterday.size;
 
-        const conclusao_diaria_percent = totalAssumptionsToday > 0
-            ? Math.round((completedToday / totalAssumptionsToday) * 100)
+        const conclusao_diaria_percent = totalRoutinesToday > 0
+            ? Math.round((completedToday / totalRoutinesToday) * 100)
             : 0;
-        const conclusao_percent_yesterday = totalAssumptionsYesterday > 0
-            ? Math.round((completedYesterday / totalAssumptionsYesterday) * 100)
+        const conclusao_percent_yesterday = totalRoutinesYesterday > 0
+            ? Math.round((completedYesterday / totalRoutinesYesterday) * 100)
             : 0;
 
-        // ── 2. Alertas Abertos ────────────────────────────────────────────
-        // Base: assumptions não concluídas hoje, classificadas por tipo
+        // ── 2. Alertas Abertos + Tarefas Críticas ────────────────────────
+        // Regra: cada assumption_id gera APENAS 1 alerta (hierarquia de severidade)
+        // Ordem: blocked > critico_atrasado > critico_pendente > atrasado
         let alertasAbertos = 0;
         const alertasRecentes: Array<{
             id: string;
@@ -216,16 +235,36 @@ export async function GET(request: Request) {
             notes: string;
             severity: 'critical' | 'warning';
             alert_type: 'critico' | 'atrasado' | 'bloqueado';
+            responsavel_nome: string;
+        }> = [];
+
+        const tarefasCriticas: Array<{
+            id: string;
+            tipo: 'bloqueado' | 'critico_atrasado' | 'critico_pendente' | 'atrasado';
+            checklist_nome: string;
+            checklist_id: string;
+            responsavel_nome: string;
+            responsavel_id: string;
+            tempo_atraso: string;
         }> = [];
 
         const nowHHMM = brazil.timeHHMM;
+        const nowMs = Date.now();
+
+        // Set para garantir que cada assumption gere apenas 1 alerta
+        const processedAssumptionIds = new Set<string>();
 
         todayAssumptions.forEach(a => {
+            if (processedAssumptionIds.has(a.id)) return;
             const cl = checklistsMap.get(a.checklist_id);
             if (!cl) return;
 
-            // ── BLOQUEADO ── (derivado de task_executions, não do campo armazenado)
-            if (assumptionIdsWithBlockedTasks.has(a.id)) {
+            const isOverdue = cl.end_time ? nowHHMM > cl.end_time : false;
+            const minutesSinceAssumed = (nowMs - new Date(a.assumed_at).getTime()) / 60000;
+
+            // ── PRIORIDADE 1: BLOQUEADO ──
+            if (assumptionIdsWithBlockedTasks.has(a.id) || a.execution_status === 'blocked') {
+                processedAssumptionIds.add(a.id);
                 alertasAbertos++;
                 alertasRecentes.push({
                     id: a.id,
@@ -234,36 +273,79 @@ export async function GET(request: Request) {
                     notes: a.blocked_reason || 'Rotina bloqueada por colaborador',
                     severity: 'critical',
                     alert_type: 'bloqueado',
+                    responsavel_nome: a.user_name,
                 });
-                return; // Bloqueado já é o pior estado, não duplicar
+                tarefasCriticas.push({
+                    id: a.id,
+                    tipo: 'bloqueado',
+                    checklist_nome: cl.name,
+                    checklist_id: cl.id,
+                    responsavel_nome: a.user_name,
+                    responsavel_id: a.user_id,
+                    tempo_atraso: formatDistanceToNowPT(new Date(a.assumed_at).getTime()),
+                });
+                return;
             }
 
-            // Pular assumptions já concluídas — não geram alertas
+            // Pular assumptions já concluídas
             if (isCompleted(a)) return;
 
-            const isOverdue = cl.end_time ? nowHHMM > cl.end_time : false;
-
-            // ── CRÍTICO: tasks críticas não concluídas ──
             const criticalTasks = (cl.checklist_tasks || []).filter(t => t.is_critical);
             const undoneCriticalTasks = criticalTasks.filter(t => !doneTaskIds.has(t.id));
 
-            if (undoneCriticalTasks.length > 0) {
+            // ── PRIORIDADE 2: CRÍTICO + ATRASADO ──
+            if (undoneCriticalTasks.length > 0 && isOverdue) {
+                processedAssumptionIds.add(a.id);
                 alertasAbertos++;
                 alertasRecentes.push({
                     id: a.id,
                     title: cl.name,
-                    time_ago: isOverdue ? 'Atrasado' : formatDistanceToNowPT(new Date(a.assumed_at).getTime()),
-                    notes: isOverdue
-                        ? `Prazo: ${cl.end_time} — ${undoneCriticalTasks.length} tarefa(s) crítica(s) pendente(s)`
-                        : `${undoneCriticalTasks.length} tarefa(s) crítica(s) aguardando execução`,
+                    time_ago: 'Atrasado',
+                    notes: `Prazo: ${cl.end_time} — ${undoneCriticalTasks.length} tarefa(s) crítica(s) pendente(s)`,
                     severity: 'critical',
                     alert_type: 'critico',
+                    responsavel_nome: a.user_name,
                 });
-                return; // Crítico tem prioridade sobre atrasado simples
+                tarefasCriticas.push({
+                    id: a.id,
+                    tipo: 'critico_atrasado',
+                    checklist_nome: cl.name,
+                    checklist_id: cl.id,
+                    responsavel_nome: a.user_name,
+                    responsavel_id: a.user_id,
+                    tempo_atraso: `Prazo: ${cl.end_time}`,
+                });
+                return;
             }
 
-            // ── ATRASADO: end_time ultrapassado sem conclusão ──
+            // ── PRIORIDADE 3: CRÍTICO PENDENTE (com grace period) ──
+            if (undoneCriticalTasks.length > 0 && minutesSinceAssumed >= CRITICAL_GRACE_MINUTES) {
+                processedAssumptionIds.add(a.id);
+                alertasAbertos++;
+                alertasRecentes.push({
+                    id: a.id,
+                    title: cl.name,
+                    time_ago: formatDistanceToNowPT(new Date(a.assumed_at).getTime()),
+                    notes: `${undoneCriticalTasks.length} tarefa(s) crítica(s) aguardando execução`,
+                    severity: 'critical',
+                    alert_type: 'critico',
+                    responsavel_nome: a.user_name,
+                });
+                tarefasCriticas.push({
+                    id: a.id,
+                    tipo: 'critico_pendente',
+                    checklist_nome: cl.name,
+                    checklist_id: cl.id,
+                    responsavel_nome: a.user_name,
+                    responsavel_id: a.user_id,
+                    tempo_atraso: formatDistanceToNowPT(new Date(a.assumed_at).getTime()),
+                });
+                return;
+            }
+
+            // ── PRIORIDADE 4: ATRASADO SIMPLES ──
             if (isOverdue) {
+                processedAssumptionIds.add(a.id);
                 alertasAbertos++;
                 alertasRecentes.push({
                     id: a.id,
@@ -272,11 +354,21 @@ export async function GET(request: Request) {
                     notes: `Prazo: ${cl.end_time} — rotina não concluída`,
                     severity: 'warning',
                     alert_type: 'atrasado',
+                    responsavel_nome: a.user_name,
+                });
+                tarefasCriticas.push({
+                    id: a.id,
+                    tipo: 'atrasado',
+                    checklist_nome: cl.name,
+                    checklist_id: cl.id,
+                    responsavel_nome: a.user_name,
+                    responsavel_id: a.user_id,
+                    tempo_atraso: `Prazo: ${cl.end_time}`,
                 });
             }
         });
 
-        // Diff alertas ontem (simplificado: assumptions não concluídas com tasks críticas)
+        // Diff alertas ontem
         let alertasYesterday = 0;
         yesterdayAssumptions.forEach(a => {
             if (isCompleted(a) || a.execution_status === 'blocked') return;
@@ -286,7 +378,8 @@ export async function GET(request: Request) {
             if (hasCritical) alertasYesterday++;
         });
 
-        // Ordenar: critical primeiro, depois warning
+        // Alertas já estão na ordem correta (processados por prioridade)
+        // Mas garantir critical antes de warning na lista final
         alertasRecentes.sort((a, b) => {
             if (a.severity === 'critical' && b.severity !== 'critical') return -1;
             if (a.severity !== 'critical' && b.severity === 'critical') return 1;
@@ -332,59 +425,76 @@ export async function GET(request: Request) {
             avatar: usersMap[uid]?.avatar_url || null,
         }));
 
-        // ── 4. Tempo Médio de Resposta ────────────────────────────────────
-        // Métrica principal: assumed_at - available_at (start_time do checklist)
-        // Fallback: se não há start_time, usa assumed_at - início do dia
-        let tempoSomaToday = 0;
-        let tempoCountToday = 0;
+        // ── Equipe Detalhes (com status operacional) ──────────────────────
+        // Status: impedimento > atrasado > em_andamento > concluiu
+        const equipe_detalhes = todayUserIds.map(uid => {
+            const userAssumptions = todayAssumptions.filter(a => a.user_id === uid);
+            const hasBlocked = userAssumptions.some(a =>
+                a.execution_status === 'blocked' || assumptionIdsWithBlockedTasks.has(a.id)
+            );
+            const allDone = userAssumptions.every(isCompleted);
+            const hasOverdue = !hasBlocked && !allDone && userAssumptions.some(a => {
+                const cl = checklistsMap.get(a.checklist_id);
+                return !isCompleted(a) && cl?.end_time ? nowHHMM > cl.end_time : false;
+            });
+
+            let status: 'em_andamento' | 'atrasado' | 'impedimento' | 'concluiu';
+            if (hasBlocked) status = 'impedimento';
+            else if (allDone) status = 'concluiu';
+            else if (hasOverdue) status = 'atrasado';
+            else status = 'em_andamento';
+
+            return {
+                user_id: uid,
+                nome: usersMap[uid]?.name || 'Colaborador',
+                avatar: usersMap[uid]?.avatar_url || null,
+                status,
+                total_assumptions: userAssumptions.length,
+                assumptions_done: userAssumptions.filter(isCompleted).length,
+            };
+        });
+
+        // ── 4. Tempo Médio de Conclusão ───────────────────────────────────
+        // Métrica: completed_at - assumed_at (quanto tempo leva para concluir)
+        // Cap de 240 min para excluir outliers; outliers são contados separadamente
+        let conclusionSumToday = 0;
+        let conclusionCountToday = 0;
+        let conclusionOutliersToday = 0;
 
         todayAssumptions.forEach(a => {
-            const cl = checklistsMap.get(a.checklist_id);
-            if (!cl) return;
-
-            const assumedAt = new Date(a.assumed_at);
-            let availableAt: Date;
-
-            if (cl.start_time) {
-                // available_at = hoje + start_time do checklist
-                availableAt = new Date(`${todayKey}T${cl.start_time}:00`);
+            if (!a.completed_at) return;
+            const diffMins = (new Date(a.completed_at).getTime() - new Date(a.assumed_at).getTime()) / 60000;
+            if (diffMins < 0) return;
+            if (diffMins > CONCLUSION_TIME_CAP_MINUTES) {
+                conclusionOutliersToday++;
             } else {
-                // Fallback: início do dia como momento de disponibilidade
-                availableAt = new Date(todayStartISO);
-            }
-
-            const diffMins = (assumedAt.getTime() - availableAt.getTime()) / 60000;
-            if (diffMins >= 0) {
-                tempoSomaToday += diffMins;
-                tempoCountToday++;
+                conclusionSumToday += diffMins;
+                conclusionCountToday++;
             }
         });
 
-        let tempoSomaYesterday = 0;
-        let tempoCountYesterday = 0;
+        let conclusionSumYesterday = 0;
+        let conclusionCountYesterday = 0;
 
         yesterdayAssumptions.forEach(a => {
-            const cl = checklistsMap.get(a.checklist_id);
-            if (!cl) return;
-
-            const assumedAt = new Date(a.assumed_at);
-            let availableAt: Date;
-
-            if (cl.start_time) {
-                availableAt = new Date(`${yesterdayKey}T${cl.start_time}:00`);
-            } else {
-                availableAt = new Date(`${yesterdayKey}T00:00:00-03:00`);
-            }
-
-            const diffMins = (assumedAt.getTime() - availableAt.getTime()) / 60000;
-            if (diffMins >= 0) {
-                tempoSomaYesterday += diffMins;
-                tempoCountYesterday++;
+            if (!a.completed_at) return;
+            const diffMins = (new Date(a.completed_at).getTime() - new Date(a.assumed_at).getTime()) / 60000;
+            if (diffMins >= 0 && diffMins <= CONCLUSION_TIME_CAP_MINUTES) {
+                conclusionSumYesterday += diffMins;
+                conclusionCountYesterday++;
             }
         });
 
-        const avgRespToday = tempoCountToday > 0 ? Math.round(tempoSomaToday / tempoCountToday) : 0;
-        const avgRespYesterday = tempoCountYesterday > 0 ? Math.round(tempoSomaYesterday / tempoCountYesterday) : 0;
+        const tempo_conclusao_mins = conclusionCountToday > 0
+            ? Math.round(conclusionSumToday / conclusionCountToday)
+            : 0;
+        const tempo_conclusao_yesterday = conclusionCountYesterday > 0
+            ? Math.round(conclusionSumYesterday / conclusionCountYesterday)
+            : 0;
+
+        // Manter backward compat (zerado — campo legado)
+        const avgRespToday = 0;
+        const avgRespYesterday = 0;
 
         // ── 5. Tendências de Execução (7 dias) ───────────────────────────
         // Base: assumptions por dia — concluídas / total assumptions do dia
@@ -394,17 +504,24 @@ export async function GET(request: Request) {
         for (let i = 6; i >= 0; i--) {
             const d = new Date();
             d.setDate(d.getDate() - i);
-            const dateKey = getBrazilDateKey(d);
-            const dayOfWeek = getBrazilNow(d).dayOfWeek;
+            const dayInfo = getBrazilNow(d);
+            const dateKey = dayInfo.dateKey;
 
+            // Denominador: checklists esperados neste dia (via recorrência)
+            const dayChecklists = filterChecklistsByRecurrence(allChecklists, dayInfo.dayOfWeek, dateKey, shifts || []);
+            const dayTotal = dayChecklists.length;
+
+            // Numerador: checklists com pelo menos 1 assumption concluída (deduplicado)
             const dayAssumptions = allAssumptions.filter(a => a.date_key === dateKey);
-            const dayCompleted = dayAssumptions.filter(isCompleted).length;
-            const dayTotal = dayAssumptions.length;
+            const dayCompletedIds = new Set(
+                dayAssumptions.filter(isCompleted).map(a => a.checklist_id)
+            );
+            const dayCompleted = dayCompletedIds.size;
 
             const pct = dayTotal > 0 ? Math.round((dayCompleted / dayTotal) * 100) : 0;
 
             tendencias.push({
-                date_label: dayNames[dayOfWeek],
+                date_label: dayNames[dayInfo.dayOfWeek],
                 percent: Math.min(pct, 100),
             });
         }
@@ -449,6 +566,47 @@ export async function GET(request: Request) {
             })
             .filter((item): item is NonNullable<typeof item> => item !== null);
 
+        // ── 6b. Progresso por Área (agregação) ────────────────────────────
+        // Agrupa checklists esperados hoje por area_id.
+        // Reutiliza completedChecklistIdsToday (mesma fonte do KPI de conclusão).
+        // Invariante: sum(total) === totalRoutinesToday; sum(completed) === completedToday
+        interface AreaProgressoEntry {
+            area_id: string;
+            area_name: string;
+            area_color: string;
+            total: number;
+            completed: number;
+        }
+        const areaMap = new Map<string, AreaProgressoEntry>();
+
+        for (const cl of checklists) {
+            // Ignorar checklists sem área válida — não criar bucket "Sem área"
+            if (!cl.area_id || !cl.areas) continue;
+
+            let entry = areaMap.get(cl.area_id);
+            if (!entry) {
+                entry = {
+                    area_id: cl.area_id,
+                    area_name: cl.areas.name,
+                    area_color: cl.areas.color,
+                    total: 0,
+                    completed: 0,
+                };
+                areaMap.set(cl.area_id, entry);
+            }
+
+            entry.total++;
+            if (completedChecklistIdsToday.has(cl.id)) {
+                entry.completed++;
+            }
+        }
+
+        const area_progresso = Array.from(areaMap.values()).map(a => ({
+            ...a,
+            pending: a.total - a.completed,
+            percent: a.total > 0 ? Math.round((a.completed / a.total) * 100) : 0,
+        }));
+
         // ── 7. Top Performers Hoje ────────────────────────────────────────
         // Base: assumptions concluídas (completed_at) hoje por usuário
         const performerCounts: Record<string, number> = {};
@@ -477,11 +635,19 @@ export async function GET(request: Request) {
             equipe_ativa: todayUserIds.length,
             equipe_ativa_diff: todayUserIds.length - yesterdayUserIds.length,
             equipe_avatars,
+            equipe_detalhes,
+            // Legado (zerado) — mantido para não quebrar clientes antigos
             tempo_resposta_mins: avgRespToday,
             tempo_resposta_diff_mins: avgRespToday - avgRespYesterday,
+            // Novo: tempo médio de conclusão (assumed_at → completed_at)
+            tempo_conclusao_mins,
+            tempo_conclusao_diff_mins: tempo_conclusao_mins - tempo_conclusao_yesterday,
+            tempo_conclusao_outliers: conclusionOutliersToday,
             tendencias,
             checklist_progresso,
+            area_progresso,
             alertas_recentes: alertasRecentes.slice(0, 10),
+            tarefas_criticas: tarefasCriticas,
             top_performers,
         });
 
