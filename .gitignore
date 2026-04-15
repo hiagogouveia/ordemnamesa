@@ -51,3 +51,6 @@ infra/terraform/**/terraform.tfvars
 infra/terraform/**/tfplan
 infra/terraform/**/*.tfstate
 infra/terraform/**/*.tfstate.backup
+
+# Dev server log
+dev.log
