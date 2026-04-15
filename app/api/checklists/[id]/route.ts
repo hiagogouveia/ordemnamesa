@@ -58,6 +58,20 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         // Se o campo não veio no payload (undefined), preserva o valor atual
         const safeAreaId = area_id !== undefined ? (area_id || null) : (currentChecklist?.area_id ?? null);
 
+        if (!safeAreaId) {
+            return NextResponse.json({ error: 'Selecione uma área para a rotina.' }, { status: 400 });
+        }
+
+        if (recurrence === 'custom') {
+            const days = recurrence_config?.days_of_week;
+            if (!Array.isArray(days) || days.length === 0) {
+                return NextResponse.json(
+                    { error: 'Recorrência personalizada exige ao menos um dia da semana selecionado.' },
+                    { status: 400 }
+                );
+            }
+        }
+
         // Validação de domínio: responsável deve pertencer à área selecionada
         const effectiveUserId = assigned_to_user_id || null;
         if (effectiveUserId && safeAreaId) {

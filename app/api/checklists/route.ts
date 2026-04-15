@@ -183,6 +183,20 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Campos obrigatórios faltando' }, { status: 400 });
         }
 
+        if (!area_id) {
+            return NextResponse.json({ error: 'Selecione uma área para a rotina.' }, { status: 400 });
+        }
+
+        if (recurrence === 'custom') {
+            const days = recurrence_config?.days_of_week;
+            if (!Array.isArray(days) || days.length === 0) {
+                return NextResponse.json(
+                    { error: 'Recorrência personalizada exige ao menos um dia da semana selecionado.' },
+                    { status: 400 }
+                );
+            }
+        }
+
         const { data: userRole } = await adminSupabase
             .from('restaurant_users')
             .select('role')

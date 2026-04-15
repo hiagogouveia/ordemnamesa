@@ -535,6 +535,21 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     const handleSave = async (isPublishing: boolean) => {
         if (!name.trim() || !restaurantId) return;
 
+        if (isPublishing) {
+            if (!areaId) {
+                setErrorMsg('Selecione uma área para a rotina.');
+                return;
+            }
+
+            if (recurrence === 'custom') {
+                const days = recurrenceConfig?.days_of_week;
+                if (!Array.isArray(days) || days.length === 0) {
+                    setErrorMsg('Recorrência personalizada exige ao menos um dia da semana selecionado.');
+                    return;
+                }
+            }
+        }
+
         const payload = {
             restaurant_id: restaurantId,
             name,
@@ -781,7 +796,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                             <div>
-                                <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Área</label>
+                                <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">
+                                    Área <span className="text-red-400">*</span>
+                                </label>
                                 <select
                                     value={areaId}
                                     onChange={(e) => {
