@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getBrazilDateKey } from '@/lib/utils/brazil-date';
 
 const getAdminSupabase = () =>
     createClient(
@@ -30,7 +31,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         }
 
         const userName = user.user_metadata?.name || user.email || 'Funcionário';
-        const dateKey = new Date().toISOString().split('T')[0];
+        const dateKey = getBrazilDateKey();
         const now = new Date().toISOString();
 
         // Upsert assumption with completion data
@@ -47,6 +48,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
                 .from('checklist_assumptions')
                 .update({
                     completed_at: now,
+                    execution_status: 'done',
                     completed_by_user_id: user.id,
                     completed_by_user_name: userName,
                     ...(observation !== undefined && { observation }),
@@ -66,6 +68,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
                     user_name: userName,
                     date_key: dateKey,
                     completed_at: now,
+                    execution_status: 'done',
                     completed_by_user_id: user.id,
                     completed_by_user_name: userName,
                     ...(observation !== undefined && { observation }),
