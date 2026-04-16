@@ -218,7 +218,7 @@ export function ChecklistListView({
     return (
         <div className="overflow-x-auto">
             {/* Toolbar */}
-            <div className="flex items-center justify-between px-1 pb-2">
+            <div className="flex flex-wrap items-center justify-between gap-y-2 px-1 pb-2">
                 <div className="flex items-center gap-3">
                     {/* Priority mode indicator */}
                     {selectedAreaId && (
@@ -242,8 +242,8 @@ export function ChecklistListView({
 
                     {!reorderMode && (
                         <span className="text-[#325a67] text-xs">
-                            {reorderMode
-                                ? "Arraste as linhas para reordenar."
+                            {!selectedAreaId || hasReducingFilters
+                                ? "Para reordenar, selecione uma área e use Disponibilidade e Status como 'Todos'."
                                 : "Ative o modo de reordenação para ajustar a ordem das rotinas."}
                         </span>
                     )}
@@ -293,10 +293,8 @@ export function ChecklistListView({
                                 onClick={handleEnterReorder}
                                 disabled={!selectedAreaId || hasReducingFilters}
                                 title={
-                                    !selectedAreaId
-                                        ? "Selecione uma área para reordenar"
-                                        : hasReducingFilters
-                                        ? "Remova os filtros de disponibilidade, turno e status para reordenar"
+                                    !selectedAreaId || hasReducingFilters
+                                        ? "Para reordenar, selecione uma área e defina Disponibilidade e Status como 'Todos'."
                                         : undefined
                                 }
                                 className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-[#16262c] border border-[#233f48] rounded-lg transition-colors ${

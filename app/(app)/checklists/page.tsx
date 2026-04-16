@@ -461,7 +461,7 @@ function ChecklistsContent() {
                             onDuplicate={handleDuplicate}
                             onDelete={handleDelete}
                             selectedAreaId={selectedAreaId}
-                            hasReducingFilters={!!(selectedShift || (selectedAvailability !== "all" && selectedAvailability !== "") || selectedExecStatus)}
+                            hasReducingFilters={(selectedAvailability !== "all" && selectedAvailability !== "") || !!selectedExecStatus}
                             onReorder={handleReorder}
                             onAutoReprioritize={handleAutoReprioritize}
                             currentMinutes={currentMinutes}
