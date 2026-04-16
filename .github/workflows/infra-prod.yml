@@ -50,8 +50,11 @@ jobs:
             set -euo pipefail
             echo "=== Iniciando setup idempotente da VPS PROD ==="
 
-            # Atualizar sistema (com retry para mirror sync transiente)
+            # Aguardar lock do apt (unattended-upgrades pode estar rodando)
             export DEBIAN_FRONTEND=noninteractive
+            systemctl stop unattended-upgrades 2>/dev/null || true
+            while fuser /var/lib/apt/lists/lock /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock 2>/dev/null; do sleep 3; done
+            # Atualizar sistema (com retry para mirror sync transiente)
             for i in 1 2 3; do apt-get update -y && break || sleep 10; done
             apt-get upgrade -y
             apt-get install -y ca-certificates curl gnupg lsb-release unzip htop git jq
