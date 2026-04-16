@@ -20,11 +20,14 @@ export default function SelecionarAccountPage() {
     const selectAccount = useCallback(
         (account: AccountItem) => {
             setAccount({ id: account.id, name: account.name });
-            document.cookie = `x-account-id=${account.id}; path=/; SameSite=Strict`;
-            document.cookie = `x-account-name=${encodeURIComponent(account.name)}; path=/; SameSite=Strict`;
-            router.push("/selecionar-restaurante");
+            const base = "; path=/; SameSite=Lax";
+            document.cookie = `x-account-id=${account.id}${base}`;
+            document.cookie = `x-account-name=${encodeURIComponent(account.name)}${base}`;
+            // Full navigation para garantir que o middleware veja os cookies recém-setados.
+            // router.push pode usar RSC prefetch anterior ao cookie set, causando redirect loop.
+            window.location.assign("/selecionar-restaurante");
         },
-        [router, setAccount]
+        [setAccount]
     );
 
     useEffect(() => {

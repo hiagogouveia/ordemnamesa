@@ -88,16 +88,19 @@ export default function SelecionarRestaurantePage() {
         });
 
         // Setar cookies de contexto para uso em Server Components e middleware
-        document.cookie = `x-restaurant-role=${restaurant.role}; path=/; SameSite=Strict`;
-        document.cookie = `x-restaurant-id=${restaurant.restaurants.id}; path=/; SameSite=Strict`;
-        document.cookie = `x-restaurant-name=${encodeURIComponent(restaurant.restaurants.name)}; path=/; SameSite=Strict`;
-        document.cookie = `x-restaurant-slug=${restaurant.restaurants.slug}; path=/; SameSite=Strict`;
+        const base = "; path=/; SameSite=Lax";
+        document.cookie = `x-restaurant-role=${restaurant.role}${base}`;
+        document.cookie = `x-restaurant-id=${restaurant.restaurants.id}${base}`;
+        document.cookie = `x-restaurant-name=${encodeURIComponent(restaurant.restaurants.name)}${base}`;
+        document.cookie = `x-restaurant-slug=${restaurant.restaurants.slug}${base}`;
+        // Limpar modo global residual de sessão anterior (se existir)
+        document.cookie = `x-restaurant-mode=${base}; expires=Thu, 01 Jan 1970 00:00:01 GMT`;
 
-        if (restaurant.role === 'staff') {
-            router.push("/turno");
-        } else {
-            router.push("/dashboard");
-        }
+        // Full navigation para garantir que o middleware veja os cookies recém-setados.
+        // router.push pode usar RSC prefetch anterior ao cookie set, causando redirect
+        // para /selecionar-account e loop.
+        const target = restaurant.role === 'staff' ? '/turno' : '/dashboard';
+        window.location.assign(target);
     };
 
     const getRoleBadgeColor = (role: string) => {
