@@ -1,15 +1,19 @@
 http:
   routers:
     nextjs-https:
-      rule: "Host(`app.ordemnamesa.com.br`)"
+      rule: "Host(`ordemnamesa.com.br`) || Host(`www.ordemnamesa.com.br`)"
       entryPoints:
         - websecure
       service: nextjs
       tls:
         certResolver: letsencrypt
+        domains:
+          - main: "ordemnamesa.com.br"
+            sans:
+              - "www.ordemnamesa.com.br"
 
     nextjs-http:
-      rule: "Host(`app.ordemnamesa.com.br`)"
+      rule: "Host(`ordemnamesa.com.br`) || Host(`www.ordemnamesa.com.br`)"
       entryPoints:
         - web
       middlewares:
