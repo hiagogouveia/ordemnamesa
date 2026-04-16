@@ -27,33 +27,50 @@ async function getAuthHeaders() {
     return headers;
 }
 
+export interface ChecklistsScope {
+    restaurantId: string | null | undefined;
+    accountId?: string | null;
+    mode?: 'single' | 'global';
+}
+
 // Buscar Checklists com Realtime para assumptions
-export function useChecklists(restaurantId: string | undefined) {
+export function useChecklists(arg: string | undefined | ChecklistsScope) {
     const queryClient = useQueryClient();
+    const scope: ChecklistsScope = typeof arg === 'object' && arg !== null
+        ? arg
+        : { restaurantId: arg, mode: 'single' };
+    const isGlobal = scope.mode === 'global';
+    const enabled = isGlobal ? !!scope.accountId : !!scope.restaurantId;
+    const queryKey = isGlobal
+        ? ["checklists", "global", scope.accountId]
+        : ["checklists", scope.restaurantId];
 
     const query = useQuery({
-        queryKey: ["checklists", restaurantId],
+        queryKey,
         queryFn: async (): Promise<Checklist[]> => {
-            if (!restaurantId) return [];
+            if (!enabled) return [];
             const headers = await getAuthHeaders();
-            const res = await fetch(`/api/checklists?restaurant_id=${restaurantId}`, {
-                headers,
-                cache: 'no-store',
-            });
+            const url = isGlobal
+                ? `/api/checklists?account_id=${scope.accountId}&mode=global`
+                : `/api/checklists?restaurant_id=${scope.restaurantId}`;
+            const res = await fetch(url, { headers, cache: 'no-store' });
             if (!res.ok) {
                 const errData = await res.json().catch(() => ({}));
                 throw new Error(errData.error || "Erro ao buscar checklists");
             }
             return res.json();
         },
-        enabled: !!restaurantId,
+        enabled,
         staleTime: 5 * 60 * 1000,
         refetchOnWindowFocus: false,
     });
 
     // Realtime: atualizar quando assumptions mudam (alguém assumiu/completou)
+    // Em global mode não assinamos — invalidação por restaurant_id specifico
+    // não cobre as várias unidades e realtime multi-filter não é suportado aqui.
     useEffect(() => {
-        if (!restaurantId) return;
+        if (isGlobal || !scope.restaurantId) return;
+        const restaurantId = scope.restaurantId;
 
         const supabase = createClient();
         const channel = supabase
@@ -75,7 +92,7 @@ export function useChecklists(restaurantId: string | undefined) {
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [restaurantId, queryClient]);
+    }, [isGlobal, scope.restaurantId, queryClient]);
 
     return query;
 }
@@ -222,6 +239,53 @@ export function useToggleChecklistStatus() {
         },
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ["checklists", variables.restaurantId] });
+        },
+    });
+}
+
+// Replicar Checklists entre unidades da mesma account (Sprint 29)
+export interface ReplicateChecklistsVariables {
+    checklist_ids: string[];
+    target_restaurant_ids: string[];
+}
+
+export interface ReplicationResultRow {
+    target_restaurant_id: string;
+    source_checklist_id: string;
+    status: 'created' | 'skipped' | 'error';
+    new_checklist_id: string | null;
+    error_message: string | null;
+}
+
+export interface ReplicationResponse {
+    results: ReplicationResultRow[];
+    summary: { created: number; skipped: number; errors: number };
+}
+
+export function useReplicateChecklists() {
+    const queryClient = useQueryClient();
+
+    return useMutation<ReplicationResponse, Error, ReplicateChecklistsVariables>({
+        mutationFn: async ({ checklist_ids, target_restaurant_ids }) => {
+            const headers = await getAuthHeaders();
+            const res = await fetch('/api/checklists/replicate', {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ checklist_ids, target_restaurant_ids }),
+            });
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || 'Erro ao replicar checklists');
+            }
+            return res.json();
+        },
+        onSuccess: (data) => {
+            const touched = new Set(data.results.map((r) => r.target_restaurant_id));
+            touched.forEach((rid) => {
+                queryClient.invalidateQueries({ queryKey: ['checklists', rid] });
+                queryClient.invalidateQueries({ queryKey: ['admin_checklists_status', rid] });
+            });
+            queryClient.invalidateQueries({ queryKey: ['checklists', 'global'] });
         },
     });
 }

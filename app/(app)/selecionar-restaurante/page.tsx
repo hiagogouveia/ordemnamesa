@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
+import { useAccountSessionStore } from "@/lib/store/account-session-store";
 import { Logo } from "@/components/ui/Logo";
 import Image from "next/image";
 
@@ -15,6 +16,7 @@ interface RestaurantData {
         name: string;
         logo_url: string | null;
         slug: string;
+        account_id: string;
     };
 }
 
@@ -24,6 +26,7 @@ export default function SelecionarRestaurantePage() {
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const router = useRouter();
     const setRestaurant = useRestaurantStore((state) => state.setRestaurant);
+    const accountId = useAccountSessionStore((state) => state.accountId);
 
     useEffect(() => {
         async function fetchRestaurants() {
@@ -34,32 +37,38 @@ export default function SelecionarRestaurantePage() {
                 router.push("/login");
                 return;
             }
+
+            if (!accountId) {
+                router.push("/selecionar-account");
+                return;
+            }
+
             setCurrentUserId(user.id);
 
-            // Buscar restaurantes onde o usuário está ativo
-            // O RLS já filtra `restaurant_users` por auth.uid()
+            // Buscar restaurantes onde o usuário está ativo, filtrados pela account selecionada
             const { data } = await supabase
                 .from('restaurant_users')
                 .select(`
           restaurant_id,
           role,
-          restaurants (
+          restaurants!inner (
             id,
             name,
             logo_url,
-            slug
+            slug,
+            account_id
           )
         `)
-                .eq('active', true);
+                .eq('active', true)
+                .eq('restaurants.account_id', accountId);
 
             if (data) {
-                // Formatar os dados para corresponder à interface
                 const formattedData = data.map((item) => ({
                     restaurant_id: item.restaurant_id,
                     role: item.role as 'owner' | 'manager' | 'staff',
                     restaurants: Array.isArray(item.restaurants)
-                        ? (item.restaurants as unknown as { id: string; name: string; logo_url: string | null; slug: string }[])[0]
-                        : item.restaurants as { id: string; name: string; logo_url: string | null; slug: string }
+                        ? (item.restaurants as unknown as { id: string; name: string; logo_url: string | null; slug: string; account_id: string }[])[0]
+                        : item.restaurants as { id: string; name: string; logo_url: string | null; slug: string; account_id: string }
                 }));
                 setRestaurants(formattedData as RestaurantData[]);
             }
@@ -67,7 +76,7 @@ export default function SelecionarRestaurantePage() {
         }
 
         fetchRestaurants();
-    }, [router]);
+    }, [router, accountId]);
 
     const handleSelect = (restaurant: RestaurantData) => {
         setRestaurant({

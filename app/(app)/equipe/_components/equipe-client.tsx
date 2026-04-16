@@ -51,11 +51,13 @@ function EquipeSkeleton() {
 }
 
 interface Props {
-    restaurantId: string;
+    restaurantId: string | null;
+    accountId?: string | null;
+    isGlobal?: boolean;
     userRole: 'owner' | 'manager' | 'staff';
 }
 
-export function EquipeClient({ restaurantId, userRole }: Props) {
+export function EquipeClient({ restaurantId, accountId = null, isGlobal = false, userRole }: Props) {
     const router = useRouter();
     const queryClient = useQueryClient();
 
@@ -63,6 +65,7 @@ export function EquipeClient({ restaurantId, userRole }: Props) {
     const [searchTerm, setSearchTerm] = useState('');
     const [roleFilter, setRoleFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
+    const [unitFilter, setUnitFilter] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
@@ -91,10 +94,14 @@ export function EquipeClient({ restaurantId, userRole }: Props) {
     const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
     const [passwordTargetMember, setPasswordTargetMember] = useState<{ user_id: string; name: string } | null>(null);
 
-    const { data: equipeData, isLoading, error } = useEquipe(restaurantId);
+    const { data: equipeData, isLoading, error } = useEquipe(
+        isGlobal
+            ? { restaurantId: null, accountId, mode: 'global' }
+            : restaurantId
+    );
     const updateMember = useUpdateEquipeMember(restaurantId);
-    const { data: areas = [] } = useAllAreas(restaurantId);
-    const { data: shifts = [] } = useShifts(restaurantId);
+    const { data: areas = [] } = useAllAreas(restaurantId ?? undefined);
+    const { data: shifts = [] } = useShifts(restaurantId ?? undefined);
 
     if (isLoading) {
         return <EquipeSkeleton />;
@@ -111,13 +118,20 @@ export function EquipeClient({ restaurantId, userRole }: Props) {
 
     const { metrics = { total_colaboradores: 0, media_desempenho: 0, turnos_ativos: 0 }, equipe = [] } = equipeData || {};
 
+    const allUnits = isGlobal
+        ? Array.from(new Map(
+            equipe.flatMap((m) => m.units ?? []).map((u) => [u.id, { id: u.id, name: u.name }])
+        ).values()).sort((a, b) => a.name.localeCompare(b.name))
+        : [];
+
     const filteredEquipe = equipe.filter(member => {
         const matchSearch = member.name.toLowerCase().includes(searchTerm.toLowerCase()) || member.email.toLowerCase().includes(searchTerm.toLowerCase());
         const matchRole = roleFilter === '' || member.role === roleFilter;
         let matchStatus = true;
         if (statusFilter === 'active') matchStatus = member.active === true;
         if (statusFilter === 'inactive') matchStatus = member.active === false;
-        return matchSearch && matchRole && matchStatus;
+        const matchUnit = !isGlobal || !unitFilter || (member.units ?? []).some((u) => u.id === unitFilter);
+        return matchSearch && matchRole && matchStatus && matchUnit;
     });
 
     const totalPages = Math.ceil(filteredEquipe.length / itemsPerPage) || 1;
@@ -241,15 +255,27 @@ export function EquipeClient({ restaurantId, userRole }: Props) {
                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                         <div className="flex flex-col gap-2">
                             <h2 className="text-white text-3xl md:text-4xl font-black tracking-tight">Gestão de Colaboradores</h2>
-                            <p className="text-[#92bbc9] text-base">Gerencie sua equipe, turnos e acompanhe o desempenho individual.</p>
+                            <p className="text-[#92bbc9] text-base">
+                                {isGlobal
+                                    ? 'Visualização global da conta. Selecione uma unidade para editar.'
+                                    : 'Gerencie sua equipe, turnos e acompanhe o desempenho individual.'}
+                            </p>
                         </div>
-                        <button
-                            onClick={() => setIsModalOpen(true)}
-                            className="flex items-center justify-center gap-2 bg-primary hover:bg-cyan-400 text-[#111e22] font-bold py-2.5 px-5 rounded-lg transition-all active:scale-95 shadow-[0_0_15px_rgba(19,182,236,0.2)]">
-                            <span className="material-symbols-outlined text-[20px]">person_add</span>
-                            <span>Novo Colaborador</span>
-                        </button>
+                        {!isGlobal && (
+                            <button
+                                onClick={() => setIsModalOpen(true)}
+                                className="flex items-center justify-center gap-2 bg-primary hover:bg-cyan-400 text-[#111e22] font-bold py-2.5 px-5 rounded-lg transition-all active:scale-95 shadow-[0_0_15px_rgba(19,182,236,0.2)]">
+                                <span className="material-symbols-outlined text-[20px]">person_add</span>
+                                <span>Novo Colaborador</span>
+                            </button>
+                        )}
                     </div>
+                    {isGlobal && (
+                        <div className="flex items-center gap-2 bg-[#0f2730] border border-[#13b6ec]/30 rounded-lg px-4 py-3 text-sm text-[#13b6ec]">
+                            <span className="material-symbols-outlined text-[20px]">public</span>
+                            <span>Visão Global — dados agregados de todas as unidades da conta.</span>
+                        </div>
+                    )}
 
                     {/* Stats Cards */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -308,6 +334,14 @@ export function EquipeClient({ restaurantId, userRole }: Props) {
                                 <option value="active">Ativo</option>
                                 <option value="inactive">Inativo</option>
                             </select>
+                            {isGlobal && allUnits.length > 1 && (
+                                <select value={unitFilter} onChange={(e) => { setUnitFilter(e.target.value); setCurrentPage(1); }} className="bg-[#101d22] text-white border border-[#233f48] rounded-lg px-3 py-2.5 text-sm focus:ring-1 focus:ring-primary focus:border-primary min-w-[160px]">
+                                    <option value="">Todas Unidades</option>
+                                    {allUnits.map((u) => (
+                                        <option key={u.id} value={u.id}>{u.name}</option>
+                                    ))}
+                                </select>
+                            )}
                         </div>
                     </div>
 
@@ -330,8 +364,8 @@ export function EquipeClient({ restaurantId, userRole }: Props) {
                                     ) : paginatedEquipe.map((member) => (
                                         <tr
                                             key={member.id}
-                                            className="group hover:bg-[#233f48]/50 cursor-pointer transition-colors"
-                                            onClick={() => openEditModal(member)}
+                                            className={`group transition-colors ${isGlobal ? '' : 'hover:bg-[#233f48]/50 cursor-pointer'}`}
+                                            onClick={isGlobal ? undefined : () => openEditModal(member)}
                                         >
                                             <td className="p-4">
                                                 <div className="flex items-center gap-3">
@@ -373,6 +407,24 @@ export function EquipeClient({ restaurantId, userRole }: Props) {
                                                                 </>
                                                             )}
                                                         </div>
+                                                        {isGlobal && (member.units?.length ?? 0) > 0 && (
+                                                            <div className="flex flex-wrap gap-1 mt-1">
+                                                                {(member.units ?? []).slice(0, 3).map((u) => (
+                                                                    <span
+                                                                        key={u.id}
+                                                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#13b6ec]/10 text-[#13b6ec] border border-[#13b6ec]/30"
+                                                                    >
+                                                                        <span className="material-symbols-outlined text-[12px]">storefront</span>
+                                                                        {u.name}
+                                                                    </span>
+                                                                ))}
+                                                                {(member.units?.length ?? 0) > 3 && (
+                                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#233f48] text-[#92bbc9] border border-[#2e4f5c]">
+                                                                        +{(member.units ?? []).length - 3}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </td>
@@ -414,18 +466,22 @@ export function EquipeClient({ restaurantId, userRole }: Props) {
                                                     <button onClick={(e) => { e.stopPropagation(); router.push(`/historico?user_id=${member.user_id}`); }} className="p-1.5 text-[#92bbc9] hover:text-white hover:bg-white/10 rounded-md transition-colors" title="Ver Histórico">
                                                         <span className="material-symbols-outlined text-[20px]">history</span>
                                                     </button>
-                                                    <button onClick={(e) => { e.stopPropagation(); openEditModal(member); }} className="p-1.5 text-[#92bbc9] hover:text-primary hover:bg-primary/10 rounded-md transition-colors" title="Editar">
-                                                        <span className="material-symbols-outlined text-[20px]">edit</span>
-                                                    </button>
-                                                    {userRole === 'owner' && (
-                                                        <button onClick={(e) => { e.stopPropagation(); setPasswordTargetMember({ user_id: member.user_id, name: member.name }); setIsChangePasswordOpen(true); }} className="p-1.5 text-[#92bbc9] hover:text-yellow-400 hover:bg-yellow-400/10 rounded-md transition-colors" title="Alterar Senha">
-                                                            <span className="material-symbols-outlined text-[20px]">key</span>
-                                                        </button>
-                                                    )}
-                                                    {member.active && (
-                                                        <button onClick={(e) => { e.stopPropagation(); handleDeactivate(member.id, member.name); }} disabled={loadingAction === member.id} className="p-1.5 text-[#92bbc9] hover:text-red-400 hover:bg-red-400/10 rounded-md transition-colors disabled:opacity-50" title="Desativar Acesso">
-                                                            <span className="material-symbols-outlined text-[20px]">{loadingAction === member.id ? 'hourglass_empty' : 'block'}</span>
-                                                        </button>
+                                                    {!isGlobal && (
+                                                        <>
+                                                            <button onClick={(e) => { e.stopPropagation(); openEditModal(member); }} className="p-1.5 text-[#92bbc9] hover:text-primary hover:bg-primary/10 rounded-md transition-colors" title="Editar">
+                                                                <span className="material-symbols-outlined text-[20px]">edit</span>
+                                                            </button>
+                                                            {userRole === 'owner' && (
+                                                                <button onClick={(e) => { e.stopPropagation(); setPasswordTargetMember({ user_id: member.user_id, name: member.name }); setIsChangePasswordOpen(true); }} className="p-1.5 text-[#92bbc9] hover:text-yellow-400 hover:bg-yellow-400/10 rounded-md transition-colors" title="Alterar Senha">
+                                                                    <span className="material-symbols-outlined text-[20px]">key</span>
+                                                                </button>
+                                                            )}
+                                                            {member.active && (
+                                                                <button onClick={(e) => { e.stopPropagation(); handleDeactivate(member.id, member.name); }} disabled={loadingAction === member.id} className="p-1.5 text-[#92bbc9] hover:text-red-400 hover:bg-red-400/10 rounded-md transition-colors disabled:opacity-50" title="Desativar Acesso">
+                                                                    <span className="material-symbols-outlined text-[20px]">{loadingAction === member.id ? 'hourglass_empty' : 'block'}</span>
+                                                                </button>
+                                                            )}
+                                                        </>
                                                     )}
                                                 </div>
                                             </td>
@@ -551,7 +607,7 @@ export function EquipeClient({ restaurantId, userRole }: Props) {
                 isOpen={isChangePasswordOpen}
                 onClose={() => { setIsChangePasswordOpen(false); setPasswordTargetMember(null); }}
                 member={passwordTargetMember}
-                restaurantId={restaurantId}
+                restaurantId={restaurantId ?? ''}
             />
         </div>
     );

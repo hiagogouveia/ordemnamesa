@@ -45,6 +45,26 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
         }
 
+        const { data: membership } = await adminSupabase
+            .from('restaurant_users')
+            .select('id')
+            .eq('restaurant_id', restaurant_id)
+            .eq('user_id', user.id)
+            .eq('active', true)
+            .maybeSingle();
+        if (!membership) {
+            return NextResponse.json({ error: 'Sem acesso a este restaurante' }, { status: 403 });
+        }
+
+        const { data: checklistOwner } = await adminSupabase
+            .from('checklists')
+            .select('id, restaurant_id')
+            .eq('id', checklistId)
+            .maybeSingle();
+        if (!checklistOwner || checklistOwner.restaurant_id !== restaurant_id) {
+            return NextResponse.json({ error: 'Checklist inválido' }, { status: 404 });
+        }
+
         // Prefer name from users table, then user_metadata, then email
         const { data: userRecord } = await adminSupabase
             .from('users')
@@ -218,6 +238,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         const { data: { user }, error: userError } = await adminSupabase.auth.getUser(token);
         if (userError || !user) {
             return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+        }
+
+        const { data: membership } = await adminSupabase
+            .from('restaurant_users')
+            .select('id')
+            .eq('restaurant_id', restaurant_id)
+            .eq('user_id', user.id)
+            .eq('active', true)
+            .maybeSingle();
+        if (!membership) {
+            return NextResponse.json({ error: 'Sem acesso a este restaurante' }, { status: 403 });
         }
 
         const dateKey = getBrazilDateKey();

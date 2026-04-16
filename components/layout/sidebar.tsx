@@ -4,24 +4,36 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Logo } from "@/components/ui/Logo";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
-import { useState, useEffect } from "react";
+import { useAccountSessionStore } from "@/lib/store/account-session-store";
+import { useAccountAccess } from "@/lib/hooks/use-account-access";
+import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useMyActivitiesBadge } from "@/lib/hooks/use-my-activities";
 
-const managerNavigation = [
+interface NavItem {
+    name: string;
+    href: string;
+    icon: string;
+    badge?: boolean;
+    globalSupported?: boolean;
+}
+
+const managerNavigation: NavItem[] = [
     { name: "Dashboard", href: "/dashboard", icon: "dashboard" },
     { name: "Meu Turno", href: "/turno", icon: "assignment_ind", badge: true },
-    { name: "Checklists", href: "/checklists", icon: "checklist" },
-    { name: "Equipe", href: "/equipe", icon: "group" },
+    { name: "Checklists", href: "/checklists", icon: "checklist", globalSupported: true },
+    { name: "Equipe", href: "/equipe", icon: "group", globalSupported: true },
     { name: "Compras", href: "/compras", icon: "shopping_cart" },
     { name: "Relatórios", href: "/relatorios", icon: "bar_chart" },
     { name: "Configurações", href: "/configuracoes", icon: "settings" },
 ];
 
-const staffNavigation = [
+const staffNavigation: NavItem[] = [
     { name: "Turno Atual", href: "/turno", icon: "dashboard", badge: true },
     { name: "Histórico", href: "/historico", icon: "history" },
 ];
+
+const GLOBAL_SUPPORTED_ROUTES = ["/equipe", "/checklists"];
 
 type SidebarProps = {
     isOpen?: boolean;
@@ -36,13 +48,81 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggle }: Sideba
     const restaurantName = useRestaurantStore((state) => state.restaurantName);
     const restaurantId = useRestaurantStore((state) => state.restaurantId);
     const userRole = useRestaurantStore((state) => state.userRole);
+    const setRestaurant = useRestaurantStore((state) => state.setRestaurant);
     const clearRestaurant = useRestaurantStore((state) => state.clearRestaurant);
+    const accountId = useAccountSessionStore((state) => state.accountId);
+    const accountName = useAccountSessionStore((state) => state.accountName);
+    const accountMode = useAccountSessionStore((state) => state.mode);
+    const setAccountMode = useAccountSessionStore((state) => state.setMode);
+    const clearAccount = useAccountSessionStore((state) => state.clearAccount);
+    const isGlobal = accountMode === "global";
+    const { data: accountAccess } = useAccountAccess(accountId);
+    const units = accountAccess?.units ?? [];
+    const canGlobal = !!accountAccess?.canUseGlobal;
+    const accountRole = accountAccess?.role ?? null;
     const [userEmail, setUserEmail] = useState("");
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const [canLaunchPurchases, setCanLaunchPurchases] = useState(false);
+    const [switcherOpen, setSwitcherOpen] = useState(false);
+    const switcherRef = useRef<HTMLDivElement>(null);
     const userId = useRestaurantStore((state) => state.userId);
     const { data: badgeData } = useMyActivitiesBadge(restaurantId || undefined, userId || undefined);
     const pendingCount = badgeData?.pending ?? 0;
+
+    useEffect(() => {
+        if (!switcherOpen) return;
+        const handler = (e: MouseEvent) => {
+            if (switcherRef.current && !switcherRef.current.contains(e.target as Node)) {
+                setSwitcherOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handler);
+        return () => document.removeEventListener("mousedown", handler);
+    }, [switcherOpen]);
+
+    const enterGlobal = () => {
+        if (!canGlobal) return;
+        clearRestaurant();
+        setAccountMode("global");
+        const base = "; path=/; SameSite=Strict";
+        document.cookie = `x-restaurant-id=${base}; expires=Thu, 01 Jan 1970 00:00:01 GMT`;
+        document.cookie = `x-restaurant-role=${accountRole ?? "manager"}${base}`;
+        document.cookie = `x-restaurant-mode=global${base}`;
+        setSwitcherOpen(false);
+        if (!GLOBAL_SUPPORTED_ROUTES.some((r) => pathname.startsWith(r))) {
+            router.push("/checklists");
+        }
+    };
+
+    const switchToUnit = async (unitId: string, unitName: string) => {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data: link } = await supabase
+            .from('restaurant_users')
+            .select('role, restaurants ( id, name, slug )')
+            .eq('restaurant_id', unitId)
+            .eq('user_id', user.id)
+            .eq('active', true)
+            .maybeSingle<{ role: 'owner' | 'manager' | 'staff'; restaurants: { id: string; name: string; slug: string } | null }>();
+
+        const nextRole = link?.role ?? (accountRole === 'owner' ? 'owner' : 'manager');
+        const slug = link?.restaurants?.slug ?? '';
+
+        setRestaurant({ id: unitId, name: unitName, slug, role: nextRole, userId: user.id });
+        setAccountMode("single");
+
+        const base = "; path=/; SameSite=Strict";
+        document.cookie = `x-restaurant-id=${unitId}${base}`;
+        document.cookie = `x-restaurant-name=${encodeURIComponent(unitName)}${base}`;
+        document.cookie = `x-restaurant-slug=${slug}${base}`;
+        document.cookie = `x-restaurant-role=${nextRole}${base}`;
+        document.cookie = `x-restaurant-mode=${base}; expires=Thu, 01 Jan 1970 00:00:01 GMT`;
+
+        setSwitcherOpen(false);
+        router.refresh();
+    };
 
     const handleSignOut = async () => {
         setIsLoggingOut(true);
@@ -50,6 +130,15 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggle }: Sideba
             const supabase = createClient();
             await supabase.auth.signOut();
             clearRestaurant();
+            clearAccount();
+            const base = "; path=/; SameSite=Strict; expires=Thu, 01 Jan 1970 00:00:01 GMT";
+            document.cookie = `x-restaurant-id=${base}`;
+            document.cookie = `x-restaurant-name=${base}`;
+            document.cookie = `x-restaurant-slug=${base}`;
+            document.cookie = `x-restaurant-role=${base}`;
+            document.cookie = `x-restaurant-mode=${base}`;
+            document.cookie = `x-account-id=${base}`;
+            document.cookie = `x-account-name=${base}`;
             router.push('/login');
             router.refresh();
         } catch (error) {
@@ -121,14 +210,77 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggle }: Sideba
                 </button>
             </div>
 
-            {restaurantName && (
+            {(userRole !== 'staff') && (accountName || restaurantName) && (
+                <div ref={switcherRef} className={`relative w-full px-4 mb-8 ${collapsed ? 'lg:hidden' : ''}`}>
+                    <button
+                        type="button"
+                        onClick={() => setSwitcherOpen((v) => !v)}
+                        className="w-full bg-[#16262c] rounded-lg p-3 border border-[#233f48] flex items-center justify-between group hover:border-[#13b6ec]/50 transition-colors text-left"
+                    >
+                        <div className="flex flex-col min-w-0">
+                            <span className="text-xs text-[#92bbc9] mb-0.5">
+                                {isGlobal ? 'Contexto' : 'Restaurante Atual'}
+                            </span>
+                            <span className="text-sm text-white font-semibold truncate flex items-center gap-1.5">
+                                {isGlobal && (
+                                    <span className="material-symbols-outlined text-[#13b6ec] text-[16px]">public</span>
+                                )}
+                                {isGlobal ? `Visão Global${accountName ? ` · ${accountName}` : ''}` : restaurantName}
+                            </span>
+                        </div>
+                        <span className="material-symbols-outlined text-[#325a67] text-sm group-hover:text-[#13b6ec]">unfold_more</span>
+                    </button>
+                    {switcherOpen && (
+                        <div className="absolute left-4 right-4 mt-2 z-20 bg-[#16262c] border border-[#233f48] rounded-lg shadow-xl overflow-hidden">
+                            <div className="max-h-72 overflow-y-auto py-1">
+                                {canGlobal && (
+                                    <button
+                                        type="button"
+                                        onClick={enterGlobal}
+                                        className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-[#1a2c32] transition-colors ${isGlobal ? 'bg-[#13b6ec]/10 text-[#13b6ec]' : 'text-white'}`}
+                                    >
+                                        <span className="material-symbols-outlined text-[18px]">public</span>
+                                        <span className="flex-1 truncate">Visão Global</span>
+                                        {isGlobal && (
+                                            <span className="material-symbols-outlined text-[18px] text-[#13b6ec]">check</span>
+                                        )}
+                                    </button>
+                                )}
+                                {canGlobal && units.length > 0 && (
+                                    <div className="my-1 border-t border-[#233f48]" />
+                                )}
+                                {units.length === 0 && !canGlobal && (
+                                    <div className="px-3 py-2 text-xs text-[#92bbc9]">Nenhuma unidade disponível</div>
+                                )}
+                                {units.map((u) => {
+                                    const isCurrent = !isGlobal && u.id === restaurantId;
+                                    return (
+                                        <button
+                                            key={u.id}
+                                            type="button"
+                                            onClick={() => switchToUnit(u.id, u.name)}
+                                            className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-[#1a2c32] transition-colors ${isCurrent ? 'bg-[#13b6ec]/10 text-[#13b6ec]' : 'text-white'}`}
+                                        >
+                                            <span className="material-symbols-outlined text-[18px]">storefront</span>
+                                            <span className="flex-1 truncate">{u.name}</span>
+                                            {isCurrent && (
+                                                <span className="material-symbols-outlined text-[18px] text-[#13b6ec]">check</span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+            {userRole === 'staff' && restaurantName && (
                 <div className={`w-full px-4 mb-8 ${collapsed ? 'lg:hidden' : ''}`}>
-                    <div className="w-full bg-[#16262c] rounded-lg p-3 border border-[#233f48] flex items-center justify-between group cursor-pointer hover:border-[#13b6ec]/50 transition-colors">
+                    <div className="w-full bg-[#16262c] rounded-lg p-3 border border-[#233f48] flex items-center justify-between">
                         <div className="flex flex-col min-w-0">
                             <span className="text-xs text-[#92bbc9] mb-0.5">Restaurante Atual</span>
                             <span className="text-sm text-white font-semibold truncate">{restaurantName}</span>
                         </div>
-                        <span className="material-symbols-outlined text-[#325a67] text-sm group-hover:text-[#13b6ec]">unfold_more</span>
                     </div>
                 </div>
             )}
@@ -140,7 +292,9 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggle }: Sideba
                     ? canLaunchPurchases
                         ? [...staffNavigation, { name: "Compras", href: "/compras", icon: "shopping_cart" }]
                         : staffNavigation
-                    : managerNavigation
+                    : isGlobal
+                        ? managerNavigation.filter((n) => n.globalSupported)
+                        : managerNavigation
                 ).map((item) => {
                     const isActive = pathname.startsWith(item.href);
                     return (

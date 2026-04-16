@@ -1,6 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 
+export interface EquipeMemberUnit {
+    id: string;
+    name: string;
+    role: 'staff' | 'manager' | 'owner';
+}
+
 export interface EquipeMember {
     id: string;      // ID do vinculo restaurant_users
     user_id: string; // auth.users.id
@@ -11,6 +17,7 @@ export interface EquipeMember {
     active: boolean;
     performance: number | null;
     areas: { id: string; name: string; color: string }[];
+    units?: EquipeMemberUnit[];
 }
 
 export interface EquipeData {
@@ -22,27 +29,40 @@ export interface EquipeData {
     equipe: EquipeMember[];
 }
 
+export interface EquipeScope {
+    restaurantId: string | null;
+    accountId?: string | null;
+    mode?: 'single' | 'global';
+}
+
 const getAuthToken = async () => {
     const supabase = createClient();
     const { data: { session } } = await supabase.auth.getSession();
     return session?.access_token || '';
 };
 
-export const useEquipe = (restaurantId: string | null) => {
+export const useEquipe = (arg: string | null | EquipeScope) => {
+    const scope: EquipeScope = typeof arg === 'object' && arg !== null
+        ? arg
+        : { restaurantId: arg, mode: 'single' };
+    const isGlobal = scope.mode === 'global';
+    const enabled = isGlobal ? !!scope.accountId : !!scope.restaurantId;
+
     return useQuery<EquipeData>({
-        queryKey: ['equipe', restaurantId],
+        queryKey: isGlobal ? ['equipe', 'global', scope.accountId] : ['equipe', scope.restaurantId],
         queryFn: async () => {
-            if (!restaurantId) return {
+            if (!enabled) return {
                 metrics: { total_colaboradores: 0, turnos_ativos: 0, media_desempenho: 0 },
                 equipe: []
             };
 
             const token = await getAuthToken();
+            const url = isGlobal
+                ? `/api/equipe?account_id=${scope.accountId}&mode=global`
+                : `/api/equipe?restaurant_id=${scope.restaurantId}`;
 
-            const response = await fetch(`/api/equipe?restaurant_id=${restaurantId}`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${token}` }
             });
 
             if (!response.ok) {
@@ -52,8 +72,8 @@ export const useEquipe = (restaurantId: string | null) => {
 
             return response.json();
         },
-        enabled: !!restaurantId,
-        staleTime: 5 * 60 * 1000,   // lista de colaboradores muda raramente
+        enabled,
+        staleTime: 5 * 60 * 1000,
         refetchOnWindowFocus: true,
     });
 };

@@ -3,15 +3,23 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useRestaurantStore } from '@/lib/store/restaurant-store';
+import { useAccountSessionStore } from '@/lib/store/account-session-store';
 import { EquipeClient } from './_components/equipe-client';
 
 export default function EquipePage() {
     const { restaurantId, userRole } = useRestaurantStore();
+    const accountId = useAccountSessionStore((s) => s.accountId);
+    const accountMode = useAccountSessionStore((s) => s.mode);
+    const isGlobal = accountMode === 'global';
     const router = useRouter();
 
     useEffect(() => {
         if (userRole === 'staff') router.replace('/turno');
     }, [userRole, router]);
+
+    if (isGlobal && accountId) {
+        return <EquipeClient restaurantId={null} accountId={accountId} isGlobal userRole={userRole ?? 'manager'} />;
+    }
 
     if (!restaurantId || !userRole || userRole === 'staff') {
         return (
@@ -49,3 +57,4 @@ export default function EquipePage() {
 
     return <EquipeClient restaurantId={restaurantId} userRole={userRole} />;
 }
+

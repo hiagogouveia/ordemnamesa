@@ -4,7 +4,9 @@ import { useState, useMemo, Suspense, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
+import { useAccountSessionStore } from "@/lib/store/account-session-store";
 import { useChecklists, useCreateChecklist, useDeleteChecklist, useToggleChecklistStatus } from "@/lib/hooks/use-checklists";
+import { ReplicateChecklistsModal } from "@/components/checklists/replicate-modal";
 import { useChecklistOrders, useUpdateChecklistOrders } from "@/lib/hooks/use-checklist-orders";
 import { createClient } from "@/lib/supabase/client";
 import { useAllAreas } from "@/lib/hooks/use-areas";
@@ -49,6 +51,7 @@ function ChecklistsContent() {
     const [currentMinutes, setCurrentMinutes] = useState(0);
     const [searchQuery, setSearchQuery] = useState("");
     const [editorState, setEditorState] = useState<EditorState>(null);
+    const [replicateOpen, setReplicateOpen] = useState(false);
 
     useEffect(() => { setMounted(true); }, []);
 
@@ -75,12 +78,23 @@ function ChecklistsContent() {
     // Store
     const restaurantId = useRestaurantStore((state) => state.restaurantId);
     const userRole = useRestaurantStore((state) => state.userRole);
+    const accountId = useAccountSessionStore((state) => state.accountId);
+    const accountMode = useAccountSessionStore((state) => state.mode);
+    const isGlobal = accountMode === "global";
 
     // Queries
-    const { data: checklists = [], isLoading } = useChecklists(restaurantId ?? undefined);
+    const { data: checklists = [], isLoading } = useChecklists(
+        isGlobal
+            ? { restaurantId: null, accountId, mode: 'global' }
+            : (restaurantId ?? undefined)
+    );
     const { data: orders = [] } = useChecklistOrders(restaurantId ?? undefined);
     const { data: areas = [], isLoading: isLoadingAreas } = useAllAreas(restaurantId ?? undefined);
-    const { data: equipeData } = useEquipe(restaurantId ?? null);
+    const { data: equipeData } = useEquipe(
+        isGlobal
+            ? { restaurantId: null, accountId, mode: 'global' }
+            : (restaurantId ?? null)
+    );
 
     // Mutations
     const { mutate: toggleStatus } = useToggleChecklistStatus();
@@ -403,6 +417,9 @@ function ChecklistsContent() {
         setEditorState(null);
     };
 
+    const canReplicate = userRole === "owner" || userRole === "manager";
+    const showReplicateEntry = canReplicate && !isGlobal && !!accountId && !!restaurantId;
+
     const showSidePanel = editorState?.mode === "view";
     const showEditModal = editorState?.mode === "edit" || editorState?.mode === "new";
 
@@ -410,6 +427,19 @@ function ChecklistsContent() {
 
     return (
         <div className="flex flex-col h-[calc(100vh-72px)] overflow-hidden bg-[#0a1215]">
+            {showReplicateEntry && (
+                <div className="flex items-center justify-end gap-3 px-4 py-2 bg-[#101d22] border-b border-[#233f48]">
+                    <button
+                        type="button"
+                        onClick={() => setReplicateOpen(true)}
+                        className="flex items-center gap-2 text-xs text-[#13b6ec] hover:text-white"
+                    >
+                        <span className="material-symbols-outlined text-[18px]">ios_share</span>
+                        Exportar rotinas para outra unidade
+                    </button>
+                </div>
+            )}
+
             <ChecklistHeader
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
@@ -503,6 +533,16 @@ function ChecklistsContent() {
                         initialAreaId={editorState?.mode === "new" ? selectedAreaId : undefined}
                     />
                 </Modal>
+            )}
+
+            {mounted && showReplicateEntry && (
+                <ReplicateChecklistsModal
+                    isOpen={replicateOpen}
+                    onClose={() => setReplicateOpen(false)}
+                    accountId={accountId}
+                    currentRestaurantId={restaurantId}
+                    availableChecklists={filtered.map((c) => ({ id: c.id, name: c.name }))}
+                />
             )}
         </div>
     );

@@ -1,10 +1,17 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { canUseGlobal } from '@/lib/supabase/accounts';
 
 interface PublicUser {
     name?: string | null;
     email?: string | null;
     avatar_url?: string | null;
+}
+
+interface UnitBadge {
+    id: string;
+    name: string;
+    role: 'owner' | 'manager' | 'staff';
 }
 
 const getAdminSupabase = () => {
@@ -18,9 +25,15 @@ export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
         const restaurant_id = searchParams.get('restaurant_id');
+        const account_id = searchParams.get('account_id');
+        const mode = searchParams.get('mode');
+        const isGlobal = mode === 'global';
 
-        if (!restaurant_id) {
+        if (!isGlobal && !restaurant_id) {
             return NextResponse.json({ error: 'restaurant_id é obrigatório' }, { status: 400 });
+        }
+        if (isGlobal && !account_id) {
+            return NextResponse.json({ error: 'account_id é obrigatório em modo global' }, { status: 400 });
         }
 
         const authHeader = request.headers.get('Authorization');
@@ -36,51 +49,78 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Sem autorização' }, { status: 401 });
         }
 
-        // Validação Role
-        const { data: userRole } = await adminSupabase
-            .from('restaurant_users')
-            .select('role')
-            .eq('restaurant_id', restaurant_id)
-            .eq('user_id', user.id)
-            .eq('active', true)
-            .single();
+        // Resolver lista de restaurant_ids que a query vai agregar.
+        // Em global: server-side via canUseGlobal (nunca confia no frontend).
+        // Em single: apenas o restaurant_id passado, com validação de role.
+        let restaurantIds: string[] = [];
+        const unitsById: Record<string, { id: string; name: string }> = {};
 
-        if (!userRole || userRole.role === 'staff') {
-            return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
+        if (isGlobal) {
+            const { allowed, units } = await canUseGlobal(adminSupabase, account_id!, user.id);
+            if (!allowed) {
+                return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
+            }
+            restaurantIds = units.map((u) => u.id);
+            for (const u of units) unitsById[u.id] = { id: u.id, name: u.name };
+        } else {
+            const { data: userRole } = await adminSupabase
+                .from('restaurant_users')
+                .select('role')
+                .eq('restaurant_id', restaurant_id!)
+                .eq('user_id', user.id)
+                .eq('active', true)
+                .single();
+
+            if (!userRole || userRole.role === 'staff') {
+                return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
+            }
+
+            const { data: rest } = await adminSupabase
+                .from('restaurants')
+                .select('id, name')
+                .eq('id', restaurant_id!)
+                .maybeSingle<{ id: string; name: string }>();
+            if (rest) unitsById[rest.id] = { id: rest.id, name: rest.name };
+            restaurantIds = [restaurant_id!];
+        }
+
+        if (restaurantIds.length === 0) {
+            return NextResponse.json({
+                metrics: { total_colaboradores: 0, turnos_ativos: 0, media_desempenho: 0 },
+                equipe: [],
+            });
         }
 
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-        // 1. Tabela de Colaboradores
-        // Puxa todos os restaurant_users vinculados e info da tabela users
         const { data: members, error: membersErr } = await adminSupabase
             .from('restaurant_users')
             .select(`
                 id,
+                restaurant_id,
                 user_id,
                 role,
                 active,
                 joined_at,
                 user:users(id, name, email, avatar_url)
             `)
-            .eq('restaurant_id', restaurant_id);
+            .in('restaurant_id', restaurantIds);
 
         if (membersErr) throw membersErr;
 
-        // 2. Áreas de cada colaborador (fonte única: user_areas + areas)
         const [
             { data: userAreaRows, error: userAreasErr },
             { data: allAreasData, error: areasErr },
         ] = await Promise.all([
             adminSupabase
                 .from('user_areas')
-                .select('user_id, area_id')
-                .eq('restaurant_id', restaurant_id),
+                .select('user_id, area_id, restaurant_id')
+                .in('restaurant_id', restaurantIds),
             adminSupabase
                 .from('areas')
-                .select('id, name, color')
-                .eq('restaurant_id', restaurant_id),
+                .select('id, name, color, restaurant_id')
+                .in('restaurant_id', restaurantIds),
         ]);
 
         if (userAreasErr) console.error('[GET /api/equipe] user_areas error:', userAreasErr);
@@ -99,21 +139,18 @@ export async function GET(request: Request) {
                 const area = areasById[ua.area_id];
                 if (!area) continue;
                 if (!areasMap[ua.user_id]) areasMap[ua.user_id] = [];
-                areasMap[ua.user_id].push(area);
+                if (!areasMap[ua.user_id].some((a) => a.id === area.id)) {
+                    areasMap[ua.user_id].push(area);
+                }
             }
         }
 
-        // 3. Desempenho dos Colaboradores (Tarefas concluídas últimos 7 dias)
         const { data: execucoes } = await adminSupabase
             .from('task_executions')
             .select('user_id, status')
-            .eq('restaurant_id', restaurant_id)
+            .in('restaurant_id', restaurantIds)
             .gte('executed_at', sevenDaysAgo.toISOString());
 
-        // Precisamos saber o total esperado global por staff?
-        // O mais simples de performance rate inter-staffs é pegar as tasks que eles concluiram como done e dividir por total que mexeram, ou só número absoluto.
-        // O layout pede "% de desempenho", que poderia ser (tarefas done / todas as execs que ele consta)? Ou total tasks do restaurante.
-        // Vamos usar tasks_done / total de execucoes no qual estão associados nas últimas 1 semanas.
         const performanceMap: Record<string, { done: number, total: number }> = {};
         let totalDoneGlobal = 0;
         let totalExecsGlobal = 0;
@@ -136,22 +173,76 @@ export async function GET(request: Request) {
 
         const globalPerformance = totalExecsGlobal > 0 ? Math.round((totalDoneGlobal / totalExecsGlobal) * 100) : 0;
 
-        // Estruturar retorno para a página
+        // Em single mode: 1 linha por vínculo (preserva contrato existente).
+        // Em global mode: 1 linha por user, com units[] listando vínculos.
+        if (isGlobal) {
+            const byUser = new Map<string, {
+                id: string;
+                user_id: string;
+                name: string;
+                email: string;
+                avatar: string | null;
+                role: 'owner' | 'manager' | 'staff';
+                active: boolean;
+                units: UnitBadge[];
+            }>();
+
+            for (const m of members || []) {
+                const u = m.user as unknown as PublicUser | null;
+                const unit = unitsById[m.restaurant_id];
+                if (!unit) continue;
+                const existing = byUser.get(m.user_id);
+                const link: UnitBadge = { id: unit.id, name: unit.name, role: m.role };
+                if (existing) {
+                    if (!existing.units.some((x) => x.id === link.id)) existing.units.push(link);
+                    // Papel global: maior nível vence (owner > manager > staff).
+                    const rank = { owner: 3, manager: 2, staff: 1 };
+                    if (rank[link.role] > rank[existing.role]) existing.role = link.role;
+                    if (m.active) existing.active = true;
+                } else {
+                    byUser.set(m.user_id, {
+                        id: m.id,
+                        user_id: m.user_id,
+                        name: u ? (u.name || 'Usuário Pendente') : 'Desconhecido',
+                        email: u?.email || 'N/A',
+                        avatar: u?.avatar_url || null,
+                        role: m.role,
+                        active: m.active,
+                        units: [link],
+                    });
+                }
+            }
+
+            const equipeFormated = Array.from(byUser.values()).map((row) => {
+                const pStats = performanceMap[row.user_id] || { done: 0, total: 0 };
+                const rating = pStats.total > 0 ? Math.round((pStats.done / pStats.total) * 100) : 100;
+                return {
+                    ...row,
+                    performance: pStats.total === 0 ? null : rating,
+                    areas: areasMap[row.user_id] || [],
+                };
+            });
+
+            const activeCount = equipeFormated.filter((e) => e.active).length;
+            return NextResponse.json({
+                metrics: {
+                    total_colaboradores: equipeFormated.length,
+                    turnos_ativos: Math.floor(activeCount * 0.4),
+                    media_desempenho: globalPerformance,
+                },
+                equipe: equipeFormated,
+            });
+        }
+
         const activeMembers = members?.filter(m => m.active) || [];
-        const turnosAtivos = Math.floor(activeMembers.length * 0.4); // Mock: approx at working shifts
+        const turnosAtivos = Math.floor(activeMembers.length * 0.4);
 
         const equipeFormated = members?.map(m => {
             const u = m.user as unknown as PublicUser | null;
-            const pmId = m.user_id || m.id; // se por algum motivo for nulo o user_id, usa uuid de vinculo
+            const pmId = m.user_id || m.id;
             const pStats = performanceMap[pmId] || { done: 0, total: 0 };
-
-            // % rating
-            let rating = 0;
-            if (pStats.total > 0) {
-                rating = Math.round((pStats.done / pStats.total) * 100);
-            } else {
-                rating = 100; // se ele nao fez nada, nao penaliza. Se precisarmos ver vazio, retornamos null
-            }
+            const rating = pStats.total > 0 ? Math.round((pStats.done / pStats.total) * 100) : 100;
+            const unit = unitsById[m.restaurant_id];
 
             return {
                 id: m.id,
@@ -162,11 +253,11 @@ export async function GET(request: Request) {
                 role: m.role,
                 active: m.active,
                 performance: pStats.total === 0 ? null : rating,
-                areas: areasMap[m.user_id] || []
+                areas: areasMap[m.user_id] || [],
+                units: unit ? [{ id: unit.id, name: unit.name, role: m.role }] : [],
             };
         });
 
-        // Retornar também métricas do Header da Equipe
         return NextResponse.json({
             metrics: {
                 total_colaboradores: members?.length || 0,
@@ -182,8 +273,22 @@ export async function GET(request: Request) {
     }
 }
 
+function rejectIfGlobal(request: Request): NextResponse | null {
+    const mode = new URL(request.url).searchParams.get('mode');
+    if (mode === 'global') {
+        return NextResponse.json(
+            { error: 'Operação bloqueada em Visão Global. Selecione uma unidade.' },
+            { status: 403 }
+        );
+    }
+    return null;
+}
+
 export async function POST(request: Request) {
     try {
+        const blocked = rejectIfGlobal(request);
+        if (blocked) return blocked;
+
         const authHeader = request.headers.get('Authorization');
         if (!authHeader) {
             return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
@@ -330,6 +435,9 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
     try {
+        const blocked = rejectIfGlobal(request);
+        if (blocked) return blocked;
+
         const authHeader = request.headers.get('Authorization');
         if (!authHeader) {
             return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });

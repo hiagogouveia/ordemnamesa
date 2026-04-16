@@ -36,8 +36,13 @@ export async function POST(request: Request) {
         status: 301,
     })
 
-    // Limpar cookie de role ao fazer logout
+    // Limpar cookies de contexto ao fazer logout
     response.cookies.set('x-restaurant-role', '', { path: '/', maxAge: 0 })
+    response.cookies.set('x-restaurant-id', '', { path: '/', maxAge: 0 })
+    response.cookies.set('x-restaurant-name', '', { path: '/', maxAge: 0 })
+    response.cookies.set('x-restaurant-slug', '', { path: '/', maxAge: 0 })
+    response.cookies.set('x-account-id', '', { path: '/', maxAge: 0 })
+    response.cookies.set('x-account-name', '', { path: '/', maxAge: 0 })
 
     return response
 }

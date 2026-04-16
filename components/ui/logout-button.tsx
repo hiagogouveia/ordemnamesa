@@ -1,19 +1,24 @@
 'use client'
 
 import { useRestaurantStore } from '@/lib/store/restaurant-store'
+import { useAccountSessionStore } from '@/lib/store/account-session-store'
 
 export function LogoutButton() {
     const clearRestaurant = useRestaurantStore((state) => state.clearRestaurant)
+    const clearAccount = useAccountSessionStore((state) => state.clearAccount)
 
     const handleLogout = async () => {
         clearRestaurant()
+        clearAccount()
 
-        // Limpar cookies de contexto do restaurante
+        // Limpar cookies de contexto (restaurante + account)
         const expired = 'expires=Thu, 01 Jan 1970 00:00:01 GMT; path=/; SameSite=Strict';
         document.cookie = `x-restaurant-role=; ${expired}`;
         document.cookie = `x-restaurant-id=; ${expired}`;
         document.cookie = `x-restaurant-name=; ${expired}`;
         document.cookie = `x-restaurant-slug=; ${expired}`;
+        document.cookie = `x-account-id=; ${expired}`;
+        document.cookie = `x-account-name=; ${expired}`;
 
         // Calls the sign out API route
         await fetch('/api/auth/signout', {

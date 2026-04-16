@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { ExecutionStatus } from '@/lib/types';
 import { getBrazilDateKey } from '@/lib/utils/brazil-date';
+import { canUseGlobal } from '@/lib/supabase/accounts';
 
 const getAdminSupabase = () => {
     return createClient(
@@ -10,13 +11,30 @@ const getAdminSupabase = () => {
     );
 };
 
+function rejectIfGlobal(request: Request): NextResponse | null {
+    const mode = new URL(request.url).searchParams.get('mode');
+    if (mode === 'global') {
+        return NextResponse.json(
+            { error: 'Operação bloqueada em Visão Global. Selecione uma unidade.' },
+            { status: 403 }
+        );
+    }
+    return null;
+}
+
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
         const restaurant_id = searchParams.get('restaurant_id');
+        const account_id = searchParams.get('account_id');
+        const mode = searchParams.get('mode');
+        const isGlobal = mode === 'global';
 
-        if (!restaurant_id) {
+        if (!isGlobal && !restaurant_id) {
             return NextResponse.json({ error: 'restaurant_id é obrigatório' }, { status: 400 });
+        }
+        if (isGlobal && !account_id) {
+            return NextResponse.json({ error: 'account_id é obrigatório em modo global' }, { status: 400 });
         }
 
         const authHeader = request.headers.get('Authorization');
@@ -33,19 +51,41 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
         }
 
-        const { data: userRole } = await adminSupabase
-            .from('restaurant_users')
-            .select('role')
-            .eq('restaurant_id', restaurant_id)
-            .eq('user_id', user.id)
-            .eq('active', true)
-            .single();
+        let restaurantIds: string[] = [];
+        const unitsById: Record<string, { id: string; name: string }> = {};
 
-        if (!userRole) {
-            return NextResponse.json({ error: 'Permissões do restaurante não encontradas' }, { status: 403 });
+        if (isGlobal) {
+            const { allowed, units } = await canUseGlobal(adminSupabase, account_id!, user.id);
+            if (!allowed) {
+                return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
+            }
+            restaurantIds = units.map((u) => u.id);
+            for (const u of units) unitsById[u.id] = { id: u.id, name: u.name };
+        } else {
+            const { data: userRole } = await adminSupabase
+                .from('restaurant_users')
+                .select('role')
+                .eq('restaurant_id', restaurant_id!)
+                .eq('user_id', user.id)
+                .eq('active', true)
+                .single();
+
+            if (!userRole) {
+                return NextResponse.json({ error: 'Permissões do restaurante não encontradas' }, { status: 403 });
+            }
+            const { data: rest } = await adminSupabase
+                .from('restaurants')
+                .select('id, name')
+                .eq('id', restaurant_id!)
+                .maybeSingle<{ id: string; name: string }>();
+            if (rest) unitsById[rest.id] = { id: rest.id, name: rest.name };
+            restaurantIds = [restaurant_id!];
         }
 
-        // Buscar checklists, assumptions de hoje e task_executions bloqueadas em paralelo
+        if (restaurantIds.length === 0) {
+            return NextResponse.json([]);
+        }
+
         const todayKey = getBrazilDateKey();
 
         const [checklistsResult, assumptionsResult, blockedTasksResult] = await Promise.all([
@@ -58,18 +98,17 @@ export async function GET(request: Request) {
                     responsible:users!assigned_to_user_id ( id, name ),
                     tasks:checklist_tasks (*)
                 `)
-                .eq('restaurant_id', restaurant_id)
+                .in('restaurant_id', restaurantIds)
                 .order('order_index', { ascending: true }),
             adminSupabase
                 .from('checklist_assumptions')
                 .select('id, checklist_id, user_id, user_name, execution_status, completed_at, blocked_reason')
-                .eq('restaurant_id', restaurant_id)
+                .in('restaurant_id', restaurantIds)
                 .eq('date_key', todayKey),
-            // Buscar task_executions com status='blocked' de hoje para derivar impedimento
             adminSupabase
                 .from('task_executions')
                 .select('checklist_id, checklist_assumption_id')
-                .eq('restaurant_id', restaurant_id)
+                .in('restaurant_id', restaurantIds)
                 .eq('status', 'blocked')
                 .gte('executed_at', new Date(todayKey).toISOString()),
         ]);
@@ -88,7 +127,7 @@ export async function GET(request: Request) {
                         responsible:users!assigned_to_user_id ( id, name ),
                         tasks:checklist_tasks (*)
                     `)
-                    .eq('restaurant_id', restaurant_id)
+                    .in('restaurant_id', restaurantIds)
                     .order('created_at', { ascending: false });
 
                 if (fallbackFetch.error) {
@@ -125,6 +164,7 @@ export async function GET(request: Request) {
 
         interface ChecklistRow {
             id: string;
+            restaurant_id: string;
             tasks?: { order: number }[];
             [key: string]: unknown;
         }
@@ -138,18 +178,19 @@ export async function GET(request: Request) {
             } else if (assumption.completed_at !== null || assumption.execution_status === 'done') {
                 execution_status = 'done';
             } else if (assumptionIdsWithBlockedTasks.has(assumption.id)) {
-                // Derivar "blocked" a partir das task_executions, não da assumption
                 execution_status = 'blocked';
             } else {
                 execution_status = 'in_progress';
             }
 
+            const unit = unitsById[checklist.restaurant_id];
             return {
                 ...checklist,
                 tasks: (checklist.tasks ?? []).sort((a: { order: number }, b: { order: number }) => a.order - b.order),
                 execution_status,
                 assumed_by_name: assumption?.user_name ?? null,
                 assumed_by_user_id: assumption?.user_id ?? null,
+                unit: unit ? { id: unit.id, name: unit.name } : null,
             };
         });
 
@@ -162,6 +203,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
     try {
+        const blocked = rejectIfGlobal(request);
+        if (blocked) return blocked;
+
         const authHeader = request.headers.get('Authorization');
         if (!authHeader) {
             return NextResponse.json({ error: 'Não autorizado. Token ausente.' }, { status: 401 });

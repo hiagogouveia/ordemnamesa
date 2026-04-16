@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { ShiftsTab } from "./_components/shifts-tab";
 import { AreasTab } from "./_components/areas-tab";
+import { UnidadesTab } from "./_components/unidades-tab";
 
-type TabId = "turnos" | "funcoes" | "geral";
+type TabId = "unidades" | "turnos" | "funcoes" | "geral";
 
 export default function ConfiguracoesPage() {
-    const [activeTab, setActiveTab] = useState<TabId>("turnos");
+    const [activeTab, setActiveTab] = useState<TabId>("unidades");
 
     return (
         <div className="flex flex-col h-full bg-[#101d22]">
@@ -24,6 +25,12 @@ export default function ConfiguracoesPage() {
 
                 {/* Tabs */}
                 <div className="flex items-center gap-6 overflow-x-auto no-scrollbar border-b border-[#233f48]">
+                    <button
+                        onClick={() => setActiveTab("unidades")}
+                        className={`pb-4 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeTab === "unidades" ? "border-[#13b6ec] text-[#13b6ec]" : "border-transparent text-[#92bbc9] hover:text-white"}`}
+                    >
+                        Unidades
+                    </button>
                     <button
                         onClick={() => setActiveTab("turnos")}
                         className={`pb-4 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeTab === "turnos" ? "border-[#13b6ec] text-[#13b6ec]" : "border-transparent text-[#92bbc9] hover:text-white"}`}
@@ -47,6 +54,7 @@ export default function ConfiguracoesPage() {
 
             {/* Content Area */}
             <div className="flex-1 overflow-y-auto p-6 lg:p-8">
+                {activeTab === "unidades" && <UnidadesTab />}
                 {activeTab === "turnos" && <ShiftsTab />}
                 {activeTab === "funcoes" && <AreasTab />}
                 {activeTab === "geral" && (

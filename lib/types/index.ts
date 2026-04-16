@@ -10,6 +10,30 @@ export interface Restaurant {
     cep?: string | null
     address?: string | null
     created_at: string
+    account_id: string
+    is_primary: boolean
+    deleted_at?: string | null
+}
+
+// Sprint 28 — Accounts (tenant de topo)
+export type AccountRole = 'owner' | 'manager'
+
+export interface Account {
+    id: string
+    name: string
+    plan_id?: string | null
+    active: boolean
+    created_at: string
+    updated_at: string
+}
+
+export interface AccountUser {
+    id: string
+    account_id: string
+    user_id: string
+    role: AccountRole
+    active: boolean
+    created_at: string
 }
 
 export type ChecklistStatus = 'active' | 'draft' | 'archived'

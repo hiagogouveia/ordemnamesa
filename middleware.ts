@@ -43,18 +43,38 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(url)
     }
 
-    // Redirect to /selecionar-restaurante if authenticated user tries to access /login or /cadastro
+    // Redirect to /selecionar-account if authenticated user tries to access /login or /cadastro
     if (user && ['/login', '/cadastro', '/signup'].includes(request.nextUrl.pathname)) {
         const url = request.nextUrl.clone()
-        url.pathname = '/selecionar-restaurante'
+        url.pathname = '/selecionar-account'
         return NextResponse.redirect(url)
     }
 
     // Redirect logged-in user away from Root
     if (user && request.nextUrl.pathname === '/') {
         const url = request.nextUrl.clone()
-        url.pathname = '/selecionar-restaurante'
+        url.pathname = '/selecionar-account'
         return NextResponse.redirect(url)
+    }
+
+    // Exigir account selecionada para rotas autenticadas (exceto a própria seleção e API)
+    const pathnameForAccountCheck = request.nextUrl.pathname
+    const accountSelectionRoutes = ['/selecionar-account']
+    const skipsAccountCheck =
+        accountSelectionRoutes.includes(pathnameForAccountCheck) ||
+        pathnameForAccountCheck.startsWith('/api') ||
+        pathnameForAccountCheck.startsWith('/blog') ||
+        pathnameForAccountCheck === '/login' ||
+        pathnameForAccountCheck === '/cadastro' ||
+        pathnameForAccountCheck === '/signup'
+
+    if (user && !skipsAccountCheck) {
+        const accountId = request.cookies.get('x-account-id')?.value
+        if (!accountId) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/selecionar-account'
+            return NextResponse.redirect(url)
+        }
     }
 
     // Proteção de rotas por role

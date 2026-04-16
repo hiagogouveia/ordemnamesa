@@ -126,29 +126,83 @@ export async function POST(request: Request) {
         // 6. Gerar slug único
         const slug = generateSlug(nome_fantasia.trim())
 
-        // 7. Criar restaurante + vínculo owner via RPC (transação atômica)
-        const { error: rpcError } = await adminSupabase.rpc('signup_create_restaurant', {
-            p_user_id: newUserId,
-            p_email: email.trim(),
-            p_name: nome_responsavel.trim(),
-            p_rest_name: nome_fantasia.trim(),
-            p_rest_slug: slug,
-            p_cnpj: cnpjDigits,
-            p_phone: telefoneDigits,
-            p_cep: cepDigits,
-            p_address: endereco.trim(),
-        })
+        // 7. Garantir row em public.users (trigger on_auth_user_created já faz isso,
+        //    upsert como safety net caso haja race condition marginal)
+        const { error: userRowError } = await adminSupabase
+            .from('users')
+            .upsert(
+                { id: newUserId, email: email.trim(), name: nome_responsavel.trim() },
+                { onConflict: 'id' }
+            )
+        if (userRowError) throw userRowError
 
-        if (rpcError) {
-            // Compensating action: remover auth user para evitar registro órfão
-            await adminSupabase.auth.admin.deleteUser(newUserId)
-            newUserId = null
+        // 8. Criar account (tenant de topo) + vínculo owner
+        const { data: accountData, error: accountError } = await adminSupabase
+            .from('accounts')
+            .insert({ name: nome_fantasia.trim() })
+            .select('id')
+            .single<{ id: string }>()
+        if (accountError || !accountData) {
+            throw accountError ?? new Error('Falha ao criar account.')
+        }
+        const newAccountId = accountData.id
 
-            const msg = rpcError.message.toLowerCase()
-            if (msg.includes('restaurants_cnpj_key')) {
+        const { error: accountUserError } = await adminSupabase
+            .from('account_users')
+            .insert({
+                account_id: newAccountId,
+                user_id: newUserId,
+                role: 'owner',
+                active: true,
+            })
+        if (accountUserError) {
+            await adminSupabase.from('accounts').delete().eq('id', newAccountId)
+            throw accountUserError
+        }
+
+        // 9. Criar restaurante (vinculado à account) + vínculo owner em restaurant_users
+        const { data: restaurantData, error: restaurantError } = await adminSupabase
+            .from('restaurants')
+            .insert({
+                name: nome_fantasia.trim(),
+                slug,
+                owner_id: newUserId,
+                cnpj: cnpjDigits,
+                phone: telefoneDigits,
+                cep: cepDigits,
+                address: endereco.trim(),
+                account_id: newAccountId,
+                is_primary: true,
+            })
+            .select('id')
+            .single<{ id: string }>()
+
+        if (restaurantError || !restaurantData) {
+            await adminSupabase.from('account_users').delete().eq('account_id', newAccountId)
+            await adminSupabase.from('accounts').delete().eq('id', newAccountId)
+
+            const msg = (restaurantError?.message ?? '').toLowerCase()
+            if (msg.includes('cnpj')) {
+                await adminSupabase.auth.admin.deleteUser(newUserId)
+                newUserId = null
                 return NextResponse.json({ error: 'CNPJ já cadastrado.' }, { status: 409 })
             }
-            throw rpcError
+            throw restaurantError ?? new Error('Falha ao criar restaurante.')
+        }
+
+        const { error: restaurantUserError } = await adminSupabase
+            .from('restaurant_users')
+            .insert({
+                restaurant_id: restaurantData.id,
+                user_id: newUserId,
+                role: 'owner',
+                active: true,
+            })
+        if (restaurantUserError) {
+            await adminSupabase.from('restaurants').delete().eq('id', restaurantData.id)
+            await adminSupabase.from('account_users').delete().eq('account_id', newAccountId)
+            await adminSupabase.from('accounts').delete().eq('id', newAccountId)
+            throw restaurantUserError
         }
 
         return NextResponse.json({ success: true }, { status: 201 })
