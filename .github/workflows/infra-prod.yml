@@ -45,7 +45,6 @@ jobs:
           host: ${{ secrets.PROD_VM_HOST }}
           username: root
           key: ${{ secrets.PROD_VM_SSH_PRIVATE_KEY }}
-          script_stop: true
           script: |
             set -euo pipefail
             echo "=== Iniciando setup idempotente da VPS PROD ==="
