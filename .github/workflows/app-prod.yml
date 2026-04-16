@@ -114,8 +114,12 @@ jobs:
             # Autenticar no GHCR para pull de imagem privada
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # Escrever .env a partir do secret único PROD_APP_ENV + IMAGE_TAG
-            printf '%s\nIMAGE_TAG=%s\n' "$APP_ENV" "$IMAGE_TAG" > .env
+            # Escrever .env whitelistando apenas as 4 chaves da aplicação
+            # (protege contra secret contendo comentários, SSH keys ou outras vars)
+            {
+              printf '%s\n' "$APP_ENV" | grep -E '^(NEXT_PUBLIC_SUPABASE_URL|NEXT_PUBLIC_SUPABASE_ANON_KEY|SUPABASE_SERVICE_ROLE_KEY|RESEND_API_KEY)=' || true
+              printf 'IMAGE_TAG=%s\n' "$IMAGE_TAG"
+            } > .env
 
             # Normalizar nomes de arquivo (prod → padrão esperado pelo compose)
             [ -f docker-compose.prod.yml ] && mv docker-compose.prod.yml docker-compose.yml || true
