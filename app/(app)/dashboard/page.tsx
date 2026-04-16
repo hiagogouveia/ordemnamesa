@@ -168,9 +168,6 @@ export default function DashboardPage() {
             {/* ── Header ────────────────────────────────────────────────── */}
             <header className="flex items-center justify-between h-16 px-6 border-b border-[#233f48] bg-surface-dark/50 backdrop-blur-sm sticky top-0 z-20">
                 <div className="flex items-center gap-4">
-                    <button className="md:hidden text-white">
-                        <span className="material-symbols-outlined">menu</span>
-                    </button>
                     <div>
                         <h2 className="text-white text-lg font-bold leading-tight">Visão Geral Hoje</h2>
                         <p className="text-[#92bbc9] text-xs capitalize">{formattedDate} • {restaurantName || 'Matriz'}</p>

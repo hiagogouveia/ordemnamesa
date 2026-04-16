@@ -36,6 +36,7 @@ interface ChecklistRow {
     recurrence?: string | null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recurrence_config?: any;
+    assigned_to_user_id: string | null;
     areas: { id: string; name: string; color: string } | null;
     checklist_tasks: { id: string; is_critical: boolean }[];
 }
@@ -135,7 +136,7 @@ export async function GET(request: Request) {
             // Checklists ativos — apenas metadados (nome, área, tasks, horários)
             adminSupabase
                 .from('checklists')
-                .select('id, name, shift, area_id, end_time, start_time, recurrence, recurrence_config, areas(id, name, color), checklist_tasks(id, is_critical)')
+                .select('id, name, shift, area_id, end_time, start_time, recurrence, recurrence_config, assigned_to_user_id, areas(id, name, color), checklist_tasks(id, is_critical)')
                 .eq('restaurant_id', restaurant_id)
                 .eq('active', true)
                 .eq('status', 'active'),
@@ -368,6 +369,14 @@ export async function GET(request: Request) {
             }
         });
 
+        // ── Rotinas esperadas hoje, não assumidas e atrasadas ─────────────
+        // Visão operacional: alerta dispara mesmo sem alguém ter assumido.
+        // Dedup por checklist_id — se já há assumption, o loop acima já cuidou.
+        const assumedChecklistIds = new Set(todayAssumptions.map(a => a.checklist_id));
+        const unassumedOverdueChecklists = checklists.filter(cl =>
+            !assumedChecklistIds.has(cl.id) && !!cl.end_time && nowHHMM > cl.end_time
+        );
+
         // Diff alertas ontem
         let alertasYesterday = 0;
         yesterdayAssumptions.forEach(a => {
@@ -378,34 +387,35 @@ export async function GET(request: Request) {
             if (hasCritical) alertasYesterday++;
         });
 
-        // Alertas já estão na ordem correta (processados por prioridade)
-        // Mas garantir critical antes de warning na lista final
-        alertasRecentes.sort((a, b) => {
-            if (a.severity === 'critical' && b.severity !== 'critical') return -1;
-            if (a.severity !== 'critical' && b.severity === 'critical') return 1;
-            return 0;
-        });
-
         // ── 3. Equipe Ativa ───────────────────────────────────────────────
         // Base: distinct user_id com pelo menos 1 assumption hoje
         const todayUserIds = [...new Set(todayAssumptions.map(a => a.user_id))];
         const yesterdayUserIds = [...new Set(yesterdayAssumptions.map(a => a.user_id))];
 
-        // Round 2: Detalhes dos usuários ativos hoje
+        // Round 2: Detalhes dos usuários ativos hoje + atribuídos a rotinas atrasadas não assumidas
         const usersMap: Record<string, { name: string; avatar_url: string | null }> = {};
         const userRolesMap: Record<string, string> = {};
 
-        if (todayUserIds.length > 0) {
+        // Batch único: usuários que assumiram + usuários atribuídos a rotinas não assumidas atrasadas
+        const extraAssignedUserIds = unassumedOverdueChecklists
+            .map(cl => cl.assigned_to_user_id)
+            .filter((id): id is string => !!id);
+        const userIdsToFetch = [...new Set([...todayUserIds, ...extraAssignedUserIds])];
+
+        if (userIdsToFetch.length > 0) {
             const [usersRes, userRolesRes] = await Promise.all([
                 adminSupabase
                     .from('users')
                     .select('id, name, avatar_url')
-                    .in('id', todayUserIds),
-                adminSupabase
-                    .from('user_roles')
-                    .select('user_id, roles(name)')
-                    .eq('restaurant_id', restaurant_id)
-                    .in('user_id', todayUserIds),
+                    .in('id', userIdsToFetch),
+                // user_roles só é usado por top_performers → basta quem executou hoje
+                todayUserIds.length > 0
+                    ? adminSupabase
+                        .from('user_roles')
+                        .select('user_id, roles(name)')
+                        .eq('restaurant_id', restaurant_id)
+                        .in('user_id', todayUserIds)
+                    : Promise.resolve({ data: [] as unknown[] }),
             ]);
 
             (usersRes.data || []).forEach((u: { id: string; name: string | null; avatar_url: string | null }) => {
@@ -424,6 +434,42 @@ export async function GET(request: Request) {
             nome: usersMap[uid]?.name || 'Colaborador',
             avatar: usersMap[uid]?.avatar_url || null,
         }));
+
+        // ── Alertas de rotinas atrasadas não assumidas ────────────────────
+        // Visão operacional: mostra atraso independente de alguém ter assumido.
+        // assigned_to_user_id = null → responsável "Equipe"; caso contrário, nome do usuário.
+        unassumedOverdueChecklists.forEach(cl => {
+            const responsavelNome = cl.assigned_to_user_id
+                ? (usersMap[cl.assigned_to_user_id]?.name || 'Colaborador')
+                : 'Equipe';
+
+            alertasAbertos++;
+            alertasRecentes.push({
+                id: cl.id,
+                title: cl.name,
+                time_ago: 'Atrasado',
+                notes: `Prazo: ${cl.end_time} — rotina não assumida`,
+                severity: 'warning',
+                alert_type: 'atrasado',
+                responsavel_nome: responsavelNome,
+            });
+            tarefasCriticas.push({
+                id: cl.id,
+                tipo: 'atrasado',
+                checklist_nome: cl.name,
+                checklist_id: cl.id,
+                responsavel_nome: responsavelNome,
+                responsavel_id: cl.assigned_to_user_id || '',
+                tempo_atraso: `Prazo: ${cl.end_time}`,
+            });
+        });
+
+        // Ordenação final: critical antes de warning
+        alertasRecentes.sort((a, b) => {
+            if (a.severity === 'critical' && b.severity !== 'critical') return -1;
+            if (a.severity !== 'critical' && b.severity === 'critical') return 1;
+            return 0;
+        });
 
         // ── Equipe Detalhes (com status operacional) ──────────────────────
         // Status: impedimento > atrasado > em_andamento > concluiu
