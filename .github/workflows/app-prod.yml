@@ -124,10 +124,10 @@ jobs:
             # Normalizar nomes de arquivo (prod → padrão esperado pelo compose)
             [ -f docker-compose.prod.yml ] && mv docker-compose.prod.yml docker-compose.yml || true
 
-            # Configurar traefik
+            # Configurar traefik (SCP já entrega em traefik/ com sufixo .prod)
             mkdir -p traefik
-            [ -f traefik.prod.yml ] && mv traefik.prod.yml traefik/traefik.yml || true
-            [ -f routes.prod.yml ]  && mv routes.prod.yml  traefik/routes.yml  || true
+            [ -f traefik/traefik.prod.yml ] && mv -f traefik/traefik.prod.yml traefik/traefik.yml || true
+            [ -f traefik/routes.prod.yml ]  && mv -f traefik/routes.prod.yml  traefik/routes.yml  || true
 
             # Garantir acme.json com permissões corretas
             touch traefik/acme.json
