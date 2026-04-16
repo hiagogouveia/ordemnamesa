@@ -12,17 +12,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { RoutineCard } from '@/components/checklists/routine-card';
-
-function getActivityTimeStatus(
-    startTime: string | undefined,
-    endTime: string | undefined,
-    currentTime: string
-): 'always' | 'before' | 'active' | 'after' {
-    if (!startTime && !endTime) return 'always';
-    if (startTime && currentTime < startTime) return 'before';
-    if (endTime && currentTime > endTime) return 'after';
-    return 'active';
-}
+import { getRoutineState } from '@/lib/utils/routine-state';
 
 export default function KanbanPage() {
     const { restaurantId } = useRestaurantStore();
@@ -79,7 +69,13 @@ export default function KanbanPage() {
         const execMapByTaskId = new Map(executions.map(e => [e.task_id, e]));
         const assumptionByChecklistId = new Map((assumptions || []).map(a => [a.checklist_id, a]));
 
-        type EnrichedChecklist = KanbanChecklist & { taskCount: number; progress: number; flaggedTasksCount: number };
+        type EnrichedChecklist = KanbanChecklist & {
+            taskCount: number;
+            progress: number;
+            flaggedTasksCount: number;
+            hasInProgressExecution: boolean;
+            hasBlockedTask: boolean;
+        };
         const todo: EnrichedChecklist[] = [];
         const doing: EnrichedChecklist[] = [];
         const blocked: EnrichedChecklist[] = [];
@@ -117,13 +113,22 @@ export default function KanbanPage() {
             const progress = isCompletedByAssumption
                 ? 100
                 : Math.round((doneTasksCount / clTasks.length) * 100);
-            const enriched = { ...cl, taskCount: clTasks.length, progress, flaggedTasksCount };
+            const hasInProgressExecution = doneTasksCount > 0 || doingTasksCount > 0 || flaggedTasksCount > 0;
+            const hasBlockedTask = blockedTasksCount > 0;
+            const enriched = {
+                ...cl,
+                taskCount: clTasks.length,
+                progress,
+                flaggedTasksCount,
+                hasInProgressExecution,
+                hasBlockedTask,
+            };
 
             if (isCompletedByAssumption || doneTasksCount === clTasks.length) {
                 done.push(enriched);
-            } else if (blockedTasksCount > 0) {
+            } else if (hasBlockedTask) {
                 blocked.push(enriched);
-            } else if (doneTasksCount > 0 || doingTasksCount > 0 || flaggedTasksCount > 0) {
+            } else if (hasInProgressExecution) {
                 doing.push(enriched);
             } else {
                 todo.push(enriched);
@@ -311,6 +316,13 @@ export default function KanbanPage() {
                                     {filteredTodo.map(activity => {
                                         const isAssignedToOther = Boolean(activity.assigned_to_user_id && activity.assigned_to_user_id !== user?.id);
                                         const assumption = kanbanData?.assumptions?.find(a => a.checklist_id === activity.id);
+                                        const state = getRoutineState({
+                                            start_time: activity.start_time ?? null,
+                                            end_time: activity.end_time ?? null,
+                                            currentMinutes,
+                                            hasBlockedTask: activity.hasBlockedTask,
+                                            hasInProgressExecution: activity.hasInProgressExecution,
+                                        });
                                         return (
                                             <RoutineCard
                                                 key={activity.id}
@@ -322,8 +334,10 @@ export default function KanbanPage() {
                                                 currentMinutes={currentMinutes}
                                                 isRequired={activity.is_required}
                                                 isAssignedToOther={isAssignedToOther}
+                                                isAssignedToMe={assumption?.user_id === user?.id}
                                                 assumptionName={assumption?.user_name}
                                                 area={activity.roles?.name || activity.areas?.name}
+                                                state={state}
                                                 onClick={() => router.push(`/turno/atividade/${activity.id}`)}
                                             />
                                         );
@@ -336,13 +350,20 @@ export default function KanbanPage() {
                         {filteredBlocked.length > 0 && (
                             <section className="flex flex-col gap-3">
                                 <div className="flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-amber-400">warning</span>
+                                    <span className="material-symbols-outlined text-amber-400">block</span>
                                     <h2 className="text-amber-400 font-bold tracking-wide uppercase text-sm">Com Impedimento</h2>
                                     <span className="ml-auto bg-amber-400/20 text-amber-400 text-xs px-2 py-0.5 rounded-full">{filteredBlocked.length}</span>
                                 </div>
                                 <div className="flex flex-col gap-3">
                                     {filteredBlocked.map(activity => {
                                         const assumption = kanbanData?.assumptions?.find(a => a.checklist_id === activity.id);
+                                        const state = getRoutineState({
+                                            start_time: activity.start_time ?? null,
+                                            end_time: activity.end_time ?? null,
+                                            currentMinutes,
+                                            hasBlockedTask: activity.hasBlockedTask,
+                                            hasInProgressExecution: activity.hasInProgressExecution,
+                                        });
                                         return (
                                             <RoutineCard
                                                 key={activity.id}
@@ -354,8 +375,10 @@ export default function KanbanPage() {
                                                 currentMinutes={currentMinutes}
                                                 progress={activity.progress}
                                                 flaggedCount={activity.flaggedTasksCount}
+                                                isAssignedToMe={assumption?.user_id === user?.id}
                                                 assumptionName={assumption?.user_name}
                                                 area={activity.roles?.name || activity.areas?.name}
+                                                state={state}
                                                 onClick={() => router.push(`/turno/atividade/${activity.id}`)}
                                             />
                                         );
@@ -364,17 +387,24 @@ export default function KanbanPage() {
                             </section>
                         )}
 
-                        {/* EM ANDAMENTO */}
+                        {/* EM EXECUÇÃO */}
                         {filteredDoing.length > 0 && (
                             <section className="flex flex-col gap-3">
                                 <div className="flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-amber-400">hourglass_top</span>
-                                    <h2 className="text-amber-400 font-bold tracking-wide uppercase text-sm">Em Andamento</h2>
-                                    <span className="ml-auto bg-amber-400/20 text-amber-400 text-xs px-2 py-0.5 rounded-full">{filteredDoing.length}</span>
+                                    <span className="material-symbols-outlined text-[#13b6ec]">play_circle</span>
+                                    <h2 className="text-[#13b6ec] font-bold tracking-wide uppercase text-sm">Em Execução</h2>
+                                    <span className="ml-auto bg-[#13b6ec]/20 text-[#13b6ec] text-xs px-2 py-0.5 rounded-full">{filteredDoing.length}</span>
                                 </div>
                                 <div className="flex flex-col gap-3">
                                     {filteredDoing.map(activity => {
                                         const assumption = kanbanData?.assumptions?.find(a => a.checklist_id === activity.id);
+                                        const state = getRoutineState({
+                                            start_time: activity.start_time ?? null,
+                                            end_time: activity.end_time ?? null,
+                                            currentMinutes,
+                                            hasBlockedTask: activity.hasBlockedTask,
+                                            hasInProgressExecution: activity.hasInProgressExecution,
+                                        });
                                         return (
                                             <RoutineCard
                                                 key={activity.id}
@@ -386,8 +416,10 @@ export default function KanbanPage() {
                                                 currentMinutes={currentMinutes}
                                                 progress={activity.progress}
                                                 flaggedCount={activity.flaggedTasksCount}
+                                                isAssignedToMe={assumption?.user_id === user?.id}
                                                 assumptionName={assumption?.user_name}
                                                 area={activity.roles?.name || activity.areas?.name}
+                                                state={state}
                                                 onClick={() => router.push(`/turno/atividade/${activity.id}`)}
                                             />
                                         );

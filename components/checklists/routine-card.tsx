@@ -1,6 +1,7 @@
 "use client";
 
 import { ChecklistPriorityLevel, getChecklistPriority } from "@/lib/utils/checklist-priority";
+import { getRoutineState, RoutineStateInfo, RoutineStateKind } from "@/lib/utils/routine-state";
 
 export type RoutineCardVariant = "admin" | "collaborator_todo" | "collaborator_doing";
 
@@ -8,24 +9,24 @@ export interface RoutineCardProps {
     variant: RoutineCardVariant;
     title: string;
     description?: string;
-    
+
     // Time & Priority
     start_time?: string | null;
     end_time?: string | null;
     currentMinutes?: number;
-    
-    // Status visual
-    isActiveStatus?: boolean; // For Admin Active/Draft/Archived string
+
+    // Status visual (admin)
+    isActiveStatus?: boolean;
     adminStatusString?: string;
-    
+
     // Informações da Rotina
     itemsCount: number;
     shift?: string;
     sectorName?: string;
     sectorColor?: string;
-    routineType?: string; // opening, closing, receiving
+    routineType?: string;
     isRequired?: boolean;
-    
+
     // Collaborator specific
     area?: string;
     progress?: number;
@@ -33,7 +34,9 @@ export interface RoutineCardProps {
     assumptionName?: string;
     isAssignedToOther?: boolean;
     isAssignedToMe?: boolean;
-    
+    /** Estado operacional consolidado (colaborador). Se ausente, é inferido por horário. */
+    state?: RoutineStateInfo;
+
     // Events & States
     isSelected?: boolean;
     isPreview?: boolean;
@@ -45,6 +48,72 @@ export interface RoutineCardProps {
     dragHandleProps?: Record<string, any>;
 }
 
+interface StateVisual {
+    label: string;
+    icon: string | null;
+    borderCls: string;
+    badgeCls: string;
+    progressCls: string;
+    ctaLabel: string;
+    ctaCls: string;
+}
+
+function buildStateVisual(kind: RoutineStateKind, start_time?: string | null): StateVisual {
+    switch (kind) {
+        case "blocked":
+            return {
+                label: "Com impedimento",
+                icon: "block",
+                borderCls: "border-l-4 border-l-amber-500",
+                badgeCls: "bg-amber-500/15 text-amber-400 border-amber-500/40",
+                progressCls: "bg-amber-400",
+                ctaLabel: "Revisar impedimento",
+                ctaCls: "text-amber-400",
+            };
+        case "late":
+            return {
+                label: "Atrasada",
+                icon: "warning",
+                borderCls: "border-l-4 border-l-red-500",
+                badgeCls: "bg-red-500/10 text-red-400 border-red-500/40",
+                progressCls: "bg-red-400",
+                ctaLabel: "Continuar",
+                ctaCls: "text-red-400",
+            };
+        case "doing":
+            return {
+                label: "Em execução",
+                icon: "play_circle",
+                borderCls: "border-l-4 border-l-[#13b6ec]",
+                badgeCls: "bg-[#13b6ec]/10 text-[#13b6ec] border-[#13b6ec]/40",
+                progressCls: "bg-[#13b6ec]",
+                ctaLabel: "Continuar",
+                ctaCls: "text-[#13b6ec]",
+            };
+        case "future":
+            return {
+                label: start_time ? `Começa às ${start_time}` : "Futura",
+                icon: "schedule",
+                borderCls: "border-l-4 border-l-[#325a67]",
+                badgeCls: "bg-[#1a2c32] text-[#92bbc9] border-[#325a67]",
+                progressCls: "bg-[#92bbc9]",
+                ctaLabel: "Ver detalhes",
+                ctaCls: "text-[#92bbc9]",
+            };
+        case "available":
+        default:
+            return {
+                label: "Disponível",
+                icon: null,
+                borderCls: "border-l-4 border-l-[#325a67]",
+                badgeCls: "bg-[#1a2c32] text-[#92bbc9] border-[#325a67]",
+                progressCls: "bg-[#92bbc9]",
+                ctaLabel: "Ver detalhes",
+                ctaCls: "text-[#13b6ec]",
+            };
+    }
+}
+
 export function RoutineCard({
     variant,
     title,
@@ -53,7 +122,7 @@ export function RoutineCard({
     end_time,
     currentMinutes = 0,
     isActiveStatus = true,
-    adminStatusString = 'active',
+    adminStatusString = "active",
     itemsCount,
     shift,
     sectorName,
@@ -66,184 +135,113 @@ export function RoutineCard({
     isAssignedToOther = false,
     isAssignedToMe = false,
     area,
+    state,
     isSelected = false,
     isPreview = false,
     onClick,
     containerRef,
     containerStyle,
-    dragHandleProps
+    dragHandleProps,
 }: RoutineCardProps) {
-
-    // --- Time and Status Calculation ---
-    const priority = getChecklistPriority({ 
-        start_time: start_time || undefined, 
-        end_time: end_time || undefined 
-    }, currentMinutes);
     const hasTime = start_time || end_time;
 
     let timeLabel = "Sem horário";
-    if (start_time && end_time) {
-        timeLabel = `${start_time} - ${end_time}`;
-    } else if (start_time) {
-        timeLabel = `A partir de ${start_time}`;
-    } else if (end_time) {
-        timeLabel = `Até ${end_time}`;
-    }
+    if (start_time && end_time) timeLabel = `${start_time} - ${end_time}`;
+    else if (start_time) timeLabel = `A partir de ${start_time}`;
+    else if (end_time) timeLabel = `Até ${end_time}`;
 
-    const isOverdue = priority === ChecklistPriorityLevel.LATE;
-    const isFuture = priority === ChecklistPriorityLevel.FUTURE;
-    
-    // Determine dynamic borders for Collaborator TODO
-    let cardBorder = "";
-    if (variant === "collaborator_todo") {
-        if (isOverdue) cardBorder = "border-l-4 border-red-500 border-red-500/20";
-        else if (isFuture) cardBorder = "border-l-4 border-[#233f48] opacity-80";
-        else if (isRequired) cardBorder = "border-l-4 border-[#13b6ec] border-[#13b6ec]/30";
-        else cardBorder = "border-l-4 border-[#233f48]";
-    } else if (variant === "collaborator_doing") {
-        cardBorder = "border border-amber-500/20";
-    }
-
-    let cardBgClass = "bg-[#16262c] hover:bg-[#1a2c32] border-[#233f48]";
-    if (variant === "admin") {
-        cardBgClass = isSelected
-            ? "bg-[#13b6ec]/10 border-[#13b6ec]/40 shadow-[0_4px_20px_0_rgba(19,182,236,0.1)]"
-            : "bg-[#16262c] border-[#233f48] hover:border-[#325a67] hover:bg-[#1a2c32]";
-    } else {
-        cardBgClass = `bg-[#1a2c32] shadow-sm transition-all ${isPreview ? 'cursor-default' : (!isAssignedToOther ? 'cursor-pointer hover:bg-[#1f363d]' : 'opacity-75')} ${cardBorder}`;
-    }
-
-    // --- Render Helpers ---
-    const getAdminStatusBadge = (status: string) => {
-        switch (status) {
-            case 'active': return <span className="bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide">Ativo</span>;
-            case 'archived': return <span className="bg-amber-500/20 text-amber-500 border border-amber-500/30 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide">Arquivado</span>;
-            default: return <span className="bg-gray-500/20 text-gray-400 border border-gray-500/30 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide">Rascunho</span>;
+    const getShiftLabel = (s: string) => {
+        switch (s) {
+            case "morning": return "Manhã";
+            case "afternoon": return "Tarde";
+            case "evening": return "Noite";
+            default: return "Qualquer turno";
         }
     };
 
     const getTypeBadge = (type?: string) => {
         switch (type) {
-            case 'opening': return <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1"><span className="text-[12px]">🌅</span> Abertura</span>;
-            case 'closing': return <span className="bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1"><span className="text-[12px]">🌙</span> Fechamento</span>;
-            case 'receiving': return <span className="bg-amber-500/20 text-amber-500 border border-amber-500/30 px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1"><span className="text-[12px]">📦</span> Recebimento</span>;
+            case "opening": return <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1"><span className="text-[12px]">🌅</span> Abertura</span>;
+            case "closing": return <span className="bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1"><span className="text-[12px]">🌙</span> Fechamento</span>;
+            case "receiving": return <span className="bg-amber-500/20 text-amber-500 border border-amber-500/30 px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1"><span className="text-[12px]">📦</span> Recebimento</span>;
             default: return null;
         }
     };
 
-    const getShiftLabel = (s: string) => {
-        switch (s) {
-            case 'morning': return 'Manhã';
-            case 'afternoon': return 'Tarde';
-            case 'evening': return 'Noite';
-            default: return 'Qualquer turno';
-        }
-    };
+    // ---------------------- ADMIN (legado, inalterado) ----------------------
+    if (variant === "admin") {
+        const priority = getChecklistPriority({
+            start_time: start_time || undefined,
+            end_time: end_time || undefined,
+        }, currentMinutes);
 
-    const renderPriorityBadge = () => {
-        if (!hasTime) {
-            return <span className="text-[10px] font-bold text-[#92bbc9] bg-[#16262c] px-2 py-0.5 rounded-full border border-[#233f48] uppercase tracking-wide">Sem Horário</span>;
-        }
-        switch (priority) {
-            case ChecklistPriorityLevel.ACTIVE:
-                return <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 uppercase tracking-wide flex items-center gap-1"><span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span> Ativa</span>;
-            case ChecklistPriorityLevel.FUTURE:
-                return <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20 uppercase tracking-wide flex items-center gap-1"><span className="material-symbols-outlined text-[12px]">lock_clock</span> Futura</span>;
-            case ChecklistPriorityLevel.LATE:
-                return <span className="text-[10px] font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20 uppercase tracking-wide flex items-center gap-1"><span className="material-symbols-outlined text-[12px]">warning</span> Atrasada</span>;
-            default:
-                return null;
-        }
-    };
+        const renderLegacyPriorityBadge = () => {
+            if (!hasTime) {
+                return <span className="text-[10px] font-bold text-[#92bbc9] bg-[#16262c] px-2 py-0.5 rounded-full border border-[#233f48] uppercase tracking-wide">Sem Horário</span>;
+            }
+            switch (priority) {
+                case ChecklistPriorityLevel.ACTIVE:
+                    return <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 uppercase tracking-wide flex items-center gap-1"><span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span> Ativa</span>;
+                case ChecklistPriorityLevel.FUTURE:
+                    return <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20 uppercase tracking-wide flex items-center gap-1"><span className="material-symbols-outlined text-[12px]">lock_clock</span> Futura</span>;
+                case ChecklistPriorityLevel.LATE:
+                    return <span className="text-[10px] font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20 uppercase tracking-wide flex items-center gap-1"><span className="material-symbols-outlined text-[12px]">warning</span> Atrasada</span>;
+                default:
+                    return null;
+            }
+        };
 
-    return (
-        <button
-            ref={containerRef}
-            style={containerStyle}
-            onClick={() => {
-                if (!isAssignedToOther || variant === "admin") onClick();
-            }}
-            className={`w-full text-left p-4 rounded-xl border transition-all duration-200 flex flex-col gap-2 ${cardBgClass} ${dragHandleProps ? 'group/card' : ''}`}
-        >
-            <div className="flex justify-between items-start gap-3 w-full">
-                <div className="flex items-start gap-2 max-w-full overflow-hidden">
-                    {dragHandleProps && (
-                        <div
-                            {...dragHandleProps}
-                            onClick={(e) => e.stopPropagation()} // Prevent card selection when dragging
-                            className="shrink-0 -ml-2 -mt-1 p-1 flex items-center justify-center rounded hover:bg-[#101d22] cursor-grab active:cursor-grabbing text-[#325a67] group-hover/card:text-[#92bbc9] transition-colors"
-                        >
-                            <span className="material-symbols-outlined text-[18px]">drag_indicator</span>
-                        </div>
-                    )}
-                    <div className="min-w-0">
-                        <h3 className={`font-bold text-base truncate pr-2 ${variant === 'admin' ? (isSelected ? "text-white" : "text-white/90") : "text-white leading-snug"}`}>
-                            {title}
-                        </h3>
-                        
-                        {/* Responsável — destaque principal */}
-                        {variant !== 'admin' && assumptionName && (
-                            <div className={`flex items-center gap-1.5 mt-1.5 ${isAssignedToMe ? 'text-[#13b6ec]' : 'text-white'}`}>
-                                <span className={`material-symbols-outlined text-[14px] ${isAssignedToMe ? 'text-[#13b6ec]' : 'text-[#5a8a99]'}`}>person</span>
-                                <span className="text-sm font-bold">{assumptionName}</span>
+        const getAdminStatusBadge = (status: string) => {
+            switch (status) {
+                case "active": return <span className="bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide">Ativo</span>;
+                case "archived": return <span className="bg-amber-500/20 text-amber-500 border border-amber-500/30 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide">Arquivado</span>;
+                default: return <span className="bg-gray-500/20 text-gray-400 border border-gray-500/30 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide">Rascunho</span>;
+            }
+        };
+
+        const adminBgCls = isSelected
+            ? "bg-[#13b6ec]/10 border-[#13b6ec]/40 shadow-[0_4px_20px_0_rgba(19,182,236,0.1)]"
+            : "bg-[#16262c] border-[#233f48] hover:border-[#325a67] hover:bg-[#1a2c32]";
+
+        return (
+            <button
+                ref={containerRef}
+                style={containerStyle}
+                onClick={onClick}
+                className={`w-full text-left p-4 rounded-xl border transition-all duration-200 flex flex-col gap-2 ${adminBgCls} ${dragHandleProps ? "group/card" : ""}`}
+            >
+                <div className="flex justify-between items-start gap-3 w-full">
+                    <div className="flex items-start gap-2 max-w-full overflow-hidden">
+                        {dragHandleProps && (
+                            <div
+                                {...dragHandleProps}
+                                onClick={(e) => e.stopPropagation()}
+                                className="shrink-0 -ml-2 -mt-1 p-1 flex items-center justify-center rounded hover:bg-[#101d22] cursor-grab active:cursor-grabbing text-[#325a67] group-hover/card:text-[#92bbc9] transition-colors"
+                            >
+                                <span className="material-symbols-outlined text-[18px]">drag_indicator</span>
                             </div>
                         )}
-
-                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                            {variant !== 'admin' && (
-                                <span className="bg-[#1a2c32] text-[#92bbc9] border border-[#233f48] px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
-                                    <span className="material-symbols-outlined text-[12px] opacity-70">location_on</span>
-                                    {(!area || area === 'Qualquer Área') ? 'Geral' : area}
-                                </span>
-                            )}
-                            {variant !== 'admin' && (
-                                <p className="text-[#92bbc9] text-xs font-medium">{itemsCount} {itemsCount === 1 ? 'item' : 'itens'}</p>
-                            )}
+                        <div className="min-w-0">
+                            <h3 className={`font-bold text-base truncate pr-2 ${isSelected ? "text-white" : "text-white/90"}`}>
+                                {title}
+                            </h3>
                         </div>
                     </div>
+                    <div className="shrink-0 mt-0.5">{getAdminStatusBadge(adminStatusString)}</div>
                 </div>
 
-                <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    {variant === 'admin' ? (
-                        <div className="shrink-0 mt-0.5">{getAdminStatusBadge(adminStatusString)}</div>
-                    ) : variant === 'collaborator_todo' ? (
-                        <>
-                            {isRequired && (
-                                <span className="bg-[#13b6ec]/10 text-[#13b6ec] text-[10px] font-bold px-1.5 py-0.5 rounded uppercase flex items-center gap-1">
-                                    <span className="material-symbols-outlined text-[12px]">bolt</span> Obrigatório
-                                </span>
-                            )}
-                        </>
-                    ) : variant === 'collaborator_doing' ? (
-                        <>
-                            {flaggedCount > 0 && (
-                                <span className="flex items-center gap-1 text-red-400 text-[10px] font-bold bg-red-500/10 px-2 py-1 rounded">
-                                    <span className="material-symbols-outlined text-[12px]">warning</span> Impedimento
-                                </span>
-                            )}
-                        </>
-                    ) : null}
+                {description && (
+                    <p className="text-[#92bbc9] text-sm line-clamp-2 leading-relaxed mb-2">
+                        {description}
+                    </p>
+                )}
+
+                <div className="flex items-center gap-2 my-1 bg-[#101d22] p-2 rounded-lg border border-[#233f48]/50 w-full">
+                    <span className="material-symbols-outlined text-[#13b6ec] text-[16px]">schedule</span>
+                    <span className="text-xs font-bold text-[#e0e0e0]">{timeLabel}</span>
+                    <div className="ml-auto">{renderLegacyPriorityBadge()}</div>
                 </div>
-            </div>
 
-            {/* Admin Only Description */}
-            {variant === 'admin' && description && (
-                <p className="text-[#92bbc9] text-sm line-clamp-2 leading-relaxed mb-2">
-                    {description}
-                </p>
-            )}
-
-            {/* Time & Priority Unified Box */}
-            <div className="flex items-center gap-2 my-1 bg-[#101d22] p-2 rounded-lg border border-[#233f48]/50 w-full">
-                <span className="material-symbols-outlined text-[#13b6ec] text-[16px]">schedule</span>
-                <span className="text-xs font-bold text-[#e0e0e0]">{timeLabel}</span>
-                <div className="ml-auto">
-                    {renderPriorityBadge()}
-                </div>
-            </div>
-
-            {/* Admin Footer */}
-            {variant === 'admin' && (
                 <div className="flex items-center flex-wrap gap-x-4 gap-y-2 mt-2 pt-3 border-t border-[#233f48]/50 w-full">
                     {shift && (
                         <div className="flex items-center gap-1.5 text-[#325a67]">
@@ -253,7 +251,7 @@ export function RoutineCard({
                     )}
                     {sectorName && (
                         <div className="flex items-center gap-1.5 bg-[#1a2c32] px-2 py-0.5 rounded-md border border-[#233f48]">
-                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: sectorColor || '#92bbc9' }} />
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: sectorColor || "#92bbc9" }} />
                             <span className="text-xs font-bold text-white truncate max-w-[100px]">{sectorName}</span>
                         </div>
                     )}
@@ -263,33 +261,136 @@ export function RoutineCard({
                         <span className="text-xs font-bold text-[#13b6ec]">{itemsCount}</span>
                     </div>
                 </div>
-            )}
+            </button>
+        );
+    }
 
-            {/* Collaborator TODO Footer */}
-            {variant === 'collaborator_todo' && !isPreview && (
-                <div className="flex items-center gap-3 mt-1 pt-2 border-t border-[#233f48]/50 text-sm font-bold text-[#92bbc9] w-full">
-                    {isAssignedToOther ? (
-                        <span className="text-[#325a67]">Atribuída a outro funcionário</span>
-                    ) : (
-                        <span className="text-[#13b6ec] ml-auto flex items-center gap-1">Ver detalhes <span className="material-symbols-outlined text-[16px]">arrow_right_alt</span></span>
+    // ---------------------- COLABORADOR (novo design unificado) ----------------------
+    // Fallback: infere estado por horário quando não é fornecido (ex: modo preview).
+    const resolvedState: RoutineStateInfo = state ?? getRoutineState({
+        start_time: start_time ?? null,
+        end_time: end_time ?? null,
+        currentMinutes,
+        hasBlockedTask: false,
+        hasInProgressExecution: variant === "collaborator_doing",
+    });
+
+    const visual = buildStateVisual(resolvedState.kind, start_time ?? null);
+    const showProgress = !isPreview && (
+        resolvedState.kind === "doing" ||
+        resolvedState.kind === "blocked" ||
+        (resolvedState.kind === "late" && resolvedState.inProgress)
+    );
+    const showLateInProgressHint = resolvedState.kind === "late" && resolvedState.inProgress;
+    const areaLabel = !area || area === "Qualquer Área" ? "Geral" : area;
+
+    const cardBaseCls = "bg-[#1a2c32] border border-[#233f48] shadow-sm transition-all";
+    const interactionCls = isPreview
+        ? "cursor-default"
+        : isAssignedToOther
+            ? "opacity-75 cursor-not-allowed"
+            : "cursor-pointer hover:bg-[#1f363d]";
+
+    return (
+        <button
+            ref={containerRef}
+            style={containerStyle}
+            onClick={() => {
+                if (isPreview) return;
+                if (isAssignedToOther) return;
+                onClick();
+            }}
+            className={`w-full text-left p-4 rounded-xl ${cardBaseCls} ${visual.borderCls} ${interactionCls} flex flex-col gap-3`}
+        >
+            {/* 1. TOPO: badge de estado + obrigatório */}
+            <div className="flex justify-between items-center gap-2 w-full">
+                <span className={`inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide px-2 py-1 rounded-md border ${visual.badgeCls}`}>
+                    {visual.icon && (
+                        <span className="material-symbols-outlined text-[14px]">{visual.icon}</span>
+                    )}
+                    {visual.label}
+                    {showLateInProgressHint && (
+                        <span className="ml-1 normal-case font-medium text-red-300/80 text-[10px]">· em execução</span>
+                    )}
+                </span>
+
+                {isRequired && (
+                    <span className="text-[10px] font-bold text-[#92bbc9] bg-[#16262c] border border-[#233f48] px-2 py-0.5 rounded-md uppercase tracking-wide flex items-center gap-1 shrink-0">
+                        <span className="material-symbols-outlined text-[12px]">bolt</span>
+                        Obrigatório
+                    </span>
+                )}
+            </div>
+
+            {/* 2. TÍTULO + 3. METADATA */}
+            <div className="flex flex-col gap-1 min-w-0">
+                <h3 className="font-bold text-base text-white leading-snug truncate">
+                    {title}
+                </h3>
+                <div className="flex items-center gap-2 text-xs text-[#92bbc9] flex-wrap">
+                    <span className="inline-flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[14px] opacity-70">location_on</span>
+                        {areaLabel}
+                    </span>
+                    <span className="text-[#325a67]">·</span>
+                    <span>{itemsCount} {itemsCount === 1 ? "item" : "itens"}</span>
+                </div>
+            </div>
+
+            {/* 4. HORÁRIO */}
+            <div className="flex items-center gap-2 bg-[#101d22] px-2.5 py-1.5 rounded-lg border border-[#233f48]/50 w-full">
+                <span className="material-symbols-outlined text-[#13b6ec] text-[16px]">schedule</span>
+                <span className="text-xs font-bold text-[#e0e0e0]">{timeLabel}</span>
+            </div>
+
+            {/* 5. PROGRESSO (só em execução / impedimento / atrasada+execução) */}
+            {showProgress && (
+                <div className="flex items-center gap-2 w-full">
+                    <div className="flex-1 bg-[#101d22] rounded-full h-1.5 overflow-hidden">
+                        <div
+                            className={`${visual.progressCls} h-full rounded-full transition-all`}
+                            style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
+                        />
+                    </div>
+                    <span className="text-[11px] font-bold text-[#92bbc9] shrink-0 tabular-nums">{progress}%</span>
+                    {flaggedCount > 0 && (
+                        <span className="flex items-center gap-1 text-red-400 text-[10px] font-bold bg-red-500/10 px-1.5 py-0.5 rounded shrink-0">
+                            <span className="material-symbols-outlined text-[12px]">warning</span>
+                            {flaggedCount}
+                        </span>
                     )}
                 </div>
             )}
 
-            {/* Collaborator DOING Footer */}
-            {variant === 'collaborator_doing' && (
-                <div className="flex flex-col gap-3 w-full">
-                    <div className="flex items-center gap-3">
-                        <div className="flex-1 w-full bg-[#101d22] rounded-full h-2.5 overflow-hidden">
-                            <div className="bg-amber-400 h-full rounded-full transition-all" style={{ width: `${progress}%` }}></div>
-                        </div>
-                        <span className="text-amber-400 text-xs font-bold shrink-0">{progress}%</span>
-                    </div>
-                    <div className="flex items-center mt-1 text-sm font-bold w-full">
-                        <span className="text-amber-400 ml-auto flex items-center gap-1">Continuar <span className="material-symbols-outlined text-[16px]">arrow_right_alt</span></span>
-                    </div>
+            {/* 6. RESPONSÁVEL (secundário) + CTA */}
+            <div className="flex items-center justify-between gap-2 w-full pt-2 border-t border-[#233f48]/50">
+                <div className="min-w-0 flex-1">
+                    {assumptionName ? (
+                        <span className={`inline-flex items-center gap-1 text-xs truncate ${isAssignedToMe ? "text-[#13b6ec] font-bold" : "text-[#92bbc9]"}`}>
+                            <span className="material-symbols-outlined text-[14px] opacity-80">person</span>
+                            <span className="truncate">
+                                {resolvedState.kind === "doing" || (resolvedState.kind === "late" && resolvedState.inProgress) || resolvedState.kind === "blocked"
+                                    ? `Em execução por ${assumptionName}`
+                                    : `Assumida por ${assumptionName}`}
+                                {isAssignedToMe && <span className="ml-1">(você)</span>}
+                            </span>
+                        </span>
+                    ) : (
+                        <span className="text-xs text-[#325a67]">Ninguém iniciou</span>
+                    )}
                 </div>
-            )}
+
+                {!isPreview && (
+                    isAssignedToOther ? (
+                        <span className="text-xs text-[#325a67] font-bold shrink-0">Atribuída a outro</span>
+                    ) : (
+                        <span className={`text-xs font-bold flex items-center gap-1 shrink-0 ${visual.ctaCls}`}>
+                            {visual.ctaLabel}
+                            <span className="material-symbols-outlined text-[16px]">arrow_right_alt</span>
+                        </span>
+                    )
+                )}
+            </div>
         </button>
     );
 }
