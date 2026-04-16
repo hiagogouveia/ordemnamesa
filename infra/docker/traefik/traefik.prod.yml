@@ -1,0 +1,33 @@
+# Traefik static configuration — PRODUÇÃO
+# Arquivo montado em /traefik.yml dentro do container
+
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+log:
+  level: INFO
+
+ping: {}
+
+api:
+  dashboard: false
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: devops@ordemnamesa.com.br
+      storage: /acme.json
+      httpChallenge:
+        entryPoint: web
+
+providers:
+  file:
+    filename: /routes.yml
+    watch: true

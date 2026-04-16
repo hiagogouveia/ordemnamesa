@@ -1,0 +1,60 @@
+name: ordem-na-mesa-prod
+
+networks:
+  proxy:
+    name: ordem-na-mesa-prod-proxy
+
+volumes:
+  traefik-acme:
+    name: ordem-na-mesa-prod-acme
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Traefik — proxy reverso + SSL automático via Let's Encrypt
+  # ---------------------------------------------------------------------------
+  traefik:
+    image: traefik:v3.2
+    container_name: ordem-na-mesa-prod-traefik
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /opt/ordemnamesa-prod/traefik/traefik.yml:/traefik.yml:ro
+      - /opt/ordemnamesa-prod/traefik/routes.yml:/routes.yml:ro
+      - /opt/ordemnamesa-prod/traefik/acme.json:/acme.json
+    networks:
+      - proxy
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Next.js — aplicação web Ordem na Mesa (PRODUÇÃO)
+  # ---------------------------------------------------------------------------
+  nextjs:
+    image: ghcr.io/hiagogouveia/ordem-na-mesa-web:${IMAGE_TAG:-prod-latest}
+    container_name: ordem-na-mesa-prod-web
+    restart: always
+    expose:
+      - "3000"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+    networks:
+      - proxy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s

@@ -1,0 +1,92 @@
+name: Infra PROD — Setup VPS
+
+# Equivalente ao userdata.sh do nonprod (cloud-init via Terraform).
+# Para nonprod, a VM nasce configurada pelo cloud-init automático.
+# Para prod (Hostinger, VM pré-existente), este workflow é o equivalente:
+# configura a VPS via SSH de forma idempotente.
+#
+# Quando rodar:
+#   - Manualmente (workflow_dispatch) ao provisionar nova VPS
+#   - Automaticamente quando o script de setup mudar
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Confirmar execução do setup na VPS de PRODUÇÃO"
+        required: true
+        type: boolean
+        default: false
+  push:
+    branches:
+      - main
+    paths:
+      - "infra/scripts/setup-prod.sh"
+      - ".github/workflows/infra-prod.yml"
+
+jobs:
+  setup-vps:
+    name: Setup VPS PROD
+    runs-on: ubuntu-latest
+    environment: prod
+
+    # Proteção extra: só executa se confirmado (no dispatch) ou via push automático
+    if: |
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.confirm == 'true')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Executar setup idempotente na VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PROD_VM_HOST }}
+          username: root
+          key: ${{ secrets.PROD_VM_SSH_PRIVATE_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            echo "=== Iniciando setup idempotente da VPS PROD ==="
+
+            # Atualizar sistema
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -y
+            apt-get upgrade -y
+            apt-get install -y ca-certificates curl gnupg lsb-release unzip htop git jq
+
+            # Instalar Docker (idempotente)
+            if ! command -v docker &>/dev/null; then
+              echo "Instalando Docker..."
+              install -m 0755 -d /etc/apt/keyrings
+              curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+                | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+              chmod a+r /etc/apt/keyrings/docker.gpg
+              echo \
+                "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+                https://download.docker.com/linux/ubuntu \
+                $(lsb_release -cs) stable" \
+                > /etc/apt/sources.list.d/docker.list
+              apt-get update -y
+              apt-get install -y \
+                docker-ce docker-ce-cli containerd.io \
+                docker-buildx-plugin docker-compose-plugin
+              systemctl enable docker
+              systemctl start docker
+            else
+              echo "Docker já instalado: $(docker --version)"
+            fi
+
+            # Criar estrutura de diretórios da aplicação
+            APP_DIR="/opt/ordemnamesa-prod"
+            mkdir -p "${APP_DIR}/traefik"
+            mkdir -p "${APP_DIR}/data"
+            touch "${APP_DIR}/traefik/acme.json"
+            chmod 600 "${APP_DIR}/traefik/acme.json"
+
+            # Resultado
+            echo "=== Setup concluído ==="
+            echo "Docker: $(docker --version)"
+            echo "Docker Compose: $(docker compose version)"
+            echo "Diretório: $(ls -la ${APP_DIR})"

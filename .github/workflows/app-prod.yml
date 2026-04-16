@@ -1,0 +1,138 @@
+name: App PROD — Build & Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "app/**"
+      - "components/**"
+      - "lib/**"
+      - "public/**"
+      - "middleware.ts"
+      - "next.config.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "infra/docker/**"
+      - ".github/workflows/app-prod.yml"
+  workflow_dispatch:
+    inputs:
+      force_deploy:
+        description: "Forçar deploy mesmo sem mudanças"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/ordem-na-mesa-web
+
+jobs:
+  build-and-push:
+    name: Build & Push Docker Image (PROD)
+    runs-on: ubuntu-latest
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker Metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=prod-,format=short
+            type=raw,value=prod-latest
+
+      # Extrair vars NEXT_PUBLIC_* do secret único PROD_APP_ENV para build-args
+      - name: Extrair vars de build
+        run: echo "${{ secrets.PROD_APP_ENV }}" | grep -E "^NEXT_PUBLIC_" >> $GITHUB_ENV
+
+      - name: Build e Push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            NEXT_PUBLIC_SUPABASE_URL=${{ env.NEXT_PUBLIC_SUPABASE_URL }}
+            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ env.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:prod-latest
+          cache-to: type=inline
+
+  deploy:
+    name: Deploy na VPS PROD
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment: prod
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Copiar configs para VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.PROD_VM_HOST }}
+          username: root
+          key: ${{ secrets.PROD_VM_SSH_PRIVATE_KEY }}
+          source: "infra/docker/docker-compose.prod.yml,infra/docker/traefik/traefik.prod.yml,infra/docker/traefik/routes.prod.yml"
+          target: /opt/ordemnamesa-prod/
+          strip_components: 2
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          APP_ENV: ${{ secrets.PROD_APP_ENV }}
+          IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+        with:
+          host: ${{ secrets.PROD_VM_HOST }}
+          username: root
+          key: ${{ secrets.PROD_VM_SSH_PRIVATE_KEY }}
+          envs: APP_ENV,IMAGE_TAG
+          script: |
+            set -euo pipefail
+
+            cd /opt/ordemnamesa-prod
+
+            # Autenticar no GHCR para pull de imagem privada
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Escrever .env a partir do secret único PROD_APP_ENV + IMAGE_TAG
+            printf '%s\nIMAGE_TAG=%s\n' "$APP_ENV" "$IMAGE_TAG" > .env
+
+            # Normalizar nomes de arquivo (prod → padrão esperado pelo compose)
+            [ -f docker-compose.prod.yml ] && mv docker-compose.prod.yml docker-compose.yml || true
+
+            # Configurar traefik
+            mkdir -p traefik
+            [ -f traefik.prod.yml ] && mv traefik.prod.yml traefik/traefik.yml || true
+            [ -f routes.prod.yml ]  && mv routes.prod.yml  traefik/routes.yml  || true
+
+            # Garantir acme.json com permissões corretas
+            touch traefik/acme.json
+            chmod 600 traefik/acme.json
+
+            # Pull da nova imagem e restart idempotente
+            docker compose pull nextjs
+            docker compose up -d --remove-orphans
+
+            # Verificar status
+            echo "=== Status dos containers PROD ==="
+            docker compose ps
