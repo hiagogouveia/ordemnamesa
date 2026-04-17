@@ -15,12 +15,18 @@ interface ChecklistBoardCardProps {
     onSelect: () => void;
     onStatusToggle: (active: boolean) => void;
     isGlobal?: boolean;
+    selectable?: boolean;
+    checked?: boolean;
+    onCheckChange?: (checked: boolean) => void;
 }
 
 export function ChecklistBoardCard({
     checklist,
     onSelect,
     isGlobal,
+    selectable,
+    checked,
+    onCheckChange,
 }: ChecklistBoardCardProps) {
     const taskCount = checklist.tasks?.length ?? 0;
     const isExecuting = Boolean(checklist.assumed_by_name) && checklist.execution_status !== "done";
@@ -29,10 +35,29 @@ export function ChecklistBoardCard({
     return (
         <div
             onClick={onSelect}
-            className="bg-[#0a1215] border border-[#233f48] hover:border-[#325a67] rounded-xl p-3 cursor-pointer select-none transition-shadow"
+            className={`relative bg-[#0a1215] border rounded-xl p-3 cursor-pointer select-none transition-shadow ${
+                checked ? "border-[#13b6ec]/40 bg-[#13b6ec]/5" : "border-[#233f48] hover:border-[#325a67]"
+            }`}
         >
+            {/* Checkbox de seleção (visão global) */}
+            {selectable && (
+                <div
+                    className="absolute top-2 left-2 z-10"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onCheckChange?.(!checked);
+                    }}
+                >
+                    <input
+                        type="checkbox"
+                        checked={checked ?? false}
+                        readOnly
+                        className="size-4 accent-[#13b6ec] cursor-pointer"
+                    />
+                </div>
+            )}
             {/* Title + active badge */}
-            <div className="flex items-start justify-between gap-2">
+            <div className={`flex items-start justify-between gap-2 ${selectable ? "pl-6" : ""}`}>
                 <p className="font-semibold text-white text-sm leading-snug line-clamp-2">
                     {checklist.name}
                 </p>

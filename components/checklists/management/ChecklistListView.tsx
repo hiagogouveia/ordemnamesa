@@ -90,6 +90,10 @@ interface ChecklistListViewProps {
     currentMinutes: number;
     priorityMode: PriorityMode;
     isGlobal?: boolean;
+    selectable?: boolean;
+    selectedIds?: Set<string>;
+    onSelectionChange?: (id: string, checked: boolean) => void;
+    onSelectAll?: (checked: boolean) => void;
 }
 
 export function ChecklistListView({
@@ -111,6 +115,10 @@ export function ChecklistListView({
     currentMinutes,
     priorityMode,
     isGlobal,
+    selectable,
+    selectedIds,
+    onSelectionChange,
+    onSelectAll,
 }: ChecklistListViewProps) {
     const [reorderMode, setReorderMode] = useState(false);
     const [localItems, setLocalItems] = useState<ExtendedChecklist[]>([]);
@@ -293,7 +301,7 @@ export function ChecklistListView({
 
                             <button
                                 onClick={handleEnterReorder}
-                                disabled={!selectedAreaId || hasReducingFilters}
+                                disabled={!selectedAreaId || hasReducingFilters || (selectedIds?.size ?? 0) > 0}
                                 title={
                                     !selectedAreaId || hasReducingFilters
                                         ? "Para reordenar, selecione uma área e defina Disponibilidade e Status como 'Todos'."
@@ -366,6 +374,16 @@ export function ChecklistListView({
                     <thead>
                         <tr className="border-b border-[#233f48]">
                             {reorderMode && <th className="pl-4 pr-2 py-2 w-8" />}
+                            {selectable && !reorderMode && (
+                                <th className="pl-3 pr-1 py-2 w-10">
+                                    <input
+                                        type="checkbox"
+                                        checked={checklists.length > 0 && selectedIds?.size === checklists.length}
+                                        onChange={(e) => onSelectAll?.(e.target.checked)}
+                                        className="size-4 accent-[#13b6ec] cursor-pointer"
+                                    />
+                                </th>
+                            )}
                             <SortableHeader
                                 field="name"
                                 label="Título"
@@ -450,6 +468,9 @@ export function ChecklistListView({
                                     onDelete={() => onDelete(checklist.id)}
                                     currentMinutes={currentMinutes}
                                     isGlobal={isGlobal}
+                                    selectable={selectable && !reorderMode}
+                                    checked={selectedIds?.has(checklist.id)}
+                                    onCheckChange={(checked) => onSelectionChange?.(checklist.id, checked)}
                                 />
                             ))
                         )}

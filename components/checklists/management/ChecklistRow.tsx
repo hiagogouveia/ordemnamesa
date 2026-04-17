@@ -61,6 +61,9 @@ interface ChecklistRowProps {
     onDelete: () => void;
     currentMinutes: number;
     isGlobal?: boolean;
+    selectable?: boolean;
+    checked?: boolean;
+    onCheckChange?: (checked: boolean) => void;
 }
 
 export function ChecklistRow({
@@ -73,6 +76,9 @@ export function ChecklistRow({
     onDelete,
     currentMinutes,
     isGlobal,
+    selectable,
+    checked,
+    onCheckChange,
 }: ChecklistRowProps) {
     const [menuOpen, setMenuOpen] = useState(false);
     const buttonRef = useRef<HTMLButtonElement>(null);
@@ -123,9 +129,21 @@ export function ChecklistRow({
     return (
         <tr
             className={`border-b border-[#1a2c32] transition-colors cursor-pointer ${
-                isSelected ? "bg-[#13b6ec]/5" : "hover:bg-[#16262c]"
+                checked ? "bg-[#13b6ec]/8" : isSelected ? "bg-[#13b6ec]/5" : "hover:bg-[#16262c]"
             } ${checklist.status === "draft" ? "opacity-70" : (!checklist.active ? "opacity-50" : "")}`}
         >
+            {/* Checkbox de seleção (visão global) */}
+            {selectable && (
+                <td className="pl-3 pr-1 py-3 w-10" onClick={(e) => e.stopPropagation()}>
+                    <input
+                        type="checkbox"
+                        checked={checked ?? false}
+                        onChange={(e) => onCheckChange?.(e.target.checked)}
+                        className="size-4 accent-[#13b6ec] cursor-pointer"
+                    />
+                </td>
+            )}
+
             {/* Título */}
             <td className="px-3 py-3" onClick={onSelect}>
                 <span className="font-semibold text-white text-sm">{checklist.name}</span>

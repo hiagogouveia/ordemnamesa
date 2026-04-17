@@ -27,6 +27,9 @@ interface ChecklistBoardViewProps {
     onSelect: (checklist: ExtendedChecklist) => void;
     onStatusToggle: (id: string, active: boolean) => void;
     isGlobal?: boolean;
+    selectable?: boolean;
+    selectedIds?: Set<string>;
+    onSelectionChange?: (id: string, checked: boolean) => void;
 }
 
 export function ChecklistBoardView({
@@ -36,6 +39,9 @@ export function ChecklistBoardView({
     onSelect,
     onStatusToggle,
     isGlobal,
+    selectable,
+    selectedIds,
+    onSelectionChange,
 }: ChecklistBoardViewProps) {
     const scrollRef = useRef<HTMLDivElement>(null);
     const [isDragging, setIsDragging] = useState(false);
@@ -125,6 +131,9 @@ export function ChecklistBoardView({
                     onSelect={onSelect}
                     onStatusToggle={onStatusToggle}
                     isGlobal={isGlobal}
+                    selectable={selectable}
+                    selectedIds={selectedIds}
+                    onSelectionChange={onSelectionChange}
                 />
             ))}
         </div>

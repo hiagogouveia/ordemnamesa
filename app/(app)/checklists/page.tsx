@@ -7,6 +7,8 @@ import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useAccountSessionStore } from "@/lib/store/account-session-store";
 import { useChecklists, useCreateChecklist, useDeleteChecklist, useToggleChecklistStatus } from "@/lib/hooks/use-checklists";
 import { ReplicateChecklistsModal } from "@/components/checklists/replicate-modal";
+import { BulkActionBar } from "@/components/checklists/management/BulkActionBar";
+import { CopyChecklistModal } from "@/components/checklists/management/CopyChecklistModal";
 import { useChecklistOrders, useUpdateChecklistOrders } from "@/lib/hooks/use-checklist-orders";
 import { createClient } from "@/lib/supabase/client";
 import { useAllAreas } from "@/lib/hooks/use-areas";
@@ -52,6 +54,8 @@ function ChecklistsContent() {
     const [searchQuery, setSearchQuery] = useState("");
     const [editorState, setEditorState] = useState<EditorState>(null);
     const [replicateOpen, setReplicateOpen] = useState(false);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [copyModalOpen, setCopyModalOpen] = useState(false);
 
     useEffect(() => { setMounted(true); }, []);
 
@@ -196,6 +200,43 @@ function ChecklistsContent() {
         
         return sortedResult;
     }, [checklists, searchQuery, selectedShift, selectedAreaId, selectedAvailability, selectedExecStatus, selectedCollaboratorId, equipeData, currentMinutes, sortField, sortOrder]);
+
+    // ─── BULK SELECTION (visão global) ─────────────────────────────────────────
+
+    const canBulkAction = isGlobal && (userRole === "owner" || userRole === "manager");
+
+    const selectedChecklists = useMemo(
+        () => filtered.filter((c) => selectedIds.has(c.id)),
+        [filtered, selectedIds]
+    );
+
+    const sourceRestaurantIds = useMemo(
+        () => [...new Set(selectedChecklists.map((c) => c.restaurant_id))],
+        [selectedChecklists]
+    );
+
+    // Limpar seleção quando filtros mudam
+    useEffect(() => {
+        setSelectedIds(new Set());
+    }, [selectedShift, selectedAreaId, selectedAvailability, selectedExecStatus, selectedCollaboratorId, searchQuery]);
+
+    const handleSelectionChange = (id: string, checked: boolean) => {
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (checked) next.add(id);
+            else next.delete(id);
+            return next;
+        });
+    };
+
+    const handleSelectAll = (checked: boolean) => {
+        setSelectedIds(checked ? new Set(filtered.map((c) => c.id)) : new Set());
+    };
+
+    const handleCopyModalClose = () => {
+        setCopyModalOpen(false);
+        setSelectedIds(new Set());
+    };
 
     // ─── URL HELPERS ────────────────────────────────────────────────────────────
 
@@ -498,6 +539,10 @@ function ChecklistsContent() {
                             currentMinutes={currentMinutes}
                             priorityMode={selectedAreaPriorityMode}
                             isGlobal={isGlobal}
+                            selectable={canBulkAction}
+                            selectedIds={selectedIds}
+                            onSelectionChange={handleSelectionChange}
+                            onSelectAll={handleSelectAll}
                         />
                     ) : (
                         <ChecklistBoardView
@@ -507,6 +552,9 @@ function ChecklistsContent() {
                             onSelect={handleSelect}
                             onStatusToggle={handleStatusToggle}
                             isGlobal={isGlobal}
+                            selectable={canBulkAction}
+                            selectedIds={selectedIds}
+                            onSelectionChange={handleSelectionChange}
                         />
                     )}
                 </div>
@@ -545,6 +593,25 @@ function ChecklistsContent() {
                     accountId={accountId}
                     currentRestaurantId={restaurantId}
                     availableChecklists={filtered.map((c) => ({ id: c.id, name: c.name }))}
+                />
+            )}
+
+            {/* Bulk actions (visão global) */}
+            {canBulkAction && selectedIds.size > 0 && (
+                <BulkActionBar
+                    selectedCount={selectedIds.size}
+                    onCopyToUnit={() => setCopyModalOpen(true)}
+                    onClearSelection={() => setSelectedIds(new Set())}
+                />
+            )}
+
+            {mounted && canBulkAction && (
+                <CopyChecklistModal
+                    isOpen={copyModalOpen}
+                    onClose={handleCopyModalClose}
+                    selectedChecklists={selectedChecklists}
+                    accountId={accountId}
+                    sourceRestaurantIds={sourceRestaurantIds}
                 />
             )}
         </div>

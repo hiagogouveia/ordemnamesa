@@ -11,6 +11,9 @@ interface ChecklistBoardColumnProps {
     onSelect: (checklist: ExtendedChecklist) => void;
     onStatusToggle: (id: string, active: boolean) => void;
     isGlobal?: boolean;
+    selectable?: boolean;
+    selectedIds?: Set<string>;
+    onSelectionChange?: (id: string, checked: boolean) => void;
 }
 
 export function ChecklistBoardColumn({
@@ -21,6 +24,9 @@ export function ChecklistBoardColumn({
     onSelect,
     onStatusToggle,
     isGlobal,
+    selectable,
+    selectedIds,
+    onSelectionChange,
 }: ChecklistBoardColumnProps) {
     return (
         <div className="min-w-[280px] flex-1 flex flex-col max-h-full rounded-xl border"
@@ -70,6 +76,9 @@ export function ChecklistBoardColumn({
                             onSelect={() => onSelect(card)}
                             onStatusToggle={(active) => onStatusToggle(card.id, active)}
                             isGlobal={isGlobal}
+                            selectable={selectable}
+                            checked={selectedIds?.has(card.id)}
+                            onCheckChange={(checked) => onSelectionChange?.(card.id, checked)}
                         />
                     ))
                 )}
