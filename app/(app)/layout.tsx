@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AppLayout } from "@/components/layout/app-layout";
+import { SessionProvider } from "@/lib/providers/session-provider";
 
 export const metadata: Metadata = {
   robots: {
@@ -17,5 +18,9 @@ export default function AppInternalLayout({
 }: {
     children: React.ReactNode;
 }) {
-    return <AppLayout>{children}</AppLayout>;
+    return (
+        <SessionProvider>
+            <AppLayout>{children}</AppLayout>
+        </SessionProvider>
+    );
 }

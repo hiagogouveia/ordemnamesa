@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState, useEffect } from 'react';
-import { useRestaurantStore } from '@/lib/store/restaurant-store';
+import { useSession } from '@/lib/providers/use-session';
 import { useKanbanTasks, KanbanChecklist } from '@/lib/hooks/use-tasks';
 import { usePurchaseLists } from '@/lib/hooks/use-purchases';
 import { useUserRoles } from '@/lib/hooks/use-user-roles-shifts';
@@ -12,18 +12,16 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { RoutineCard } from '@/components/checklists/routine-card';
 import { getRoutineState } from '@/lib/utils/routine-state';
-import { useAuthUser } from '@/lib/hooks/use-auth-user';
 
 export default function KanbanPage() {
-    const { restaurantId } = useRestaurantStore();
-    const router = useRouter();
-
-    // userId vem exclusivamente do Supabase Auth — nunca do store
-    const { data: authUser, isLoading: userLoading } = useAuthUser();
-    const userId = authUser?.id;
-    const user = authUser
-        ? { id: authUser.id, name: (authUser.user_metadata?.name as string) || 'Membro' }
+    const session = useSession();
+    const restaurantId = session.restaurantId;
+    const userId = session.userId;
+    const userLoading = session.status === 'loading';
+    const user = session.status === 'authenticated'
+        ? { id: session.userId, name: session.userName }
         : null;
+    const router = useRouter();
 
     const { data: kanbanData, isLoading: loadingKanban } = useKanbanTasks(restaurantId || undefined, userId);
     const { data: shifts = [] } = useShifts(restaurantId || undefined);

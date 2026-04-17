@@ -2,7 +2,7 @@
 
 import { useEffect, useCallback, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useRestaurantStore } from '@/lib/store/restaurant-store';
+import { useSession } from '@/lib/providers/use-session';
 import { useDashboard, type TarefaCriticaTipo, type EquipeMembroStatus } from '@/lib/hooks/use-dashboard';
 import { Avatar } from '@/components/ui/avatar';
 import Link from 'next/link';
@@ -96,7 +96,9 @@ function StatusDot({ status }: { status: EquipeMembroStatus }) {
 
 export default function DashboardPage() {
     const router = useRouter();
-    const { userRole, restaurantId, restaurantName } = useRestaurantStore();
+    const session = useSession();
+    const { userRole, restaurantId } = session;
+    const restaurantName = session.restaurant?.name ?? null;
 
     const { data: dashboardData, isLoading, error, refetch, isFetching } = useDashboard(restaurantId);
 
