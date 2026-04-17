@@ -31,7 +31,7 @@ export default function LoginPage() {
             return;
         }
 
-        router.push("/selecionar-account");
+        router.push("/selecionar-restaurante");
     };
 
     return (

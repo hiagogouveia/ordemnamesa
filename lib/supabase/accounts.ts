@@ -78,17 +78,18 @@ export async function canUseGlobal(
     const [{ data: membership }, units] = await Promise.all([
         supabase
             .from('account_users')
-            .select('role')
+            .select('role, can_view_global')
             .eq('account_id', accountId)
             .eq('user_id', userId)
             .eq('active', true)
-            .maybeSingle<{ role: 'owner' | 'manager' }>(),
+            .maybeSingle<{ role: 'owner' | 'manager'; can_view_global: boolean }>(),
         listAccountUnits(supabase, accountId),
     ])
 
-    const hasRole = !!membership && (membership.role === 'owner' || membership.role === 'manager')
+    const isOwner = membership?.role === 'owner'
+    const isManagerWithPermission = membership?.role === 'manager' && membership.can_view_global === true
     return {
-        allowed: hasRole && units.length >= 2,
+        allowed: (isOwner || isManagerWithPermission) && units.length >= 2,
         units,
     }
 }

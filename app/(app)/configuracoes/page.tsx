@@ -4,11 +4,15 @@ import { useState } from "react";
 import { ShiftsTab } from "./_components/shifts-tab";
 import { AreasTab } from "./_components/areas-tab";
 import { UnidadesTab } from "./_components/unidades-tab";
+import { ContaTab } from "./_components/conta-tab";
+import { useRestaurantStore } from "@/lib/store/restaurant-store";
 
-type TabId = "unidades" | "turnos" | "funcoes" | "geral";
+type TabId = "unidades" | "turnos" | "funcoes" | "conta" | "geral";
 
 export default function ConfiguracoesPage() {
     const [activeTab, setActiveTab] = useState<TabId>("unidades");
+    const userRole = useRestaurantStore((s) => s.userRole);
+    const isOwner = userRole === "owner";
 
     return (
         <div className="flex flex-col h-full bg-[#101d22]">
@@ -43,6 +47,14 @@ export default function ConfiguracoesPage() {
                     >
                         Áreas
                     </button>
+                    {isOwner && (
+                        <button
+                            onClick={() => setActiveTab("conta")}
+                            className={`pb-4 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeTab === "conta" ? "border-[#13b6ec] text-[#13b6ec]" : "border-transparent text-[#92bbc9] hover:text-white"}`}
+                        >
+                            Conta
+                        </button>
+                    )}
                     <button
                         onClick={() => setActiveTab("geral")}
                         className={`pb-4 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeTab === "geral" ? "border-[#13b6ec] text-[#13b6ec]" : "border-transparent text-[#92bbc9] hover:text-white"}`}
@@ -57,6 +69,7 @@ export default function ConfiguracoesPage() {
                 {activeTab === "unidades" && <UnidadesTab />}
                 {activeTab === "turnos" && <ShiftsTab />}
                 {activeTab === "funcoes" && <AreasTab />}
+                {activeTab === "conta" && <ContaTab />}
                 {activeTab === "geral" && (
                     <div className="flex items-center justify-center h-full min-h-[400px]">
                         <div className="flex flex-col items-center justify-center max-w-sm text-center">

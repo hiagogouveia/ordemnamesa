@@ -43,21 +43,22 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(url)
     }
 
-    // Redirect to /selecionar-account if authenticated user tries to access /login or /cadastro
+    // Redirect to /selecionar-restaurante if authenticated user tries to access /login or /cadastro
     if (user && ['/login', '/cadastro', '/signup'].includes(request.nextUrl.pathname)) {
         const url = request.nextUrl.clone()
-        url.pathname = '/selecionar-account'
+        url.pathname = '/selecionar-restaurante'
         return NextResponse.redirect(url)
     }
 
     // Redirect logged-in user away from Root
     if (user && request.nextUrl.pathname === '/') {
         const url = request.nextUrl.clone()
-        url.pathname = '/selecionar-account'
+        url.pathname = '/selecionar-restaurante'
         return NextResponse.redirect(url)
     }
 
-    // Exigir account e restaurant selecionados para rotas autenticadas
+    // Exigir restaurant selecionado para rotas autenticadas
+    // Middleware SÓ valida acesso — pages decidem navegação
     const pathnameForContextCheck = request.nextUrl.pathname
     const skipsContextCheck =
         pathnameForContextCheck === '/selecionar-account' ||
@@ -69,17 +70,8 @@ export async function middleware(request: NextRequest) {
         pathnameForContextCheck === '/signup'
 
     if (user && !skipsContextCheck) {
-        const accountId = request.cookies.get('x-account-id')?.value
         const restaurantId = request.cookies.get('x-restaurant-id')?.value
 
-        // Sem account → seleção de account
-        if (!accountId) {
-            const url = request.nextUrl.clone()
-            url.pathname = '/selecionar-account'
-            return NextResponse.redirect(url)
-        }
-
-        // Com account, sem restaurant → seleção de restaurante
         if (!restaurantId) {
             const url = request.nextUrl.clone()
             url.pathname = '/selecionar-restaurante'
