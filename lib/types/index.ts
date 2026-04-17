@@ -102,6 +102,7 @@ export interface Checklist {
     execution_status?: ExecutionStatus
     assumed_by_name?: string | null
     assumed_by_user_id?: string | null
+    unit?: { id: string; name: string } | null
 }
 
 export interface ChecklistTask {

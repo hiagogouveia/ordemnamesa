@@ -26,6 +26,7 @@ interface ChecklistBoardViewProps {
     currentMinutes: number;
     onSelect: (checklist: ExtendedChecklist) => void;
     onStatusToggle: (id: string, active: boolean) => void;
+    isGlobal?: boolean;
 }
 
 export function ChecklistBoardView({
@@ -34,6 +35,7 @@ export function ChecklistBoardView({
     currentMinutes,
     onSelect,
     onStatusToggle,
+    isGlobal,
 }: ChecklistBoardViewProps) {
     const scrollRef = useRef<HTMLDivElement>(null);
     const [isDragging, setIsDragging] = useState(false);
@@ -122,6 +124,7 @@ export function ChecklistBoardView({
                     cards={grouped[col.status]}
                     onSelect={onSelect}
                     onStatusToggle={onStatusToggle}
+                    isGlobal={isGlobal}
                 />
             ))}
         </div>

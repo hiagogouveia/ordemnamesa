@@ -89,6 +89,7 @@ interface ChecklistListViewProps {
     hasReducingFilters: boolean;
     currentMinutes: number;
     priorityMode: PriorityMode;
+    isGlobal?: boolean;
 }
 
 export function ChecklistListView({
@@ -109,6 +110,7 @@ export function ChecklistListView({
     hasReducingFilters,
     currentMinutes,
     priorityMode,
+    isGlobal,
 }: ChecklistListViewProps) {
     const [reorderMode, setReorderMode] = useState(false);
     const [localItems, setLocalItems] = useState<ExtendedChecklist[]>([]);
@@ -431,6 +433,7 @@ export function ChecklistListView({
                                         onDuplicate={() => onDuplicate(checklist)}
                                         onDelete={() => onDelete(checklist.id)}
                                         currentMinutes={currentMinutes}
+                                        isGlobal={isGlobal}
                                     />
                                 ))}
                             </SortableContext>
@@ -446,6 +449,7 @@ export function ChecklistListView({
                                     onDuplicate={() => onDuplicate(checklist)}
                                     onDelete={() => onDelete(checklist.id)}
                                     currentMinutes={currentMinutes}
+                                    isGlobal={isGlobal}
                                 />
                             ))
                         )}

@@ -1,6 +1,7 @@
 "use client";
 
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
+import { UnitBadge } from "@/components/ui/unit-badge";
 
 const SHIFT_LABELS: Record<string, string> = {
     morning: "Manhã",
@@ -13,11 +14,13 @@ interface ChecklistBoardCardProps {
     checklist: ExtendedChecklist;
     onSelect: () => void;
     onStatusToggle: (active: boolean) => void;
+    isGlobal?: boolean;
 }
 
 export function ChecklistBoardCard({
     checklist,
     onSelect,
+    isGlobal,
 }: ChecklistBoardCardProps) {
     const taskCount = checklist.tasks?.length ?? 0;
     const isExecuting = Boolean(checklist.assumed_by_name) && checklist.execution_status !== "done";
@@ -43,6 +46,13 @@ export function ChecklistBoardCard({
                     {checklist.active ? "Ativo" : "Inativo"}
                 </span>
             </div>
+
+            {/* Unit badge — global mode only */}
+            {isGlobal && checklist.unit?.name && (
+                <div className="mt-1">
+                    <UnitBadge name={checklist.unit.name} />
+                </div>
+            )}
 
             {/* Área */}
             <div className="flex items-center gap-1.5 mt-1.5">

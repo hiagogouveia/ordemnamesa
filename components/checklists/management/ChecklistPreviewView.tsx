@@ -5,11 +5,13 @@ import { RoutineCard } from "@/components/checklists/routine-card";
 import { IphoneMockup } from "@/components/ui/iphone-mockup";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
 import type { PriorityMode } from "@/lib/types";
+import { UnitBadge } from "@/components/ui/unit-badge";
 
 interface ChecklistPreviewViewProps {
     checklists: ExtendedChecklist[];
     currentMinutes: number;
     priorityMode?: PriorityMode;
+    isGlobal?: boolean;
 }
 
 function minutesToHHMM(minutes: number): string {
@@ -25,7 +27,7 @@ interface PreviewSection {
     items: ExtendedChecklist[];
 }
 
-export function ChecklistPreviewView({ checklists, currentMinutes, priorityMode = "auto" }: ChecklistPreviewViewProps) {
+export function ChecklistPreviewView({ checklists, currentMinutes, priorityMode = "auto", isGlobal }: ChecklistPreviewViewProps) {
     const nowHHMM = minutesToHHMM(currentMinutes);
 
     const sections: PreviewSection[] = useMemo(() => {
@@ -115,19 +117,25 @@ export function ChecklistPreviewView({ checklists, currentMinutes, priorityMode 
                         {/* Cards */}
                         <div className="flex flex-col gap-3">
                             {section.items.map((c) => (
-                                <RoutineCard
-                                    key={c.id}
-                                    variant="collaborator_todo"
-                                    isPreview
-                                    title={c.name}
-                                    start_time={c.start_time}
-                                    end_time={c.end_time}
-                                    currentMinutes={currentMinutes}
-                                    itemsCount={c.tasks?.length ?? 0}
-                                    isRequired={c.is_required ?? false}
-                                    area={c.area?.name}
-                                    onClick={() => {}}
-                                />
+                                <div key={c.id} className="flex flex-col gap-1">
+                                    <RoutineCard
+                                        variant="collaborator_todo"
+                                        isPreview
+                                        title={c.name}
+                                        start_time={c.start_time}
+                                        end_time={c.end_time}
+                                        currentMinutes={currentMinutes}
+                                        itemsCount={c.tasks?.length ?? 0}
+                                        isRequired={c.is_required ?? false}
+                                        area={c.area?.name}
+                                        onClick={() => {}}
+                                    />
+                                    {isGlobal && c.unit?.name && (
+                                        <div className="px-4 -mt-1">
+                                            <UnitBadge name={c.unit.name} />
+                                        </div>
+                                    )}
+                                </div>
                             ))}
                         </div>
                     </div>

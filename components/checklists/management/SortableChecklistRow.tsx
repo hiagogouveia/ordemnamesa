@@ -7,6 +7,7 @@ import { CSS } from "@dnd-kit/utilities";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
 import type { ExecutionStatus } from "@/lib/types";
 import { getOperationalStatus } from "@/lib/utils/get-operational-status";
+import { UnitBadge } from "@/components/ui/unit-badge";
 
 const SHIFT_LABELS: Record<string, string> = {
     morning: "Manhã",
@@ -61,6 +62,7 @@ interface SortableChecklistRowProps {
     onDuplicate: () => void;
     onDelete: () => void;
     currentMinutes: number;
+    isGlobal?: boolean;
 }
 
 export function SortableChecklistRow({
@@ -72,6 +74,7 @@ export function SortableChecklistRow({
     onDuplicate,
     onDelete,
     currentMinutes,
+    isGlobal,
 }: SortableChecklistRowProps) {
     const [menuOpen, setMenuOpen] = useState(false);
     const buttonRef = useRef<HTMLButtonElement>(null);
@@ -160,6 +163,11 @@ export function SortableChecklistRow({
                 <span className="font-semibold text-white text-sm">{checklist.name}</span>
                 {checklist.description && (
                     <p className="text-[#92bbc9] text-xs mt-0.5 line-clamp-1">{checklist.description}</p>
+                )}
+                {isGlobal && checklist.unit?.name && (
+                    <div className="mt-1">
+                        <UnitBadge name={checklist.unit.name} />
+                    </div>
                 )}
             </td>
 

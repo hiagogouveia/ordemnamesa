@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
 import type { ExecutionStatus } from "@/lib/types";
 import { getOperationalStatus } from "@/lib/utils/get-operational-status";
+import { UnitBadge } from "@/components/ui/unit-badge";
 
 const SHIFT_LABELS: Record<string, string> = {
     morning: "Manhã",
@@ -59,6 +60,7 @@ interface ChecklistRowProps {
     onDuplicate: () => void;
     onDelete: () => void;
     currentMinutes: number;
+    isGlobal?: boolean;
 }
 
 export function ChecklistRow({
@@ -70,6 +72,7 @@ export function ChecklistRow({
     onDuplicate,
     onDelete,
     currentMinutes,
+    isGlobal,
 }: ChecklistRowProps) {
     const [menuOpen, setMenuOpen] = useState(false);
     const buttonRef = useRef<HTMLButtonElement>(null);
@@ -128,6 +131,11 @@ export function ChecklistRow({
                 <span className="font-semibold text-white text-sm">{checklist.name}</span>
                 {checklist.description && (
                     <p className="text-[#92bbc9] text-xs mt-0.5 line-clamp-1">{checklist.description}</p>
+                )}
+                {isGlobal && checklist.unit?.name && (
+                    <div className="mt-1">
+                        <UnitBadge name={checklist.unit.name} />
+                    </div>
                 )}
             </td>
 

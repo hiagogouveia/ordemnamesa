@@ -476,6 +476,7 @@ function ChecklistsContent() {
                             checklists={filtered}
                             currentMinutes={currentMinutes}
                             priorityMode={selectedAreaPriorityMode}
+                            isGlobal={isGlobal}
                         />
                     ) : view === "list" ? (
                         <ChecklistListView
@@ -496,6 +497,7 @@ function ChecklistsContent() {
                             onAutoReprioritize={handleAutoReprioritize}
                             currentMinutes={currentMinutes}
                             priorityMode={selectedAreaPriorityMode}
+                            isGlobal={isGlobal}
                         />
                     ) : (
                         <ChecklistBoardView
@@ -504,6 +506,7 @@ function ChecklistsContent() {
                             currentMinutes={currentMinutes}
                             onSelect={handleSelect}
                             onStatusToggle={handleStatusToggle}
+                            isGlobal={isGlobal}
                         />
                     )}
                 </div>
