@@ -74,7 +74,6 @@ export const useEquipe = (arg: string | null | EquipeScope) => {
         },
         enabled,
         staleTime: 5 * 60 * 1000,
-        refetchOnWindowFocus: true,
     });
 };
 

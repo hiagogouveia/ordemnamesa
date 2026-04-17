@@ -116,7 +116,6 @@ export function useAdminChecklistsStatus(restaurantId: string | undefined) {
         },
         enabled: !!restaurantId,
         staleTime: 2 * 60 * 1000,    // considera fresco por 2 min
-        refetchOnWindowFocus: true,
     });
 }
 

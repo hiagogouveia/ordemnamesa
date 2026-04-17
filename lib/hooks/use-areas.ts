@@ -29,8 +29,7 @@ export function useAreas(restaurantId: string | undefined, userId?: string) {
             return res.json();
         },
         enabled: !!restaurantId,
-        staleTime: 0,
-        refetchOnMount: "always",
+        staleTime: 5 * 60 * 1000,   // áreas raramente mudam
     });
 }
 
@@ -53,8 +52,7 @@ export function useAllAreas(restaurantId: string | undefined) {
             return res.json();
         },
         enabled: !!restaurantId,
-        staleTime: 0,
-        refetchOnMount: "always",
+        staleTime: 5 * 60 * 1000,   // áreas raramente mudam
     });
 }
 

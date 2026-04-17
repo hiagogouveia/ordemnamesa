@@ -38,7 +38,6 @@ export const useKanbanTasks = (restaurantId: string | undefined, userId?: string
         },
         enabled: !!restaurantId,
         staleTime: 2 * 60 * 1000,
-        refetchOnWindowFocus: true,
     });
 
     // Realtime: atualizar ao mudar assumptions ou execuções de tarefas
@@ -102,7 +101,6 @@ export const useChecklistAssumption = (restaurantId: string | undefined, checkli
         },
         enabled: !!restaurantId && !!checklistId,
         staleTime: 30 * 1000,        // assumption de turno pode mudar entre colaboradores
-        refetchOnWindowFocus: true,
     });
 };
 

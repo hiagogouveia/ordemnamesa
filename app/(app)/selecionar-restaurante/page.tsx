@@ -70,6 +70,28 @@ export default function SelecionarRestaurantePage() {
                         ? (item.restaurants as unknown as { id: string; name: string; logo_url: string | null; slug: string; account_id: string }[])[0]
                         : item.restaurants as { id: string; name: string; logo_url: string | null; slug: string; account_id: string }
                 }));
+
+                // Auto-skip: se só há 1 restaurante, seleciona automaticamente
+                if (formattedData.length === 1) {
+                    const only = formattedData[0] as RestaurantData;
+                    setRestaurant({
+                        id: only.restaurants.id,
+                        name: only.restaurants.name,
+                        slug: only.restaurants.slug,
+                        role: only.role,
+                        userId: user.id,
+                    });
+                    const base = "; path=/; SameSite=Lax";
+                    document.cookie = `x-restaurant-role=${only.role}${base}`;
+                    document.cookie = `x-restaurant-id=${only.restaurants.id}${base}`;
+                    document.cookie = `x-restaurant-name=${encodeURIComponent(only.restaurants.name)}${base}`;
+                    document.cookie = `x-restaurant-slug=${only.restaurants.slug}${base}`;
+                    document.cookie = `x-restaurant-mode=${base}; expires=Thu, 01 Jan 1970 00:00:01 GMT`;
+                    const target = only.role === 'staff' ? '/turno' : '/dashboard';
+                    window.location.assign(target);
+                    return;
+                }
+
                 setRestaurants(formattedData as RestaurantData[]);
             }
             setLoading(false);

@@ -35,7 +35,6 @@ export function useMyActivities(restaurantId: string | undefined, userId?: strin
         },
         enabled: !!restaurantId,
         staleTime: 2 * 60 * 1000,
-        refetchOnWindowFocus: true,
     });
 
     // Realtime: escutar mudanças em checklist_assumptions para atualizar imediatamente
@@ -97,7 +96,6 @@ export function useMyActivitiesBadge(restaurantId: string | undefined, userId?: 
         },
         enabled: !!restaurantId,
         staleTime: 2 * 60 * 1000,
-        refetchOnWindowFocus: true,
     });
 }
 

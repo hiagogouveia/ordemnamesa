@@ -131,8 +131,8 @@ export async function GET(request: Request) {
         sevenDaysAgoDate.setDate(sevenDaysAgoDate.getDate() - 6);
         const sevenDaysAgoKey = getBrazilDateKey(sevenDaysAgoDate);
 
-        // ── Round 1: Queries paralelas ────────────────────────────────────
-        const [checklistsRes, assumptionsRes, taskExecsRes] = await Promise.all([
+        // ── Round 1: Queries paralelas (inclui shifts) ─────────────────────
+        const [checklistsRes, assumptionsRes, taskExecsRes, shiftsRes] = await Promise.all([
             // Checklists ativos — apenas metadados (nome, área, tasks, horários)
             adminSupabase
                 .from('checklists')
@@ -156,19 +156,20 @@ export async function GET(request: Request) {
                 .eq('restaurant_id', restaurant_id)
                 .gte('executed_at', todayStartISO)
                 .lte('executed_at', todayEndISO),
+
+            // Shifts para resolver recurrence='shift_days'
+            adminSupabase
+                .from('shifts')
+                .select('shift_type, days_of_week')
+                .eq('restaurant_id', restaurant_id)
+                .eq('active', true),
         ]);
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const allChecklists = (checklistsRes.data || []) as any as ChecklistRow[];
         const allAssumptions: AssumptionRow[] = assumptionsRes.data || [];
         const taskExecs: TaskExecRow[] = taskExecsRes.data || [];
-
-        // Buscar shifts para resolver recurrence='shift_days'
-        const { data: shifts } = await adminSupabase
-            .from('shifts')
-            .select('shift_type, days_of_week')
-            .eq('restaurant_id', restaurant_id)
-            .eq('active', true);
+        const shifts = shiftsRes.data;
 
         // Filtrar checklists por regras de recorrência (dia da semana, custom, etc.)
         const checklists = filterChecklistsByRecurrence(allChecklists, brazil.dayOfWeek, brazil.dateKey, shifts || []);

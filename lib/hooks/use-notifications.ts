@@ -34,8 +34,7 @@ export function useNotifications(restaurantId: string | undefined) {
             return res.json();
         },
         enabled: !!restaurantId,
-        staleTime: 30 * 1000,
-        refetchOnWindowFocus: true,
+        staleTime: 2 * 60 * 1000,     // realtime subscription cuida de atualizações instantâneas
     });
 }
 

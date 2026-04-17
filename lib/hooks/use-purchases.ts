@@ -24,7 +24,6 @@ export function usePurchaseLists(restaurantId: string | undefined, status?: 'ope
         },
         enabled: !!restaurantId,
         staleTime: 60 * 1000,        // listas de compras têm movimento frequente
-        refetchOnWindowFocus: true,
     });
 }
 
@@ -44,7 +43,6 @@ export function usePurchaseListDetails(restaurantId: string | undefined, listId:
         },
         enabled: !!restaurantId && !!listId,
         staleTime: 60 * 1000,        // itens de uma lista mudam durante operação
-        refetchOnWindowFocus: true,
     });
 }
 

@@ -107,6 +107,5 @@ export const useDashboard = (restaurantId: string | null) => {
         },
         enabled: !!restaurantId,
         staleTime: 2 * 60 * 1000,     // dashboard operacional: fresco por 2 min
-        refetchOnWindowFocus: true,   // refresca ao voltar para a aba
     });
 };
