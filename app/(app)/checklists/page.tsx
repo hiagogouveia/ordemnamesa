@@ -13,6 +13,7 @@ import { useChecklistOrders, useUpdateChecklistOrders } from "@/lib/hooks/use-ch
 import { createClient } from "@/lib/supabase/client";
 import { useAllAreas } from "@/lib/hooks/use-areas";
 import { useEquipe } from "@/lib/hooks/use-equipe";
+import { useAccountAccess } from "@/lib/hooks/use-account-access";
 import { ChecklistHeader } from "@/components/checklists/management/ChecklistHeader";
 import { ChecklistFilters } from "@/components/checklists/management/ChecklistFilters";
 import { ChecklistListView } from "@/components/checklists/management/ChecklistListView";
@@ -87,6 +88,7 @@ function ChecklistsContent() {
     const isGlobal = accountMode === "global";
 
     // Queries
+    const { data: accountAccess } = useAccountAccess(isGlobal ? accountId : undefined);
     const { data: checklists = [], isLoading } = useChecklists(
         isGlobal
             ? { restaurantId: null, accountId, mode: 'global' }
@@ -203,7 +205,9 @@ function ChecklistsContent() {
 
     // ─── BULK SELECTION (visão global) ─────────────────────────────────────────
 
-    const canBulkAction = isGlobal && (userRole === "owner" || userRole === "manager");
+    // No modo global, userRole (restaurant-store) é null — usar role da account
+    const effectiveRole = isGlobal ? accountAccess?.role : userRole;
+    const canBulkAction = isGlobal && (effectiveRole === "owner" || effectiveRole === "manager");
 
     const selectedChecklists = useMemo(
         () => filtered.filter((c) => selectedIds.has(c.id)),
