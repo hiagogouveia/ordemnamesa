@@ -18,8 +18,9 @@ const AREA_COLORS = [
     "#3b82f6",
 ];
 
-export function AreasTab() {
-    const restaurantId = useRestaurantStore((state) => state.restaurantId);
+export function AreasTab({ overrideRestaurantId }: { overrideRestaurantId?: string } = {}) {
+    const storeRestaurantId = useRestaurantStore((state) => state.restaurantId);
+    const restaurantId = overrideRestaurantId || storeRestaurantId;
     const userRole = useRestaurantStore((state) => state.userRole);
 
     const { data: areas = [], isLoading } = useAllAreas(restaurantId || undefined);

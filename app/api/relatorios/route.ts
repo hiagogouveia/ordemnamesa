@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { resolveGlobalScope, isGlobalScopeResult } from '@/lib/api/global-scope';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
+
+interface UnitInfo {
+    id: string;
+    name: string;
+}
 
 interface RegistroRecente {
     id: string;
@@ -10,6 +16,7 @@ interface RegistroRecente {
     executor_name: string;
     executor_avatar: string | null;
     executed_at: string;
+    unit?: UnitInfo;
 }
 
 interface ExecRow {
@@ -17,6 +24,7 @@ interface ExecRow {
     status: string;
     executed_at: string;
     checklist_id: string;
+    restaurant_id: string;
     user_id: string;
     photo_url: string | null;
     checklist_tasks: { title?: string } | null;
@@ -53,12 +61,18 @@ export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
         const restaurant_id = searchParams.get('restaurant_id');
+        const account_id = searchParams.get('account_id');
+        const mode = searchParams.get('mode');
         const start_date = searchParams.get('start_date');
         const end_date = searchParams.get('end_date');
         const format = searchParams.get('format');
+        const isGlobal = mode === 'global';
 
-        if (!restaurant_id) {
+        if (!isGlobal && !restaurant_id) {
             return NextResponse.json({ error: 'restaurant_id é obrigatório' }, { status: 400 });
+        }
+        if (isGlobal && !account_id) {
+            return NextResponse.json({ error: 'account_id é obrigatório em modo global' }, { status: 400 });
         }
 
         // ── Auth ─────────────────────────────────────────────────────────────
@@ -75,17 +89,32 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Sem autorização' }, { status: 401 });
         }
 
-        const { data: userRole } = await adminSupabase
-            .from('restaurant_users')
-            .select('role')
-            .eq('restaurant_id', restaurant_id)
-            .eq('user_id', user.id)
-            .eq('active', true)
-            .single();
+        // ── Resolver escopo ──────────────────────────────────────────────────
+        let restaurantIds: string[] = [];
+        const unitsById: Record<string, UnitInfo> = {};
 
-        if (!userRole || userRole.role === 'staff') {
-            return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
+        if (isGlobal) {
+            const scopeResult = await resolveGlobalScope(adminSupabase, account_id!, user.id);
+            if (!isGlobalScopeResult(scopeResult)) return scopeResult; // 403
+            restaurantIds = scopeResult.restaurantIds;
+            Object.assign(unitsById, scopeResult.unitsById);
+        } else {
+            const { data: userRole } = await adminSupabase
+                .from('restaurant_users')
+                .select('role')
+                .eq('restaurant_id', restaurant_id!)
+                .eq('user_id', user.id)
+                .eq('active', true)
+                .single();
+
+            if (!userRole || userRole.role === 'staff') {
+                return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
+            }
+            restaurantIds = [restaurant_id!];
         }
+
+        const getUnit = (rid: string): UnitInfo | undefined =>
+            isGlobal ? unitsById[rid] : undefined;
 
         // ── Dates ────────────────────────────────────────────────────────────
         const now = new Date();
@@ -121,16 +150,16 @@ export async function GET(request: Request) {
             // Active checklists with task count
             adminSupabase
                 .from('checklists')
-                .select('id, name, checklist_tasks(id, is_critical)')
-                .eq('restaurant_id', restaurant_id)
+                .select('id, name, restaurant_id, checklist_tasks(id, is_critical)')
+                .in('restaurant_id', restaurantIds)
                 .eq('active', true)
                 .eq('status', 'active'),
 
             // Assumptions in current period
             adminSupabase
                 .from('checklist_assumptions')
-                .select('id, checklist_id, user_id, user_name, date_key, assumed_at, completed_at, execution_status')
-                .eq('restaurant_id', restaurant_id)
+                .select('id, checklist_id, restaurant_id, user_id, user_name, date_key, assumed_at, completed_at, execution_status')
+                .in('restaurant_id', restaurantIds)
                 .gte('date_key', startKey)
                 .lte('date_key', endKey),
 
@@ -138,7 +167,7 @@ export async function GET(request: Request) {
             adminSupabase
                 .from('checklist_assumptions')
                 .select('id, checklist_id, user_id, date_key, completed_at, execution_status')
-                .eq('restaurant_id', restaurant_id)
+                .in('restaurant_id', restaurantIds)
                 .gte('date_key', prevStartKey)
                 .lte('date_key', prevEndKey),
 
@@ -146,11 +175,11 @@ export async function GET(request: Request) {
             adminSupabase
                 .from('task_executions')
                 .select(`
-                    id, status, executed_at, checklist_id, user_id, photo_url,
+                    id, status, executed_at, checklist_id, restaurant_id, user_id, photo_url,
                     checklist_tasks(title),
                     user:restaurant_users!user_id(user:users(id, name, avatar_url))
                 `)
-                .eq('restaurant_id', restaurant_id)
+                .in('restaurant_id', restaurantIds)
                 .gte('executed_at', startD.toISOString())
                 .lte('executed_at', endD.toISOString())
                 .order('executed_at', { ascending: false }),
@@ -159,7 +188,7 @@ export async function GET(request: Request) {
             adminSupabase
                 .from('task_executions')
                 .select('id, status')
-                .eq('restaurant_id', restaurant_id)
+                .in('restaurant_id', restaurantIds)
                 .gte('executed_at', prevStartD.toISOString())
                 .lte('executed_at', prevEndD.toISOString()),
         ]);
@@ -275,7 +304,7 @@ export async function GET(request: Request) {
         }
 
         // ── 6. Top Performers ────────────────────────────────────────────────
-        const topPerformersMap: Record<string, { name: string; avatar: string | null; total_done: number; total: number }> = {};
+        const topPerformersMap: Record<string, { name: string; avatar: string | null; total_done: number; total: number; restaurant_id: string }> = {};
 
         execucoes.forEach(ex => {
             const uid = ex.user_id;
@@ -284,7 +313,7 @@ export async function GET(request: Request) {
             const { name, avatar } = getUserInfo(ex);
 
             if (!topPerformersMap[uid]) {
-                topPerformersMap[uid] = { name, avatar, total_done: 0, total: 0 };
+                topPerformersMap[uid] = { name, avatar, total_done: 0, total: 0, restaurant_id: ex.restaurant_id };
             }
             topPerformersMap[uid].total++;
             if (ex.status === 'done' || ex.status === 'completed') {
@@ -299,6 +328,7 @@ export async function GET(request: Request) {
                 avatar: dt.avatar,
                 total_done: dt.total_done,
                 percent: dt.total > 0 ? Math.round((dt.total_done / dt.total) * 100) : 0,
+                ...(getUnit(dt.restaurant_id) ? { unit: getUnit(dt.restaurant_id) } : {}),
             }))
             .sort((a, b) => b.total_done - a.total_done)
             .slice(0, 5);
@@ -319,6 +349,7 @@ export async function GET(request: Request) {
                 executor_name: name,
                 executor_avatar: avatar,
                 executed_at: ex.executed_at,
+                ...(getUnit(ex.restaurant_id) ? { unit: getUnit(ex.restaurant_id) } : {}),
             });
         }
 

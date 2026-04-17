@@ -13,8 +13,9 @@ const SHIFT_TYPES = [
 ];
 const SHIFT_TYPE_LABELS: Record<string, string> = { morning: 'Manhã', afternoon: 'Tarde', evening: 'Noite' };
 
-export function ShiftsTab() {
-    const restaurantId = useRestaurantStore((state) => state.restaurantId);
+export function ShiftsTab({ overrideRestaurantId }: { overrideRestaurantId?: string } = {}) {
+    const storeRestaurantId = useRestaurantStore((state) => state.restaurantId);
+    const restaurantId = overrideRestaurantId || storeRestaurantId;
     const { data: shifts = [], isLoading } = useShifts(restaurantId || undefined);
     const createShift = useCreateShift();
     const updateShift = useUpdateShift();

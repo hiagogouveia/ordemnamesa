@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getBrazilNow, getBrazilStartAndEndOfDay } from '@/lib/utils/brazil-date';
 import { filterChecklistsByRecurrence } from '@/lib/utils/should-checklist-appear-today';
+import { resolveGlobalScope, isGlobalScopeResult } from '@/lib/api/global-scope';
 
 const getAdminSupabase = () => {
     return createClient(
@@ -14,9 +15,15 @@ export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
         const restaurant_id = searchParams.get('restaurant_id');
+        const account_id = searchParams.get('account_id');
+        const mode = searchParams.get('mode');
+        const isGlobal = mode === 'global';
 
-        if (!restaurant_id) {
+        if (!isGlobal && !restaurant_id) {
             return NextResponse.json({ error: 'restaurant_id é obrigatório' }, { status: 400 });
+        }
+        if (isGlobal && !account_id) {
+            return NextResponse.json({ error: 'account_id é obrigatório em modo global' }, { status: 400 });
         }
 
         const authHeader = request.headers.get('Authorization');
@@ -32,17 +39,30 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
         }
 
-        // 1. Obter areas e roles do usuário neste restaurante
+        // ── Resolver escopo ──────────────────────────────────────────────
+        let restaurantIds: string[] = [];
+        const unitsById: Record<string, { id: string; name: string }> = {};
+
+        if (isGlobal) {
+            const scopeResult = await resolveGlobalScope(adminSupabase, account_id!, user.id);
+            if (!isGlobalScopeResult(scopeResult)) return scopeResult; // 403
+            restaurantIds = scopeResult.restaurantIds;
+            Object.assign(unitsById, scopeResult.unitsById);
+        } else {
+            restaurantIds = [restaurant_id!];
+        }
+
+        // 1. Obter areas e roles do usuário nas unidades em escopo
         const { data: userAreas } = await adminSupabase
             .from('user_areas')
             .select('area_id')
-            .eq('restaurant_id', restaurant_id)
+            .in('restaurant_id', restaurantIds)
             .eq('user_id', user.id);
-            
+
         const { data: userRoles } = await adminSupabase
             .from('user_roles')
             .select('role_id')
-            .eq('restaurant_id', restaurant_id)
+            .in('restaurant_id', restaurantIds)
             .eq('user_id', user.id);
 
         const areaIds = userAreas?.map(ua => ua.area_id) || [];
@@ -76,8 +96,8 @@ export async function GET(request: Request) {
 
         const { data: activeChecklists } = await adminSupabase
             .from('checklists')
-            .select('id, name, description, shift, is_required, recurrence, recurrence_config, last_reset_at, assigned_to_user_id, role_id, area_id, order_index, roles(id, name, color), areas(id, name, color), checklist_type, start_time, end_time')
-            .eq('restaurant_id', restaurant_id)
+            .select('id, name, description, shift, is_required, recurrence, recurrence_config, last_reset_at, assigned_to_user_id, role_id, area_id, order_index, restaurant_id, roles(id, name, color), areas(id, name, color), checklist_type, start_time, end_time')
+            .in('restaurant_id', restaurantIds)
             .eq('active', true)
             .eq('status', 'active')
             .or(checklistFilterParts.join(','))
@@ -92,7 +112,7 @@ export async function GET(request: Request) {
         const { data: shifts } = await adminSupabase
             .from('shifts')
             .select('shift_type, days_of_week')
-            .eq('restaurant_id', restaurant_id)
+            .in('restaurant_id', restaurantIds)
             .eq('active', true);
 
         // Filtrar checklists por regras de recorrência (dia da semana, custom, etc.)
@@ -132,10 +152,11 @@ export async function GET(request: Request) {
             }
 
             if (periodStart && (!lastReset || lastReset < periodStart)) {
+                const clRestaurantId = (cl as { restaurant_id?: string }).restaurant_id || restaurantIds[0];
                 await adminSupabase
                     .from('task_executions')
                     .delete()
-                    .eq('restaurant_id', restaurant_id)
+                    .eq('restaurant_id', clRestaurantId)
                     .lt('executed_at', periodStart.toISOString())
                     .in('task_id', (await adminSupabase.from('checklist_tasks').select('id').eq('checklist_id', cl.id)).data?.map(t => t.id) || []);
 
@@ -151,7 +172,7 @@ export async function GET(request: Request) {
             const tasksQuery = adminSupabase
                 .from('checklist_tasks')
                 .select('*')
-                .eq('restaurant_id', restaurant_id)
+                .in('restaurant_id', restaurantIds)
                 .in('checklist_id', checklistIds)
                 .or(`assigned_to_user_id.is.null,assigned_to_user_id.eq.${user.id}`)
                 .order('order', { ascending: true });
@@ -183,21 +204,21 @@ export async function GET(request: Request) {
             is_required: checklistMeta.get(task.checklist_id as string)?.is_required ?? false,
         }));
 
-        // 3. Buscar execuções de HOJE para ESTE USUÁRIO neste restaurante
+        // 3. Buscar execuções de HOJE para ESTE USUÁRIO nas unidades em escopo
         const { data: executions } = await adminSupabase
             .from('task_executions')
             .select('*')
-            .eq('restaurant_id', restaurant_id)
+            .in('restaurant_id', restaurantIds)
             .eq('user_id', user.id)
             .gte('executed_at', brazilDayStart)
             .lte('executed_at', brazilDayEnd);
 
-        // 4. Buscar assumptions de HOJE para este restaurante
+        // 4. Buscar assumptions de HOJE nas unidades em escopo
         const todayKey = brazil.dateKey;
         const { data: assumptions } = await adminSupabase
             .from('checklist_assumptions')
             .select('*')
-            .eq('restaurant_id', restaurant_id)
+            .in('restaurant_id', restaurantIds)
             .eq('date_key', todayKey);
 
         return NextResponse.json({
@@ -205,6 +226,7 @@ export async function GET(request: Request) {
             tasks: tasksData || [],
             executions: executions || [],
             assumptions: assumptions || [],
+            ...(isGlobal ? { units_by_id: unitsById } : {}),
         });
 
     } catch (error: unknown) {

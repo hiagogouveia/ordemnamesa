@@ -3,9 +3,12 @@
 import { useEffect, useCallback, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/providers/use-session';
+import { useAccountSessionStore } from '@/lib/store/account-session-store';
 import { useDashboard, type TarefaCriticaTipo, type EquipeMembroStatus } from '@/lib/hooks/use-dashboard';
+import { UnitBadge } from '@/components/ui/unit-badge';
 import { Avatar } from '@/components/ui/avatar';
 import Link from 'next/link';
+import type { Scope } from '@/lib/types/scope';
 
 // ─── Skeleton ────────────────────────────────────────────────────────────────
 
@@ -100,7 +103,18 @@ export default function DashboardPage() {
     const { userRole, restaurantId } = session;
     const restaurantName = session.restaurant?.name ?? null;
 
-    const { data: dashboardData, isLoading, error, refetch, isFetching } = useDashboard(restaurantId);
+    const accountMode = useAccountSessionStore((s) => s.mode);
+    const accountId = useAccountSessionStore((s) => s.accountId);
+    const accountName = useAccountSessionStore((s) => s.accountName);
+    const isGlobal = accountMode === 'global';
+
+    const scope: Scope | null = useMemo(() => {
+        if (isGlobal && accountId) return { mode: 'global', accountId };
+        if (restaurantId) return { mode: 'single', restaurantId };
+        return null;
+    }, [isGlobal, accountId, restaurantId]);
+
+    const { data: dashboardData, isLoading, error, refetch, isFetching } = useDashboard(scope);
 
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -130,7 +144,7 @@ export default function DashboardPage() {
         }
     }, [userRole, router]);
 
-    if (!userRole || userRole === 'staff' || isLoading) {
+    if ((!userRole && !isGlobal) || userRole === 'staff' || isLoading) {
         return <DashboardSkeleton />;
     }
 
@@ -171,8 +185,12 @@ export default function DashboardPage() {
             <header className="flex items-center justify-between h-16 px-6 border-b border-[#233f48] bg-surface-dark/50 backdrop-blur-sm sticky top-0 z-20">
                 <div className="flex items-center gap-4">
                     <div>
-                        <h2 className="text-white text-lg font-bold leading-tight">Visão Geral Hoje</h2>
-                        <p className="text-[#92bbc9] text-xs capitalize">{formattedDate} • {restaurantName || 'Matriz'}</p>
+                        <h2 className="text-white text-lg font-bold leading-tight">
+                            {isGlobal ? 'Visão Global' : 'Visão Geral Hoje'}
+                        </h2>
+                        <p className="text-[#92bbc9] text-xs capitalize">
+                            {formattedDate} • {isGlobal ? (accountName || 'Todas as Unidades') : (restaurantName || 'Matriz')}
+                        </p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -219,7 +237,10 @@ export default function DashboardPage() {
                                     >
                                         <TipoBadge tipo={item.tipo} />
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-white text-sm font-medium truncate">{item.checklist_nome}</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className="text-white text-sm font-medium truncate">{item.checklist_nome}</p>
+                                                {item.unit && <UnitBadge name={item.unit.name} />}
+                                            </div>
                                             <p className="text-[#92bbc9] text-xs">{item.responsavel_nome} • {item.tempo_atraso}</p>
                                         </div>
                                         <span className="material-symbols-outlined text-[#92bbc9] text-sm opacity-0 group-hover:opacity-100 transition-opacity">chevron_right</span>
@@ -357,6 +378,39 @@ export default function DashboardPage() {
                         </div>
                     </div>
 
+                    {/* ── Breakdown por Unidade (apenas global) ────────── */}
+                    {isGlobal && dashboardData?.units_breakdown && dashboardData.units_breakdown.length > 0 && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                            {dashboardData.units_breakdown.map((ub) => (
+                                <div key={ub.unit.id} className="bg-[#1a2c32] rounded-xl p-4 border border-[#233f48] flex flex-col gap-2">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <UnitBadge name={ub.unit.name} />
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[#92bbc9] text-xs">Conclusão</span>
+                                        <span className="text-white text-sm font-bold">{ub.conclusao_diaria_percent}%</span>
+                                    </div>
+                                    <div className="w-full bg-[#233f48] h-1.5 rounded-full">
+                                        <div
+                                            className="bg-primary h-1.5 rounded-full transition-all duration-700"
+                                            style={{ width: `${ub.conclusao_diaria_percent}%` }}
+                                        />
+                                    </div>
+                                    <div className="flex items-center justify-between text-xs mt-1">
+                                        <span className="text-[#92bbc9]">
+                                            <span className="material-symbols-outlined text-[12px] align-middle mr-0.5">warning</span>
+                                            {ub.alertas_abertos} alerta{ub.alertas_abertos !== 1 ? 's' : ''}
+                                        </span>
+                                        <span className="text-[#92bbc9]">
+                                            <span className="material-symbols-outlined text-[12px] align-middle mr-0.5">group</span>
+                                            {ub.equipe_ativa} ativo{ub.equipe_ativa !== 1 ? 's' : ''}
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
                     {/* ── Grid principal ────────────────────────────────── */}
                     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 h-full">
 
@@ -443,7 +497,7 @@ export default function DashboardPage() {
 
                                         return (
                                             <div
-                                                key={area.area_id}
+                                                key={`${area.area_id}-${area.unit?.id ?? 'single'}`}
                                                 className="p-4 flex flex-col sm:flex-row items-center gap-4"
                                             >
                                                 <div
@@ -454,7 +508,10 @@ export default function DashboardPage() {
                                                 </div>
                                                 <div className="flex-1 w-full">
                                                     <div className="flex justify-between mb-1">
-                                                        <span className="text-white text-sm font-medium">{area.area_name}</span>
+                                                        <span className="text-white text-sm font-medium flex items-center gap-2">
+                                                            {area.area_name}
+                                                            {area.unit && <UnitBadge name={area.unit.name} />}
+                                                        </span>
                                                         <span className="text-white text-sm font-bold">
                                                             {area.completed}/{area.total} concluída{area.total !== 1 ? 's' : ''} · {area.percent}%
                                                         </span>
@@ -506,7 +563,10 @@ export default function DashboardPage() {
                                                     }`}
                                                 >
                                                     <div className="flex justify-between items-start mb-1">
-                                                        <h4 className="text-white font-medium text-sm pr-2 truncate">{alerta.title}</h4>
+                                                        <div className="flex items-center gap-2 pr-2 min-w-0">
+                                                            <h4 className="text-white font-medium text-sm truncate">{alerta.title}</h4>
+                                                            {alerta.unit && <UnitBadge name={alerta.unit.name} />}
+                                                        </div>
                                                         <span className="text-[#92bbc9] text-xs shrink-0">{alerta.time_ago}</span>
                                                     </div>
                                                     <p className="text-[#92bbc9] text-xs mb-1 line-clamp-2" title={alerta.notes}>{alerta.notes}</p>

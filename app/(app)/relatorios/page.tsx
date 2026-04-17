@@ -1,19 +1,31 @@
 "use client";
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useRestaurantStore } from '@/lib/store/restaurant-store';
+import { useAccountSessionStore } from '@/lib/store/account-session-store';
 import { RelatoriosClient } from './_components/relatorios-client';
+import type { Scope } from '@/lib/types/scope';
 
 export default function RelatoriosPage() {
     const { restaurantId, userRole } = useRestaurantStore();
+    const accountMode = useAccountSessionStore((s) => s.mode);
+    const accountId = useAccountSessionStore((s) => s.accountId);
+    const accountName = useAccountSessionStore((s) => s.accountName);
+    const isGlobal = accountMode === 'global';
     const router = useRouter();
 
-    useEffect(() => {
-        if (userRole === 'staff') router.replace('/turno');
-    }, [userRole, router]);
+    const scope: Scope | null = useMemo(() => {
+        if (isGlobal && accountId) return { mode: 'global', accountId };
+        if (restaurantId) return { mode: 'single', restaurantId };
+        return null;
+    }, [isGlobal, accountId, restaurantId]);
 
-    if (!restaurantId || !userRole || userRole === 'staff') {
+    useEffect(() => {
+        if (userRole === 'staff' && !isGlobal) router.replace('/turno');
+    }, [userRole, router, isGlobal]);
+
+    if (!scope || (!isGlobal && (!userRole || userRole === 'staff'))) {
         return (
             <div className="flex-1 p-4 md:p-8 bg-[#101d22] animate-pulse">
                 <div className="max-w-5xl mx-auto flex flex-col gap-6">
@@ -58,5 +70,11 @@ export default function RelatoriosPage() {
         );
     }
 
-    return <RelatoriosClient restaurantId={restaurantId} />;
+    return (
+        <RelatoriosClient
+            scope={scope}
+            isGlobal={isGlobal}
+            accountName={accountName}
+        />
+    );
 }

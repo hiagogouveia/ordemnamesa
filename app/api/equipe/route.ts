@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { canUseGlobal } from '@/lib/supabase/accounts';
+import { resolveGlobalScope, rejectIfGlobal, isGlobalScopeResult } from '@/lib/api/global-scope';
 
 interface PublicUser {
     name?: string | null;
@@ -56,12 +56,10 @@ export async function GET(request: Request) {
         const unitsById: Record<string, { id: string; name: string }> = {};
 
         if (isGlobal) {
-            const { allowed, units } = await canUseGlobal(adminSupabase, account_id!, user.id);
-            if (!allowed) {
-                return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
-            }
-            restaurantIds = units.map((u) => u.id);
-            for (const u of units) unitsById[u.id] = { id: u.id, name: u.name };
+            const scopeResult = await resolveGlobalScope(adminSupabase, account_id!, user.id);
+            if (!isGlobalScopeResult(scopeResult)) return scopeResult; // 403
+            restaurantIds = scopeResult.restaurantIds;
+            Object.assign(unitsById, scopeResult.unitsById);
         } else {
             const { data: userRole } = await adminSupabase
                 .from('restaurant_users')
@@ -271,17 +269,6 @@ export async function GET(request: Request) {
         console.error('API Equipe Error:', error);
         return NextResponse.json({ error: (error as Error).message }, { status: 500 });
     }
-}
-
-function rejectIfGlobal(request: Request): NextResponse | null {
-    const mode = new URL(request.url).searchParams.get('mode');
-    if (mode === 'global') {
-        return NextResponse.json(
-            { error: 'Operação bloqueada em Visão Global. Selecione uma unidade.' },
-            { status: 403 }
-        );
-    }
-    return null;
 }
 
 export async function POST(request: Request) {

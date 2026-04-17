@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getBrazilNow, getBrazilStartAndEndOfDay, getBrazilDateKey } from '@/lib/utils/brazil-date';
 import { filterChecklistsByRecurrence } from '@/lib/utils/should-checklist-appear-today';
+import { resolveGlobalScope, isGlobalScopeResult } from '@/lib/api/global-scope';
 import type { RecurrenceConfig } from '@/lib/types';
 
 // ─── Constantes operacionais ─────────────────────────────────────────────────
@@ -24,11 +25,13 @@ interface AssumptionRow {
     completed_at: string | null;
     execution_status: string;
     blocked_reason: string | null;
+    restaurant_id: string;
 }
 
 interface ChecklistRow {
     id: string;
     name: string;
+    restaurant_id: string;
     shift?: string | null;
     area_id: string | null;
     end_time: string | null;
@@ -46,6 +49,11 @@ interface TaskExecRow {
     task_id: string;
     status: string;
     checklist_assumption_id: string | null;
+}
+
+interface UnitInfo {
+    id: string;
+    name: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -87,9 +95,15 @@ export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
         const restaurant_id = searchParams.get('restaurant_id');
+        const account_id = searchParams.get('account_id');
+        const mode = searchParams.get('mode');
+        const isGlobal = mode === 'global';
 
-        if (!restaurant_id) {
+        if (!isGlobal && !restaurant_id) {
             return NextResponse.json({ error: 'restaurant_id é obrigatório' }, { status: 400 });
+        }
+        if (isGlobal && !account_id) {
+            return NextResponse.json({ error: 'account_id é obrigatório em modo global' }, { status: 400 });
         }
 
         // ── Auth ──────────────────────────────────────────────────────────
@@ -106,17 +120,39 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Sem autorização' }, { status: 401 });
         }
 
-        const { data: userRole } = await adminSupabase
-            .from('restaurant_users')
-            .select('role')
-            .eq('restaurant_id', restaurant_id)
-            .eq('user_id', user.id)
-            .eq('active', true)
-            .single();
+        // ── Resolver escopo ───────────────────────────────────────────────
+        let restaurantIds: string[] = [];
+        const unitsById: Record<string, UnitInfo> = {};
 
-        if (!userRole || userRole.role === 'staff') {
-            return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
+        if (isGlobal) {
+            const scopeResult = await resolveGlobalScope(adminSupabase, account_id!, user.id);
+            if (!isGlobalScopeResult(scopeResult)) return scopeResult; // 403
+            restaurantIds = scopeResult.restaurantIds;
+            Object.assign(unitsById, scopeResult.unitsById);
+        } else {
+            const { data: userRole } = await adminSupabase
+                .from('restaurant_users')
+                .select('role')
+                .eq('restaurant_id', restaurant_id!)
+                .eq('user_id', user.id)
+                .eq('active', true)
+                .single();
+
+            if (!userRole || userRole.role === 'staff') {
+                return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
+            }
+            restaurantIds = [restaurant_id!];
+            // Em single mode, carregar nome do restaurante para consistência
+            const { data: rest } = await adminSupabase
+                .from('restaurants')
+                .select('id, name')
+                .eq('id', restaurant_id!)
+                .maybeSingle<{ id: string; name: string }>();
+            if (rest) unitsById[rest.id] = { id: rest.id, name: rest.name };
         }
+
+        const getUnit = (rid: string): UnitInfo | undefined =>
+            isGlobal ? unitsById[rid] : undefined;
 
         // ── Datas (timezone Brasil) ────────────────────────────────────────
         const brazil = getBrazilNow();
@@ -131,50 +167,46 @@ export async function GET(request: Request) {
         sevenDaysAgoDate.setDate(sevenDaysAgoDate.getDate() - 6);
         const sevenDaysAgoKey = getBrazilDateKey(sevenDaysAgoDate);
 
-        // ── Round 1: Queries paralelas (inclui shifts) ─────────────────────
+        // ── Round 1: Queries paralelas ─────────────────────────────────────
         const [checklistsRes, assumptionsRes, taskExecsRes, shiftsRes] = await Promise.all([
-            // Checklists ativos — apenas metadados (nome, área, tasks, horários)
             adminSupabase
                 .from('checklists')
-                .select('id, name, shift, area_id, end_time, start_time, recurrence, recurrence_config, assigned_to_user_id, areas(id, name, color), checklist_tasks(id, is_critical)')
-                .eq('restaurant_id', restaurant_id)
+                .select('id, name, restaurant_id, shift, area_id, end_time, start_time, recurrence, recurrence_config, assigned_to_user_id, areas(id, name, color), checklist_tasks(id, is_critical)')
+                .in('restaurant_id', restaurantIds)
                 .eq('active', true)
                 .eq('status', 'active'),
 
-            // Assumptions dos últimos 7 dias — fonte primária de TODAS as métricas
             adminSupabase
                 .from('checklist_assumptions')
-                .select('id, checklist_id, user_id, user_name, date_key, assumed_at, completed_at, execution_status, blocked_reason')
-                .eq('restaurant_id', restaurant_id)
+                .select('id, checklist_id, user_id, user_name, date_key, assumed_at, completed_at, execution_status, blocked_reason, restaurant_id')
+                .in('restaurant_id', restaurantIds)
                 .gte('date_key', sevenDaysAgoKey)
                 .lte('date_key', todayKey),
 
-            // Task executions de hoje — para progresso granular por tarefa e detecção de bloqueios
             adminSupabase
                 .from('task_executions')
                 .select('checklist_id, task_id, status, checklist_assumption_id')
-                .eq('restaurant_id', restaurant_id)
+                .in('restaurant_id', restaurantIds)
                 .gte('executed_at', todayStartISO)
                 .lte('executed_at', todayEndISO),
 
-            // Shifts para resolver recurrence='shift_days'
             adminSupabase
                 .from('shifts')
-                .select('shift_type, days_of_week')
-                .eq('restaurant_id', restaurant_id)
+                .select('shift_type, days_of_week, restaurant_id')
+                .in('restaurant_id', restaurantIds)
                 .eq('active', true),
         ]);
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const allChecklists = (checklistsRes.data || []) as any as ChecklistRow[];
-        const allAssumptions: AssumptionRow[] = assumptionsRes.data || [];
+        const allAssumptions: AssumptionRow[] = (assumptionsRes.data || []) as AssumptionRow[];
         const taskExecs: TaskExecRow[] = taskExecsRes.data || [];
         const shifts = shiftsRes.data;
 
-        // Filtrar checklists por regras de recorrência (dia da semana, custom, etc.)
+        // Filtrar checklists por regras de recorrência
         const checklists = filterChecklistsByRecurrence(allChecklists, brazil.dayOfWeek, brazil.dateKey, shifts || []);
 
-        // Mapa de checklists para lookup rápido (metadados apenas)
+        // Mapa de checklists para lookup rápido
         const checklistsMap = new Map<string, ChecklistRow>();
         checklists.forEach(cl => checklistsMap.set(cl.id, cl));
 
@@ -202,15 +234,12 @@ export async function GET(request: Request) {
         // ══════════════════════════════════════════════════════════════════
 
         // ── 1. Conclusão Diária (%) ───────────────────────────────────────
-        // Denominador: total de checklists esperados para o dia (via recorrência)
-        // Numerador: checklists com pelo menos 1 assumption concluída (deduplicado)
         const totalRoutinesToday = checklists.length;
         const completedChecklistIdsToday = new Set(
             todayAssumptions.filter(isCompleted).map(a => a.checklist_id)
         );
         const completedToday = completedChecklistIdsToday.size;
 
-        // Yesterday: filtrar checklists esperados por recorrência de ontem
         const yesterdayBrazil = getBrazilNow(yesterdayDate);
         const checklistsYesterday = filterChecklistsByRecurrence(allChecklists, yesterdayBrazil.dayOfWeek, yesterdayKey, shifts || []);
         const totalRoutinesYesterday = checklistsYesterday.length;
@@ -227,8 +256,6 @@ export async function GET(request: Request) {
             : 0;
 
         // ── 2. Alertas Abertos + Tarefas Críticas ────────────────────────
-        // Regra: cada assumption_id gera APENAS 1 alerta (hierarquia de severidade)
-        // Ordem: blocked > critico_atrasado > critico_pendente > atrasado
         let alertasAbertos = 0;
         const alertasRecentes: Array<{
             id: string;
@@ -238,6 +265,7 @@ export async function GET(request: Request) {
             severity: 'critical' | 'warning';
             alert_type: 'critico' | 'atrasado' | 'bloqueado';
             responsavel_nome: string;
+            unit?: UnitInfo;
         }> = [];
 
         const tarefasCriticas: Array<{
@@ -248,12 +276,12 @@ export async function GET(request: Request) {
             responsavel_nome: string;
             responsavel_id: string;
             tempo_atraso: string;
+            unit?: UnitInfo;
         }> = [];
 
         const nowHHMM = brazil.timeHHMM;
         const nowMs = Date.now();
 
-        // Set para garantir que cada assumption gere apenas 1 alerta
         const processedAssumptionIds = new Set<string>();
 
         todayAssumptions.forEach(a => {
@@ -261,6 +289,7 @@ export async function GET(request: Request) {
             const cl = checklistsMap.get(a.checklist_id);
             if (!cl) return;
 
+            const unit = getUnit(cl.restaurant_id);
             const isOverdue = cl.end_time ? nowHHMM > cl.end_time : false;
             const minutesSinceAssumed = (nowMs - new Date(a.assumed_at).getTime()) / 60000;
 
@@ -276,6 +305,7 @@ export async function GET(request: Request) {
                     severity: 'critical',
                     alert_type: 'bloqueado',
                     responsavel_nome: a.user_name,
+                    unit,
                 });
                 tarefasCriticas.push({
                     id: a.id,
@@ -285,11 +315,11 @@ export async function GET(request: Request) {
                     responsavel_nome: a.user_name,
                     responsavel_id: a.user_id,
                     tempo_atraso: formatDistanceToNowPT(new Date(a.assumed_at).getTime()),
+                    unit,
                 });
                 return;
             }
 
-            // Pular assumptions já concluídas
             if (isCompleted(a)) return;
 
             const criticalTasks = (cl.checklist_tasks || []).filter(t => t.is_critical);
@@ -307,6 +337,7 @@ export async function GET(request: Request) {
                     severity: 'critical',
                     alert_type: 'critico',
                     responsavel_nome: a.user_name,
+                    unit,
                 });
                 tarefasCriticas.push({
                     id: a.id,
@@ -316,6 +347,7 @@ export async function GET(request: Request) {
                     responsavel_nome: a.user_name,
                     responsavel_id: a.user_id,
                     tempo_atraso: `Prazo: ${cl.end_time}`,
+                    unit,
                 });
                 return;
             }
@@ -332,6 +364,7 @@ export async function GET(request: Request) {
                     severity: 'critical',
                     alert_type: 'critico',
                     responsavel_nome: a.user_name,
+                    unit,
                 });
                 tarefasCriticas.push({
                     id: a.id,
@@ -341,6 +374,7 @@ export async function GET(request: Request) {
                     responsavel_nome: a.user_name,
                     responsavel_id: a.user_id,
                     tempo_atraso: formatDistanceToNowPT(new Date(a.assumed_at).getTime()),
+                    unit,
                 });
                 return;
             }
@@ -357,6 +391,7 @@ export async function GET(request: Request) {
                     severity: 'warning',
                     alert_type: 'atrasado',
                     responsavel_nome: a.user_name,
+                    unit,
                 });
                 tarefasCriticas.push({
                     id: a.id,
@@ -366,13 +401,12 @@ export async function GET(request: Request) {
                     responsavel_nome: a.user_name,
                     responsavel_id: a.user_id,
                     tempo_atraso: `Prazo: ${cl.end_time}`,
+                    unit,
                 });
             }
         });
 
         // ── Rotinas esperadas hoje, não assumidas e atrasadas ─────────────
-        // Visão operacional: alerta dispara mesmo sem alguém ter assumido.
-        // Dedup por checklist_id — se já há assumption, o loop acima já cuidou.
         const assumedChecklistIds = new Set(todayAssumptions.map(a => a.checklist_id));
         const unassumedOverdueChecklists = checklists.filter(cl =>
             !assumedChecklistIds.has(cl.id) && !!cl.end_time && nowHHMM > cl.end_time
@@ -389,15 +423,12 @@ export async function GET(request: Request) {
         });
 
         // ── 3. Equipe Ativa ───────────────────────────────────────────────
-        // Base: distinct user_id com pelo menos 1 assumption hoje
         const todayUserIds = [...new Set(todayAssumptions.map(a => a.user_id))];
         const yesterdayUserIds = [...new Set(yesterdayAssumptions.map(a => a.user_id))];
 
-        // Round 2: Detalhes dos usuários ativos hoje + atribuídos a rotinas atrasadas não assumidas
         const usersMap: Record<string, { name: string; avatar_url: string | null }> = {};
         const userRolesMap: Record<string, string> = {};
 
-        // Batch único: usuários que assumiram + usuários atribuídos a rotinas não assumidas atrasadas
         const extraAssignedUserIds = unassumedOverdueChecklists
             .map(cl => cl.assigned_to_user_id)
             .filter((id): id is string => !!id);
@@ -409,12 +440,11 @@ export async function GET(request: Request) {
                     .from('users')
                     .select('id, name, avatar_url')
                     .in('id', userIdsToFetch),
-                // user_roles só é usado por top_performers → basta quem executou hoje
                 todayUserIds.length > 0
                     ? adminSupabase
                         .from('user_roles')
                         .select('user_id, roles(name)')
-                        .eq('restaurant_id', restaurant_id)
+                        .in('restaurant_id', restaurantIds)
                         .in('user_id', todayUserIds)
                     : Promise.resolve({ data: [] as unknown[] }),
             ]);
@@ -437,12 +467,11 @@ export async function GET(request: Request) {
         }));
 
         // ── Alertas de rotinas atrasadas não assumidas ────────────────────
-        // Visão operacional: mostra atraso independente de alguém ter assumido.
-        // assigned_to_user_id = null → responsável "Equipe"; caso contrário, nome do usuário.
         unassumedOverdueChecklists.forEach(cl => {
             const responsavelNome = cl.assigned_to_user_id
                 ? (usersMap[cl.assigned_to_user_id]?.name || 'Colaborador')
                 : 'Equipe';
+            const unit = getUnit(cl.restaurant_id);
 
             alertasAbertos++;
             alertasRecentes.push({
@@ -453,6 +482,7 @@ export async function GET(request: Request) {
                 severity: 'warning',
                 alert_type: 'atrasado',
                 responsavel_nome: responsavelNome,
+                unit,
             });
             tarefasCriticas.push({
                 id: cl.id,
@@ -462,10 +492,10 @@ export async function GET(request: Request) {
                 responsavel_nome: responsavelNome,
                 responsavel_id: cl.assigned_to_user_id || '',
                 tempo_atraso: `Prazo: ${cl.end_time}`,
+                unit,
             });
         });
 
-        // Ordenação final: critical antes de warning
         alertasRecentes.sort((a, b) => {
             if (a.severity === 'critical' && b.severity !== 'critical') return -1;
             if (a.severity !== 'critical' && b.severity === 'critical') return 1;
@@ -473,7 +503,6 @@ export async function GET(request: Request) {
         });
 
         // ── Equipe Detalhes (com status operacional) ──────────────────────
-        // Status: impedimento > atrasado > em_andamento > concluiu
         const equipe_detalhes = todayUserIds.map(uid => {
             const userAssumptions = todayAssumptions.filter(a => a.user_id === uid);
             const hasBlocked = userAssumptions.some(a =>
@@ -502,8 +531,6 @@ export async function GET(request: Request) {
         });
 
         // ── 4. Tempo Médio de Conclusão ───────────────────────────────────
-        // Métrica: completed_at - assumed_at (quanto tempo leva para concluir)
-        // Cap de 240 min para excluir outliers; outliers são contados separadamente
         let conclusionSumToday = 0;
         let conclusionCountToday = 0;
         let conclusionOutliersToday = 0;
@@ -539,12 +566,10 @@ export async function GET(request: Request) {
             ? Math.round(conclusionSumYesterday / conclusionCountYesterday)
             : 0;
 
-        // Manter backward compat (zerado — campo legado)
         const avgRespToday = 0;
         const avgRespYesterday = 0;
 
         // ── 5. Tendências de Execução (7 dias) ───────────────────────────
-        // Base: assumptions por dia — concluídas / total assumptions do dia
         const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
         const tendencias = [];
 
@@ -554,11 +579,9 @@ export async function GET(request: Request) {
             const dayInfo = getBrazilNow(d);
             const dateKey = dayInfo.dateKey;
 
-            // Denominador: checklists esperados neste dia (via recorrência)
             const dayChecklists = filterChecklistsByRecurrence(allChecklists, dayInfo.dayOfWeek, dateKey, shifts || []);
             const dayTotal = dayChecklists.length;
 
-            // Numerador: checklists com pelo menos 1 assumption concluída (deduplicado)
             const dayAssumptions = allAssumptions.filter(a => a.date_key === dateKey);
             const dayCompletedIds = new Set(
                 dayAssumptions.filter(isCompleted).map(a => a.checklist_id)
@@ -573,10 +596,7 @@ export async function GET(request: Request) {
             });
         }
 
-        // ── 6. Progresso por Área / Rotina ────────────────────────────────
-        // Base: apenas rotinas com assumption hoje (execução real)
-        // Se tem tasks → tasks concluídas / total tasks
-        // Se NÃO tem tasks → 100% se assumption concluída, 0% se não
+        // ── 6. Progresso por Rotina ───────────────────────────────────────
         const checklist_progresso = todayAssumptions
             .map(a => {
                 const cl = checklistsMap.get(a.checklist_id);
@@ -609,28 +629,28 @@ export async function GET(request: Request) {
                     status,
                     area_name: area?.name || null,
                     area_color: area?.color || null,
+                    unit: getUnit(cl.restaurant_id),
                 };
             })
             .filter((item): item is NonNullable<typeof item> => item !== null);
 
         // ── 6b. Progresso por Área (agregação) ────────────────────────────
-        // Agrupa checklists esperados hoje por area_id.
-        // Reutiliza completedChecklistIdsToday (mesma fonte do KPI de conclusão).
-        // Invariante: sum(total) === totalRoutinesToday; sum(completed) === completedToday
         interface AreaProgressoEntry {
             area_id: string;
             area_name: string;
             area_color: string;
             total: number;
             completed: number;
+            unit?: UnitInfo;
         }
+        // Em global, usar chave composta area_id+restaurant_id para não misturar áreas de unidades distintas
         const areaMap = new Map<string, AreaProgressoEntry>();
 
         for (const cl of checklists) {
-            // Ignorar checklists sem área válida — não criar bucket "Sem área"
             if (!cl.area_id || !cl.areas) continue;
 
-            let entry = areaMap.get(cl.area_id);
+            const key = isGlobal ? `${cl.area_id}__${cl.restaurant_id}` : cl.area_id;
+            let entry = areaMap.get(key);
             if (!entry) {
                 entry = {
                     area_id: cl.area_id,
@@ -638,8 +658,9 @@ export async function GET(request: Request) {
                     area_color: cl.areas.color,
                     total: 0,
                     completed: 0,
+                    unit: getUnit(cl.restaurant_id),
                 };
-                areaMap.set(cl.area_id, entry);
+                areaMap.set(key, entry);
             }
 
             entry.total++;
@@ -655,7 +676,6 @@ export async function GET(request: Request) {
         }));
 
         // ── 7. Top Performers Hoje ────────────────────────────────────────
-        // Base: assumptions concluídas (completed_at) hoje por usuário
         const performerCounts: Record<string, number> = {};
         todayAssumptions.filter(isCompleted).forEach(a => {
             performerCounts[a.user_id] = (performerCounts[a.user_id] || 0) + 1;
@@ -673,6 +693,41 @@ export async function GET(request: Request) {
             .sort((a, b) => b.total_done - a.total_done)
             .slice(0, 3);
 
+        // ── 8. Breakdown por unidade (apenas global) ─────────────────────
+        let units_breakdown: Array<{
+            unit: UnitInfo;
+            conclusao_diaria_percent: number;
+            alertas_abertos: number;
+            equipe_ativa: number;
+        }> | undefined;
+
+        if (isGlobal) {
+            units_breakdown = restaurantIds.map(rid => {
+                const unitChecklists = checklists.filter(cl => cl.restaurant_id === rid);
+                const unitTodayAssumptions = todayAssumptions.filter(a => a.restaurant_id === rid);
+                const unitCompletedIds = new Set(
+                    unitTodayAssumptions.filter(isCompleted).map(a => a.checklist_id)
+                );
+                const unitTotal = unitChecklists.length;
+                const unitCompleted = unitCompletedIds.size;
+
+                // Alertas: contar do array geral filtrado por unit
+                const unitAlertas = tarefasCriticas.filter(t => t.unit?.id === rid).length;
+
+                // Equipe ativa: distinct user_id
+                const unitUserIds = new Set(unitTodayAssumptions.map(a => a.user_id));
+
+                return {
+                    unit: unitsById[rid],
+                    conclusao_diaria_percent: unitTotal > 0
+                        ? Math.round((unitCompleted / unitTotal) * 100)
+                        : 0,
+                    alertas_abertos: unitAlertas,
+                    equipe_ativa: unitUserIds.size,
+                };
+            });
+        }
+
         // ── Resposta ──────────────────────────────────────────────────────
         return NextResponse.json({
             conclusao_diaria_percent,
@@ -683,10 +738,8 @@ export async function GET(request: Request) {
             equipe_ativa_diff: todayUserIds.length - yesterdayUserIds.length,
             equipe_avatars,
             equipe_detalhes,
-            // Legado (zerado) — mantido para não quebrar clientes antigos
             tempo_resposta_mins: avgRespToday,
             tempo_resposta_diff_mins: avgRespToday - avgRespYesterday,
-            // Novo: tempo médio de conclusão (assumed_at → completed_at)
             tempo_conclusao_mins,
             tempo_conclusao_diff_mins: tempo_conclusao_mins - tempo_conclusao_yesterday,
             tempo_conclusao_outliers: conclusionOutliersToday,
@@ -696,6 +749,7 @@ export async function GET(request: Request) {
             alertas_recentes: alertasRecentes.slice(0, 10),
             tarefas_criticas: tarefasCriticas,
             top_performers,
+            ...(units_breakdown ? { units_breakdown } : {}),
         });
 
     } catch (error: unknown) {

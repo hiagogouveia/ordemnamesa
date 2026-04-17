@@ -2,18 +2,20 @@ import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { ChecklistAssumption } from '@/lib/types';
+import type { Scope } from '@/lib/types/scope';
 
 export type TaskStatus = 'todo' | 'doing' | 'done' | 'flagged' | 'skipped' | 'blocked';
 
 export interface KanbanTask { id: string; title: string; description?: string; checklist_id: string; role_id?: string; assigned_to_user_id?: string; is_critical?: boolean; requires_photo?: boolean; [key: string]: unknown; }
 export interface KanbanExecution { id: string; task_id: string; status: TaskStatus; executed_at: string; notes?: string; photo_url?: string; requires_photo_snapshot?: boolean; blocked_reason?: string | null; blocked_at?: string | null; blocked_by_user_id?: string | null; checklist_assumption_id?: string | null; [key: string]: unknown; }
-export interface KanbanChecklist { id: string; name: string; description?: string; is_required: boolean; recurrence?: string; last_reset_at?: string; assigned_to_user_id?: string; checklist_type?: string; role_id?: string; area_id?: string; order_index?: number | null; roles?: { id: string; name: string; color: string }; areas?: { id: string; name: string; color: string }; start_time?: string; end_time?: string; [key: string]: unknown; }
+export interface KanbanChecklist { id: string; name: string; description?: string; is_required: boolean; recurrence?: string; last_reset_at?: string; assigned_to_user_id?: string; checklist_type?: string; role_id?: string; area_id?: string; order_index?: number | null; restaurant_id?: string; roles?: { id: string; name: string; color: string }; areas?: { id: string; name: string; color: string }; start_time?: string; end_time?: string; [key: string]: unknown; }
 
 export interface KanbanData {
     checklists: KanbanChecklist[];
     tasks: KanbanTask[];
     executions: KanbanExecution[];
     assumptions: ChecklistAssumption[];
+    units_by_id?: Record<string, { id: string; name: string }>;
 }
 
 const getAuthToken = async () => {
@@ -22,42 +24,56 @@ const getAuthToken = async () => {
     return session?.access_token || '';
 };
 
-export const useKanbanTasks = (restaurantId: string | undefined, userId?: string) => {
+export const useKanbanTasks = (arg: string | undefined | Scope, userId?: string) => {
     const queryClient = useQueryClient();
 
+    const scope: { mode: 'single' | 'global'; restaurantId?: string; accountId?: string } =
+        typeof arg === 'object' && arg !== null
+            ? (arg.mode === 'global' ? { mode: 'global', accountId: arg.accountId } : { mode: 'single', restaurantId: arg.restaurantId })
+            : { mode: 'single', restaurantId: arg };
+    const isGlobal = scope.mode === 'global';
+    const enabled = isGlobal ? !!scope.accountId : !!scope.restaurantId;
+
     const query = useQuery({
-        queryKey: ['kanban', restaurantId, userId],
+        queryKey: isGlobal
+            ? ['kanban', 'global', scope.accountId, userId]
+            : ['kanban', scope.restaurantId, userId],
         queryFn: async () => {
-            if (!restaurantId) return null;
+            if (!enabled) return null;
             const token = await getAuthToken();
-            const response = await fetch(`/api/tasks/kanban?restaurant_id=${restaurantId}`, {
+            const url = isGlobal
+                ? `/api/tasks/kanban?account_id=${scope.accountId}&mode=global`
+                : `/api/tasks/kanban?restaurant_id=${scope.restaurantId}`;
+            const response = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (!response.ok) throw new Error('Falha ao buscar Kanban data');
             return response.json() as Promise<KanbanData>;
         },
-        enabled: !!restaurantId,
+        enabled,
         staleTime: 2 * 60 * 1000,
     });
 
     // Realtime: atualizar ao mudar assumptions ou execuções de tarefas
+    // Em modo global, pular realtime (não há um único restaurant_id para filtrar)
+    const singleRestaurantId = scope.restaurantId;
     useEffect(() => {
-        if (!restaurantId) return;
+        if (!singleRestaurantId || isGlobal) return;
 
         const supabase = createClient();
         const channel = supabase
-            .channel(`kanban-rt-${restaurantId}`)
+            .channel(`kanban-rt-${singleRestaurantId}`)
             .on(
                 'postgres_changes',
                 {
                     event: '*',
                     schema: 'public',
                     table: 'checklist_assumptions',
-                    filter: `restaurant_id=eq.${restaurantId}`,
+                    filter: `restaurant_id=eq.${singleRestaurantId}`,
                 },
                 () => {
-                    queryClient.invalidateQueries({ queryKey: ['kanban', restaurantId] });
-                    queryClient.invalidateQueries({ queryKey: ['my-activities-badge', restaurantId] });
+                    queryClient.invalidateQueries({ queryKey: ['kanban', singleRestaurantId] });
+                    queryClient.invalidateQueries({ queryKey: ['my-activities-badge', singleRestaurantId] });
                 }
             )
             .on(
@@ -66,11 +82,11 @@ export const useKanbanTasks = (restaurantId: string | undefined, userId?: string
                     event: '*',
                     schema: 'public',
                     table: 'task_executions',
-                    filter: `restaurant_id=eq.${restaurantId}`,
+                    filter: `restaurant_id=eq.${singleRestaurantId}`,
                 },
                 () => {
-                    queryClient.invalidateQueries({ queryKey: ['kanban', restaurantId] });
-                    queryClient.invalidateQueries({ queryKey: ['my-activities-badge', restaurantId] });
+                    queryClient.invalidateQueries({ queryKey: ['kanban', singleRestaurantId] });
+                    queryClient.invalidateQueries({ queryKey: ['my-activities-badge', singleRestaurantId] });
                 }
             )
             .subscribe();
@@ -78,7 +94,7 @@ export const useKanbanTasks = (restaurantId: string | undefined, userId?: string
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [restaurantId, queryClient]);
+    }, [singleRestaurantId, isGlobal, queryClient]);
 
     return query;
 };

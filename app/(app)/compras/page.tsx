@@ -1,20 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
+import { useAccountSessionStore } from "@/lib/store/account-session-store";
 import { usePurchaseLists, useCreatePurchaseList } from "@/lib/hooks/use-purchases";
 import { useRoles } from "@/lib/hooks/use-roles";
+import { UnitBadge } from "@/components/ui/unit-badge";
+import type { Scope } from "@/lib/types/scope";
 
 export default function ComprasPage() {
     const router = useRouter();
     const { restaurantId, userRole } = useRestaurantStore();
+    const accountMode = useAccountSessionStore((s) => s.mode);
+    const accountId = useAccountSessionStore((s) => s.accountId);
+    const isGlobal = accountMode === 'global';
+
+    const scope: Scope | undefined = useMemo(() => {
+        if (isGlobal && accountId) return { mode: 'global', accountId };
+        if (restaurantId) return { mode: 'single', restaurantId };
+        return undefined;
+    }, [isGlobal, accountId, restaurantId]);
 
     const [activeTab, setActiveTab] = useState<'open' | 'closed'>('open');
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     // Hooks
-    const { data: lists = [], isLoading } = usePurchaseLists(restaurantId || undefined, activeTab);
+    const { data: lists = [], isLoading } = usePurchaseLists(scope, activeTab);
     const { data: roles = [] } = useRoles(restaurantId || undefined);
     const createList = useCreatePurchaseList();
 
@@ -22,7 +34,7 @@ export default function ComprasPage() {
     const [formTitle, setFormTitle] = useState("");
     const [formTargetRoles, setFormTargetRoles] = useState<string[]>([]);
 
-    if (!restaurantId || userRole === 'staff') { // Will redirect via layout or useEffect but keeping it safe
+    if (!isGlobal && (!restaurantId || userRole === 'staff')) {
         return <div className="p-8 text-white">Carregando permissões...</div>;
     }
 
@@ -37,7 +49,7 @@ export default function ComprasPage() {
     };
 
     const handleCreateList = async () => {
-        if (!restaurantId || !formTitle) return;
+        if (!restaurantId || !formTitle || isGlobal) return;
         try {
             const newList = await createList.mutateAsync({
                 restaurant_id: restaurantId,
@@ -66,17 +78,19 @@ export default function ComprasPage() {
                             Gerencie as listas de compras e acompanhe o recebimento de mercadorias.
                         </p>
                     </div>
-                    <button
-                        onClick={() => {
-                            setFormTitle("");
-                            setFormTargetRoles([]);
-                            setIsModalOpen(true);
-                        }}
-                        className="flex items-center justify-center gap-2 bg-[#13b6ec] text-[#101d22] px-4 py-2.5 rounded-lg font-semibold hover:bg-white hover:text-[#101d22] transition-colors whitespace-nowrap"
-                    >
-                        <span className="material-symbols-outlined text-xl">add_shopping_cart</span>
-                        Nova Lista
-                    </button>
+                    {!isGlobal && (
+                        <button
+                            onClick={() => {
+                                setFormTitle("");
+                                setFormTargetRoles([]);
+                                setIsModalOpen(true);
+                            }}
+                            className="flex items-center justify-center gap-2 bg-[#13b6ec] text-[#101d22] px-4 py-2.5 rounded-lg font-semibold hover:bg-white hover:text-[#101d22] transition-colors whitespace-nowrap"
+                        >
+                            <span className="material-symbols-outlined text-xl">add_shopping_cart</span>
+                            Nova Lista
+                        </button>
+                    )}
                 </div>
 
                 {/* Tabs */}
@@ -127,7 +141,12 @@ export default function ComprasPage() {
                                     className="bg-[#1a2c32] border border-[#233f48] rounded-xl p-5 hover:border-[#325a67] hover:bg-[#1f353d] transition-colors cursor-pointer flex flex-col group"
                                 >
                                     <div className="flex justify-between items-start mb-4">
-                                        <h3 className="text-white font-bold text-lg">{list.title}</h3>
+                                        <div className="flex flex-col gap-1">
+                                            <h3 className="text-white font-bold text-lg">{list.title}</h3>
+                                            {(list as { unit?: { name: string } }).unit && (
+                                                <UnitBadge name={(list as { unit: { name: string } }).unit.name} />
+                                            )}
+                                        </div>
                                         {list.status === 'open' ? (
                                             <span className="bg-primary/10 text-primary border border-primary/20 text-[10px] uppercase font-bold px-2 py-1 rounded-md">Aberta</span>
                                         ) : (

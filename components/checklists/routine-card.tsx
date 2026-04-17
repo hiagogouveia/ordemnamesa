@@ -2,6 +2,7 @@
 
 import { ChecklistPriorityLevel, getChecklistPriority } from "@/lib/utils/checklist-priority";
 import { getRoutineState, RoutineStateInfo, RoutineStateKind } from "@/lib/utils/routine-state";
+import { UnitBadge } from "@/components/ui/unit-badge";
 
 export type RoutineCardVariant = "admin" | "collaborator_todo" | "collaborator_doing";
 
@@ -36,6 +37,9 @@ export interface RoutineCardProps {
     isAssignedToMe?: boolean;
     /** Estado operacional consolidado (colaborador). Se ausente, é inferido por horário. */
     state?: RoutineStateInfo;
+
+    // Visão Global
+    unitName?: string;
 
     // Events & States
     isSelected?: boolean;
@@ -135,6 +139,7 @@ export function RoutineCard({
     isAssignedToOther = false,
     isAssignedToMe = false,
     area,
+    unitName,
     state,
     isSelected = false,
     isPreview = false,
@@ -335,6 +340,7 @@ export function RoutineCard({
                     <span className="text-[#325a67]">·</span>
                     <span>{itemsCount} {itemsCount === 1 ? "item" : "itens"}</span>
                 </div>
+                {unitName && <UnitBadge name={unitName} />}
             </div>
 
             {/* 4. HORÁRIO */}

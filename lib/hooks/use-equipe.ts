@@ -1,5 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
+import type { Scope } from '@/lib/types/scope';
+
+export type { Scope };
 
 export interface EquipeMemberUnit {
     id: string;

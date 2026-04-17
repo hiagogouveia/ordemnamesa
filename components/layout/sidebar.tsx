@@ -20,13 +20,13 @@ interface NavItem {
 }
 
 const managerNavigation: NavItem[] = [
-    { name: "Dashboard", href: "/dashboard", icon: "dashboard" },
-    { name: "Meu Turno", href: "/turno", icon: "assignment_ind", badge: true },
+    { name: "Dashboard", href: "/dashboard", icon: "dashboard", globalSupported: true },
+    { name: "Meu Turno", href: "/turno", icon: "assignment_ind", badge: true, globalSupported: true },
     { name: "Checklists", href: "/checklists", icon: "checklist", globalSupported: true },
     { name: "Equipe", href: "/equipe", icon: "group", globalSupported: true },
-    { name: "Compras", href: "/compras", icon: "shopping_cart" },
-    { name: "Relatórios", href: "/relatorios", icon: "bar_chart" },
-    { name: "Configurações", href: "/configuracoes", icon: "settings" },
+    { name: "Compras", href: "/compras", icon: "shopping_cart", globalSupported: true },
+    { name: "Relatórios", href: "/relatorios", icon: "bar_chart", globalSupported: true },
+    { name: "Configurações", href: "/configuracoes", icon: "settings", globalSupported: true },
 ];
 
 const staffNavigation: NavItem[] = [
@@ -34,7 +34,10 @@ const staffNavigation: NavItem[] = [
     { name: "Histórico", href: "/historico", icon: "history" },
 ];
 
-const GLOBAL_SUPPORTED_ROUTES = ["/equipe", "/checklists"];
+const GLOBAL_SUPPORTED_ROUTES = [
+    "/dashboard", "/turno", "/checklists", "/equipe",
+    "/compras", "/relatorios", "/configuracoes",
+];
 
 type SidebarProps = {
     isOpen?: boolean;
@@ -91,7 +94,7 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggle }: Sideba
         document.cookie = `x-restaurant-mode=global${base}`;
         setSwitcherOpen(false);
         if (!GLOBAL_SUPPORTED_ROUTES.some((r) => pathname.startsWith(r))) {
-            router.push("/checklists");
+            router.push("/dashboard");
         }
     };
 

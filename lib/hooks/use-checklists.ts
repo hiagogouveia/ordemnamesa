@@ -13,6 +13,9 @@ interface ReorderTasksVariables {
     taskOrders: TaskOrderEntry[];
 }
 import { createClient } from "@/lib/supabase/client";
+import type { Scope } from "@/lib/types/scope";
+
+export type { Scope };
 
 // Função helper para obter o token de Auth e adicionar aos headers
 async function getAuthHeaders() {
@@ -27,6 +30,7 @@ async function getAuthHeaders() {
     return headers;
 }
 
+/** @deprecated Usar Scope de lib/types/scope.ts */
 export interface ChecklistsScope {
     restaurantId: string | null | undefined;
     accountId?: string | null;

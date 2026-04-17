@@ -1,6 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PurchaseList, PurchaseItem } from "../types";
 import { createClient } from "@/lib/supabase/client";
+import type { Scope } from "@/lib/types/scope";
+
+export type { Scope };
 
 async function getAuthHeaders() {
     const supabase = createClient();
@@ -10,20 +13,31 @@ async function getAuthHeaders() {
     return headers;
 }
 
-export function usePurchaseLists(restaurantId: string | undefined, status?: 'open' | 'closed') {
+export function usePurchaseLists(arg: string | undefined | Scope, status?: 'open' | 'closed') {
+    const scope: { mode: 'single' | 'global'; restaurantId?: string; accountId?: string } =
+        typeof arg === 'object' && arg !== null
+            ? (arg.mode === 'global' ? { mode: 'global', accountId: arg.accountId } : { mode: 'single', restaurantId: arg.restaurantId })
+            : { mode: 'single', restaurantId: arg };
+    const isGlobal = scope.mode === 'global';
+    const enabled = isGlobal ? !!scope.accountId : !!scope.restaurantId;
+
     return useQuery({
-        queryKey: ["purchase-lists", restaurantId, status],
+        queryKey: isGlobal
+            ? ["purchase-lists", "global", scope.accountId, status]
+            : ["purchase-lists", scope.restaurantId, status],
         queryFn: async (): Promise<PurchaseList[]> => {
-            if (!restaurantId) return [];
+            if (!enabled) return [];
             const headers = await getAuthHeaders();
-            let url = `/api/purchase-lists?restaurant_id=${restaurantId}`;
+            let url = isGlobal
+                ? `/api/purchase-lists?account_id=${scope.accountId}&mode=global`
+                : `/api/purchase-lists?restaurant_id=${scope.restaurantId}`;
             if (status) url += `&status=${status}`;
             const res = await fetch(url, { headers });
             if (!res.ok) throw new Error("Erro ao buscar listas de compras");
             return res.json();
         },
-        enabled: !!restaurantId,
-        staleTime: 60 * 1000,        // listas de compras têm movimento frequente
+        enabled,
+        staleTime: 60 * 1000,
     });
 }
 

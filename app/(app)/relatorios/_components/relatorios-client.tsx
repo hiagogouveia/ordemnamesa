@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useRelatorios } from '@/lib/hooks/use-relatorios';
 import { Avatar } from '@/components/ui/avatar';
+import { UnitBadge } from '@/components/ui/unit-badge';
+import type { Scope } from '@/lib/types/scope';
 
 // ─── Skeleton ────────────────────────────────────────────────────────────────
 
@@ -56,10 +58,12 @@ function RelatoriosSkeleton() {
 }
 
 interface Props {
-    restaurantId: string;
+    scope: Scope;
+    isGlobal: boolean;
+    accountName: string | null;
 }
 
-export function RelatoriosClient({ restaurantId }: Props) {
+export function RelatoriosClient({ scope, isGlobal, accountName }: Props) {
     const router = useRouter();
 
     const [startDate, setStartDate] = useState(() => {
@@ -69,7 +73,7 @@ export function RelatoriosClient({ restaurantId }: Props) {
     });
     const [endDate] = useState(() => new Date().toISOString());
 
-    const { data: relData, isLoading, error } = useRelatorios(restaurantId, startDate, endDate);
+    const { data: relData, isLoading, error } = useRelatorios(scope, startDate, endDate);
 
     if (isLoading) {
         return <RelatoriosSkeleton />;
@@ -105,10 +109,16 @@ export function RelatoriosClient({ restaurantId }: Props) {
             const { data: { session } } = await supabase.auth.getSession();
             const token = session?.access_token || '';
 
-            const response = await fetch(
-                `/api/relatorios?restaurant_id=${restaurantId}&start_date=${startDate}&end_date=${endDate}&format=csv`,
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
+            let exportUrl = `/api/relatorios?start_date=${startDate}&end_date=${endDate}&format=csv`;
+            if (isGlobal && scope.mode === 'global') {
+                exportUrl += `&account_id=${scope.accountId}&mode=global`;
+            } else if (scope.mode === 'single') {
+                exportUrl += `&restaurant_id=${scope.restaurantId}`;
+            }
+
+            const response = await fetch(exportUrl, {
+                headers: { 'Authorization': `Bearer ${token}` },
+            });
             if (!response.ok) return;
 
             const blob = await response.blob();
@@ -144,8 +154,14 @@ export function RelatoriosClient({ restaurantId }: Props) {
                     {/* Page Heading & Actions */}
                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                         <div className="flex flex-col gap-2">
-                            <h2 className="text-white text-3xl md:text-4xl font-black tracking-tight">Relatórios da Unidade</h2>
-                            <p className="text-[#92bbc9] text-base">Análise de desempenho, consistência e registros do seu restaurante.</p>
+                            <h2 className="text-white text-3xl md:text-4xl font-black tracking-tight">
+                                {isGlobal ? 'Relatórios — Visão Global' : 'Relatórios da Unidade'}
+                            </h2>
+                            <p className="text-[#92bbc9] text-base">
+                                {isGlobal
+                                    ? `Análise consolidada de todas as unidades${accountName ? ` · ${accountName}` : ''}`
+                                    : 'Análise de desempenho, consistência e registros do seu restaurante.'}
+                            </p>
                         </div>
                         <button onClick={handleExport} className="flex items-center justify-center gap-2 bg-primary hover:bg-cyan-400 text-[#111e22] font-bold py-2.5 px-6 rounded-lg transition-all shadow-md active:scale-95">
                             <span className="material-symbols-outlined text-[20px]">download</span>
@@ -280,7 +296,10 @@ export function RelatoriosClient({ restaurantId }: Props) {
                                             ) : registros_recentes.map((reg) => (
                                                 <tr key={reg.id} className="hover:bg-[#233f48]/30 transition-colors">
                                                     <td className="p-4">
-                                                        <span className="text-white text-sm font-medium">{reg.task_name}</span>
+                                                        <div className="flex flex-col gap-1">
+                                                            <span className="text-white text-sm font-medium">{reg.task_name}</span>
+                                                            {reg.unit && <UnitBadge name={reg.unit.name} />}
+                                                        </div>
                                                     </td>
                                                     <td className="p-4">
                                                         {(reg.status === 'done' || reg.status === 'completed') && (
@@ -360,6 +379,7 @@ export function RelatoriosClient({ restaurantId }: Props) {
                                                         <div>
                                                             <p className="text-white font-bold text-sm truncate max-w-[120px]" title={perf.name}>{perf.name}</p>
                                                             <p className="text-[#92bbc9] text-xs font-medium">{perf.total_done} Tarefas Concluídas</p>
+                                                            {perf.unit && <UnitBadge name={perf.unit.name} />}
                                                         </div>
                                                     </div>
                                                     {medalIcon && (

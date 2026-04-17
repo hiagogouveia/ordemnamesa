@@ -71,8 +71,11 @@ export async function middleware(request: NextRequest) {
 
     if (user && !skipsContextCheck) {
         const restaurantId = request.cookies.get('x-restaurant-id')?.value
+        const restaurantMode = request.cookies.get('x-restaurant-mode')?.value
 
-        if (!restaurantId) {
+        // Cookie de mode é apenas UX (evita redirect) — autorização real
+        // é feita em cada API route via resolveGlobalScope / canUseGlobal.
+        if (!restaurantId && restaurantMode !== 'global') {
             const url = request.nextUrl.clone()
             url.pathname = '/selecionar-restaurante'
             return NextResponse.redirect(url)

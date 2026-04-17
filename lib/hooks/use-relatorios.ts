@@ -1,5 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
+import type { Scope } from '@/lib/types/scope';
+
+export type { Scope };
+
+interface UnitInfo {
+    id: string;
+    name: string;
+}
 
 export interface RelatoriosData {
     metrics: {
@@ -11,7 +19,7 @@ export interface RelatoriosData {
         total_registros: number;
     };
     consistencia_semanal: { date_label: string; percent: number }[];
-    top_performers: { user_id: string; name: string; avatar: string | null; total_done: number; percent: number }[];
+    top_performers: { user_id: string; name: string; avatar: string | null; total_done: number; percent: number; unit?: UnitInfo }[];
     registros_recentes: {
         id: string;
         task_name: string;
@@ -19,6 +27,7 @@ export interface RelatoriosData {
         executor_name: string;
         executor_avatar: string | null;
         executed_at: string;
+        unit?: UnitInfo;
     }[];
 }
 
@@ -28,28 +37,38 @@ const getAuthToken = async () => {
     return session?.access_token || '';
 };
 
-export const useRelatorios = (restaurantId: string | null, startDate: string, endDate: string) => {
+const EMPTY_DATA: RelatoriosData = {
+    metrics: { taxa_conclusao: 0, taxa_conclusao_diff: 0, tarefas_pendentes: 0, colaboradores_ativos: 0, avaliacao: '0.0', total_registros: 0 },
+    consistencia_semanal: [],
+    top_performers: [],
+    registros_recentes: [],
+};
+
+export const useRelatorios = (scope: Scope | null, startDate: string, endDate: string) => {
+    const isGlobal = scope?.mode === 'global';
+    const enabled = scope !== null;
+
     return useQuery<RelatoriosData>({
-        queryKey: ['relatorios', restaurantId, startDate, endDate],
+        queryKey: isGlobal
+            ? ['relatorios', 'global', scope.accountId, startDate, endDate]
+            : ['relatorios', scope?.mode === 'single' ? scope.restaurantId : null, startDate, endDate],
         queryFn: async () => {
-            if (!restaurantId) return {
-                metrics: { taxa_conclusao: 0, taxa_conclusao_diff: 0, tarefas_pendentes: 0, colaboradores_ativos: 0, avaliacao: '0.0', total_registros: 0 },
-                consistencia_semanal: [],
-                top_performers: [],
-                registros_recentes: []
-            };
+            if (!scope) return EMPTY_DATA;
 
             const token = await getAuthToken();
 
             const url = new URL(`/api/relatorios`, window.location.origin);
-            url.searchParams.append('restaurant_id', restaurantId);
+            if (isGlobal) {
+                url.searchParams.append('account_id', scope.accountId);
+                url.searchParams.append('mode', 'global');
+            } else {
+                url.searchParams.append('restaurant_id', scope.restaurantId);
+            }
             if (startDate) url.searchParams.append('start_date', startDate);
             if (endDate) url.searchParams.append('end_date', endDate);
 
             const response = await fetch(url.toString(), {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+                headers: { 'Authorization': `Bearer ${token}` },
             });
 
             if (!response.ok) {
@@ -59,7 +78,7 @@ export const useRelatorios = (restaurantId: string | null, startDate: string, en
 
             return response.json();
         },
-        enabled: !!restaurantId,
-        staleTime: 5 * 60 * 1000,   // relatório é fresco por 5 min; muda quando o usuário troca o período
+        enabled,
+        staleTime: 5 * 60 * 1000,
     });
 };
