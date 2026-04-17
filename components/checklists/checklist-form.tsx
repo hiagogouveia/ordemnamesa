@@ -15,6 +15,7 @@ import { useEquipe } from "@/lib/hooks/use-equipe";
 import { useAllAreas } from "@/lib/hooks/use-areas";
 import { useShifts } from "@/lib/hooks/use-shifts";
 import isEqual from "lodash/isEqual";
+import { getDraft, saveDraft, removeDraft } from "@/lib/utils/draft-storage";
 
 const DAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
@@ -180,58 +181,49 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
 
         if (checklist) {
             // Priority: Local Draft (if exists) > Checklist Props
-            const draftKey = `ordem_na_mesa_draft_rotina_${checklist.id}`;
-            const savedDraft = localStorage.getItem(draftKey);
-            
-            if (savedDraft) {
-                try {
-                    const parsed = JSON.parse(savedDraft);
-                    setName(parsed.name ?? "");
-                    setDescription(parsed.description ?? "");
-                    setShift(parsed.shift ?? "any");
-                    setChecklistType(parsed.checklistType ?? "regular");
-                    setAssignedToUserId(parsed.assignedToUserId ?? "");
-                    setIsIndividualMode(parsed.isIndividualMode ?? !!parsed.assignedToUserId);
-                    setIsRequired(parsed.isRequired ?? true);
-                    setRecurrence(parsed.recurrence === 'none' ? 'daily' : (parsed.recurrence ?? "daily"));
-                    setStartTime(parsed.startTime ?? "");
-                    setEndTime(parsed.endTime ?? "");
-                    setHasTimeWindow(parsed.hasTimeWindow ?? false);
-                    setRecurrenceConfig(parsed.recurrenceConfig ?? undefined);
-                    setEnforceSequentialOrder(parsed.enforceSequentialOrder ?? false);
-                    // FIX BUG: areaId estava ausente — draft era carregado sem restaurar área,
-                    // causando area_id=null no auto-save e perda da associação com área
-                    setAreaId(parsed.areaId ?? checklist.area_id ?? "");
-                    setTasks(parsed.tasks ?? []);
-                    setSaveState("saved");
-                    isFirstLoad.current = false;
-                    // FIX: Reconstruir snapshot com areaId incluído para evitar falso diff
-                    previousStateRef.current = {
-                        name: parsed.name ?? "",
-                        description: parsed.description ?? "",
-                        shift: parsed.shift ?? "any",
-                        checklistType: parsed.checklistType ?? "regular",
-                        assignedToUserId: parsed.assignedToUserId ?? "",
-                        isIndividualMode: parsed.isIndividualMode ?? !!parsed.assignedToUserId,
-                        isRequired: parsed.isRequired ?? true,
-                        recurrence: parsed.recurrence === 'none' ? 'daily' : (parsed.recurrence ?? "daily"),
-                        startTime: parsed.startTime ?? "",
-                        endTime: parsed.endTime ?? "",
-                        hasTimeWindow: parsed.hasTimeWindow ?? false,
-                        recurrenceConfig: parsed.recurrenceConfig ?? undefined,
-                        enforceSequentialOrder: parsed.enforceSequentialOrder ?? false,
-                        areaId: parsed.areaId ?? checklist.area_id ?? "",
-                        tasks: parsed.tasks ?? [],
-                    };
-                    // Sempre capturar status/area_id original do banco (não do draft)
-                    originalChecklistRef.current = {
-                        status: checklist.status || 'draft',
-                        area_id: checklist.area_id || null,
-                    };
-                    return; // Skip setting from props since we used draft
-                } catch {
-                    localStorage.removeItem(draftKey);
-                }
+            const parsed = getDraft(checklist.id, restaurantId);
+
+            if (parsed) {
+                setName(parsed.name ?? "");
+                setDescription(parsed.description ?? "");
+                setShift(parsed.shift ?? "any");
+                setChecklistType(parsed.checklistType ?? "regular");
+                setAssignedToUserId(parsed.assignedToUserId ?? "");
+                setIsIndividualMode(parsed.isIndividualMode ?? !!parsed.assignedToUserId);
+                setIsRequired(parsed.isRequired ?? true);
+                setRecurrence(parsed.recurrence === 'none' ? 'daily' : (parsed.recurrence ?? "daily"));
+                setStartTime(parsed.startTime ?? "");
+                setEndTime(parsed.endTime ?? "");
+                setHasTimeWindow(parsed.hasTimeWindow ?? false);
+                setRecurrenceConfig(parsed.recurrenceConfig ?? undefined);
+                setEnforceSequentialOrder(parsed.enforceSequentialOrder ?? false);
+                setAreaId(parsed.areaId ?? checklist.area_id ?? "");
+                setTasks(parsed.tasks ?? []);
+                setSaveState("saved");
+                isFirstLoad.current = false;
+                previousStateRef.current = {
+                    name: parsed.name ?? "",
+                    description: parsed.description ?? "",
+                    shift: parsed.shift ?? "any",
+                    checklistType: parsed.checklistType ?? "regular",
+                    assignedToUserId: parsed.assignedToUserId ?? "",
+                    isIndividualMode: parsed.isIndividualMode ?? !!parsed.assignedToUserId,
+                    isRequired: parsed.isRequired ?? true,
+                    recurrence: parsed.recurrence === 'none' ? 'daily' : (parsed.recurrence ?? "daily"),
+                    startTime: parsed.startTime ?? "",
+                    endTime: parsed.endTime ?? "",
+                    hasTimeWindow: parsed.hasTimeWindow ?? false,
+                    recurrenceConfig: parsed.recurrenceConfig ?? undefined,
+                    enforceSequentialOrder: parsed.enforceSequentialOrder ?? false,
+                    areaId: parsed.areaId ?? checklist.area_id ?? "",
+                    tasks: parsed.tasks ?? [],
+                };
+                // Sempre capturar status/area_id original do banco (não do draft)
+                originalChecklistRef.current = {
+                    status: checklist.status || 'draft',
+                    area_id: checklist.area_id || null,
+                };
+                return; // Skip setting from props since we used draft
             }
 
             const loadedName = checklist.name;
@@ -319,64 +311,57 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 setSaveState("idle");
             };
 
-            const savedDraft = localStorage.getItem("ordem_na_mesa_draft_rotina");
-            if (savedDraft) {
-                try {
-                    const parsed = JSON.parse(savedDraft);
-                    const draftName = parsed.name ?? "";
-                    const draftDescription = parsed.description ?? "";
-                    const draftShift = parsed.shift ?? "any";
-                    const draftChecklistType = parsed.checklistType ?? "regular";
-                    const draftAssignedToUserId = parsed.assignedToUserId ?? "";
-                    const draftIsIndividualMode = parsed.isIndividualMode ?? !!parsed.assignedToUserId;
-                    const draftIsRequired = parsed.isRequired ?? true;
-                    const draftRecurrence = parsed.recurrence === 'none' ? 'daily' : (parsed.recurrence ?? "daily");
-                    const draftStartTime = parsed.startTime ?? "";
-                    const draftEndTime = parsed.endTime ?? "";
-                    const draftHasTimeWindow = parsed.hasTimeWindow ?? false;
-                    const draftRecurrenceConfig = parsed.recurrenceConfig ?? undefined;
-                    const draftEnforceSequentialOrder = parsed.enforceSequentialOrder ?? false;
-                    const draftAreaId = parsed.areaId ?? "";
-                    const draftTasks = parsed.tasks ?? [];
+            const parsed = getDraft(null, restaurantId);
+            if (parsed) {
+                const draftName = parsed.name ?? "";
+                const draftDescription = parsed.description ?? "";
+                const draftShift = parsed.shift ?? "any";
+                const draftChecklistType = parsed.checklistType ?? "regular";
+                const draftAssignedToUserId = parsed.assignedToUserId ?? "";
+                const draftIsIndividualMode = parsed.isIndividualMode ?? !!parsed.assignedToUserId;
+                const draftIsRequired = parsed.isRequired ?? true;
+                const draftRecurrence = parsed.recurrence === 'none' ? 'daily' : (parsed.recurrence ?? "daily");
+                const draftStartTime = parsed.startTime ?? "";
+                const draftEndTime = parsed.endTime ?? "";
+                const draftHasTimeWindow = parsed.hasTimeWindow ?? false;
+                const draftRecurrenceConfig = parsed.recurrenceConfig ?? undefined;
+                const draftEnforceSequentialOrder = parsed.enforceSequentialOrder ?? false;
+                const draftAreaId = parsed.areaId ?? "";
+                const draftTasks = parsed.tasks ?? [];
 
-                    setName(draftName);
-                    setDescription(draftDescription);
-                    setShift(draftShift);
-                    setChecklistType(draftChecklistType);
-                    setAssignedToUserId(draftAssignedToUserId);
-                    setIsIndividualMode(draftIsIndividualMode);
-                    setIsRequired(draftIsRequired);
-                    setRecurrence(draftRecurrence);
-                    setStartTime(draftStartTime);
-                    setEndTime(draftEndTime);
-                    setHasTimeWindow(draftHasTimeWindow);
-                    setRecurrenceConfig(draftRecurrenceConfig);
-                    setEnforceSequentialOrder(draftEnforceSequentialOrder);
-                    setAreaId(draftAreaId);
-                    setTasks(draftTasks);
-                    setErrorMsg(null);
-                    setShowDeleteModal(false);
-                    setSaveState("saved");
-                    isFirstLoad.current = false;
-                    // FIX: Snapshot com forma idêntica ao formState do auto-save
-                    previousStateRef.current = {
-                        name: draftName, description: draftDescription, shift: draftShift,
-                        checklistType: draftChecklistType, assignedToUserId: draftAssignedToUserId,
-                        isIndividualMode: draftIsIndividualMode, isRequired: draftIsRequired,
-                        recurrence: draftRecurrence, startTime: draftStartTime, endTime: draftEndTime,
-                        hasTimeWindow: draftHasTimeWindow, recurrenceConfig: draftRecurrenceConfig,
-                        enforceSequentialOrder: draftEnforceSequentialOrder, areaId: draftAreaId,
-                        tasks: draftTasks,
-                    };
-                } catch {
-                    localStorage.removeItem("ordem_na_mesa_draft_rotina");
-                    resetForm();
-                }
+                setName(draftName);
+                setDescription(draftDescription);
+                setShift(draftShift);
+                setChecklistType(draftChecklistType);
+                setAssignedToUserId(draftAssignedToUserId);
+                setIsIndividualMode(draftIsIndividualMode);
+                setIsRequired(draftIsRequired);
+                setRecurrence(draftRecurrence);
+                setStartTime(draftStartTime);
+                setEndTime(draftEndTime);
+                setHasTimeWindow(draftHasTimeWindow);
+                setRecurrenceConfig(draftRecurrenceConfig);
+                setEnforceSequentialOrder(draftEnforceSequentialOrder);
+                setAreaId(draftAreaId);
+                setTasks(draftTasks);
+                setErrorMsg(null);
+                setShowDeleteModal(false);
+                setSaveState("saved");
+                isFirstLoad.current = false;
+                previousStateRef.current = {
+                    name: draftName, description: draftDescription, shift: draftShift,
+                    checklistType: draftChecklistType, assignedToUserId: draftAssignedToUserId,
+                    isIndividualMode: draftIsIndividualMode, isRequired: draftIsRequired,
+                    recurrence: draftRecurrence, startTime: draftStartTime, endTime: draftEndTime,
+                    hasTimeWindow: draftHasTimeWindow, recurrenceConfig: draftRecurrenceConfig,
+                    enforceSequentialOrder: draftEnforceSequentialOrder, areaId: draftAreaId,
+                    tasks: draftTasks,
+                };
             } else {
                 resetForm();
             }
         }
-    }, [checklist, initialAreaId]);
+    }, [checklist, initialAreaId, restaurantId]);
 
     useEffect(() => {
         const formState = {
@@ -409,8 +394,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         if (isEqual(previousStateRef.current, formState)) return;
         if (isPublishingRef.current) return;
 
-        const draftKey = checklist ? `ordem_na_mesa_draft_rotina_${checklist.id}` : "ordem_na_mesa_draft_rotina";
-        localStorage.setItem(draftKey, JSON.stringify(formState));
+        saveDraft(checklist?.id ?? null, restaurantId, formState);
 
         const handler = setTimeout(async () => {
             if (isSavingRef.current) return;
@@ -589,14 +573,14 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 await updateMutation.mutateAsync({ id: checklist.id, skipInvalidation: false, ...payload } as any);
                 await new Promise(resolve => setTimeout(resolve, 300));
-                localStorage.removeItem(`ordem_na_mesa_draft_rotina_${checklist.id}`);
+                removeDraft(checklist.id, restaurantId);
                 setSaveState("idle");
                 onSaved();
             } else {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const res = await createMutation.mutateAsync(payload as any);
                 await new Promise(resolve => setTimeout(resolve, 300));
-                localStorage.removeItem("ordem_na_mesa_draft_rotina");
+                removeDraft(null, restaurantId);
                 setSaveState("idle");
                 if (checklistType === 'receiving') {
                     window.location.href = `/compras?new=true&checklist_id=${res.id}`; // Simple redirect
