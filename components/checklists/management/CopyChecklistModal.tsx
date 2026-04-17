@@ -128,6 +128,27 @@ export function CopyChecklistModal({
         };
     }, [isOpen, isPending, onClose]);
 
+    // IMPORTANTE: todos os hooks devem estar ANTES do return condicional
+    const groupedResults = useMemo(() => {
+        if (!response) return null;
+        const byStatus: Record<string, ReplicationResultRow[]> = {
+            created: [],
+            skipped: [],
+            error: [],
+        };
+        for (const row of response.results) {
+            (byStatus[row.status] ??= []).push(row);
+        }
+        return byStatus;
+    }, [response]);
+
+    // Lookup de nome de checklist por ID
+    const checklistNameById = useMemo(() => {
+        const map: Record<string, string> = {};
+        for (const c of selectedChecklists) map[c.id] = c.name;
+        return map;
+    }, [selectedChecklists]);
+
     if (!isOpen || !mounted) return null;
 
     const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -150,19 +171,6 @@ export function CopyChecklistModal({
         }
     };
 
-    const groupedResults = useMemo(() => {
-        if (!response) return null;
-        const byStatus: Record<string, ReplicationResultRow[]> = {
-            created: [],
-            skipped: [],
-            error: [],
-        };
-        for (const row of response.results) {
-            (byStatus[row.status] ??= []).push(row);
-        }
-        return byStatus;
-    }, [response]);
-
     const selectedTargetName = targetId ? (unitById[targetId] ?? "Unidade") : null;
 
     const title = step === "pick-target"
@@ -172,13 +180,6 @@ export function CopyChecklistModal({
     const subtitle = step === "pick-target"
         ? `${selectedChecklists.length} rotina${selectedChecklists.length !== 1 ? "s" : ""} selecionada${selectedChecklists.length !== 1 ? "s" : ""}`
         : null;
-
-    // Lookup de nome de checklist por ID
-    const checklistNameById = useMemo(() => {
-        const map: Record<string, string> = {};
-        for (const c of selectedChecklists) map[c.id] = c.name;
-        return map;
-    }, [selectedChecklists]);
 
     return createPortal(
         <div
