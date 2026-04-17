@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, Suspense, useEffect } from "react";
+import { useState, useMemo, useCallback, Suspense, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
@@ -237,10 +237,10 @@ function ChecklistsContent() {
         setSelectedIds(checked ? new Set(filtered.map((c) => c.id)) : new Set());
     };
 
-    const handleCopyModalClose = () => {
+    const handleCopyModalClose = useCallback(() => {
         setCopyModalOpen(false);
         setSelectedIds(new Set());
-    };
+    }, []);
 
     // ─── URL HELPERS ────────────────────────────────────────────────────────────
 

@@ -35,10 +35,13 @@ export function CopyChecklistModal({
     sourceRestaurantIds,
 }: CopyChecklistModalProps) {
     const backdropRef = useRef<HTMLDivElement>(null);
+    const [mounted, setMounted] = useState(false);
     const [step, setStep] = useState<Step>("pick-target");
     const [targetId, setTargetId] = useState<string | null>(null);
     const [response, setResponse] = useState<ReplicationResponse | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+    useEffect(() => { setMounted(true); }, []);
 
     const { data: units = [], isLoading: loadingUnits } = useUnits(accountId);
     const { data: targetAreas = [] } = useAllAreas(targetId ?? undefined);
@@ -125,7 +128,7 @@ export function CopyChecklistModal({
         };
     }, [isOpen, isPending, onClose]);
 
-    if (!isOpen) return null;
+    if (!isOpen || !mounted) return null;
 
     const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
         if (e.target === backdropRef.current && !isPending) onClose();
