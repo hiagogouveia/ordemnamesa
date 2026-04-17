@@ -17,6 +17,7 @@ interface MyRestaurant {
     role: "owner" | "manager" | "staff";
 }
 
+
 /** Lê um cookie pelo nome (síncrono) */
 function getCookie(name: string): string | null {
     const match = document.cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
@@ -50,6 +51,7 @@ function clearContextCookies() {
 
 export default function SelecionarRestaurantePage() {
     const [restaurants, setRestaurants] = useState<MyRestaurant[]>([]);
+    const [resolvedUserId, setResolvedUserId] = useState<string>("");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
@@ -57,21 +59,19 @@ export default function SelecionarRestaurantePage() {
     const setAccount = useAccountSessionStore((state) => state.setAccount);
 
     const enterRestaurant = useCallback(
-        (restaurant: MyRestaurant) => {
-            // Setar stores
+        (restaurant: MyRestaurant, userId: string) => {
             setRestaurant({
                 id: restaurant.id,
                 name: restaurant.name,
                 slug: restaurant.slug,
                 role: restaurant.role,
-                userId: undefined, // será setado pelo store via auth
+                userId,
             });
             setAccount({ id: restaurant.account_id, name: restaurant.account_name });
 
             // Setar cookies atomicamente
             setContextCookies(restaurant);
 
-            // Redirect baseado em role
             const target = restaurant.role === "staff" ? "/turno" : "/dashboard";
             window.location.assign(target);
         },
@@ -94,18 +94,18 @@ export default function SelecionarRestaurantePage() {
                     throw new Error("Falha ao carregar restaurantes.");
                 }
 
-                const data = (await response.json()) as { restaurants: MyRestaurant[] };
+                const data = (await response.json()) as { restaurants: MyRestaurant[]; userId: string };
                 if (cancelled) return;
 
                 const list = data.restaurants ?? [];
+                const uid = data.userId;
 
                 // Step 1: Se já existe cookie válido, validar e entrar direto
                 const existingRestaurantId = getCookie("x-restaurant-id");
                 if (existingRestaurantId) {
                     const match = list.find((r) => r.id === existingRestaurantId);
                     if (match) {
-                        // Cookie válido — entrar direto
-                        enterRestaurant(match);
+                        enterRestaurant(match, uid);
                         return;
                     }
                     // Cookie inválido — limpar e continuar
@@ -114,11 +114,12 @@ export default function SelecionarRestaurantePage() {
 
                 // Step 2: Auto-skip se só tem 1 restaurante
                 if (list.length === 1) {
-                    enterRestaurant(list[0]);
+                    enterRestaurant(list[0], uid);
                     return;
                 }
 
-                // Step 3: Múltiplos ou zero — mostrar UI
+                // Step 3: Múltiplos — mostrar UI
+                setResolvedUserId(uid);
                 setRestaurants(list);
                 setLoading(false);
             } catch (e) {
@@ -205,7 +206,7 @@ export default function SelecionarRestaurantePage() {
                                 {group.items.map((item) => (
                                     <button
                                         key={item.id}
-                                        onClick={() => enterRestaurant(item)}
+                                        onClick={() => enterRestaurant(item, resolvedUserId)}
                                         className="group flex items-center gap-4 rounded-xl border border-[#233f48] bg-[#16262c] p-5 hover:border-[#13b6ec] hover:shadow-[0_4px_20px_0_rgba(19,182,236,0.1)] transition-all text-left animate-fade-in focus:outline-none focus:ring-2 focus:ring-[#13b6ec]"
                                     >
                                         <div className="w-14 h-14 shrink-0 rounded-full border-2 border-[#233f48] group-hover:border-[#13b6ec]/50 flex items-center justify-center overflow-hidden bg-[#101d22] relative transition-colors">
