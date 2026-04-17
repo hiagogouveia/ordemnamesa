@@ -4,9 +4,14 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
-import { useAccountSessionStore } from "@/lib/store/account-session-store";
 import { Logo } from "@/components/ui/Logo";
 import Image from "next/image";
+
+/** Lê accountId do cookie (síncrono, sem depender de hidratação do Zustand) */
+function getAccountIdFromCookie(): string | null {
+    const match = document.cookie.match(/(?:^|;\s*)x-account-id=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : null;
+}
 
 interface RestaurantData {
     restaurant_id: string;
@@ -26,7 +31,6 @@ export default function SelecionarRestaurantePage() {
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const router = useRouter();
     const setRestaurant = useRestaurantStore((state) => state.setRestaurant);
-    const accountId = useAccountSessionStore((state) => state.accountId);
 
     useEffect(() => {
         async function fetchRestaurants() {
@@ -38,6 +42,8 @@ export default function SelecionarRestaurantePage() {
                 return;
             }
 
+            // Ler accountId do cookie (síncrono) — evita race condition com hidratação do Zustand
+            const accountId = getAccountIdFromCookie();
             if (!accountId) {
                 router.push("/selecionar-account");
                 return;
@@ -98,7 +104,7 @@ export default function SelecionarRestaurantePage() {
         }
 
         fetchRestaurants();
-    }, [router, accountId]);
+    }, [router]);
 
     const handleSelect = (restaurant: RestaurantData) => {
         setRestaurant({

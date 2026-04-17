@@ -57,22 +57,32 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(url)
     }
 
-    // Exigir account selecionada para rotas autenticadas (exceto a própria seleção e API)
-    const pathnameForAccountCheck = request.nextUrl.pathname
-    const accountSelectionRoutes = ['/selecionar-account']
-    const skipsAccountCheck =
-        accountSelectionRoutes.includes(pathnameForAccountCheck) ||
-        pathnameForAccountCheck.startsWith('/api') ||
-        pathnameForAccountCheck.startsWith('/blog') ||
-        pathnameForAccountCheck === '/login' ||
-        pathnameForAccountCheck === '/cadastro' ||
-        pathnameForAccountCheck === '/signup'
+    // Exigir account e restaurant selecionados para rotas autenticadas
+    const pathnameForContextCheck = request.nextUrl.pathname
+    const skipsContextCheck =
+        pathnameForContextCheck === '/selecionar-account' ||
+        pathnameForContextCheck === '/selecionar-restaurante' ||
+        pathnameForContextCheck.startsWith('/api') ||
+        pathnameForContextCheck.startsWith('/blog') ||
+        pathnameForContextCheck === '/login' ||
+        pathnameForContextCheck === '/cadastro' ||
+        pathnameForContextCheck === '/signup'
 
-    if (user && !skipsAccountCheck) {
+    if (user && !skipsContextCheck) {
         const accountId = request.cookies.get('x-account-id')?.value
+        const restaurantId = request.cookies.get('x-restaurant-id')?.value
+
+        // Sem account → seleção de account
         if (!accountId) {
             const url = request.nextUrl.clone()
             url.pathname = '/selecionar-account'
+            return NextResponse.redirect(url)
+        }
+
+        // Com account, sem restaurant → seleção de restaurante
+        if (!restaurantId) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/selecionar-restaurante'
             return NextResponse.redirect(url)
         }
     }
