@@ -10,33 +10,26 @@ import { useMyAreas } from '@/lib/hooks/use-user-areas';
 import { getCurrentShift } from '@/lib/utils';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
 import { RoutineCard } from '@/components/checklists/routine-card';
 import { getRoutineState } from '@/lib/utils/routine-state';
+import { useAuthUser } from '@/lib/hooks/use-auth-user';
 
 export default function KanbanPage() {
     const { restaurantId } = useRestaurantStore();
     const router = useRouter();
 
-    const [user, setUser] = useState<{ id: string; name: string } | null>(null);
-    const [userLoading, setUserLoading] = useState(true);
+    // userId vem exclusivamente do Supabase Auth — nunca do store
+    const { data: authUser, isLoading: userLoading } = useAuthUser();
+    const userId = authUser?.id;
+    const user = authUser
+        ? { id: authUser.id, name: (authUser.user_metadata?.name as string) || 'Membro' }
+        : null;
 
-    // Fetch auth user
-    useEffect(() => {
-        createClient().auth.getUser().then(({ data }) => {
-            if (data.user) {
-                setUser({ id: data.user.id, name: data.user.user_metadata?.name || 'Membro' });
-            }
-            setUserLoading(false);
-        });
-    }, []);
-
-    const userId = useRestaurantStore((state) => state.userId);
-    const { data: kanbanData, isLoading: loadingKanban } = useKanbanTasks(restaurantId || undefined, userId || undefined);
+    const { data: kanbanData, isLoading: loadingKanban } = useKanbanTasks(restaurantId || undefined, userId);
     const { data: shifts = [] } = useShifts(restaurantId || undefined);
-    const { data: userRolesData = [], isLoading: loadingUserRoles } = useUserRoles(restaurantId || undefined, user?.id);
+    const { data: userRolesData = [], isLoading: loadingUserRoles } = useUserRoles(restaurantId || undefined, userId);
     const { data: purchaseLists = [] } = usePurchaseLists(restaurantId || undefined, 'open');
-    const { data: myAreaAssignments = [] } = useMyAreas(restaurantId || undefined, userId || undefined);
+    const { data: myAreaAssignments = [] } = useMyAreas(restaurantId || undefined, userId);
 
     const [timeNow, setTimeNow] = useState<string>('');
 

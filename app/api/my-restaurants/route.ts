@@ -76,5 +76,5 @@ export async function GET() {
             role: row.role,
         }))
 
-    return NextResponse.json({ restaurants, userId: user.id })
+    return NextResponse.json({ restaurants })
 }

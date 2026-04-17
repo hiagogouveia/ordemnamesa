@@ -9,6 +9,7 @@ import { useAccountAccess } from "@/lib/hooks/use-account-access";
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useMyActivitiesBadge } from "@/lib/hooks/use-my-activities";
+import { useAuthUser } from "@/lib/hooks/use-auth-user";
 
 interface NavItem {
     name: string;
@@ -65,8 +66,8 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggle }: Sideba
     const [canLaunchPurchases, setCanLaunchPurchases] = useState(false);
     const [switcherOpen, setSwitcherOpen] = useState(false);
     const switcherRef = useRef<HTMLDivElement>(null);
-    const userId = useRestaurantStore((state) => state.userId);
-    const { data: badgeData } = useMyActivitiesBadge(restaurantId || undefined, userId || undefined);
+    const { data: authUser } = useAuthUser();
+    const { data: badgeData } = useMyActivitiesBadge(restaurantId || undefined, authUser?.id);
     const pendingCount = badgeData?.pending ?? 0;
 
     useEffect(() => {
@@ -110,7 +111,7 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggle }: Sideba
         const nextRole = link?.role ?? (accountRole === 'owner' ? 'owner' : 'manager');
         const slug = link?.restaurants?.slug ?? '';
 
-        setRestaurant({ id: unitId, name: unitName, slug, role: nextRole, userId: user.id });
+        setRestaurant({ id: unitId, name: unitName, slug, role: nextRole });
         setAccountMode("single");
 
         const base = "; path=/; SameSite=Strict";
