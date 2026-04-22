@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { canCreateUnit } from '@/lib/billing/plan-limits'
+import { buildAccessDeniedResponse } from '@/lib/billing/errors'
 
 const getAdminSupabase = () =>
     createClient(
@@ -145,6 +147,9 @@ export async function POST(request: Request) {
         if (!membership || membership.role !== 'owner') {
             return NextResponse.json({ error: 'Apenas owners podem criar unidades.' }, { status: 403 })
         }
+
+        const unitCheck = await canCreateUnit(admin, account_id)
+        if (!unitCheck.allowed) return buildAccessDeniedResponse(unitCheck)
 
         // Buscar todos os owners ativos da account para replicar em restaurant_users
         const { data: ownerRows, error: ownersError } = await admin

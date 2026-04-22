@@ -3,6 +3,9 @@ import { createClient } from '@supabase/supabase-js';
 import type { ExecutionStatus } from '@/lib/types';
 import { getBrazilDateKey } from '@/lib/utils/brazil-date';
 import { resolveGlobalScope, rejectIfGlobal, isGlobalScopeResult } from '@/lib/api/global-scope';
+import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
+import { getAccountBilling, canCreateResources } from '@/lib/billing/subscription-access';
+import { buildAccessDeniedResponse } from '@/lib/billing/errors';
 
 const getAdminSupabase = () => {
     return createClient(
@@ -246,6 +249,15 @@ export async function POST(request: Request) {
         if (!userRole || userRole.role === 'staff') {
             return NextResponse.json({ error: 'Permissão negada' }, { status: 403 });
         }
+
+        // Enforcement billing: só trial/active podem criar recursos
+        const accountId = await getAccountIdForRestaurant(adminSupabase, restaurant_id);
+        if (!accountId) {
+            return NextResponse.json({ error: 'Unidade não pertence a nenhuma account.' }, { status: 404 });
+        }
+        const billing = await getAccountBilling(adminSupabase, accountId);
+        const accessCheck = canCreateResources(billing);
+        if (!accessCheck.allowed) return buildAccessDeniedResponse(accessCheck);
 
         // Validação de domínio: responsável deve pertencer à área selecionada
         if (assigned_to_user_id && area_id) {
