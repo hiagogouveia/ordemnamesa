@@ -160,6 +160,35 @@ export async function POST(request: Request) {
             throw accountUserError
         }
 
+        // 8.5. Criar subscription trial 30d no Plano A
+        const { data: planA, error: planErr } = await adminSupabase
+            .from('plans')
+            .select('id')
+            .eq('code', 'A')
+            .single<{ id: string }>()
+        if (planErr || !planA) {
+            await adminSupabase.from('account_users').delete().eq('account_id', newAccountId)
+            await adminSupabase.from('accounts').delete().eq('id', newAccountId)
+            throw planErr ?? new Error('Plano A não encontrado.')
+        }
+
+        const trialEndsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+        const { error: subError } = await adminSupabase
+            .from('subscriptions')
+            .insert({
+                account_id: newAccountId,
+                plan_id: planA.id,
+                billing_cycle: 'monthly',
+                status: 'trial',
+                started_at: new Date().toISOString(),
+                ends_at: trialEndsAt,
+            })
+        if (subError) {
+            await adminSupabase.from('account_users').delete().eq('account_id', newAccountId)
+            await adminSupabase.from('accounts').delete().eq('id', newAccountId)
+            throw subError
+        }
+
         // 9. Criar restaurante (vinculado à account) + vínculo owner em restaurant_users
         const { data: restaurantData, error: restaurantError } = await adminSupabase
             .from('restaurants')
@@ -178,6 +207,7 @@ export async function POST(request: Request) {
             .single<{ id: string }>()
 
         if (restaurantError || !restaurantData) {
+            await adminSupabase.from('subscriptions').delete().eq('account_id', newAccountId)
             await adminSupabase.from('account_users').delete().eq('account_id', newAccountId)
             await adminSupabase.from('accounts').delete().eq('id', newAccountId)
 
@@ -200,6 +230,7 @@ export async function POST(request: Request) {
             })
         if (restaurantUserError) {
             await adminSupabase.from('restaurants').delete().eq('id', restaurantData.id)
+            await adminSupabase.from('subscriptions').delete().eq('account_id', newAccountId)
             await adminSupabase.from('account_users').delete().eq('account_id', newAccountId)
             await adminSupabase.from('accounts').delete().eq('id', newAccountId)
             throw restaurantUserError

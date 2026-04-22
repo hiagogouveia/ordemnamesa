@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
+import { canAddManager, canAddStaff } from '@/lib/billing/plan-limits';
+import { buildAccessDeniedResponse } from '@/lib/billing/errors';
 
 const getAdminSupabase = () =>
     createClient(
@@ -90,6 +93,23 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
                         { status: 403 }
                     );
                 }
+            }
+        }
+
+        // --- VALIDAÇÃO DE LIMITE EM PROMOÇÃO ---
+        if (role !== undefined && role !== targetMember.role) {
+            const accountId = await getAccountIdForRestaurant(adminSupabase, restaurant_id);
+            if (!accountId) {
+                return NextResponse.json({ error: 'Unidade não pertence a nenhuma account.' }, { status: 404 });
+            }
+            if (role === 'manager') {
+                const check = await canAddManager(adminSupabase, accountId, {
+                    userIdBeingAdded: userId,
+                });
+                if (!check.allowed) return buildAccessDeniedResponse(check);
+            } else if (role === 'staff') {
+                const check = await canAddStaff(adminSupabase, restaurant_id);
+                if (!check.allowed) return buildAccessDeniedResponse(check);
             }
         }
 

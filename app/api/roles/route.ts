@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
+import { getAccountBilling, canCreateResources } from '@/lib/billing/subscription-access';
+import { buildAccessDeniedResponse } from '@/lib/billing/errors';
 
 const getAdminSupabase = () =>
     createClient(
@@ -88,6 +91,15 @@ export async function POST(request: Request) {
         if (!membership || !['owner', 'manager'].includes(membership.role)) {
             return NextResponse.json({ error: 'Permissão negada' }, { status: 403 });
         }
+
+        // Enforcement billing
+        const accountId = await getAccountIdForRestaurant(adminSupabase, restaurant_id);
+        if (!accountId) {
+            return NextResponse.json({ error: 'Unidade não pertence a nenhuma account.' }, { status: 404 });
+        }
+        const billing = await getAccountBilling(adminSupabase, accountId);
+        const accessCheck = canCreateResources(billing);
+        if (!accessCheck.allowed) return buildAccessDeniedResponse(accessCheck);
 
         const { data, error } = await adminSupabase
             .from('roles')

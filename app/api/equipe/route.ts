@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { resolveGlobalScope, rejectIfGlobal, isGlobalScopeResult } from '@/lib/api/global-scope';
+import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
+import { canAddManager, canAddStaff } from '@/lib/billing/plan-limits';
+import { buildAccessDeniedResponse } from '@/lib/billing/errors';
 
 interface PublicUser {
     name?: string | null;
@@ -331,6 +334,39 @@ export async function POST(request: Request) {
             .eq('email', email)
             .maybeSingle();
 
+        // --- VALIDAÇÃO DE LIMITE DE PLANO ---
+        // Executa aqui (após lookup, antes de createUser) para não gerar auth user órfão.
+        // Só consome cota quando vamos realmente criar/reativar vínculo: se o user já está
+        // ativo nesta unidade com o mesmo role, é idempotente e skipamos a validação.
+        const accountId = await getAccountIdForRestaurant(adminSupabase, restaurant_id);
+        if (!accountId) {
+            return NextResponse.json({ error: 'Unidade não pertence a nenhuma account.' }, { status: 404 });
+        }
+
+        const existingUserId = existingUser?.id ?? null;
+        let willConsumeSlot = true;
+        if (existingUserId) {
+            const { data: existingLinkPreview } = await adminSupabase
+                .from('restaurant_users')
+                .select('active, role')
+                .eq('user_id', existingUserId)
+                .eq('restaurant_id', restaurant_id)
+                .maybeSingle<{ active: boolean; role: 'owner' | 'manager' | 'staff' }>();
+            if (existingLinkPreview?.active && existingLinkPreview.role === role) {
+                willConsumeSlot = false;
+            }
+        }
+
+        if (willConsumeSlot && role === 'manager') {
+            const check = await canAddManager(adminSupabase, accountId, {
+                userIdBeingAdded: existingUserId ?? undefined,
+            });
+            if (!check.allowed) return buildAccessDeniedResponse(check);
+        } else if (willConsumeSlot && role === 'staff') {
+            const check = await canAddStaff(adminSupabase, restaurant_id);
+            if (!check.allowed) return buildAccessDeniedResponse(check);
+        }
+
         if (!existingUser) {
             // Usuário novo: criar no Auth (o trigger sincroniza para public.users)
             if (!password || password.length < 6) {
@@ -501,6 +537,25 @@ export async function PUT(request: Request) {
                         { status: 403 }
                     );
                 }
+            }
+        }
+
+        // --- VALIDAÇÃO DE LIMITE EM PROMOÇÃO ---
+        // Se a role está mudando para manager/staff, validar cota.
+        // Reativação (active=true) de vínculo inativo também consome cota.
+        if (role !== undefined && role !== target.role) {
+            const accountId = await getAccountIdForRestaurant(adminSupabase, restaurant_id);
+            if (!accountId) {
+                return NextResponse.json({ error: 'Unidade não pertence a nenhuma account.' }, { status: 404 });
+            }
+            if (role === 'manager') {
+                const check = await canAddManager(adminSupabase, accountId, {
+                    userIdBeingAdded: target.user_id,
+                });
+                if (!check.allowed) return buildAccessDeniedResponse(check);
+            } else if (role === 'staff') {
+                const check = await canAddStaff(adminSupabase, restaurant_id);
+                if (!check.allowed) return buildAccessDeniedResponse(check);
             }
         }
 

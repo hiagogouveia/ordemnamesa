@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getBrazilDateKey } from '@/lib/utils/brazil-date';
+import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
+import { getAccountBilling, canExecuteTasks } from '@/lib/billing/subscription-access';
+import { buildAccessDeniedResponse } from '@/lib/billing/errors';
 
 const getAdminSupabase = () =>
     createClient(
@@ -55,6 +58,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         if (!membership) {
             return NextResponse.json({ error: 'Sem acesso a este restaurante' }, { status: 403 });
         }
+
+        // Enforcement billing: permite execução em trial/active; past_due depende da flag
+        const accountId = await getAccountIdForRestaurant(adminSupabase, restaurant_id);
+        if (!accountId) {
+            return NextResponse.json({ error: 'Unidade não pertence a nenhuma account.' }, { status: 404 });
+        }
+        const billing = await getAccountBilling(adminSupabase, accountId);
+        const accessCheck = canExecuteTasks(billing);
+        if (!accessCheck.allowed) return buildAccessDeniedResponse(accessCheck);
 
         const { data: checklistOwner } = await adminSupabase
             .from('checklists')

@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
+import { getAccountBilling, canExecuteTasks } from '@/lib/billing/subscription-access';
+import { buildAccessDeniedResponse } from '@/lib/billing/errors';
 
 const getAdminSupabase = () => {
     return createClient(
@@ -25,6 +28,15 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         if (!restaurant_id || !status) {
             return NextResponse.json({ error: 'Faltam campos obrigatórios' }, { status: 400 });
         }
+
+        // Enforcement billing
+        const accountId = await getAccountIdForRestaurant(adminSupabase, restaurant_id);
+        if (!accountId) {
+            return NextResponse.json({ error: 'Unidade não pertence a nenhuma account.' }, { status: 404 });
+        }
+        const billing = await getAccountBilling(adminSupabase, accountId);
+        const accessCheck = canExecuteTasks(billing);
+        if (!accessCheck.allowed) return buildAccessDeniedResponse(accessCheck);
 
         const updateData: Record<string, unknown> = { status };
         if (notes !== undefined) updateData.notes = notes;
