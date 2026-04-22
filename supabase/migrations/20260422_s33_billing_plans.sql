@@ -34,10 +34,10 @@ CREATE POLICY plans_select_auth ON public.plans FOR SELECT
 -- Seed idempotente dos 4 planos (preços em centavos; yearly é valor mensal equivalente)
 INSERT INTO public.plans (code, name, max_units, max_managers, max_staff_per_unit, price_monthly_cents, price_yearly_cents)
 VALUES
-  ('A', 'Plano A', 1, 1, 6,  7400,  6600),
-  ('B', 'Plano B', 2, 2, 12, 14000, 12600),
-  ('C', 'Plano C', 4, 3, 20, 26500, 23800),
-  ('D', 'Plano D', 6, 5, 35, 50000, 45000)
+  ('A', 'Commis',         1, 1, 6,  7400,  6600),
+  ('B', 'Chef de Partie', 2, 2, 12, 14000, 12600),
+  ('C', 'Sous-Chef',      4, 3, 20, 26500, 23800),
+  ('D', 'Chef Executivo', 6, 5, 35, 50000, 45000)
 ON CONFLICT (code) DO UPDATE SET
   name               = EXCLUDED.name,
   max_units          = EXCLUDED.max_units,

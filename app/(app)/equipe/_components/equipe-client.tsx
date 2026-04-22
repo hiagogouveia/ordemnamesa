@@ -10,6 +10,7 @@ import { ChangePasswordModal } from './change-password-modal';
 import { Avatar } from '@/components/ui/avatar';
 import { useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
+import { useBilling } from '@/lib/hooks/use-billing';
 
 // ─── Skeleton ────────────────────────────────────────────────────────────────
 
@@ -102,6 +103,8 @@ export function EquipeClient({ restaurantId, accountId = null, isGlobal = false,
     const updateMember = useUpdateEquipeMember(restaurantId);
     const { data: areas = [] } = useAllAreas(restaurantId ?? undefined);
     const { data: shifts = [] } = useShifts(restaurantId ?? undefined);
+    const { data: billing } = useBilling();
+    const canCreate = billing?.access.can_create_resources ?? true;
 
     if (isLoading) {
         return <EquipeSkeleton />;
@@ -264,7 +267,9 @@ export function EquipeClient({ restaurantId, accountId = null, isGlobal = false,
                         {!isGlobal && (
                             <button
                                 onClick={() => setIsModalOpen(true)}
-                                className="flex items-center justify-center gap-2 bg-primary hover:bg-cyan-400 text-[#111e22] font-bold py-2.5 px-5 rounded-lg transition-all active:scale-95 shadow-[0_0_15px_rgba(19,182,236,0.2)]">
+                                disabled={!canCreate}
+                                title={!canCreate ? "Plano expirado ou limite atingido" : undefined}
+                                className="flex items-center justify-center gap-2 bg-primary hover:bg-cyan-400 text-[#111e22] font-bold py-2.5 px-5 rounded-lg transition-all active:scale-95 shadow-[0_0_15px_rgba(19,182,236,0.2)] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-primary disabled:active:scale-100">
                                 <span className="material-symbols-outlined text-[20px]">person_add</span>
                                 <span>Novo Colaborador</span>
                             </button>

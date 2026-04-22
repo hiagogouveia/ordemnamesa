@@ -13,6 +13,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAllAreas } from "@/lib/hooks/use-areas";
 import { useEquipe } from "@/lib/hooks/use-equipe";
 import { useAccountAccess } from "@/lib/hooks/use-account-access";
+import { useBilling } from "@/lib/hooks/use-billing";
 import { ChecklistHeader } from "@/components/checklists/management/ChecklistHeader";
 import { ChecklistFilters } from "@/components/checklists/management/ChecklistFilters";
 import { ChecklistListView } from "@/components/checklists/management/ChecklistListView";
@@ -87,6 +88,7 @@ function ChecklistsContent() {
 
     // Queries
     const { data: accountAccess } = useAccountAccess(isGlobal ? accountId : undefined);
+    const { data: billing } = useBilling();
     const { data: checklists = [], isLoading } = useChecklists(
         isGlobal
             ? { restaurantId: null, accountId, mode: 'global' }
@@ -473,6 +475,7 @@ function ChecklistsContent() {
                 view={view}
                 onViewChange={setView}
                 onNewChecklist={() => setEditorState({ checklist: null, mode: "new" })}
+                canCreate={billing?.access.can_create_resources ?? true}
             />
 
             <ChecklistFilters

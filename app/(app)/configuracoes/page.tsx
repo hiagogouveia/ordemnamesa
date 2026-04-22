@@ -5,11 +5,12 @@ import { ShiftsTab } from "./_components/shifts-tab";
 import { AreasTab } from "./_components/areas-tab";
 import { UnidadesTab } from "./_components/unidades-tab";
 import { ContaTab } from "./_components/conta-tab";
+import { PlanoTab } from "./_components/plano-tab";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useAccountSessionStore } from "@/lib/store/account-session-store";
 import { useAccountUnits } from "@/lib/hooks/use-account-units";
 
-type TabId = "unidades" | "turnos" | "funcoes" | "conta" | "geral";
+type TabId = "unidades" | "turnos" | "funcoes" | "conta" | "plano" | "geral";
 
 export default function ConfiguracoesPage() {
     const [activeTab, setActiveTab] = useState<TabId>("unidades");
@@ -77,6 +78,14 @@ export default function ConfiguracoesPage() {
                             Conta
                         </button>
                     )}
+                    {isOwner && (
+                        <button
+                            onClick={() => setActiveTab("plano")}
+                            className={`pb-4 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeTab === "plano" ? "border-[#13b6ec] text-[#13b6ec]" : "border-transparent text-[#92bbc9] hover:text-white"}`}
+                        >
+                            Plano
+                        </button>
+                    )}
                     <button
                         onClick={() => setActiveTab("geral")}
                         className={`pb-4 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeTab === "geral" ? "border-[#13b6ec] text-[#13b6ec]" : "border-transparent text-[#92bbc9] hover:text-white"}`}
@@ -135,6 +144,7 @@ export default function ConfiguracoesPage() {
                     )
                 )}
                 {activeTab === "conta" && <ContaTab />}
+                {activeTab === "plano" && <PlanoTab />}
                 {activeTab === "geral" && (
                     <div className="flex items-center justify-center h-full min-h-[400px]">
                         <div className="flex flex-col items-center justify-center max-w-sm text-center">

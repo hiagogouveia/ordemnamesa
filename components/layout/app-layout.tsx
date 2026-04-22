@@ -7,6 +7,8 @@ import { Sidebar } from "./sidebar";
 import { Header } from "./header";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useNotifications, useNotificationsRealtime, useMarkNotificationRead } from "@/lib/hooks/use-notifications";
+import { BillingBanner } from "@/components/billing/BillingBanner";
+import { BillingProvider } from "@/lib/context/billing-context";
 
 function PasswordChangedBanner({ restaurantId }: { restaurantId: string }) {
     // Ponto único de realtime para notificações — evita múltiplas subscriptions
@@ -66,6 +68,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     }
 
     return (
+        <BillingProvider>
         <div className="flex h-screen overflow-hidden bg-[#101d22] font-sans">
             {/* Overlay para Mobile */}
             {isMobileMenuOpen && (
@@ -85,6 +88,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 <Header onMenuClick={() => setIsMobileMenuOpen(true)} />
 
                 {restaurantId && <PasswordChangedBanner restaurantId={restaurantId} />}
+                <BillingBanner />
 
                 <main className="flex-1 overflow-x-hidden overflow-y-auto">
                     {children}
@@ -111,5 +115,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 )}
             </div>
         </div>
+        </BillingProvider>
     );
 }
