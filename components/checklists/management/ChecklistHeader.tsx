@@ -6,6 +6,7 @@ interface ChecklistHeaderProps {
     view: "list" | "board" | "preview";
     onViewChange: (v: "list" | "board" | "preview") => void;
     onNewChecklist: () => void;
+    canCreate?: boolean;
 }
 
 export function ChecklistHeader({
@@ -14,6 +15,7 @@ export function ChecklistHeader({
     view,
     onViewChange,
     onNewChecklist,
+    canCreate = true,
 }: ChecklistHeaderProps) {
     return (
         <div className="shrink-0 px-4 pt-4 pb-3 border-b border-[#233f48] bg-[#0a1215]">
@@ -84,7 +86,9 @@ export function ChecklistHeader({
                 {/* Nova lista */}
                 <button
                     onClick={onNewChecklist}
-                    className="flex items-center gap-1.5 bg-[#13b6ec] hover:bg-[#0ea5d4] text-[#0a1215] font-bold text-xs px-3 py-2 rounded-lg transition-colors shrink-0"
+                    disabled={!canCreate}
+                    title={!canCreate ? "Plano expirado ou limite atingido" : undefined}
+                    className="flex items-center gap-1.5 bg-[#13b6ec] hover:bg-[#0ea5d4] text-[#0a1215] font-bold text-xs px-3 py-2 rounded-lg transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#13b6ec]"
                 >
                     <span className="material-symbols-outlined text-[16px]">add</span>
                     <span className="hidden sm:inline">Nova lista</span>

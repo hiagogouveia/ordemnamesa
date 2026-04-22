@@ -11,6 +11,7 @@ import {
     useDeleteUnit,
     type Unit,
 } from "@/lib/hooks/use-units";
+import { useBilling } from "@/lib/hooks/use-billing";
 
 type ModalMode = "create" | "edit";
 
@@ -27,6 +28,7 @@ export function UnidadesTab() {
     const isOwner = userRole === "owner";
 
     const { data: units = [], isLoading, error } = useUnits(accountId);
+    const { data: billing } = useBilling();
     const createUnit = useCreateUnit();
     const updateUnit = useUpdateUnit();
     const setPrimary = useSetPrimaryUnit();
@@ -44,6 +46,8 @@ export function UnidadesTab() {
     const [deleteError, setDeleteError] = useState<string | null>(null);
 
     const activeCount = useMemo(() => units.filter((u) => u.active).length, [units]);
+    const canCreate = (billing?.access.can_create_resources ?? true) &&
+        (billing ? activeCount < billing.plan.max_units : true);
 
     const openCreate = () => {
         setMode("create");
@@ -171,7 +175,9 @@ export function UnidadesTab() {
                 {isOwner && (
                     <button
                         onClick={openCreate}
-                        className="flex items-center justify-center gap-2 bg-[#13b6ec] text-[#101d22] px-4 py-2.5 rounded-lg font-semibold hover:bg-white hover:text-[#101d22] transition-colors whitespace-nowrap"
+                        disabled={!canCreate}
+                        title={!canCreate ? (!billing?.access.can_create_resources ? "Plano expirado" : `Limite de ${billing?.plan.max_units} unidade(s) atingido`) : undefined}
+                        className="flex items-center justify-center gap-2 bg-[#13b6ec] text-[#101d22] px-4 py-2.5 rounded-lg font-semibold hover:bg-white hover:text-[#101d22] transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#13b6ec] disabled:hover:text-[#101d22]"
                     >
                         <span className="material-symbols-outlined text-xl">add</span>
                         Nova Unidade
