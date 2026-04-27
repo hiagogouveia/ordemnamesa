@@ -1,11 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import type { RecurrenceConfig } from "@/lib/types";
+import type { RecurrenceConfig, RecurrenceV2 } from "@/lib/types";
+// Import direto (não barrel) — evita carregar `evaluate`/`validate` no client.
+import { legacyConfigToV2Rrule } from "@/lib/utils/recurrence/legacy-to-v2-rrule";
 
 interface RecurrencePickerProps {
     initial?: RecurrenceConfig;
-    onConfirm: (config: RecurrenceConfig) => void;
+    /**
+     * PR 3: o picker mantém o estado interno em formato v1 (mais ergonômico
+     * para a UI atual: frequency + interval + days_of_week + end), mas
+     * **converte para v2 (`type:'custom'` + rrule RFC 5545) na confirmação**.
+     * Isso garante que toda promoção pelo picker produza um payload v2.
+     */
+    onConfirm: (config: RecurrenceV2) => void;
     onCancel: () => void;
 }
 
@@ -27,17 +35,17 @@ export function RecurrencePicker({ initial, onConfirm, onCancel }: RecurrencePic
     };
 
     const handleConfirm = () => {
-        const config: RecurrenceConfig = {
+        const legacy: RecurrenceConfig = {
             frequency,
             interval: Math.max(1, interval),
             end_type: endType,
         };
         if (frequency === 'weekly') {
-            config.days_of_week = daysOfWeek.length > 0 ? daysOfWeek : [1];
+            legacy.days_of_week = daysOfWeek.length > 0 ? daysOfWeek : [1];
         }
-        if (endType === 'date' && endDate) config.end_date = endDate;
-        if (endType === 'count' && endCount > 0) config.end_count = endCount;
-        onConfirm(config);
+        if (endType === 'date' && endDate) legacy.end_date = endDate;
+        if (endType === 'count' && endCount > 0) legacy.end_count = endCount;
+        onConfirm(legacyConfigToV2Rrule(legacy));
     };
 
     const freqLabels: Record<RecurrenceConfig['frequency'], { singular: string; plural: string }> = {

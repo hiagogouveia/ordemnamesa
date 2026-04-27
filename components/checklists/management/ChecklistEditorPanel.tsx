@@ -7,22 +7,13 @@ import { getPhotoSignedUrl } from "@/lib/supabase/storage";
 import { ChecklistForm } from "@/components/checklists/checklist-form";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
 import { getBrazilDateKey } from "@/lib/utils/brazil-date";
+import { describeRecurrence } from "@/lib/utils/recurrence/describe";
 
 const SHIFT_LABELS: Record<string, string> = {
     morning: "Manhã",
     afternoon: "Tarde",
     evening: "Noite",
     any: "Todos os turnos",
-};
-
-const RECURRENCE_LABELS: Record<string, string> = {
-    daily: "Diária",
-    weekly: "Semanal",
-    monthly: "Mensal",
-    yearly: "Anual",
-    weekdays: "Dias úteis",
-    custom: "Personalizada",
-    shift_days: "Dias do turno",
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -339,7 +330,10 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose }: Checkl
                         <div className="flex items-center justify-between">
                             <span className="text-[#92bbc9] text-sm">Recorrência</span>
                             <span className="text-white text-sm font-medium">
-                                {RECURRENCE_LABELS[checklist.recurrence ?? "daily"] ?? "—"}
+                                {describeRecurrence({
+                                    recurrence: checklist.recurrence,
+                                    recurrence_config: checklist.recurrence_config,
+                                })}
                             </span>
                         </div>
                         <div className="flex items-center justify-between">

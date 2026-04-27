@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { RecurrencePicker } from "./recurrence-picker-modal";
-import type { RecurrenceConfig } from "@/lib/types";
+import type { RecurrenceConfig, RecurrenceV2 } from "@/lib/types";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useIsMobile } from "@/lib/hooks/use-is-mobile";
@@ -16,6 +16,17 @@ import { useAllAreas } from "@/lib/hooks/use-areas";
 import { useShifts } from "@/lib/hooks/use-shifts";
 import isEqual from "lodash/isEqual";
 import { getDraft, saveDraft, removeDraft } from "@/lib/utils/draft-storage";
+import { getBrazilNow } from "@/lib/utils/brazil-date";
+// Imports diretos dos arquivos (não do barrel) para evitar arrastar `rrule`
+// para o bundle do client — `evaluate.ts` e `validate.ts` usam rrule, mas
+// nenhum componente client precisa deles.
+import {
+    buildV2FromDropdownOption,
+    computeWeekOfMonth,
+    type DropdownRecurrenceOption,
+} from "@/lib/utils/recurrence/build-from-dropdown";
+import { daysInMonth } from "@/lib/utils/recurrence/weekday-position";
+import { describeRecurrence } from "@/lib/utils/recurrence/describe";
 
 const DAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
@@ -33,38 +44,38 @@ const SHIFTS = [
     { value: 'evening', label: 'Noite' },
     { value: 'any', label: 'Qualquer turno' }
 ];
+// Calcula labels dinâmicos do dropdown e o contexto v2 para cada opção
+// usando o fuso de São Paulo (não o timezone do navegador).
 const getDynamicRecurrenceOptions = () => {
-    const now = new Date();
-    
-    const dayOfWeek = now.getDay();
+    const brazil = getBrazilNow();
+    const [yearStr, monthStr2d, dayStr] = brazil.dateKey.split('-');
+    const year = Number(yearStr);
+    const month = Number(monthStr2d);   // 1-12
+    const currentDate = Number(dayStr); // 1-31
+    const dayOfWeek = brazil.dayOfWeek;
+
     const daysOfWeek = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
     const dayOfWeekStr = daysOfWeek[dayOfWeek];
-    
-    // Check gender (domingo and sábado are masculine)
+
     const isMasculine = dayOfWeek === 0 || dayOfWeek === 6;
     const prefix = isMasculine ? 'todo' : 'toda';
 
-    const currentDate = now.getDate();
-    const ordinalNum = Math.ceil(currentDate / 7);
-    
-    // Check if it's the last occurrence of the weekday in the current month
-    const nextWeekDate = new Date(now.getTime());
-    nextWeekDate.setDate(currentDate + 7);
-    const isLastOccurrence = nextWeekDate.getMonth() !== now.getMonth();
+    const lastDay = daysInMonth(year, month);
+    const weekOfMonth = computeWeekOfMonth(currentDate, lastDay);
 
     let ordinalStr = '';
-    if (isLastOccurrence) {
+    if (weekOfMonth === -1) {
         ordinalStr = isMasculine ? 'último' : 'última';
         ordinalStr += ` ${dayOfWeekStr} do mês`;
     } else {
-        const ordinalsM = ['primeiro', 'segundo', 'terceiro', 'quarto', 'quinto'];
-        const ordinalsF = ['primeira', 'segunda', 'terceira', 'quarta', 'quinta'];
+        const ordinalsM = ['primeiro', 'segundo', 'terceiro', 'quarto'];
+        const ordinalsF = ['primeira', 'segunda', 'terceira', 'quarta'];
         const ordinals = isMasculine ? ordinalsM : ordinalsF;
-        ordinalStr = `${ordinals[ordinalNum - 1]} ${dayOfWeekStr}`;
+        ordinalStr = `${ordinals[weekOfMonth - 1]} ${dayOfWeekStr}`;
     }
-    
+
     const months = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
-    const monthStr = months[now.getMonth()];
+    const monthName = months[month - 1];
 
     return [
         { value: 'shift_days', label: 'Dias do turno' },
@@ -72,7 +83,7 @@ const getDynamicRecurrenceOptions = () => {
         { value: 'weekdays', label: 'Dias úteis (seg-sex)' },
         { value: 'weekly', label: `Semanal: ${prefix} ${dayOfWeekStr}` },
         { value: 'monthly', label: `Mensal (${ordinalStr})` },
-        { value: 'yearly', label: `Anual em ${currentDate} de ${monthStr}` },
+        { value: 'yearly', label: `Anual em ${currentDate} de ${monthName}` },
         { value: 'custom', label: 'Personalizar...' },
     ];
 };
@@ -98,8 +109,10 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     const [hasTimeWindow, setHasTimeWindow] = useState(false);
     const [startTime, setStartTime] = useState("");
     const [endTime, setEndTime] = useState("");
-    // Sprint 8: Custom recurrence
-    const [recurrenceConfig, setRecurrenceConfig] = useState<RecurrenceConfig | undefined>(undefined);
+    // Sprint 8 (v1) + Sprint 34 (v2): aceita ambos formatos.
+    // Identidade do objeto importa: se admin não tocar no dropdown nem no picker,
+    // permanece o original carregado do banco — backend trata como v1.
+    const [recurrenceConfig, setRecurrenceConfig] = useState<RecurrenceConfig | RecurrenceV2 | null | undefined>(undefined);
     // Sequence order
     const [enforceSequentialOrder, setEnforceSequentialOrder] = useState(false);
     const [showRecurrencePicker, setShowRecurrencePicker] = useState(false);
@@ -419,7 +432,10 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                         recurrence,
                         start_time: hasTimeWindow && startTime ? startTime : null,
                         end_time: hasTimeWindow && endTime ? endTime : null,
-                        recurrence_config: recurrence === 'custom' ? recurrenceConfig : null,
+                        // PR 3: enviar config como está no estado.
+                        // - v1: pode ser null/undefined ou objeto v1 legacy → backend trata como v1
+                        // - v2: objeto com version=2 → backend valida e persiste estruturado
+                        recurrence_config: recurrenceConfig ?? null,
                         enforce_sequential_order: enforceSequentialOrder,
                         area_id: areaId || null,
                         target_role: checklist.target_role || 'all',
@@ -531,10 +547,19 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             }
 
             if (recurrence === 'custom') {
-                const days = recurrenceConfig?.days_of_week;
-                if (!Array.isArray(days) || days.length === 0) {
-                    setErrorMsg('Recorrência personalizada exige ao menos um dia da semana selecionado.');
-                    return;
+                // PR 3: validação client-side legada só vale para v1 ('custom' com
+                // frequency='weekly' precisa days_of_week). Para v2, o backend valida.
+                const cfg = recurrenceConfig;
+                const isV2 =
+                    typeof cfg === 'object' &&
+                    cfg !== null &&
+                    (cfg as { version?: unknown }).version === 2;
+                if (!isV2) {
+                    const days = (cfg as RecurrenceConfig | null | undefined)?.days_of_week;
+                    if (!Array.isArray(days) || days.length === 0) {
+                        setErrorMsg('Recorrência personalizada exige ao menos um dia da semana selecionado.');
+                        return;
+                    }
                 }
             }
         }
@@ -550,7 +575,8 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             recurrence,
             start_time: hasTimeWindow && startTime ? startTime : null,
             end_time: hasTimeWindow && endTime ? endTime : null,
-            recurrence_config: recurrence === 'custom' ? recurrenceConfig : null,
+            // PR 3: igual ao auto-save — envia config como está no estado.
+            recurrence_config: recurrenceConfig ?? null,
             enforce_sequential_order: enforceSequentialOrder,
             area_id: areaId || null,
             assignment_type: (isIndividualMode && assignedToUserId) ? 'user' : (areaId ? 'area' : 'all'),
@@ -612,26 +638,45 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
 
     const isLoading = createMutation.isPending || updateMutation.isPending;
 
+    // PR 3: ao tocar no dropdown, frontend constrói payload v2 estruturado
+    // contendo o dia/data atual (em fuso de São Paulo). Resolve R1: opções
+    // como "Semanal: toda terça" agora persistem o dia da semana no banco.
+    //
+    // Nota de promoção v1→v2: tocar no dropdown reflete intenção explícita do
+    // admin de aplicar a configuração escolhida — converter para v2 é seguro.
+    // Se o admin NÃO tocar, este handler não é chamado e o estado mantém o
+    // formato original (v1) que veio do banco.
     const handleRecurrenceChange = useCallback((value: string) => {
         if (value === 'custom') {
             setShowRecurrencePicker(true);
-            // Keep previous recurrence until user confirms
-        } else {
-            setRecurrence(value);
-            setRecurrenceConfig(undefined);
+            return;
         }
+
+        const brazil = getBrazilNow();
+        const [yearStr, monthStr2d, dayStr] = brazil.dateKey.split('-');
+        const year = Number(yearStr);
+        const month = Number(monthStr2d);
+        const day = Number(dayStr);
+        const lastDay = daysInMonth(year, month);
+        const weekOfMonth = computeWeekOfMonth(day, lastDay);
+
+        const v2 = buildV2FromDropdownOption(value as DropdownRecurrenceOption, {
+            day,
+            month,
+            weekday: brazil.dayOfWeek,
+            weekOfMonth,
+        });
+
+        setRecurrence(value);
+        setRecurrenceConfig(v2);
     }, []);
 
+    // Label legível para o admin — funciona tanto para v1 quanto para v2 via
+    // describeRecurrence. Substitui a lógica antiga que entendia apenas v1.
     const getRecurrenceLabel = () => {
-        if (recurrence !== 'custom' || !recurrenceConfig) return null;
-        const freqLabel = recurrenceConfig.frequency === 'daily' ? 'dia(s)' : recurrenceConfig.frequency === 'weekly' ? 'semana(s)' : 'mês(es)';
-        const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-        const dayNames = recurrenceConfig.days_of_week?.map(d => days[d]).join(', ') || '';
-        let label = `A cada ${recurrenceConfig.interval} ${freqLabel}`;
-        if (dayNames) label += ` nas ${dayNames}`;
-        if (recurrenceConfig.end_type === 'date' && recurrenceConfig.end_date) label += ` até ${recurrenceConfig.end_date}`;
-        if (recurrenceConfig.end_type === 'count' && recurrenceConfig.end_count) label += `, ${recurrenceConfig.end_count} vez(es)`;
-        return label;
+        if (recurrence !== 'custom') return null;
+        if (!recurrenceConfig) return null;
+        return describeRecurrence({ recurrence, recurrence_config: recurrenceConfig });
     };
 
     return (
@@ -1034,7 +1079,15 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             {/* Modal de Recorrência Personalizada */}
             {showRecurrencePicker && (
                 <RecurrencePicker
-                    initial={recurrenceConfig}
+                    // Só pré-popula se o estado atual é v1 legacy (tem `frequency`).
+                    // Configs v2 abrem o picker com defaults limpos — admin re-configura.
+                    initial={
+                        recurrenceConfig &&
+                        typeof recurrenceConfig === 'object' &&
+                        'frequency' in recurrenceConfig
+                            ? (recurrenceConfig as RecurrenceConfig)
+                            : undefined
+                    }
                     onConfirm={(config) => {
                         setRecurrenceConfig(config);
                         setRecurrence('custom');

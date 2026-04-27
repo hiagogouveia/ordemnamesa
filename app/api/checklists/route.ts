@@ -6,6 +6,7 @@ import { resolveGlobalScope, rejectIfGlobal, isGlobalScopeResult } from '@/lib/a
 import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
 import { getAccountBilling, canCreateResources } from '@/lib/billing/subscription-access';
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
+import { processRecurrencePayload } from '@/lib/api/recurrence-payload';
 
 const getAdminSupabase = () => {
     return createClient(
@@ -228,7 +229,17 @@ export async function POST(request: Request) {
             );
         }
 
-        if (recurrence === 'custom') {
+        // PR 2: roteamento estrito v2 vs v1 — payloads sem version=2 mantêm caminho legado
+        const recurrenceProcess = processRecurrencePayload(recurrence_config);
+        if (recurrenceProcess.mode === 'v2' && !recurrenceProcess.ok) {
+            return NextResponse.json(
+                { error: recurrenceProcess.error, code: 'INVALID_RECURRENCE_V2' },
+                { status: 400 }
+            );
+        }
+
+        // Validação legada de 'custom' — só roda quando NÃO é v2 (preserva v1 intacto)
+        if (recurrenceProcess.mode === 'v1' && recurrence === 'custom') {
             const days = recurrence_config?.days_of_week;
             if (!Array.isArray(days) || days.length === 0) {
                 return NextResponse.json(
@@ -276,6 +287,17 @@ export async function POST(request: Request) {
             }
         }
 
+        // PR 2: Em v2, a fonte de verdade é o JSONB validado — sincroniza coluna text
+        // com `validated.type`. Em v1, usa o caminho legado intacto.
+        const finalRecurrence =
+            recurrenceProcess.mode === 'v2' && recurrenceProcess.ok
+                ? recurrenceProcess.validated.type
+                : (recurrence && recurrence !== 'none' ? recurrence : 'daily');
+        const finalRecurrenceConfig =
+            recurrenceProcess.mode === 'v2' && recurrenceProcess.ok
+                ? recurrenceProcess.validated
+                : (recurrence_config || null);
+
         // 1. Criar o Checklist
         const { data: newChecklist, error: checklistError } = await adminSupabase
             .from('checklists')
@@ -290,10 +312,10 @@ export async function POST(request: Request) {
                 is_required: is_required !== undefined ? is_required : true,
                 checklist_type: checklist_type || 'regular',
                 assigned_to_user_id: assigned_to_user_id || null,
-                recurrence: recurrence && recurrence !== 'none' ? recurrence : 'daily',
+                recurrence: finalRecurrence,
                 start_time: start_time || null,
                 end_time: end_time || null,
-                recurrence_config: recurrence_config || null,
+                recurrence_config: finalRecurrenceConfig,
                 enforce_sequential_order: enforce_sequential_order !== undefined ? enforce_sequential_order : false,
                 area_id: area_id || null,
                 target_role: target_role || 'all',

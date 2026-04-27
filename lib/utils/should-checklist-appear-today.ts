@@ -1,14 +1,30 @@
-import type { RecurrenceConfig } from '@/lib/types'
+import type { RecurrenceConfig, RecurrenceV2 } from '@/lib/types'
+import { evaluateV2 } from './recurrence/evaluate'
 
 interface ChecklistForRecurrence {
     recurrence?: string | null
-    recurrence_config?: RecurrenceConfig | null
+    recurrence_config?: RecurrenceConfig | RecurrenceV2 | null
     shift?: string | null
 }
 
 interface ShiftForRecurrence {
     shift_type?: string | null
     days_of_week: number[]
+}
+
+/**
+ * Roteia para v2 apenas quando `recurrence_config.version === 2` (estrito,
+ * numérico). Qualquer outro formato — incluindo string '2', version 1, ou
+ * ausência total — cai na lógica v1 sem alteração.
+ */
+function isRecurrenceV2(
+    config: RecurrenceConfig | RecurrenceV2 | null | undefined,
+): config is RecurrenceV2 {
+    return (
+        typeof config === 'object' &&
+        config !== null &&
+        (config as { version?: unknown }).version === 2
+    )
 }
 
 /**
@@ -26,6 +42,16 @@ export function shouldChecklistAppearToday(
     shifts?: ShiftForRecurrence[],
 ): boolean {
     const { recurrence, recurrence_config } = checklist
+
+    // Roteamento v2 (não toca em v1)
+    if (isRecurrenceV2(recurrence_config)) {
+        return evaluateV2(recurrence_config, {
+            dayOfWeek: brazilDayOfWeek,
+            dateKey: brazilDateKey,
+            shifts,
+            shiftLabel: checklist.shift,
+        })
+    }
 
     // Fallback defensivo: sem recorrência definida → mostra (não deveria acontecer pós-migration)
     if (!recurrence) return true
