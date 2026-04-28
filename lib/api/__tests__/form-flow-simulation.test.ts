@@ -62,7 +62,7 @@ describe("Cenário C4: editar rotina v1 weekly mudando só o nome", () => {
     it("preserva recurrence_config v1 — backend trata como v1", () => {
         // Estado inicial do form ao carregar a rotina
         const initialState = {
-            name: ROTINA_V1_CUSTOM_WEEKLY.name ?? "Rotina Original",
+            name: "Rotina Original",
             recurrence: ROTINA_V1_CUSTOM_WEEKLY.recurrence,
             recurrence_config: ROTINA_V1_CUSTOM_WEEKLY.recurrence_config,
         }

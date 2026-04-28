@@ -1,7 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { RecurrencePicker } from "./recurrence-picker-modal";
+import { DailyConfig } from "./recurrence/daily-config";
+import { WeeklyConfig } from "./recurrence/weekly-config";
+import { MonthlyConfig } from "./recurrence/monthly-config";
+import { YearlyConfig } from "./recurrence/yearly-config";
 import type { RecurrenceConfig, RecurrenceV2 } from "@/lib/types";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -16,16 +20,6 @@ import { useAllAreas } from "@/lib/hooks/use-areas";
 import { useShifts } from "@/lib/hooks/use-shifts";
 import isEqual from "lodash/isEqual";
 import { getDraft, saveDraft, removeDraft } from "@/lib/utils/draft-storage";
-import { getBrazilNow } from "@/lib/utils/brazil-date";
-// Imports diretos dos arquivos (não do barrel) para evitar arrastar `rrule`
-// para o bundle do client — `evaluate.ts` e `validate.ts` usam rrule, mas
-// nenhum componente client precisa deles.
-import {
-    buildV2FromDropdownOption,
-    computeWeekOfMonth,
-    type DropdownRecurrenceOption,
-} from "@/lib/utils/recurrence/build-from-dropdown";
-import { daysInMonth } from "@/lib/utils/recurrence/weekday-position";
 import { describeRecurrence } from "@/lib/utils/recurrence/describe";
 
 const DAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -44,49 +38,61 @@ const SHIFTS = [
     { value: 'evening', label: 'Noite' },
     { value: 'any', label: 'Qualquer turno' }
 ];
-// Calcula labels dinâmicos do dropdown e o contexto v2 para cada opção
-// usando o fuso de São Paulo (não o timezone do navegador).
-const getDynamicRecurrenceOptions = () => {
-    const brazil = getBrazilNow();
-    const [yearStr, monthStr2d, dayStr] = brazil.dateKey.split('-');
-    const year = Number(yearStr);
-    const month = Number(monthStr2d);   // 1-12
-    const currentDate = Number(dayStr); // 1-31
-    const dayOfWeek = brazil.dayOfWeek;
+// Opções fixas do dropdown (PR 4 - UX). Cada uma representa um intent claro:
+// "Todos os dias" e "Dias do turno" não abrem modal (set direto). As demais
+// abrem um modal específico onde o admin configura os parâmetros.
+type RecurrenceDropdownOption =
+    | 'shift_days'
+    | 'todos_os_dias'
+    | 'daily'
+    | 'weekly'
+    | 'monthly'
+    | 'yearly'
+    | 'custom';
 
-    const daysOfWeek = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
-    const dayOfWeekStr = daysOfWeek[dayOfWeek];
+const RECURRENCE_DROPDOWN_OPTIONS: { value: RecurrenceDropdownOption; label: string }[] = [
+    { value: 'shift_days', label: 'Dias do turno' },
+    { value: 'todos_os_dias', label: 'Todos os dias' },
+    { value: 'daily', label: 'Diário (exceto)' },
+    { value: 'weekly', label: 'Semanal' },
+    { value: 'monthly', label: 'Mensal' },
+    { value: 'yearly', label: 'Anual' },
+    { value: 'custom', label: 'Personalizar' },
+];
 
-    const isMasculine = dayOfWeek === 0 || dayOfWeek === 6;
-    const prefix = isMasculine ? 'todo' : 'toda';
+/**
+ * Deriva qual opção do dropdown deve estar selecionada a partir do estado
+ * atual de `recurrence` + `recurrence_config` (v1 ou v2). Sem efeitos colaterais.
+ */
+function deriveDropdownOption(
+    recurrence: string | null | undefined,
+    config: RecurrenceConfig | RecurrenceV2 | null | undefined,
+): RecurrenceDropdownOption {
+    const isV2 =
+        typeof config === 'object' &&
+        config !== null &&
+        (config as { version?: unknown }).version === 2;
 
-    const lastDay = daysInMonth(year, month);
-    const weekOfMonth = computeWeekOfMonth(currentDate, lastDay);
-
-    let ordinalStr = '';
-    if (weekOfMonth === -1) {
-        ordinalStr = isMasculine ? 'último' : 'última';
-        ordinalStr += ` ${dayOfWeekStr} do mês`;
-    } else {
-        const ordinalsM = ['primeiro', 'segundo', 'terceiro', 'quarto'];
-        const ordinalsF = ['primeira', 'segunda', 'terceira', 'quarta'];
-        const ordinals = isMasculine ? ordinalsM : ordinalsF;
-        ordinalStr = `${ordinals[weekOfMonth - 1]} ${dayOfWeekStr}`;
+    if (isV2) {
+        const v2 = config as RecurrenceV2;
+        if (v2.type === 'daily') return 'todos_os_dias';
+        if (v2.type === 'shift_days') return 'shift_days';
+        if (v2.type === 'weekly') return 'weekly';
+        if (v2.type === 'monthly') return 'monthly';
+        if (v2.type === 'yearly') return 'yearly';
+        if (v2.type === 'custom') return 'custom';
     }
 
-    const months = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
-    const monthName = months[month - 1];
-
-    return [
-        { value: 'shift_days', label: 'Dias do turno' },
-        { value: 'daily', label: 'Todos os dias' },
-        { value: 'weekdays', label: 'Dias úteis (seg-sex)' },
-        { value: 'weekly', label: `Semanal: ${prefix} ${dayOfWeekStr}` },
-        { value: 'monthly', label: `Mensal (${ordinalStr})` },
-        { value: 'yearly', label: `Anual em ${currentDate} de ${monthName}` },
-        { value: 'custom', label: 'Personalizar...' },
-    ];
-};
+    // v1 fallback: usa a coluna text legacy
+    if (recurrence === 'daily') return 'todos_os_dias';
+    if (recurrence === 'weekdays') return 'weekly';   // legado: weekly seg-sex
+    if (recurrence === 'shift_days') return 'shift_days';
+    if (recurrence === 'weekly') return 'weekly';
+    if (recurrence === 'monthly') return 'monthly';
+    if (recurrence === 'yearly') return 'yearly';
+    if (recurrence === 'custom') return 'custom';
+    return 'todos_os_dias'; // default seguro
+}
 const CHECKLIST_TYPES = [
     { value: 'regular', label: 'Regular' },
     { value: 'opening', label: 'Abertura' },
@@ -116,6 +122,18 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     // Sequence order
     const [enforceSequentialOrder, setEnforceSequentialOrder] = useState(false);
     const [showRecurrencePicker, setShowRecurrencePicker] = useState(false);
+    // PR 4 (UX): qual modal de configuração v2 está aberto. `null` = nenhum.
+    const [activeRecurrenceModal, setActiveRecurrenceModal] = useState<
+        'daily' | 'weekly' | 'monthly' | 'yearly' | null
+    >(null);
+    // Valor selecionado no <select> — derivado do estado atual (v1 ou v2),
+    // sem efeitos colaterais. Garante que o select reflita o que está salvo
+    // mesmo quando o admin abre uma rotina existente.
+    const dropdownValue = useMemo(
+        () => deriveDropdownOption(recurrence, recurrenceConfig),
+        [recurrence, recurrenceConfig],
+    );
+
     const taskInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
     const [tasks, setTasks] = useState<(Partial<ChecklistTask> & { tempId: string })[]>([]);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -246,7 +264,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             const loadedAssignedToUserId = checklist.assigned_to_user_id || "";
             const loadedIsIndividualMode = checklist.assignment_type === 'user' || !!checklist.assigned_to_user_id;
             const loadedIsRequired = checklist.is_required ?? true;
-            const loadedRecurrence = (!checklist.recurrence || checklist.recurrence === 'none') ? 'daily' : checklist.recurrence;
+            const loadedRecurrence = (!checklist.recurrence || (checklist.recurrence as string) === 'none') ? 'daily' : checklist.recurrence;
             // Sprint 8: time window
             const st = checklist.start_time as string | undefined;
             const et = checklist.end_time as string | undefined;
@@ -646,29 +664,39 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     // admin de aplicar a configuração escolhida — converter para v2 é seguro.
     // Se o admin NÃO tocar, este handler não é chamado e o estado mantém o
     // formato original (v1) que veio do banco.
-    const handleRecurrenceChange = useCallback((value: string) => {
+    // PR 4 (UX): cada opção do dropdown roteia para um caminho distinto.
+    // - "Todos os dias" e "Dias do turno" são set diretos (sem modal)
+    // - "Diário/Semanal/Mensal/Anual" abrem modal específico para o admin
+    //   configurar parâmetros (dias excluídos, weekdays, dia do mês, etc.)
+    // - "Personalizar" abre o RecurrencePicker (rrule) — não foi alterado
+    //
+    // Nota de promoção v1→v2: o estado `recurrenceConfig` só vira v2 se o
+    // admin CONFIRMAR uma configuração no modal. Se ele cancela, o estado
+    // mantém o valor original — sem promoção acidental.
+    const handleRecurrenceChange = useCallback((value: RecurrenceDropdownOption) => {
+        if (value === 'shift_days') {
+            setRecurrence('shift_days');
+            setRecurrenceConfig({ version: 2, type: 'shift_days' });
+            return;
+        }
+        if (value === 'todos_os_dias') {
+            setRecurrence('daily');
+            setRecurrenceConfig({ version: 2, type: 'daily' });
+            return;
+        }
         if (value === 'custom') {
             setShowRecurrencePicker(true);
             return;
         }
+        // 'daily' | 'weekly' | 'monthly' | 'yearly' → modal específico
+        setActiveRecurrenceModal(value);
+    }, []);
 
-        const brazil = getBrazilNow();
-        const [yearStr, monthStr2d, dayStr] = brazil.dateKey.split('-');
-        const year = Number(yearStr);
-        const month = Number(monthStr2d);
-        const day = Number(dayStr);
-        const lastDay = daysInMonth(year, month);
-        const weekOfMonth = computeWeekOfMonth(day, lastDay);
-
-        const v2 = buildV2FromDropdownOption(value as DropdownRecurrenceOption, {
-            day,
-            month,
-            weekday: brazil.dayOfWeek,
-            weekOfMonth,
-        });
-
-        setRecurrence(value);
-        setRecurrenceConfig(v2);
+    // Confirmação dos modais — atualiza estado com payload v2 e fecha modal.
+    const handleModalConfirm = useCallback((config: RecurrenceV2) => {
+        setRecurrenceConfig(config);
+        setRecurrence(config.type);
+        setActiveRecurrenceModal(null);
     }, []);
 
     // Label legível para o admin — funciona tanto para v1 quanto para v2 via
@@ -793,12 +821,13 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                             <div>
                                 <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Repetição</label>
                                 <select
-                                    value={recurrence}
-                                    onChange={(e) => handleRecurrenceChange(e.target.value)}
+                                    value={dropdownValue}
+                                    onChange={(e) => handleRecurrenceChange(e.target.value as RecurrenceDropdownOption)}
                                     className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
                                 >
-                                    {getDynamicRecurrenceOptions().map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                                    {RECURRENCE_DROPDOWN_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                                 </select>
+                                <p className="text-[#92bbc9] text-xs mt-2">{describeRecurrence({ recurrence, recurrence_config: recurrenceConfig })}</p>
                                 {recurrence === 'custom' && recurrenceConfig && (
                                     <button
                                         type="button"
@@ -1076,7 +1105,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 </div>
             </div>
 
-            {/* Modal de Recorrência Personalizada */}
+            {/* Modal de Recorrência Personalizada (rrule) — não foi alterado */}
             {showRecurrencePicker && (
                 <RecurrencePicker
                     // Só pré-popula se o estado atual é v1 legacy (tem `frequency`).
@@ -1095,11 +1124,78 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                     }}
                     onCancel={() => {
                         setShowRecurrencePicker(false);
-                        // If no config was set before, revert to 'daily'
-                        if (!recurrenceConfig) {
-                            setRecurrence('daily');
-                        }
                     }}
+                />
+            )}
+
+            {/* PR 4: Modais de configuração v2 (daily/weekly/monthly/yearly) */}
+            {activeRecurrenceModal === 'daily' && (
+                <DailyConfig
+                    initialExcluded={
+                        recurrenceConfig &&
+                        typeof recurrenceConfig === 'object' &&
+                        (recurrenceConfig as { version?: unknown }).version === 2 &&
+                        (recurrenceConfig as RecurrenceV2).type === 'weekly'
+                            ? [0, 1, 2, 3, 4, 5, 6].filter(
+                                d => !((recurrenceConfig as RecurrenceV2 & { type: 'weekly' }).weekdays.includes(d))
+                            )
+                            : []
+                    }
+                    onConfirm={handleModalConfirm}
+                    onCancel={() => setActiveRecurrenceModal(null)}
+                    shifts={shiftsData}
+                    shiftLabel={shift}
+                />
+            )}
+
+            {activeRecurrenceModal === 'weekly' && (
+                <WeeklyConfig
+                    initialWeekdays={
+                        recurrenceConfig &&
+                        typeof recurrenceConfig === 'object' &&
+                        (recurrenceConfig as { version?: unknown }).version === 2 &&
+                        (recurrenceConfig as RecurrenceV2).type === 'weekly'
+                            ? (recurrenceConfig as RecurrenceV2 & { type: 'weekly' }).weekdays
+                            : undefined
+                    }
+                    onConfirm={handleModalConfirm}
+                    onCancel={() => setActiveRecurrenceModal(null)}
+                    shifts={shiftsData}
+                    shiftLabel={shift}
+                />
+            )}
+
+            {activeRecurrenceModal === 'monthly' && (
+                <MonthlyConfig
+                    initial={
+                        recurrenceConfig &&
+                        typeof recurrenceConfig === 'object' &&
+                        (recurrenceConfig as { version?: unknown }).version === 2 &&
+                        (recurrenceConfig as RecurrenceV2).type === 'monthly'
+                            ? (recurrenceConfig as RecurrenceV2 & { type: 'monthly' })
+                            : undefined
+                    }
+                    onConfirm={handleModalConfirm}
+                    onCancel={() => setActiveRecurrenceModal(null)}
+                    shifts={shiftsData}
+                    shiftLabel={shift}
+                />
+            )}
+
+            {activeRecurrenceModal === 'yearly' && (
+                <YearlyConfig
+                    initial={
+                        recurrenceConfig &&
+                        typeof recurrenceConfig === 'object' &&
+                        (recurrenceConfig as { version?: unknown }).version === 2 &&
+                        (recurrenceConfig as RecurrenceV2).type === 'yearly'
+                            ? (recurrenceConfig as RecurrenceV2 & { type: 'yearly' })
+                            : undefined
+                    }
+                    onConfirm={handleModalConfirm}
+                    onCancel={() => setActiveRecurrenceModal(null)}
+                    shifts={shiftsData}
+                    shiftLabel={shift}
                 />
             )}
 
