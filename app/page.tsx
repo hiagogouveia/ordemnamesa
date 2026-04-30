@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { buildMetadata, siteConfig } from "@/lib/seo";
 import { Navbar } from "@/components/landing/Navbar";
-import { Hero } from "@/components/landing/Hero";
+import { CinematicHero } from "@/components/landing/CinematicHero";
 import { ProblemSection } from "@/components/landing/sections/ProblemSection";
 import { SolutionSection } from "@/components/landing/sections/SolutionSection";
 import { HowItWorks } from "@/components/landing/sections/HowItWorks";
@@ -44,7 +44,7 @@ export default function LandingPage() {
       />
       <main id="top" className="min-h-screen bg-background-dark text-white scroll-smooth">
         <Navbar />
-        <Hero />
+        <CinematicHero />
         <ProblemSection />
         <SolutionSection />
         <HowItWorks />
