@@ -107,10 +107,10 @@ supabase/
 
 ## Deploy
 
-| Ambiente    | Infra                          | Workflow                          |
-| ----------- | ------------------------------ | --------------------------------- |
-| Production  | **Vercel** (auto from `main`)  | `.github/workflows/deploy-web.yml` |
-| Non-prod    | **OCI VM** (Docker + Traefik)  | `.github/workflows/app-nonprod.yml` |
+| Ambiente    | Infra                                | Workflow                              |
+| ----------- | ------------------------------------ | ------------------------------------- |
+| Production  | **Hostinger VPS** (Docker + Traefik) | `.github/workflows/app-prod.yml`      |
+| Non-prod    | **OCI VM** (Docker + Traefik)        | `.github/workflows/app-nonprod.yml`   |
 
 Docker: multi-stage build, node:20-alpine, standalone output, health checks.
 
