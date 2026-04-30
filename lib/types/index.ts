@@ -41,7 +41,7 @@ export type ExecutionStatus = 'not_started' | 'in_progress' | 'done' | 'blocked'
 export type ShiftType = 'morning' | 'afternoon' | 'evening' | 'any' // Rename to avoid conflict with Shift table or keep? Let's keep it Shift for now, but the new table is 'shifts'
 export type UserRole = 'owner' | 'manager' | 'staff'
 
-// Sprint 8
+// Sprint 8 — formato legado (v1). Mantido para compatibilidade total.
 export interface RecurrenceConfig {
     frequency: 'daily' | 'weekly' | 'monthly'
     interval: number           // a cada X dias/semanas/meses
@@ -50,6 +50,24 @@ export interface RecurrenceConfig {
     end_date?: string          // ISO date string
     end_count?: number
 }
+
+// Sprint 34 — Recorrência v2 (discriminated union).
+// Roteamento: payload só é tratado como v2 se `version === 2` (estrito numérico).
+// Qualquer outro caso cai na lógica v1 sem alteração.
+export type WeekOfMonth = 1 | 2 | 3 | 4 | -1
+
+export type RecurrenceV2 =
+    | { version: 2; type: 'daily' }
+    | { version: 2; type: 'weekly'; weekdays: number[] }
+    | { version: 2; type: 'shift_days' }
+    | { version: 2; type: 'monthly'; mode: 'day_of_month'; day: number }
+    | { version: 2; type: 'monthly'; mode: 'weekday_position'; weekday: number; weekOfMonth: WeekOfMonth }
+    | { version: 2; type: 'yearly'; mode: 'date'; day: number; month: number }
+    | { version: 2; type: 'yearly'; mode: 'weekday_position'; weekday: number; weekOfMonth: WeekOfMonth; month: number }
+    | { version: 2; type: 'custom'; rrule: string }
+
+// Tipo unificado do campo `recurrence_config` no banco. Aceita v1 legado e v2.
+export type RecurrenceConfigField = RecurrenceConfig | RecurrenceV2
 
 // Sprint 8
 export interface ChecklistAssumption {

@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
 import type { ExecutionStatus } from "@/lib/types";
 import { getOperationalStatus } from "@/lib/utils/get-operational-status";
+import { describeRecurrence } from "@/lib/utils/recurrence/describe";
 import { UnitBadge } from "@/components/ui/unit-badge";
 
 const SHIFT_LABELS: Record<string, string> = {
@@ -12,16 +13,6 @@ const SHIFT_LABELS: Record<string, string> = {
     afternoon: "Tarde",
     evening: "Noite",
     any: "Todos",
-};
-
-const RECURRENCE_LABELS: Record<string, string> = {
-    daily: "Diária",
-    weekly: "Semanal",
-    monthly: "Mensal",
-    yearly: "Anual",
-    weekdays: "Dias úteis",
-    custom: "Personalizada",
-    shift_days: "Dias do turno",
 };
 
 const EXECUTION_STATUS_CONFIG: Record<ExecutionStatus, { label: string; className: string }> = {
@@ -205,7 +196,10 @@ export function ChecklistRow({
             {/* Recorrência */}
             <td className="px-3 py-3 hidden lg:table-cell" onClick={onSelect}>
                 <span className="text-[#92bbc9] text-sm">
-                    {RECURRENCE_LABELS[checklist.recurrence ?? "daily"] ?? "—"}
+                    {describeRecurrence({
+                        recurrence: checklist.recurrence,
+                        recurrence_config: checklist.recurrence_config,
+                    })}
                 </span>
             </td>
 
