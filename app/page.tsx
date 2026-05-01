@@ -1,15 +1,20 @@
 import type { Metadata } from "next";
 import { buildMetadata, siteConfig } from "@/lib/seo";
 import { Navbar } from "@/components/landing/Navbar";
-import { Hero } from "@/components/landing/Hero";
-import { ProblemSolution } from "@/components/landing/ProblemSolution";
-import { CTASection } from "@/components/landing/CTASection";
-import { Footer } from "@/components/landing/Footer";
+import { CinematicHero } from "@/components/landing/CinematicHero";
+import { ProblemSection } from "@/components/landing/sections/ProblemSection";
+import { SolutionSection } from "@/components/landing/sections/SolutionSection";
+import { HowItWorks } from "@/components/landing/sections/HowItWorks";
+import { BenefitsSection } from "@/components/landing/sections/BenefitsSection";
+import { TestimonialsSection } from "@/components/landing/sections/TestimonialsSection";
+import { CTASection } from "@/components/landing/sections/CTASection";
+import { FAQSection } from "@/components/landing/sections/FAQSection";
+import { Footer } from "@/components/landing/sections/Footer";
 
 export const metadata: Metadata = buildMetadata({
   title: "Checklists Digitais para Restaurantes",
   description:
-    "Transforme aberturas, fechamentos e auditorias em processos rápidos e à prova de falhas. Controle sua cozinha direto do celular e economize horas da sua equipe.",
+    "Sistema operacional para restaurantes. Checklists com evidência fotográfica e histórico auditável. Pare de apagar incêndio na sua operação.",
   path: "/",
 });
 
@@ -37,11 +42,16 @@ export default function LandingPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareJsonLd) }}
       />
-      <main className="min-h-screen">
+      <main id="top" className="min-h-screen bg-background-dark text-white scroll-smooth">
         <Navbar />
-        <Hero />
-        <ProblemSolution />
+        <CinematicHero />
+        <ProblemSection />
+        <SolutionSection />
+        <HowItWorks />
+        <BenefitsSection />
+        <TestimonialsSection />
         <CTASection />
+        <FAQSection />
         <Footer />
       </main>
     </>

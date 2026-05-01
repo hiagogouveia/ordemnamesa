@@ -3,86 +3,129 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/ui/Logo";
+import { WhatsApp, Menu, X } from "./icons";
+
+const WHATSAPP_URL = "https://wa.me/5567991364767";
+
+const NAV_LINKS = [
+  { href: "#problema", label: "Problema" },
+  { href: "#solucao", label: "Solução" },
+  { href: "#como-funciona", label: "Como funciona" },
+  { href: "#depoimentos", label: "Depoimentos" },
+  { href: "#faq", label: "FAQ" },
+];
 
 export function Navbar() {
-  const [isScrolled, setIsScrolled] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 10);
-    };
-
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
+    const onScroll = () => setScrolled(window.scrollY > 10);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  useEffect(() => {
+    document.body.style.overflow = open ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [open]);
 
   return (
     <nav
       className={`fixed top-0 z-50 w-full transition-all duration-300 ${
-        isScrolled
-          ? "bg-white dark:bg-[#101d22] shadow-sm border-b border-[#e7f0f3] dark:border-[#233f48]"
+        scrolled
+          ? "bg-background-dark/90 backdrop-blur-md border-b border-border-dark"
           : "bg-transparent"
       }`}
     >
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-20 items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex h-16 md:h-20 items-center justify-between gap-4">
+          <Link href="#top" className="flex items-center gap-3 shrink-0">
             <Logo width={32} height={32} />
-            <span
-              className={`text-xl font-black ${
-                isScrolled
-                  ? "text-slate-900 dark:text-white"
-                  : "text-slate-900 dark:text-white"
-              } hidden sm:block tracking-tight`}
-            >
-              Ordem na Mesa
+            <span className="text-lg md:text-xl font-black tracking-tight text-white hidden sm:block">
+              Ordem <span className="italic font-light text-text-secondary">na Mesa</span>
             </span>
-          </div>
+          </Link>
 
-          {/* Desktop Menu */}
-          <div className="hidden md:flex items-center gap-8">
-            <a
-              href="#por-que-sistema"
-              className="text-sm font-semibold text-slate-600 dark:text-[#93adc8] hover:text-primary transition-colors"
-            >
-              Benefícios
-            </a>
-            <a
-              href="#como-funciona"
-              className="text-sm font-semibold text-slate-600 dark:text-[#93adc8] hover:text-primary transition-colors"
-            >
-              Como Funciona
-            </a>
-            <Link
-              href="/blog"
-              className="text-sm font-semibold text-slate-600 dark:text-[#93adc8] hover:text-primary transition-colors"
-            >
-              Blog
-            </Link>
-            <div className="flex items-center gap-4 border-l border-slate-200 dark:border-[#293a41] pl-8">
-              <Link
-                href="/login"
-                className="text-sm font-bold text-slate-900 dark:text-white hover:text-primary transition-colors"
+          <div className="hidden lg:flex items-center gap-8">
+            {NAV_LINKS.map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                className="text-sm font-semibold text-text-secondary hover:text-white transition-colors"
               >
-                Fazer Login
-              </Link>
-              <Link href="/signup" className="rounded-lg bg-primary px-5 py-2.5 text-sm font-bold text-white hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20">
-                Criar Conta
-              </Link>
-            </div>
+                {link.label}
+              </a>
+            ))}
           </div>
 
-          {/* Mobile menu button */}
-          <div className="flex items-center gap-4 md:hidden">
-            <Link href="/login" className="text-sm font-bold text-primary">
-              Login
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Link
+              href="/login"
+              className="inline-flex items-center justify-center px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg
+                         border border-primary/40 text-primary
+                         hover:bg-primary/10 hover:border-primary hover:text-white
+                         transition-colors duration-200
+                         text-sm font-semibold"
+            >
+              Entrar
             </Link>
-            <button className="text-slate-900 dark:text-white p-2">
-              <span className="material-symbols-outlined">menu</span>
+
+            <a
+              href={WHATSAPP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden sm:inline-flex items-center gap-2 px-4 lg:px-5 py-2 lg:py-2.5 rounded-lg
+                         bg-success text-white font-semibold text-sm
+                         hover:bg-success/90 transition-colors duration-200
+                         shadow-lg shadow-success/20"
+            >
+              <WhatsApp size={16} />
+              <span className="hidden md:inline">WhatsApp</span>
+            </a>
+
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              className="lg:hidden p-2 rounded-lg text-white hover:bg-surface-dark transition-colors"
+              aria-label={open ? "Fechar menu" : "Abrir menu"}
+              aria-expanded={open}
+            >
+              {open ? <X size={22} /> : <Menu size={22} />}
             </button>
           </div>
         </div>
       </div>
+
+      {open && (
+        <div className="lg:hidden border-t border-border-dark bg-background-dark/95 backdrop-blur-md">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 py-4 flex flex-col gap-1">
+            {NAV_LINKS.map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                onClick={() => setOpen(false)}
+                className="px-3 py-3 rounded-lg text-base font-semibold text-text-secondary hover:text-white hover:bg-surface-dark transition-colors"
+              >
+                {link.label}
+              </a>
+            ))}
+            <a
+              href={WHATSAPP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setOpen(false)}
+              className="mt-2 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-success text-white font-semibold text-base shadow-lg shadow-success/20"
+            >
+              <WhatsApp size={18} />
+              Falar no WhatsApp
+            </a>
+          </div>
+        </div>
+      )}
     </nav>
   );
 }

@@ -5,8 +5,10 @@
   --color-background-light: #f6f8f8;
   --color-background-dark: #101d22;
   --color-surface-dark: #1a2c32;
+  --color-surface-deep: #070f13;
   --color-border-dark: #293a41;
   --color-text-secondary: #93adc8;
+  --color-success: #22c55e;
   --font-display: var(--font-inter), sans-serif;
   --font-body: var(--font-inter), sans-serif;
 }
