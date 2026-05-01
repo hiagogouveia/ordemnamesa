@@ -54,7 +54,7 @@ export function ProblemSection() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 md:gap-6">
           {PROBLEMS.map((p, i) => (
-            <Reveal key={p.title} delay={i * 80} className="h-full">
+            <Reveal key={p.title} delay={i * 30} className="h-full">
               <article className="h-full p-6 rounded-2xl bg-surface-dark border border-border-dark hover:border-primary/40 transition-colors duration-300">
                 <div className="w-11 h-11 rounded-xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center mb-4">
                   {p.icon}

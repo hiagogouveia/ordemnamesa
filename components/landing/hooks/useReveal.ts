@@ -2,7 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 
-export function useReveal<T extends HTMLElement = HTMLDivElement>(threshold = 0.15) {
+interface UseRevealOptions {
+  threshold?: number;
+  rootMargin?: string;
+}
+
+export function useReveal<T extends HTMLElement = HTMLDivElement>({
+  threshold = 0.05,
+  rootMargin = "0px 0px 15% 0px",
+}: UseRevealOptions = {}) {
   const ref = useRef<T | null>(null);
   const [visible, setVisible] = useState(false);
 
@@ -19,12 +27,12 @@ export function useReveal<T extends HTMLElement = HTMLDivElement>(threshold = 0.
           }
         });
       },
-      { threshold }
+      { threshold, rootMargin }
     );
 
     obs.observe(node);
     return () => obs.disconnect();
-  }, [threshold]);
+  }, [threshold, rootMargin]);
 
   return { ref, visible } as const;
 }

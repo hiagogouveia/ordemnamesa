@@ -67,7 +67,7 @@ export function BenefitsSection() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6 mb-12 md:mb-16">
           {BENEFITS.map((b, i) => (
-            <Reveal key={b.title} delay={i * 50} className="h-full">
+            <Reveal key={b.title} delay={i * 20} className="h-full">
               <article className="h-full p-5 md:p-6 rounded-2xl bg-surface-dark/80 border border-border-dark hover:border-primary/40 transition-colors duration-300">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 text-primary flex items-center justify-center shrink-0">
