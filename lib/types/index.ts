@@ -123,6 +123,14 @@ export interface Checklist {
     unit?: { id: string; name: string } | null
 }
 
+// Sprint 35 — Tipos de resposta estruturados
+export type TaskType = 'boolean' | 'date' | 'number' | 'rating'
+
+export interface TaskConfig {
+    min_value?: number
+    max_value?: number
+}
+
 export interface ChecklistTask {
     id: string
     checklist_id: string
@@ -134,6 +142,11 @@ export interface ChecklistTask {
     order: number
     assigned_to_user_id?: string
     role_id?: string
+    // Sprint 35
+    type?: TaskType | null
+    requires_observation?: boolean
+    max_photos?: number | null
+    task_config?: TaskConfig | null
 }
 
 // Sprint 6

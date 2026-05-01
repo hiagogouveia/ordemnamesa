@@ -37,6 +37,14 @@ export async function POST(request: Request) {
         const accessCheck = canExecuteTasks(billing);
         if (!accessCheck.allowed) return buildAccessDeniedResponse(accessCheck);
 
+        // Sprint 35 — buscar snapshot da task antes de criar a execução
+        const { data: taskRow } = await adminSupabase
+            .from('checklist_tasks')
+            .select('type, requires_photo, requires_observation, max_photos, task_config')
+            .eq('id', task_id)
+            .eq('restaurant_id', restaurant_id)
+            .single();
+
         const { data: newExecution, error: execError } = await adminSupabase
             .from('task_executions')
             .insert({
@@ -45,7 +53,13 @@ export async function POST(request: Request) {
                 checklist_id,
                 user_id: user.id,
                 status: 'doing',
-                executed_at: new Date().toISOString()
+                executed_at: new Date().toISOString(),
+                // Snapshots (compat: se task não encontrada, defaults seguros)
+                type_snapshot: taskRow?.type ?? 'boolean',
+                requires_photo_snapshot: taskRow?.requires_photo ?? false,
+                requires_observation_snapshot: taskRow?.requires_observation ?? false,
+                max_photos_snapshot: taskRow?.max_photos ?? null,
+                task_config_snapshot: taskRow?.task_config ?? null,
             })
             .select()
             .single();

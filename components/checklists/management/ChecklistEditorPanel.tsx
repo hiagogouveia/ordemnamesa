@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { getPhotoSignedUrl } from "@/lib/supabase/storage";
 import { ChecklistForm } from "@/components/checklists/checklist-form";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
-import { getBrazilDateKey } from "@/lib/utils/brazil-date";
+import { getBrazilDateKey, formatDateBR } from "@/lib/utils/brazil-date";
 import { describeRecurrence } from "@/lib/utils/recurrence/describe";
 
 const SHIFT_LABELS: Record<string, string> = {
@@ -32,6 +32,13 @@ interface TaskExecution {
     photo_url: string | null;
     executed_at: string;
     blocked_reason: string | null;
+    // Sprint 35
+    observation: string | null;
+    value_date: string | null;
+    value_number: number | null;
+    value_rating: number | null;
+    photos: string[] | null;
+    has_alert: boolean;
 }
 
 interface AssumptionDetail {
@@ -53,7 +60,7 @@ function useChecklistExecutions(checklistId: string, restaurantId: string) {
 
             const { data } = await supabase
                 .from("task_executions")
-                .select("id, task_id, status, photo_url, executed_at, blocked_reason")
+                .select("id, task_id, status, photo_url, executed_at, blocked_reason, observation, value_date, value_number, value_rating, photos, has_alert")
                 .eq("checklist_id", checklistId)
                 .eq("restaurant_id", restaurantId)
                 .gte("executed_at", todayStart.toISOString());
@@ -141,37 +148,57 @@ interface ChecklistViewPanelProps {
     onClose: () => void;
 }
 
+// Normaliza fotos da execução: photos[] (Sprint 35) tem precedência, fallback para photo_url (legado)
+function getExecutionPhotos(execution: TaskExecution | undefined): string[] {
+    if (!execution) return [];
+    if (Array.isArray(execution.photos) && execution.photos.length > 0) return execution.photos;
+    if (execution.photo_url) return [execution.photo_url];
+    return [];
+}
+
 function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose }: ChecklistViewPanelProps) {
     const [selectedPhoto, setSelectedPhoto] = useState<{ url: string; title: string } | null>(null);
-    const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+    const [signedUrls, setSignedUrls] = useState<Record<string, string[]>>({});
 
     const { data: executions = [], isLoading: execLoading } = useChecklistExecutions(
         checklist.id,
         restaurantId ?? ""
     );
 
-    // Resolve signed URLs para todas as execuções com foto
+    // Resolve signed URLs para TODAS as fotos de cada execução (multi-foto Sprint 35)
+    // Compat: se photos[] vazio, usa photo_url legado como única foto
+    const photoItems = useMemo(
+        () =>
+            executions
+                .map((e) => ({ id: e.task_id, paths: getExecutionPhotos(e) }))
+                .filter((it) => it.paths.length > 0),
+        [executions],
+    );
+
     useEffect(() => {
-        const photoPaths = executions.filter((e) => e.photo_url).map((e) => ({ id: e.task_id, path: e.photo_url! }));
-        if (photoPaths.length === 0) return;
+        if (photoItems.length === 0) {
+            // Evita setState quando já está vazio (previne loop de re-render)
+            setSignedUrls((prev) => (Object.keys(prev).length === 0 ? prev : {}));
+            return;
+        }
 
         let cancelled = false;
         Promise.all(
-            photoPaths.map(async ({ id, path }) => {
-                const url = await getPhotoSignedUrl(path);
-                return { id, url };
+            photoItems.map(async ({ id, paths }) => {
+                const urls = await Promise.all(paths.map((p) => getPhotoSignedUrl(p)));
+                return { id, urls: urls.filter((u): u is string => !!u) };
             })
         ).then((results) => {
             if (cancelled) return;
-            const map: Record<string, string> = {};
-            for (const { id, url } of results) {
-                if (url) map[id] = url;
+            const map: Record<string, string[]> = {};
+            for (const { id, urls } of results) {
+                if (urls.length > 0) map[id] = urls;
             }
             setSignedUrls(map);
         });
 
         return () => { cancelled = true; };
-    }, [executions]);
+    }, [photoItems]);
 
     const { data: assumptionDetail } = useAssumptionDetail(
         checklist.id,
@@ -180,7 +207,9 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose }: Checkl
 
     const executionMap = new Map(executions.map((e) => [e.task_id, e]));
     const hasExecution = executions.length > 0 || !!assumptionDetail;
-    const hasPhotos = executions.some((e) => !!e.photo_url);
+    const executionHasPhoto = (e: TaskExecution) =>
+        (Array.isArray(e.photos) && e.photos.length > 0) || !!e.photo_url;
+    const hasPhotos = executions.some(executionHasPhoto);
 
     const statusLabel: Record<string, string> = {
         done: "Concluída",
@@ -291,8 +320,8 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose }: Checkl
                         {hasPhotos && (
                             <div className="flex items-center gap-1.5 text-[#13b6ec] text-xs font-semibold mb-2">
                                 <span className="material-symbols-outlined text-[14px]">photo_camera</span>
-                                {executions.filter((e) => e.photo_url).length}{" "}
-                                {executions.filter((e) => e.photo_url).length === 1
+                                {executions.filter(executionHasPhoto).length}{" "}
+                                {executions.filter(executionHasPhoto).length === 1
                                     ? "foto enviada"
                                     : "fotos enviadas"}
                             </div>
@@ -388,7 +417,7 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose }: Checkl
                                     const execution = executionMap.get(task.id);
                                     const isDone = execution?.status === "done";
                                     const isBlocked = execution?.status === "blocked";
-                                    const photoUrl = signedUrls[task.id] ?? null;
+                                    const photoUrls = signedUrls[task.id] ?? [];
 
                                     return (
                                         <div
@@ -457,28 +486,80 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose }: Checkl
                                                             Crítica
                                                         </span>
                                                     )}
+                                                    {isDone && execution?.has_alert && (
+                                                        <span className="flex items-center gap-1 bg-amber-500/15 text-amber-400 text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-amber-500/30">
+                                                            <span className="material-symbols-outlined text-[12px]">
+                                                                warning
+                                                            </span>
+                                                            Alerta
+                                                        </span>
+                                                    )}
                                                 </div>
 
-                                                {/* Thumbnail da foto */}
-                                                {photoUrl && (
-                                                    <button
-                                                        onClick={() =>
-                                                            setSelectedPhoto({ url: photoUrl, title: task.title })
-                                                        }
-                                                        className="mt-2 block relative w-full max-w-[120px] h-16 rounded-lg overflow-hidden border border-[#13b6ec]/30 hover:border-[#13b6ec] transition-colors group"
-                                                    >
-                                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                        <img
-                                                            src={photoUrl}
-                                                            alt={task.title}
-                                                            className="w-full h-full object-cover"
-                                                        />
-                                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                                                            <span className="material-symbols-outlined text-white text-[18px] opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                zoom_in
-                                                            </span>
-                                                        </div>
-                                                    </button>
+                                                {/* Sprint 35 — respostas registradas pelo colaborador */}
+                                                {isDone && execution?.value_date && (
+                                                    <p className="text-[#92bbc9] text-xs mt-2">
+                                                        <span className="font-bold">Data de validade informada:</span>{" "}
+                                                        <span className="text-white font-semibold">{formatDateBR(execution.value_date)}</span>
+                                                    </p>
+                                                )}
+                                                {isDone && execution?.value_number !== null && execution?.value_number !== undefined && (
+                                                    <p className="text-[#92bbc9] text-xs mt-1">
+                                                        <span className="font-bold uppercase tracking-wider text-[10px]">Valor:</span>{" "}
+                                                        <span className="text-white font-semibold">{execution.value_number}</span>
+                                                    </p>
+                                                )}
+                                                {isDone && execution?.value_rating !== null && execution?.value_rating !== undefined && (
+                                                    <p className="text-[#92bbc9] text-xs mt-1 flex items-center gap-2 flex-wrap">
+                                                        <span className="font-bold uppercase tracking-wider text-[10px]">Avaliação:</span>
+                                                        <span className="text-yellow-400 font-semibold text-base md:text-lg leading-none tracking-wider">
+                                                            {"★".repeat(execution.value_rating)}
+                                                            <span className="text-yellow-400/30">{"☆".repeat(5 - execution.value_rating)}</span>
+                                                        </span>
+                                                    </p>
+                                                )}
+                                                {isDone && execution?.observation && (
+                                                    <div className="mt-2 bg-[#0a1215] border border-[#233f48] rounded-lg p-2.5">
+                                                        <p className="text-[10px] font-bold uppercase tracking-wider text-[#92bbc9] mb-1 flex items-center gap-1">
+                                                            <span className="material-symbols-outlined text-[12px]">edit_note</span>
+                                                            Observação
+                                                        </p>
+                                                        <p className="text-white text-xs leading-relaxed whitespace-pre-wrap">
+                                                            {execution.observation}
+                                                        </p>
+                                                    </div>
+                                                )}
+
+                                                {/* Thumbnails — multi-foto Sprint 35 (compat com photo_url legado) */}
+                                                {photoUrls.length > 0 && (
+                                                    <div className="mt-2 flex flex-wrap gap-2">
+                                                        {photoUrls.map((url, photoIdx) => (
+                                                            <button
+                                                                key={`${task.id}-${photoIdx}`}
+                                                                onClick={() =>
+                                                                    setSelectedPhoto({
+                                                                        url,
+                                                                        title: photoUrls.length > 1
+                                                                            ? `${task.title} — Foto ${photoIdx + 1}/${photoUrls.length}`
+                                                                            : task.title,
+                                                                    })
+                                                                }
+                                                                className="block relative w-20 h-20 rounded-lg overflow-hidden border border-[#13b6ec]/30 hover:border-[#13b6ec] transition-colors group"
+                                                            >
+                                                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                                <img
+                                                                    src={url}
+                                                                    alt={`${task.title} foto ${photoIdx + 1}`}
+                                                                    className="w-full h-full object-cover"
+                                                                />
+                                                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                                                    <span className="material-symbols-outlined text-white text-[18px] opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                        zoom_in
+                                                                    </span>
+                                                                </div>
+                                                            </button>
+                                                        ))}
+                                                    </div>
                                                 )}
                                             </div>
                                         </div>

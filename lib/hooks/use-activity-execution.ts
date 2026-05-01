@@ -122,31 +122,71 @@ export const useActivityData = (restaurantId: string | undefined, checklistId: s
     return result;
 };
 
+export interface ToggleActivityTaskInput {
+    restaurantId: string;
+    checklistId: string;
+    taskId: string;
+    executionId?: string;
+    isDone: boolean;
+    photoUrl?: string;
+    requiresPhoto?: boolean;
+    // Sprint 35
+    type?: 'boolean' | 'date' | 'number' | 'rating' | null;
+    requiresObservation?: boolean;
+    maxPhotos?: number | null;
+    taskConfig?: { min_value?: number; max_value?: number } | null;
+    photos?: string[];
+    observation?: string;
+    valueBoolean?: boolean;
+    valueDate?: string;
+    valueNumber?: number;
+    valueRating?: number;
+    hasAlert?: boolean;
+}
+
 export const useToggleActivityTask = () => {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: async ({ restaurantId, checklistId, taskId, executionId, isDone, photoUrl, requiresPhoto }: {
-            restaurantId: string;
-            checklistId: string;
-            taskId: string;
-            executionId?: string;
-            isDone: boolean;
-            photoUrl?: string;
-            requiresPhoto?: boolean;
-        }) => {
+        mutationFn: async (input: ToggleActivityTaskInput) => {
+            const {
+                restaurantId, checklistId, taskId, executionId, isDone,
+                photoUrl, requiresPhoto,
+                type, requiresObservation, maxPhotos, taskConfig,
+                photos, observation,
+                valueBoolean, valueDate, valueNumber, valueRating, hasAlert,
+            } = input;
+
             // Bloquear conclusão de task que exige foto sem foto
-            if (isDone && requiresPhoto && !photoUrl) {
-                throw new Error('Essa tarefa exige uma foto.');
+            if (isDone && requiresPhoto) {
+                const hasPhotos = (photos && photos.length > 0) || !!photoUrl;
+                if (!hasPhotos) {
+                    throw new Error('Essa tarefa exige uma foto.');
+                }
             }
 
             const supabase = createClient();
 
             if (isDone) {
+                // Campos comuns (Sprint 35)
+                const sharedFields: Record<string, unknown> = {};
+                if (type !== undefined) sharedFields.type_snapshot = type ?? 'boolean';
+                if (requiresObservation !== undefined) sharedFields.requires_observation_snapshot = requiresObservation;
+                if (maxPhotos !== undefined) sharedFields.max_photos_snapshot = maxPhotos;
+                if (taskConfig !== undefined) sharedFields.task_config_snapshot = taskConfig;
+                if (photos !== undefined) sharedFields.photos = photos;
+                if (observation !== undefined) sharedFields.observation = observation;
+                if (valueBoolean !== undefined) sharedFields.value_boolean = valueBoolean;
+                if (valueDate !== undefined) sharedFields.value_date = valueDate;
+                if (valueNumber !== undefined) sharedFields.value_number = valueNumber;
+                if (valueRating !== undefined) sharedFields.value_rating = valueRating;
+                if (hasAlert !== undefined) sharedFields.has_alert = hasAlert;
+
                 if (executionId) {
                     const updatePayload: Record<string, unknown> = {
                         status: 'done',
                         executed_at: new Date().toISOString(),
+                        ...sharedFields,
                     };
                     if (photoUrl !== undefined) updatePayload.photo_url = photoUrl;
                     if (requiresPhoto !== undefined) updatePayload.requires_photo_snapshot = requiresPhoto;
@@ -174,6 +214,7 @@ export const useToggleActivityTask = () => {
                             executed_at: new Date().toISOString(),
                             photo_url: photoUrl ?? null,
                             requires_photo_snapshot: requiresPhoto ?? false,
+                            ...sharedFields,
                         })
                         .select()
                         .single();
@@ -219,7 +260,14 @@ export const useToggleActivityTask = () => {
                     if (variables.isDone) {
                         if (variables.executionId) {
                             newExecs = newExecs.map(e => e.id === variables.executionId
-                                ? { ...e, status: 'done', photo_url: variables.photoUrl ?? e.photo_url }
+                                ? {
+                                    ...e,
+                                    status: 'done',
+                                    photo_url: variables.photoUrl ?? e.photo_url,
+                                    photos: variables.photos ?? e.photos,
+                                    observation: variables.observation ?? e.observation,
+                                    has_alert: variables.hasAlert ?? e.has_alert,
+                                }
                                 : e
                             );
                         } else {
@@ -231,6 +279,9 @@ export const useToggleActivityTask = () => {
                                 executed_at: new Date().toISOString(),
                                 photo_url: variables.photoUrl ?? null,
                                 requires_photo_snapshot: variables.requiresPhoto ?? false,
+                                photos: variables.photos ?? [],
+                                observation: variables.observation ?? null,
+                                has_alert: variables.hasAlert ?? false,
                             } as KanbanExecution);
                         }
                     } else {

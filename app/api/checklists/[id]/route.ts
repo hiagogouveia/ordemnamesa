@@ -165,6 +165,17 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         const existingTaskIds = new Set(existingTasks?.map(t => t.id) || []);
 
         if (tasks && tasks.length > 0) {
+            // Validar campos novos (Sprint 35)
+            const VALID_TYPES = new Set(['boolean', 'date', 'number', 'rating']);
+            for (const t of tasks) {
+                if (t.type !== undefined && t.type !== null && !VALID_TYPES.has(t.type)) {
+                    return NextResponse.json({ error: `Tipo de tarefa inválido: ${t.type}` }, { status: 400 });
+                }
+                if (t.requires_photo && t.max_photos !== null && t.max_photos !== undefined && t.max_photos < 1) {
+                    return NextResponse.json({ error: 'Máximo de fotos deve ser pelo menos 1.' }, { status: 400 });
+                }
+            }
+
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const tasksToUpdate: any[] = [];
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -180,7 +191,12 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
                     requires_photo: task.requires_photo || false,
                     is_critical: task.is_critical || false,
                     order: index,
-                    assigned_to_user_id: task.assigned_to_user_id || null
+                    assigned_to_user_id: task.assigned_to_user_id || null,
+                    // Sprint 35
+                    type: task.type ?? 'boolean',
+                    requires_observation: task.requires_observation || false,
+                    max_photos: task.max_photos ?? null,
+                    task_config: task.task_config ?? null,
                 };
 
                 if (task.id && existingTaskIds.has(task.id)) {

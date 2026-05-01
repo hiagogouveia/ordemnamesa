@@ -44,6 +44,21 @@ export function getBrazilDayOfWeek(date?: Date): number {
 }
 
 /**
+ * Formata uma data no formato `YYYY-MM-DD` (Postgres DATE) para `DD/MM/YYYY`.
+ * Não converte fuso — operação puramente lexical para evitar bugs de timezone
+ * comuns ao usar `new Date('YYYY-MM-DD')` (o JS interpreta como UTC midnight,
+ * o que move o dia para trás em São Paulo).
+ *
+ * Retorna a string original como fallback se o formato for inesperado.
+ */
+export function formatDateBR(value: string | null | undefined): string {
+    if (!value) return ''
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
+    if (!match) return value
+    return `${match[3]}/${match[2]}/${match[1]}`
+}
+
+/**
  * Retorna os limites do dia atual em São Paulo como ISO strings (UTC).
  * Útil para queries Supabase com .gte() / .lte().
  */

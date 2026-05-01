@@ -467,6 +467,10 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                             description: t.description || "",
                             is_critical: t.is_critical || false,
                             requires_photo: t.requires_photo || false,
+                            requires_observation: t.requires_observation || false,
+                            type: t.type || 'boolean',
+                            max_photos: t.max_photos ?? null,
+                            task_config: t.task_config ?? null,
                             assigned_to_user_id: t.assigned_to_user_id || undefined
                         }))
                     };
@@ -528,7 +532,16 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
 
     const addTask = (afterTempId?: string) => {
         const newTempId = Math.random().toString();
-        const newTask = { tempId: newTempId, title: "", is_critical: false, requires_photo: false };
+        const newTask = {
+            tempId: newTempId,
+            title: "",
+            is_critical: false,
+            requires_photo: false,
+            requires_observation: false,
+            type: 'boolean' as const,
+            max_photos: null,
+            task_config: null,
+        };
         if (afterTempId) {
             setTasks(prev => {
                 const idx = prev.findIndex(t => t.tempId === afterTempId);
@@ -606,6 +619,10 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 description: t.description || "",
                 is_critical: t.is_critical || false,
                 requires_photo: t.requires_photo || false,
+                requires_observation: t.requires_observation || false,
+                type: t.type || 'boolean',
+                max_photos: t.max_photos ?? null,
+                task_config: t.task_config ?? null,
                 assigned_to_user_id: t.assigned_to_user_id || undefined
             }))
         };
