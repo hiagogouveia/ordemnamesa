@@ -60,7 +60,7 @@ export function SolutionSection() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 md:gap-6">
           {PILLARS.map((p, i) => (
-            <Reveal key={p.title} delay={i * 80} className="h-full">
+            <Reveal key={p.title} delay={i * 30} className="h-full">
               <article className="h-full p-6 rounded-2xl bg-surface-dark/80 backdrop-blur border border-border-dark hover:border-primary/60 hover:-translate-y-1 transition-all duration-300">
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/30 to-primary/5 border border-primary/30 text-primary flex items-center justify-center mb-4 shadow-lg shadow-primary/10">
                   {p.icon}

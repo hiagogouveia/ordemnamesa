@@ -50,7 +50,7 @@ export function TestimonialsSection() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 md:gap-6">
           {TESTIMONIALS.map((t, i) => (
-            <Reveal key={t.name} delay={i * 80} className="h-full">
+            <Reveal key={t.name} delay={i * 30} className="h-full">
               <article className="h-full flex flex-col p-6 md:p-7 rounded-2xl bg-surface-dark border border-border-dark hover:border-primary/40 transition-colors duration-300">
                 <div className="flex gap-1 text-primary mb-4">
                   {[1, 2, 3, 4, 5].map((n) => (
