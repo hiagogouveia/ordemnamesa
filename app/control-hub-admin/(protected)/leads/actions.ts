@@ -120,7 +120,7 @@ export async function approveLeadAction(leadId: string): Promise<ApproveLeadResu
             const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
                 type: 'recovery',
                 email,
-                options: { redirectTo: `${siteUrl}/update-password` },
+                options: { redirectTo: `${siteUrl}/reset-password` },
             })
             const setupLink = linkData?.properties?.action_link
             if (setupLink) {

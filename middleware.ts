@@ -47,7 +47,7 @@ export async function middleware(request: NextRequest) {
         return supabaseResponse
     }
 
-    const publicRoutes = ['/', '/login', '/cadastro', '/signup']
+    const publicRoutes = ['/', '/login', '/cadastro', '/signup', '/forgot-password', '/reset-password']
     const isPublicRoute =
         publicRoutes.includes(request.nextUrl.pathname) ||
         request.nextUrl.pathname.startsWith('/blog')
