@@ -112,9 +112,9 @@ export default function LoginPage() {
                                 <label className="text-slate-700 dark:text-white text-sm font-semibold leading-normal" htmlFor="password">
                                     Senha
                                 </label>
-                                <a href="#" className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors">
+                                <Link href="/forgot-password" className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors">
                                     Esqueceu a senha?
-                                </a>
+                                </Link>
                             </div>
                             <div className="relative flex w-full items-center group">
                                 <div className="absolute left-0 top-0 bottom-0 pl-4 flex items-center pointer-events-none text-slate-400 dark:text-[#93adc8] group-focus-within:text-primary transition-colors">

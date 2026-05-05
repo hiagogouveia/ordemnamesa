@@ -6,8 +6,48 @@ import type { Scope } from '@/lib/types/scope';
 
 export type TaskStatus = 'todo' | 'doing' | 'done' | 'flagged' | 'skipped' | 'blocked';
 
-export interface KanbanTask { id: string; title: string; description?: string; checklist_id: string; role_id?: string; assigned_to_user_id?: string; is_critical?: boolean; requires_photo?: boolean; [key: string]: unknown; }
-export interface KanbanExecution { id: string; task_id: string; status: TaskStatus; executed_at: string; notes?: string; photo_url?: string; requires_photo_snapshot?: boolean; blocked_reason?: string | null; blocked_at?: string | null; blocked_by_user_id?: string | null; checklist_assumption_id?: string | null; [key: string]: unknown; }
+export interface KanbanTask {
+    id: string;
+    title: string;
+    description?: string;
+    checklist_id: string;
+    role_id?: string;
+    assigned_to_user_id?: string;
+    is_critical?: boolean;
+    requires_photo?: boolean;
+    // Sprint 35
+    type?: 'boolean' | 'date' | 'number' | 'rating' | null;
+    requires_observation?: boolean;
+    max_photos?: number | null;
+    task_config?: { min_value?: number; max_value?: number } | null;
+    [key: string]: unknown;
+}
+export interface KanbanExecution {
+    id: string;
+    task_id: string;
+    status: TaskStatus;
+    executed_at: string;
+    notes?: string;
+    photo_url?: string | null;
+    requires_photo_snapshot?: boolean;
+    blocked_reason?: string | null;
+    blocked_at?: string | null;
+    blocked_by_user_id?: string | null;
+    checklist_assumption_id?: string | null;
+    // Sprint 35
+    photos?: string[];
+    observation?: string | null;
+    has_alert?: boolean;
+    type_snapshot?: 'boolean' | 'date' | 'number' | 'rating' | null;
+    requires_observation_snapshot?: boolean;
+    max_photos_snapshot?: number | null;
+    task_config_snapshot?: { min_value?: number; max_value?: number } | null;
+    value_boolean?: boolean | null;
+    value_date?: string | null;
+    value_number?: number | null;
+    value_rating?: number | null;
+    [key: string]: unknown;
+}
 export interface KanbanChecklist { id: string; name: string; description?: string; is_required: boolean; recurrence?: string; last_reset_at?: string; assigned_to_user_id?: string; checklist_type?: string; role_id?: string; area_id?: string; order_index?: number | null; restaurant_id?: string; roles?: { id: string; name: string; color: string }; areas?: { id: string; name: string; color: string }; start_time?: string; end_time?: string; [key: string]: unknown; }
 
 export interface KanbanData {
@@ -202,15 +242,31 @@ export const useAssumeTask = () => {
     });
 };
 
+export interface UpdateTaskStatusInput {
+    restaurantId: string;
+    executionId: string;
+    status: TaskStatus;
+    notes?: string;
+    photo_url?: string;
+    // Sprint 35
+    photos?: string[];
+    observation?: string;
+    value_boolean?: boolean;
+    value_date?: string;
+    value_number?: number;
+    value_rating?: number;
+}
+
 export const useUpdateTaskStatus = () => {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: async ({ restaurantId, executionId, status, notes, photo_url }: { restaurantId: string; executionId: string; status: TaskStatus; notes?: string; photo_url?: string }) => {
+        mutationFn: async (input: UpdateTaskStatusInput) => {
+            const { restaurantId, executionId, ...rest } = input;
             const token = await getAuthToken();
             const response = await fetch(`/api/task-executions/${executionId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ restaurant_id: restaurantId, status, notes, photo_url }),
+                body: JSON.stringify({ restaurant_id: restaurantId, ...rest }),
             });
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));

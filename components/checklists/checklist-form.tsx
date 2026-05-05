@@ -19,7 +19,7 @@ import { useEquipe } from "@/lib/hooks/use-equipe";
 import { useAllAreas } from "@/lib/hooks/use-areas";
 import { useShifts } from "@/lib/hooks/use-shifts";
 import isEqual from "lodash/isEqual";
-import { getDraft, saveDraft, removeDraft } from "@/lib/utils/draft-storage";
+import { getDraft, saveDraft, removeDraft, type DraftData } from "@/lib/utils/draft-storage";
 import { describeRecurrence } from "@/lib/utils/recurrence/describe";
 
 const DAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -100,6 +100,17 @@ const CHECKLIST_TYPES = [
     { value: 'receiving', label: 'Recebimento' }
 ];
 
+/**
+ * Avalia se um draft local de rotina nova vale a pena restaurar — evita
+ * "lixo" de drafts vazios (e.g. usuário abriu o form, fechou sem digitar).
+ */
+function hasMeaningfulDraft(parsed: DraftData): boolean {
+    const name = (parsed.name ?? "").toString().trim();
+    const description = (parsed.description ?? "").toString().trim();
+    const tasks = Array.isArray(parsed.tasks) ? parsed.tasks : [];
+    return name.length > 0 || description.length > 0 || tasks.length > 0;
+}
+
 export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = false, initialAreaId }: ChecklistFormProps) {
     const restaurantId = useRestaurantStore((state) => state.restaurantId);
 
@@ -146,6 +157,8 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     const isPublishingRef = useRef(false);
 
     const [areaId, setAreaId] = useState<string>("");
+    // Draft de rotina nova encontrado em localStorage — aguardando decisão do usuário
+    const [pendingDraftRestore, setPendingDraftRestore] = useState<DraftData | null>(null);
 
     // Snapshot do estado original da rotina carregada do banco
     // Usado para: (1) preservar status original no auto-save, (2) comparação de dirty state
@@ -251,7 +264,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 };
                 // Sempre capturar status/area_id original do banco (não do draft)
                 originalChecklistRef.current = {
-                    status: checklist.status || 'draft',
+                    status: checklist.status || 'active',
                     area_id: checklist.area_id || null,
                 };
                 return; // Skip setting from props since we used draft
@@ -316,83 +329,94 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
 
             // Capturar snapshot original para preservar status e proteger campos críticos
             originalChecklistRef.current = {
-                status: checklist.status || 'draft',
+                status: checklist.status || 'active',
                 area_id: checklist.area_id || null,
             };
             setSaveState("idle");
         } else {
-            const resetForm = () => {
-                setName("");
-                setDescription("");
-                setShift("any");
-                setChecklistType("regular");
-                setAssignedToUserId("");
-                setIsIndividualMode(false);
-                setIsRequired(true);
-                setRecurrence("daily");
-                setStartTime("");
-                setEndTime("");
-                setHasTimeWindow(false);
-                setRecurrenceConfig(undefined);
-                setEnforceSequentialOrder(false);
-                setAreaId(initialAreaId ?? "");
-                setTasks([]);
-                setErrorMsg(null);
-                setShowDeleteModal(false);
-                setSaveState("idle");
-            };
+            // Modo "nova rotina": iniciar sempre limpo. Se houver draft local salvo,
+            // não aplicar automaticamente — perguntar ao usuário (ver pendingDraftRestore).
+            setName("");
+            setDescription("");
+            setShift("any");
+            setChecklistType("regular");
+            setAssignedToUserId("");
+            setIsIndividualMode(false);
+            setIsRequired(true);
+            setRecurrence("daily");
+            setStartTime("");
+            setEndTime("");
+            setHasTimeWindow(false);
+            setRecurrenceConfig(undefined);
+            setEnforceSequentialOrder(false);
+            setAreaId(initialAreaId ?? "");
+            setTasks([]);
+            setErrorMsg(null);
+            setShowDeleteModal(false);
+            setSaveState("idle");
 
             const parsed = getDraft(null, restaurantId);
-            if (parsed) {
-                const draftName = parsed.name ?? "";
-                const draftDescription = parsed.description ?? "";
-                const draftShift = parsed.shift ?? "any";
-                const draftChecklistType = parsed.checklistType ?? "regular";
-                const draftAssignedToUserId = parsed.assignedToUserId ?? "";
-                const draftIsIndividualMode = parsed.isIndividualMode ?? !!parsed.assignedToUserId;
-                const draftIsRequired = parsed.isRequired ?? true;
-                const draftRecurrence = parsed.recurrence === 'none' ? 'daily' : (parsed.recurrence ?? "daily");
-                const draftStartTime = parsed.startTime ?? "";
-                const draftEndTime = parsed.endTime ?? "";
-                const draftHasTimeWindow = parsed.hasTimeWindow ?? false;
-                const draftRecurrenceConfig = parsed.recurrenceConfig ?? undefined;
-                const draftEnforceSequentialOrder = parsed.enforceSequentialOrder ?? false;
-                const draftAreaId = parsed.areaId ?? "";
-                const draftTasks = parsed.tasks ?? [];
-
-                setName(draftName);
-                setDescription(draftDescription);
-                setShift(draftShift);
-                setChecklistType(draftChecklistType);
-                setAssignedToUserId(draftAssignedToUserId);
-                setIsIndividualMode(draftIsIndividualMode);
-                setIsRequired(draftIsRequired);
-                setRecurrence(draftRecurrence);
-                setStartTime(draftStartTime);
-                setEndTime(draftEndTime);
-                setHasTimeWindow(draftHasTimeWindow);
-                setRecurrenceConfig(draftRecurrenceConfig);
-                setEnforceSequentialOrder(draftEnforceSequentialOrder);
-                setAreaId(draftAreaId);
-                setTasks(draftTasks);
-                setErrorMsg(null);
-                setShowDeleteModal(false);
-                setSaveState("saved");
-                isFirstLoad.current = false;
-                previousStateRef.current = {
-                    name: draftName, description: draftDescription, shift: draftShift,
-                    checklistType: draftChecklistType, assignedToUserId: draftAssignedToUserId,
-                    isIndividualMode: draftIsIndividualMode, isRequired: draftIsRequired,
-                    recurrence: draftRecurrence, startTime: draftStartTime, endTime: draftEndTime,
-                    hasTimeWindow: draftHasTimeWindow, recurrenceConfig: draftRecurrenceConfig,
-                    enforceSequentialOrder: draftEnforceSequentialOrder, areaId: draftAreaId,
-                    tasks: draftTasks,
-                };
+            if (parsed && hasMeaningfulDraft(parsed)) {
+                setPendingDraftRestore(parsed);
             } else {
-                resetForm();
+                setPendingDraftRestore(null);
             }
         }
     }, [checklist, initialAreaId, restaurantId]);
+
+    const applyPendingDraft = useCallback(() => {
+        const parsed = pendingDraftRestore;
+        if (!parsed) return;
+
+        const draftName = parsed.name ?? "";
+        const draftDescription = parsed.description ?? "";
+        const draftShift = parsed.shift ?? "any";
+        const draftChecklistType = parsed.checklistType ?? "regular";
+        const draftAssignedToUserId = parsed.assignedToUserId ?? "";
+        const draftIsIndividualMode = parsed.isIndividualMode ?? !!parsed.assignedToUserId;
+        const draftIsRequired = parsed.isRequired ?? true;
+        const draftRecurrence = parsed.recurrence === 'none' ? 'daily' : (parsed.recurrence ?? "daily");
+        const draftStartTime = parsed.startTime ?? "";
+        const draftEndTime = parsed.endTime ?? "";
+        const draftHasTimeWindow = parsed.hasTimeWindow ?? false;
+        const draftRecurrenceConfig = parsed.recurrenceConfig ?? undefined;
+        const draftEnforceSequentialOrder = parsed.enforceSequentialOrder ?? false;
+        const draftAreaId = parsed.areaId ?? "";
+        const draftTasks = parsed.tasks ?? [];
+
+        setName(draftName);
+        setDescription(draftDescription);
+        setShift(draftShift);
+        setChecklistType(draftChecklistType);
+        setAssignedToUserId(draftAssignedToUserId);
+        setIsIndividualMode(draftIsIndividualMode);
+        setIsRequired(draftIsRequired);
+        setRecurrence(draftRecurrence);
+        setStartTime(draftStartTime);
+        setEndTime(draftEndTime);
+        setHasTimeWindow(draftHasTimeWindow);
+        setRecurrenceConfig(draftRecurrenceConfig);
+        setEnforceSequentialOrder(draftEnforceSequentialOrder);
+        setAreaId(draftAreaId);
+        setTasks(draftTasks);
+        setSaveState("saved");
+        isFirstLoad.current = false;
+        previousStateRef.current = {
+            name: draftName, description: draftDescription, shift: draftShift,
+            checklistType: draftChecklistType, assignedToUserId: draftAssignedToUserId,
+            isIndividualMode: draftIsIndividualMode, isRequired: draftIsRequired,
+            recurrence: draftRecurrence, startTime: draftStartTime, endTime: draftEndTime,
+            hasTimeWindow: draftHasTimeWindow, recurrenceConfig: draftRecurrenceConfig,
+            enforceSequentialOrder: draftEnforceSequentialOrder, areaId: draftAreaId,
+            tasks: draftTasks,
+        };
+        setPendingDraftRestore(null);
+    }, [pendingDraftRestore]);
+
+    const discardPendingDraft = useCallback(() => {
+        removeDraft(null, restaurantId);
+        setPendingDraftRestore(null);
+    }, [restaurantId]);
 
     useEffect(() => {
         const formState = {
@@ -459,7 +483,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                         target_role: checklist.target_role || 'all',
                         assignment_type: (isIndividualMode && assignedToUserId) ? 'user' : (areaId ? 'area' : 'all'),
                         // FIX BUG 1: Preservar status original — auto-save NUNCA deve mudar o status
-                        status: originalChecklistRef.current?.status || checklist.status || 'draft',
+                        status: originalChecklistRef.current?.status || checklist.status || 'active',
                         skipInvalidation: true,
                         tasks: tasks.map(t => ({
                             id: t.id || undefined,
@@ -467,6 +491,10 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                             description: t.description || "",
                             is_critical: t.is_critical || false,
                             requires_photo: t.requires_photo || false,
+                            requires_observation: t.requires_observation || false,
+                            type: t.type || 'boolean',
+                            max_photos: t.max_photos ?? null,
+                            task_config: t.task_config ?? null,
                             assigned_to_user_id: t.assigned_to_user_id || undefined
                         }))
                     };
@@ -528,7 +556,16 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
 
     const addTask = (afterTempId?: string) => {
         const newTempId = Math.random().toString();
-        const newTask = { tempId: newTempId, title: "", is_critical: false, requires_photo: false };
+        const newTask = {
+            tempId: newTempId,
+            title: "",
+            is_critical: false,
+            requires_photo: false,
+            requires_observation: false,
+            type: 'boolean' as const,
+            max_photos: null,
+            task_config: null,
+        };
         if (afterTempId) {
             setTasks(prev => {
                 const idx = prev.findIndex(t => t.tempId === afterTempId);
@@ -550,34 +587,32 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         setTasks(tasks.filter((t) => t.tempId !== id));
     };
 
-    const handleSave = async (isPublishing: boolean) => {
+    const handleSave = async () => {
         if (!name.trim() || !restaurantId) return;
 
-        if (isPublishing) {
-            if (!areaId) {
-                setErrorMsg('Selecione uma área para a rotina.');
-                return;
-            }
+        if (!areaId) {
+            setErrorMsg('Selecione uma área para a rotina.');
+            return;
+        }
 
-            if (tasks.length === 0) {
-                setErrorMsg('Adicione ao menos uma tarefa para publicar a rotina.');
-                return;
-            }
+        if (tasks.length === 0) {
+            setErrorMsg('Adicione ao menos uma tarefa para salvar a rotina.');
+            return;
+        }
 
-            if (recurrence === 'custom') {
-                // PR 3: validação client-side legada só vale para v1 ('custom' com
-                // frequency='weekly' precisa days_of_week). Para v2, o backend valida.
-                const cfg = recurrenceConfig;
-                const isV2 =
-                    typeof cfg === 'object' &&
-                    cfg !== null &&
-                    (cfg as { version?: unknown }).version === 2;
-                if (!isV2) {
-                    const days = (cfg as RecurrenceConfig | null | undefined)?.days_of_week;
-                    if (!Array.isArray(days) || days.length === 0) {
-                        setErrorMsg('Recorrência personalizada exige ao menos um dia da semana selecionado.');
-                        return;
-                    }
+        if (recurrence === 'custom') {
+            // PR 3: validação client-side legada só vale para v1 ('custom' com
+            // frequency='weekly' precisa days_of_week). Para v2, o backend valida.
+            const cfg = recurrenceConfig;
+            const isV2 =
+                typeof cfg === 'object' &&
+                cfg !== null &&
+                (cfg as { version?: unknown }).version === 2;
+            if (!isV2) {
+                const days = (cfg as RecurrenceConfig | null | undefined)?.days_of_week;
+                if (!Array.isArray(days) || days.length === 0) {
+                    setErrorMsg('Recorrência personalizada exige ao menos um dia da semana selecionado.');
+                    return;
                 }
             }
         }
@@ -598,7 +633,10 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             enforce_sequential_order: enforceSequentialOrder,
             area_id: areaId || null,
             assignment_type: (isIndividualMode && assignedToUserId) ? 'user' : (areaId ? 'area' : 'all'),
-            status: (isPublishing ? 'active' : (originalChecklistRef.current?.status || 'draft')) as "active" | "draft" | "archived",
+            // Em update, preserva status original (active/archived). Em criação, sempre active.
+            status: (checklist?.id
+                ? (originalChecklistRef.current?.status || 'active')
+                : 'active') as "active" | "archived",
             target_role: checklist?.target_role || 'all',
             tasks: tasks.map(t => ({
                 id: t.id || undefined,
@@ -606,6 +644,10 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 description: t.description || "",
                 is_critical: t.is_critical || false,
                 requires_photo: t.requires_photo || false,
+                requires_observation: t.requires_observation || false,
+                type: t.type || 'boolean',
+                max_photos: t.max_photos ?? null,
+                task_config: t.task_config ?? null,
                 assigned_to_user_id: t.assigned_to_user_id || undefined
             }))
         };
@@ -708,7 +750,38 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     };
 
     return (
-        <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#0a1215]">
+        <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#0a1215] relative">
+            {pendingDraftRestore && (
+                <div className="absolute inset-0 z-30 flex items-center justify-center p-6 bg-[#0a1215]/95 backdrop-blur-sm">
+                    <div className="w-full max-w-md bg-[#101d22] border border-[#233f48] rounded-2xl p-6 shadow-2xl">
+                        <div className="flex items-start gap-3 mb-4">
+                            <span className="material-symbols-outlined text-[#13b6ec] text-[28px] shrink-0">history</span>
+                            <div>
+                                <h3 className="text-lg font-bold text-white">Continuar rotina não finalizada?</h3>
+                                <p className="text-sm text-[#92bbc9] mt-1">
+                                    Encontramos uma rotina que você começou neste dispositivo e ainda não finalizou.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-2 mt-6">
+                            <button
+                                type="button"
+                                onClick={discardPendingDraft}
+                                className="flex-1 px-4 py-2 rounded-lg font-bold text-sm text-[#92bbc9] bg-[#16262c] border border-[#233f48] hover:border-[#325a67] hover:text-white transition-colors"
+                            >
+                                Começar nova
+                            </button>
+                            <button
+                                type="button"
+                                onClick={applyPendingDraft}
+                                className="flex-1 px-4 py-2 rounded-lg font-bold text-sm bg-[#13b6ec] text-[#111e22] hover:bg-[#10a0d0] transition-colors"
+                            >
+                                Continuar edição
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             {/* Header Actions */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 sm:p-6 border-b border-[#233f48] shrink-0 bg-[#101d22] gap-4">
                 <div>
@@ -736,7 +809,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                     {saveState === "error" && (
                          <span className="text-xs text-red-400 italic mr-2 flex items-center gap-1" title="Alguns dados só estão salvos localmente">
                              <span className="material-symbols-outlined text-[14px]">cloud_off</span>
-                             Erro - Rascunho Local
+                             Erro - salvo apenas neste dispositivo
                          </span>
                     )}
                     {checklist && (
@@ -755,19 +828,12 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                         Cancelar
                     </button>
                     <button
-                        onClick={() => handleSave(false)}
-                        disabled={isLoading || !name.trim()}
-                        className="px-4 py-2 rounded-lg font-bold text-sm bg-[#16262c] text-white border border-[#233f48] hover:border-[#325a67] disabled:opacity-50 transition-colors"
-                    >
-                        Salvar Rascunho
-                    </button>
-                    <button
-                        onClick={() => handleSave(true)}
+                        onClick={() => handleSave()}
                         disabled={isLoading || !name.trim() || tasks.length === 0}
-                        title={tasks.length === 0 ? 'Adicione ao menos uma tarefa para publicar' : undefined}
+                        title={tasks.length === 0 ? 'Adicione ao menos uma tarefa para salvar' : undefined}
                         className="px-4 py-2 rounded-lg font-bold text-sm bg-[#13b6ec] text-[#111e22] hover:bg-[#10a0d0] shadow-[0_4px_14px_0_rgba(19,182,236,0.2)] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                     >
-                        {isLoading ? "Salvando..." : "Publicar"}
+                        {isLoading ? "Salvando..." : "Salvar rotina"}
                     </button>
                 </div>
             </div>

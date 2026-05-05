@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/ui/Logo";
-import { WhatsApp, Menu, X } from "./icons";
+import { Menu, X } from "./icons";
 
-const WHATSAPP_URL = "https://wa.me/5567991364767";
+const SIGNUP_CTA_URL = "/qualificacao";
 
 const NAV_LINKS = [
   { href: "#problema", label: "Problema" },
@@ -74,18 +74,15 @@ export function Navbar() {
               Entrar
             </Link>
 
-            <a
-              href={WHATSAPP_URL}
-              target="_blank"
-              rel="noopener noreferrer"
+            <Link
+              href={SIGNUP_CTA_URL}
               className="hidden sm:inline-flex items-center gap-2 px-4 lg:px-5 py-2 lg:py-2.5 rounded-lg
                          bg-success text-white font-semibold text-sm
                          hover:bg-success/90 transition-colors duration-200
                          shadow-lg shadow-success/20"
             >
-              <WhatsApp size={16} />
-              <span className="hidden md:inline">WhatsApp</span>
-            </a>
+              Faça seu cadastro agora
+            </Link>
 
             <button
               type="button"
@@ -113,16 +110,13 @@ export function Navbar() {
                 {link.label}
               </a>
             ))}
-            <a
-              href={WHATSAPP_URL}
-              target="_blank"
-              rel="noopener noreferrer"
+            <Link
+              href={SIGNUP_CTA_URL}
               onClick={() => setOpen(false)}
               className="mt-2 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-success text-white font-semibold text-base shadow-lg shadow-success/20"
             >
-              <WhatsApp size={18} />
-              Falar no WhatsApp
-            </a>
+              Faça seu cadastro agora
+            </Link>
           </div>
         </div>
       )}

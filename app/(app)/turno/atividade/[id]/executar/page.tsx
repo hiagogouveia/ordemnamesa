@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { useRestaurantStore } from '@/lib/store/restaurant-store';
 import { useActivityData, useToggleActivityTask, useBlockTask, useResumeTask } from '@/lib/hooks/use-activity-execution';
 import { useChecklistAssumption, useCompleteChecklist } from '@/lib/hooks/use-tasks';
-import { ExecutionItem } from '@/components/turno/execution-item';
+import { ExecutionItem, type ExecutionToggleInput } from '@/components/turno/execution-item';
 
 export default function ActivityExecutionPage() {
     const router = useRouter();
@@ -54,12 +54,31 @@ export default function ActivityExecutionPage() {
 
     const isAllDone = progress === 100;
 
-    const handleToggle = async (taskId: string, executionId: string | undefined, isDone: boolean, photoUrl?: string) => {
+    const handleToggle = async (taskId: string, executionId: string | undefined, input: ExecutionToggleInput) => {
         if (!restaurantId || !checklistId || isCompleted) return;
         const task = tasks?.find(t => t.id === taskId);
         const requiresPhoto = Boolean(task?.requires_photo);
         try {
-            await toggleTask.mutateAsync({ restaurantId, checklistId, taskId, executionId, isDone, photoUrl, requiresPhoto });
+            await toggleTask.mutateAsync({
+                restaurantId,
+                checklistId,
+                taskId,
+                executionId,
+                isDone: input.isDone,
+                photoUrl: input.photoUrl,
+                requiresPhoto,
+                type: task?.type ?? null,
+                requiresObservation: task?.requires_observation,
+                maxPhotos: task?.max_photos ?? null,
+                taskConfig: task?.task_config ?? null,
+                photos: input.photos,
+                observation: input.observation,
+                valueBoolean: input.valueBoolean,
+                valueDate: input.valueDate,
+                valueNumber: input.valueNumber,
+                valueRating: input.valueRating,
+                hasAlert: input.hasAlert,
+            });
         } catch (e) {
             console.error('Erro ao alternar tarefa:', e);
         }
@@ -106,10 +125,15 @@ export default function ActivityExecutionPage() {
     const handleConfirmFinalize = async () => {
         if (!restaurantId || !checklistId) return;
 
-        // Validação de segurança: tasks que exigem foto e não têm photo_url na execução
+        // Validação de segurança: tasks que exigem foto e não têm foto na execução
+        // Compat: leitura considera photos[] (Sprint 35) OU photo_url (legado)
         const missingPhotoTasks = (tasks ?? []).filter(t =>
             t.requires_photo &&
-            !executions?.some(e => e.task_id === t.id && e.status === 'done' && e.photo_url)
+            !executions?.some(e =>
+                e.task_id === t.id &&
+                e.status === 'done' &&
+                ((Array.isArray(e.photos) && e.photos.length > 0) || !!e.photo_url)
+            )
         );
         if (missingPhotoTasks.length > 0) {
             setPhotoValidationError(

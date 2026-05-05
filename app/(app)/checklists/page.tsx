@@ -6,6 +6,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useAccountSessionStore } from "@/lib/store/account-session-store";
 import { useChecklists, useCreateChecklist, useDeleteChecklist, useToggleChecklistStatus } from "@/lib/hooks/use-checklists";
+import { useShifts } from "@/lib/hooks/use-shifts";
+import { shouldChecklistAppearToday } from "@/lib/utils/should-checklist-appear-today";
+import { getBrazilNow } from "@/lib/utils/brazil-date";
 import { BulkActionBar } from "@/components/checklists/management/BulkActionBar";
 import { CopyChecklistModal } from "@/components/checklists/management/CopyChecklistModal";
 import { useChecklistOrders, useUpdateChecklistOrders } from "@/lib/hooks/use-checklist-orders";
@@ -71,7 +74,9 @@ function ChecklistsContent() {
 
     const selectedShift = searchParams.get("shift") ?? "";
     const selectedAreaId = searchParams.get("area_id") ?? "";
-    const selectedAvailability = searchParams.get("availability") ?? "active";
+    // Compat: URLs antigos com ?availability=draft caem em "active" (sem-op)
+    const rawAvailability = searchParams.get("availability") ?? "active";
+    const selectedAvailability = rawAvailability === "draft" ? "active" : rawAvailability;
     const selectedExecStatus = searchParams.get("exec_status") ?? "";
     const selectedCollaboratorId = searchParams.get("collaborator_id") ?? "";
     const sortField = (searchParams.get("sort") as SortField | null) ?? null;
@@ -96,6 +101,7 @@ function ChecklistsContent() {
     );
     const { data: orders = [] } = useChecklistOrders(restaurantId ?? undefined);
     const { data: areas = [], isLoading: isLoadingAreas } = useAllAreas(restaurantId ?? undefined);
+    const { data: shifts = [] } = useShifts(restaurantId ?? undefined);
     const { data: equipeData } = useEquipe(
         isGlobal
             ? { restaurantId: null, accountId, mode: 'global' }
@@ -128,13 +134,19 @@ function ChecklistsContent() {
             ) as ExtendedChecklist[]
             : checklists as ExtendedChecklist[];
 
+        // "Hoje": só rotinas ativas e que devem aparecer hoje pelas regras de recorrência.
+        const brazilNow = selectedAvailability === "today" ? getBrazilNow() : null;
+
         const result = collaboratorFiltered.filter((c) => {
             if (q && !c.name.toLowerCase().includes(q)) return false;
             if (selectedShift && c.shift !== selectedShift && c.shift !== "any") return false;
             if (selectedAreaId && c.area_id !== selectedAreaId) return false;
-            if (selectedAvailability === "active" && (!c.active || c.status === "draft")) return false;
-            if (selectedAvailability === "inactive" && (c.active || c.status === "draft")) return false;
-            if (selectedAvailability === "draft" && c.status !== "draft") return false;
+            if (selectedAvailability === "active" && !c.active) return false;
+            if (selectedAvailability === "inactive" && c.active) return false;
+            if (selectedAvailability === "today" && brazilNow) {
+                if (!c.active) return false;
+                if (!shouldChecklistAppearToday(c, brazilNow.dayOfWeek, brazilNow.dateKey, shifts)) return false;
+            }
 
             // Filtro por status de execução
             if (selectedExecStatus) {
@@ -145,26 +157,12 @@ function ChecklistsContent() {
             return true;
         });
 
-        // Separar rascunhos das outras rotinas
-        const drafts = result.filter(c => c.status === "draft");
-        const nonDrafts = result.filter(c => c.status !== "draft");
-
         // Sempre ordenar por order_index como base
-        const sortedNonDrafts = [...nonDrafts].sort((a, b) => (a.order_index ?? 9999) - (b.order_index ?? 9999));
-        const sortedDrafts = [...drafts].sort((a, b) => (a.order_index ?? 9999) - (b.order_index ?? 9999));
-
         if (!sortField) {
-            // Se não houver sort explícito, garantir drafts por último
-            return [...sortedNonDrafts, ...sortedDrafts];
+            return [...result].sort((a, b) => (a.order_index ?? 9999) - (b.order_index ?? 9999));
         }
 
-        const sortedResult = [...nonDrafts, ...drafts].sort((a, b) => {
-            // Sempre enviar drafts pro final a não ser que tenhamos escolhido um field diferente e seja uma exigência estrita (?)
-            // Mas a regra diz: quando o filtro "Todas" estiver ativo, Rascunhos sempre por último.
-            // Implementando: se a estiver draft e b não, envia a para o fim.
-            if (a.status === "draft" && b.status !== "draft") return 1;
-            if (a.status !== "draft" && b.status === "draft") return -1;
-
+        const sortedResult = [...result].sort((a, b) => {
             let valA: string | number;
             let valB: string | number;
 
@@ -186,8 +184,8 @@ function ChecklistsContent() {
                     valB = b.responsible?.name?.toLowerCase() ?? "\uffff";
                     break;
                 case "status":
-                    valA = a.status === "draft" ? 2 : (!a.active ? 1 : 0);
-                    valB = b.status === "draft" ? 2 : (!b.active ? 1 : 0);
+                    valA = !a.active ? 1 : 0;
+                    valB = !b.active ? 1 : 0;
                     break;
                 default:
                     return 0;
@@ -201,7 +199,7 @@ function ChecklistsContent() {
         });
         
         return sortedResult;
-    }, [checklists, searchQuery, selectedShift, selectedAreaId, selectedAvailability, selectedExecStatus, selectedCollaboratorId, equipeData, currentMinutes, sortField, sortOrder]);
+    }, [checklists, searchQuery, selectedShift, selectedAreaId, selectedAvailability, selectedExecStatus, selectedCollaboratorId, equipeData, shifts, currentMinutes, sortField, sortOrder]);
 
     // ─── BULK SELECTION (visão global) ─────────────────────────────────────────
 

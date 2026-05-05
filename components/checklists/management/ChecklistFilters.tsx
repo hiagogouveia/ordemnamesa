@@ -12,9 +12,9 @@ const SHIFT_OPTIONS = [
 ];
 
 const AVAILABILITY_OPTIONS = [
+    { value: "today", label: "Hoje" },
     { value: "active", label: "Ativas" },
     { value: "inactive", label: "Inativas" },
-    { value: "draft", label: "Rascunhos" },
     { value: "all", label: "Todas" },
 ];
 

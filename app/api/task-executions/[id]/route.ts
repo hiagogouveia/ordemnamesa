@@ -23,7 +23,11 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
 
         const { id } = await context.params;
         const body = await request.json();
-        const { restaurant_id, status, notes, photo_url } = body;
+        const {
+            restaurant_id, status, notes, photo_url,
+            photos, observation,
+            value_boolean, value_date, value_number, value_rating,
+        } = body;
 
         if (!restaurant_id || !status) {
             return NextResponse.json({ error: 'Faltam campos obrigatórios' }, { status: 400 });
@@ -42,6 +46,56 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         if (notes !== undefined) updateData.notes = notes;
         if (photo_url !== undefined) updateData.photo_url = photo_url;
         if (status === 'done') updateData.executed_at = new Date().toISOString();
+
+        // Sprint 35 — campos novos
+        if (Array.isArray(photos)) updateData.photos = photos;
+        if (observation !== undefined) updateData.observation = observation;
+        if (value_boolean !== undefined) updateData.value_boolean = value_boolean;
+        if (value_date !== undefined) updateData.value_date = value_date;
+        if (value_number !== undefined) updateData.value_number = value_number;
+        if (value_rating !== undefined) updateData.value_rating = value_rating;
+
+        // Recomputa has_alert server-side a partir do snapshot já gravado + valor recebido
+        if (status === 'done') {
+            const { data: existing } = await adminSupabase
+                .from('task_executions')
+                .select('type_snapshot, task_config_snapshot, requires_photo_snapshot, requires_observation_snapshot')
+                .eq('id', id)
+                .eq('restaurant_id', restaurant_id)
+                .single();
+
+            // Validação: foto obrigatória — leitura considera photos[] OU photo_url
+            if (existing?.requires_photo_snapshot) {
+                const finalPhotos = Array.isArray(photos) ? photos : null;
+                const hasPhoto = (finalPhotos && finalPhotos.length > 0) || !!photo_url;
+                if (!hasPhoto) {
+                    return NextResponse.json({ error: 'Esta tarefa exige ao menos uma foto.' }, { status: 400 });
+                }
+            }
+            if (existing?.requires_observation_snapshot) {
+                const finalObs = observation;
+                if (!finalObs || typeof finalObs !== 'string' || finalObs.trim() === '') {
+                    return NextResponse.json({ error: 'Esta tarefa exige observação.' }, { status: 400 });
+                }
+            }
+
+            const t = existing?.type_snapshot ?? 'boolean';
+            const cfg = (existing?.task_config_snapshot ?? null) as { min_value?: number; max_value?: number } | null;
+            let hasAlert = false;
+            if (t === 'date' && typeof value_date === 'string') {
+                const todayKey = new Intl.DateTimeFormat('en-CA', {
+                    timeZone: 'America/Sao_Paulo',
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                }).format(new Date());
+                hasAlert = value_date < todayKey;
+            } else if (t === 'number' && typeof value_number === 'number' && cfg) {
+                if (typeof cfg.min_value === 'number' && value_number < cfg.min_value) hasAlert = true;
+                if (typeof cfg.max_value === 'number' && value_number > cfg.max_value) hasAlert = true;
+            } else if (t === 'rating' && typeof value_rating === 'number') {
+                hasAlert = value_rating <= 3;
+            }
+            updateData.has_alert = hasAlert;
+        }
 
         const { data: updated, error: execError } = await adminSupabase
             .from('task_executions')

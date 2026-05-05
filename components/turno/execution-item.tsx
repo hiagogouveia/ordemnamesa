@@ -1,12 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { KanbanTask, KanbanExecution } from '@/lib/hooks/use-tasks';
 import { PhotoUpload } from '@/components/tasks/photo-upload';
 import { useSignedUrl } from '@/lib/hooks/use-signed-url';
+import { resolveTaskType, computeTaskAlert } from '@/lib/utils/task-alert';
+import { formatDateBR } from '@/lib/utils/brazil-date';
+
+export interface ExecutionToggleInput {
+    isDone: boolean;
+    photoUrl?: string;
+    photos?: string[];
+    observation?: string;
+    valueBoolean?: boolean;
+    valueDate?: string;
+    valueNumber?: number;
+    valueRating?: number;
+    hasAlert?: boolean;
+}
 
 interface ExecutionItemProps {
     task: KanbanTask;
     execution?: KanbanExecution;
-    onToggle: (taskId: string, executionId: string | undefined, isDone: boolean, photoUrl?: string) => void;
+    onToggle: (taskId: string, executionId: string | undefined, input: ExecutionToggleInput) => void;
     onReportProblem: (taskId: string) => void;
     onResumeTask?: (taskId: string, executionId: string) => void;
     locked?: boolean;
@@ -18,45 +32,159 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onRe
     const isDone = Boolean(execution && execution.status === 'done');
     const isBlocked = Boolean(execution && execution.status === 'blocked');
     const [isAnimating, setIsAnimating] = useState(false);
-    const [pendingPhotoPath, setPendingPhotoPath] = useState<string | null>(null);
     const [photoError, setPhotoError] = useState<string | null>(null);
 
-    // Para tasks com foto já executadas, exibir preview da foto salva
-    const existingPhotoPath = execution?.photo_url ?? undefined;
-
+    const taskType = resolveTaskType(task.type ?? null);
     const requiresPhoto = Boolean(task.requires_photo);
+    const requiresObservation = Boolean(task.requires_observation);
+    const maxPhotos = task.max_photos ?? null;
 
-    // Task simples (sem exigência de foto): comportamento original — o card inteiro é clicável
-    const handleSimpleToggle = () => {
-        if (locked || isBlocked) return;
-        setIsAnimating(true);
-        setTimeout(() => setIsAnimating(false), 300);
-        onToggle(task.id, execution?.id, !isDone);
-    };
+    // Estado local — valores em digitação antes de concluir
+    const [pendingPhotos, setPendingPhotos] = useState<string[]>([]);
+    const [pendingObservation, setPendingObservation] = useState<string>("");
+    const [pendingDate, setPendingDate] = useState<string>("");
+    const [pendingNumber, setPendingNumber] = useState<string>("");
+    const [pendingRating, setPendingRating] = useState<number>(0);
+    const [validationError, setValidationError] = useState<string | null>(null);
 
-    // Task com exigência de foto: botão "Concluir" separado
-    const handleConcludeWithPhoto = () => {
-        if (!pendingPhotoPath) {
-            setPhotoError('Adicione uma foto antes de concluir.');
-            return;
-        }
-        setPhotoError(null);
-        setIsAnimating(true);
-        setTimeout(() => setIsAnimating(false), 300);
-        onToggle(task.id, execution?.id, true, pendingPhotoPath);
-    };
-
-    // Desfazer conclusão (desmarcar)
-    const handleUndo = () => {
-        if (locked) return;
-        onToggle(task.id, execution?.id, false);
-        setPendingPhotoPath(null);
-        setPhotoError(null);
-    };
-
+    // Para tasks já executadas, exibir foto salva (compat: photos[] OU photo_url)
+    const existingPhotoPath = useMemo(() => {
+        const ph = execution?.photos;
+        if (Array.isArray(ph) && ph.length > 0) return ph[0];
+        return execution?.photo_url ?? undefined;
+    }, [execution]);
     const donePhotoUrl = useSignedUrl(isDone ? existingPhotoPath : undefined);
 
-    // ── RENDER: task bloqueada (com impedimento) ──────────────────
+    const hasAlertSaved = Boolean(execution?.has_alert);
+
+    // Alerta em tempo real (não bloqueante) — calculado a partir dos valores
+    // que o colaborador está digitando, antes de concluir.
+    const pendingHasAlert = useMemo(() => {
+        const numericValue = pendingNumber.trim() === "" ? null : Number(pendingNumber);
+        return computeTaskAlert({
+            type: taskType,
+            value_date: pendingDate || null,
+            value_number: numericValue !== null && Number.isFinite(numericValue) ? numericValue : null,
+            value_rating: pendingRating > 0 ? pendingRating : null,
+            config: task.task_config ?? null,
+        });
+    }, [taskType, pendingDate, pendingNumber, pendingRating, task.task_config]);
+
+    const alertMessage = useMemo(() => {
+        if (!pendingHasAlert) return null;
+        if (taskType === 'date') return 'Atenção: data igual ou anterior a hoje.';
+        if (taskType === 'number') return 'Atenção: valor fora do esperado.';
+        if (taskType === 'rating') return 'Atenção: avaliação baixa registrada.';
+        return 'Atenção: valor fora do esperado.';
+    }, [pendingHasAlert, taskType]);
+
+    // ── Helpers ─────────────────────────────────────────────────────────────
+    const animateToggle = () => {
+        setIsAnimating(true);
+        setTimeout(() => setIsAnimating(false), 300);
+    };
+
+    const buildToggleInput = (overrides: Partial<ExecutionToggleInput> = {}): ExecutionToggleInput => {
+        const input: ExecutionToggleInput = { isDone: true, ...overrides };
+
+        if (taskType === 'boolean') {
+            input.valueBoolean = true;
+        } else if (taskType === 'date') {
+            input.valueDate = pendingDate;
+        } else if (taskType === 'number') {
+            const n = Number(pendingNumber);
+            if (Number.isFinite(n)) input.valueNumber = n;
+        } else if (taskType === 'rating') {
+            input.valueRating = pendingRating;
+        }
+
+        if (requiresObservation || pendingObservation.trim()) {
+            input.observation = pendingObservation.trim();
+        }
+
+        if (pendingPhotos.length > 0) {
+            input.photos = pendingPhotos;
+            input.photoUrl = pendingPhotos[0];
+        }
+
+        const alert = computeTaskAlert({
+            type: taskType,
+            value_date: input.valueDate ?? null,
+            value_number: input.valueNumber ?? null,
+            value_rating: input.valueRating ?? null,
+            config: task.task_config ?? null,
+        });
+        input.hasAlert = alert;
+
+        return input;
+    };
+
+    const validateBeforeComplete = (): string | null => {
+        if (requiresPhoto && pendingPhotos.length === 0) {
+            return 'Adicione ao menos uma foto antes de concluir.';
+        }
+        if (requiresObservation && pendingObservation.trim() === "") {
+            return 'Preencha a observação obrigatória.';
+        }
+        if (taskType === 'date' && !pendingDate) {
+            return 'Selecione uma data.';
+        }
+        if (taskType === 'number') {
+            const n = Number(pendingNumber);
+            if (pendingNumber.trim() === "" || !Number.isFinite(n)) {
+                return 'Informe um valor numérico válido.';
+            }
+        }
+        if (taskType === 'rating' && pendingRating < 1) {
+            return 'Selecione uma avaliação.';
+        }
+        return null;
+    };
+
+    const handleSimpleToggle = () => {
+        if (locked || isBlocked) return;
+        // Bool simples sem foto/observação/etc — fluxo legado intacto
+        animateToggle();
+        onToggle(task.id, execution?.id, buildToggleInput({ isDone: !isDone }));
+    };
+
+    const handleConclude = () => {
+        const err = validateBeforeComplete();
+        if (err) {
+            setValidationError(err);
+            return;
+        }
+        setValidationError(null);
+        animateToggle();
+        onToggle(task.id, execution?.id, buildToggleInput());
+    };
+
+    const handleUndo = () => {
+        if (locked) return;
+        onToggle(task.id, execution?.id, { isDone: false });
+        setPendingPhotos([]);
+        setPendingObservation("");
+        setPendingDate("");
+        setPendingNumber("");
+        setPendingRating(0);
+        setPhotoError(null);
+        setValidationError(null);
+    };
+
+    const handlePhotoUploaded = (filePath: string) => {
+        setPendingPhotos((prev) => {
+            if (maxPhotos !== null && prev.length >= maxPhotos) return prev;
+            return [...prev, filePath];
+        });
+        setPhotoError(null);
+        setValidationError(null);
+    };
+
+    const handleRemovePhoto = (index: number) => {
+        setPendingPhotos((prev) => prev.filter((_, i) => i !== index));
+    };
+
+    // ── RENDER: task bloqueada (impedimento) ──────────────────────────────
     if (isBlocked) {
         return (
             <div className="w-full flex flex-col gap-0 rounded-2xl border text-left bg-amber-500/5 border-amber-500/30 shadow-[0_4px_12px_rgba(234,179,8,0.05)] overflow-hidden relative">
@@ -91,7 +219,6 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onRe
                     </div>
                 </div>
 
-                {/* Botão Retomar tarefa */}
                 {!locked && onResumeTask && execution && (
                     <div className="relative px-4 pb-3">
                         <button
@@ -107,15 +234,18 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onRe
         );
     }
 
-    // ── RENDER: task concluída ────────────────────────────────
+    // ── RENDER: task concluída ──────────────────────────────────────────
     if (isDone) {
+        const allPhotos: string[] = Array.isArray(execution?.photos) && execution.photos.length > 0
+            ? execution.photos
+            : (execution?.photo_url ? [execution.photo_url] : []);
+
         return (
             <div className={`
                 w-full flex flex-col gap-0 rounded-2xl border text-left
                 bg-[#1a2c32]/40 border-[#13b6ec]/30 shadow-[0_4px_12px_rgba(19,182,236,0.05)]
                 overflow-hidden relative
             `}>
-                {/* Gradiente de fundo */}
                 <div className="absolute inset-0 bg-gradient-to-r from-[#13b6ec]/10 to-transparent pointer-events-none" />
 
                 <div className="relative flex items-center gap-4 p-4 min-h-[64px]">
@@ -134,19 +264,49 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onRe
                             <span className="text-base font-semibold leading-snug text-white">
                                 {task.title}
                             </span>
+                            {hasAlertSaved && (
+                                <span className="shrink-0 bg-amber-500/15 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-amber-500/30 flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-[12px]">warning</span>
+                                    Alerta
+                                </span>
+                            )}
                         </div>
                         {task.description && (
                             <p className="text-sm mt-1 text-[#92bbc9]/70">{task.description}</p>
                         )}
-                        {donePhotoUrl && (
+                        {/* Valor registrado por tipo */}
+                        {execution?.value_date && (
+                            <p className="text-xs mt-1 text-[#92bbc9]">
+                                Data de validade informada: <span className="text-white font-semibold">{formatDateBR(execution.value_date)}</span>
+                            </p>
+                        )}
+                        {execution?.value_number !== null && execution?.value_number !== undefined && (
+                            <p className="text-xs mt-1 text-[#92bbc9]">
+                                Valor: <span className="text-white font-semibold">{execution.value_number}</span>
+                            </p>
+                        )}
+                        {execution?.value_rating !== null && execution?.value_rating !== undefined && (
+                            <p className="text-xs mt-1 text-[#92bbc9]">
+                                Avaliação:{' '}
+                                <span className="text-yellow-400 font-semibold">
+                                    {'★'.repeat(execution.value_rating)}
+                                    {'☆'.repeat(5 - execution.value_rating)}
+                                </span>
+                            </p>
+                        )}
+                        {execution?.observation && (
+                            <p className="text-xs mt-1 text-[#92bbc9] italic">
+                                &ldquo;{execution.observation}&rdquo;
+                            </p>
+                        )}
+                        {allPhotos.length > 0 && (
                             <div className="flex items-center gap-1 mt-2 text-[#13b6ec] text-xs font-semibold">
                                 <span className="material-symbols-outlined text-[14px]">photo_camera</span>
-                                Foto registrada
+                                {allPhotos.length === 1 ? '1 foto registrada' : `${allPhotos.length} fotos registradas`}
                             </div>
                         )}
                     </div>
 
-                    {/* Botão desfazer — só exibe se não estiver locked */}
                     {!locked && (
                         <button
                             onClick={handleUndo}
@@ -158,7 +318,6 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onRe
                     )}
                 </div>
 
-                {/* Preview da foto (colapsado, pequeno) */}
                 {donePhotoUrl && (
                     <div className="relative mx-4 mb-3 rounded-xl overflow-hidden border border-[#13b6ec]/20 max-h-32">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -169,24 +328,43 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onRe
         );
     }
 
-    // ── RENDER: task com exigência de foto (não concluída, não locked) ──
-    if (requiresPhoto && !locked) {
+    // ── RENDER: boolean simples sem requisitos extras (fluxo legado) ─────
+    const hasExtraRequirement = taskType !== 'boolean' || requiresPhoto || requiresObservation;
+
+    if (!hasExtraRequirement) {
         return (
-            <div className="w-full flex flex-col rounded-2xl border text-left bg-[#16262c] border-[#233f48] shadow-sm overflow-hidden">
-                {/* Header da task — informativo, não clicável para concluir */}
-                <div className="flex items-start gap-4 p-4 min-h-[64px]">
-                    <div className="shrink-0 flex items-center justify-center pt-0.5">
-                        <div className="w-7 h-7 rounded-full border-[2px] border-[#325a67] bg-transparent flex items-center justify-center">
-                            <span className="material-symbols-outlined text-[14px] text-amber-400">photo_camera</span>
+            <div className="w-full flex flex-col gap-0">
+                <button
+                    onClick={handleSimpleToggle}
+                    disabled={locked}
+                    className={`
+                        w-full flex items-center gap-4 p-4 min-h-[64px] rounded-2xl border text-left
+                        transition-all duration-200 ease-out relative overflow-hidden group
+                        ${locked ? 'cursor-default opacity-75' : 'active:scale-[0.98]'}
+                        ${locked
+                            ? 'bg-[#16262c] border-[#233f48]'
+                            : 'bg-[#16262c] border-[#233f48] shadow-sm hover:border-[#325a67]'
+                        }
+                    `}
+                >
+                    <div className="relative shrink-0 flex items-center justify-center">
+                        <div
+                            className={`
+                                w-7 h-7 rounded-full border-[2px] flex items-center justify-center
+                                transition-colors duration-200 border-[#325a67] bg-transparent text-transparent
+                                ${isAnimating ? 'scale-110' : 'scale-100'}
+                            `}
+                        >
+                            <span className="material-symbols-outlined text-[16px] font-bold opacity-0 scale-50">check</span>
                         </div>
                     </div>
 
-                    <div className="flex-1 py-1">
+                    <div className="relative flex-1 py-1">
                         <div className="flex items-start justify-between gap-3">
                             <span className="text-base font-semibold leading-snug text-[#e0e0e0]">
                                 {task.title}
                             </span>
-                            {task.is_critical && (
+                            {task.is_critical && !locked && (
                                 <span className="shrink-0 bg-red-500/10 text-red-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
                                     Crítica
                                 </span>
@@ -195,98 +373,60 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onRe
                         {task.description && (
                             <p className="text-sm mt-1 text-[#92bbc9]">{task.description}</p>
                         )}
-                        <div className="flex items-center gap-1 mt-2 text-amber-400 text-xs font-semibold">
-                            <span className="material-symbols-outlined text-[14px]">photo_camera</span>
-                            Exige foto para concluir
-                        </div>
+                        {isBlockedSequential && (
+                            <div className="flex items-center gap-1 mt-2 text-[#92bbc9]/70 text-xs font-semibold">
+                                <span className="material-symbols-outlined text-[14px]">lock</span>
+                                Conclua a tarefa acima para habilitar
+                            </div>
+                        )}
                     </div>
-                </div>
+                </button>
 
-                {/* Seção de upload de foto */}
-                <div className="px-4 pb-4 flex flex-col gap-3">
-                    <PhotoUpload
-                        restaurantId={restaurantId}
-                        onUpload={(filePath) => {
-                            setPendingPhotoPath(filePath);
-                            setPhotoError(null);
-                        }}
-                        disabled={false}
-                    />
-
-                    {/* Erro de validação */}
-                    {photoError && (
-                        <p className="text-red-400 text-xs font-semibold flex items-center gap-1">
-                            <span className="material-symbols-outlined text-[14px]">error</span>
-                            {photoError}
-                        </p>
-                    )}
-
-                    {/* Botão Concluir task */}
-                    <button
-                        onClick={handleConcludeWithPhoto}
-                        disabled={!pendingPhotoPath}
-                        className={`
-                            w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl
-                            text-sm font-bold transition-all duration-200 active:scale-[0.98]
-                            ${pendingPhotoPath
-                                ? 'bg-[#13b6ec] text-[#0a1215] shadow-[0_4px_12px_rgba(19,182,236,0.25)]'
-                                : 'bg-[#1a2c32] text-[#325a67] border border-[#233f48] cursor-not-allowed'
-                            }
-                        `}
-                    >
-                        <span className="material-symbols-outlined text-[18px]">
-                            {pendingPhotoPath ? 'check_circle' : 'lock'}
-                        </span>
-                        {pendingPhotoPath ? 'Concluir tarefa' : 'Adicione a foto para concluir'}
-                    </button>
-
-                    {/* Botão Reportar Problema */}
+                {!locked && !isBlockedSequential && (
                     <button
                         onClick={() => onReportProblem(task.id)}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15 transition-colors active:scale-[0.98]"
+                        className="mt-1 self-start ml-11 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-amber-400/70 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
                     >
-                        <span className="material-symbols-outlined text-[16px]">warning</span>
+                        <span className="material-symbols-outlined text-[14px]">warning</span>
                         Reportar problema
                     </button>
-                </div>
+                )}
             </div>
         );
     }
 
-    // ── RENDER: task sem exigência de foto (comportamento original) ──
+    // ── RENDER: task com requisitos extras (tipos novos OU foto/obs) ──────
+    if (locked) {
+        // Locked sem completar: mostrar só info
+        return (
+            <div className="w-full flex flex-col rounded-2xl border text-left bg-[#16262c] border-[#233f48] shadow-sm overflow-hidden p-4">
+                <span className="text-base font-semibold leading-snug text-[#92bbc9]">{task.title}</span>
+                {task.description && (
+                    <p className="text-sm mt-1 text-[#92bbc9]/60">{task.description}</p>
+                )}
+            </div>
+        );
+    }
+
     return (
-        <div className="w-full flex flex-col gap-0">
-            <button
-                onClick={handleSimpleToggle}
-                disabled={locked}
-                className={`
-                    w-full flex items-center gap-4 p-4 min-h-[64px] rounded-2xl border text-left
-                    transition-all duration-200 ease-out relative overflow-hidden group
-                    ${locked ? 'cursor-default opacity-75' : 'active:scale-[0.98]'}
-                    ${locked
-                        ? 'bg-[#16262c] border-[#233f48]'
-                        : 'bg-[#16262c] border-[#233f48] shadow-sm hover:border-[#325a67]'
-                    }
-                `}
-            >
-                <div className="relative shrink-0 flex items-center justify-center">
-                    <div
-                        className={`
-                            w-7 h-7 rounded-full border-[2px] flex items-center justify-center
-                            transition-colors duration-200 border-[#325a67] bg-transparent text-transparent
-                            ${isAnimating ? 'scale-110' : 'scale-100'}
-                        `}
-                    >
-                        <span className="material-symbols-outlined text-[16px] font-bold opacity-0 scale-50">check</span>
+        <div className="w-full flex flex-col rounded-2xl border text-left bg-[#16262c] border-[#233f48] shadow-sm overflow-hidden">
+            <div className="flex items-start gap-4 p-4 min-h-[64px]">
+                <div className="shrink-0 flex items-center justify-center pt-0.5">
+                    <div className="w-7 h-7 rounded-full border-[2px] border-[#325a67] bg-transparent flex items-center justify-center">
+                        <span className="material-symbols-outlined text-[14px] text-[#13b6ec]">
+                            {taskType === 'date' ? 'event' :
+                                taskType === 'number' ? 'tag' :
+                                taskType === 'rating' ? 'star' : 'check_circle'}
+                        </span>
                     </div>
                 </div>
 
-                <div className="relative flex-1 py-1">
+                <div className="flex-1 py-1">
                     <div className="flex items-start justify-between gap-3">
                         <span className="text-base font-semibold leading-snug text-[#e0e0e0]">
                             {task.title}
                         </span>
-                        {task.is_critical && !locked && (
+                        {task.is_critical && (
                             <span className="shrink-0 bg-red-500/10 text-red-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
                                 Crítica
                             </span>
@@ -302,17 +442,161 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onRe
                         </div>
                     )}
                 </div>
-            </button>
+            </div>
 
-            {/* Botão Reportar Problema — abaixo do card, apenas se não locked */}
-            {!locked && !isBlockedSequential && (
-                <button
-                    onClick={() => onReportProblem(task.id)}
-                    className="mt-1 self-start ml-11 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-amber-400/70 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
-                >
-                    <span className="material-symbols-outlined text-[14px]">warning</span>
-                    Reportar problema
-                </button>
+            {!isBlockedSequential && (
+                <div className="px-4 pb-4 flex flex-col gap-3">
+                    {/* Input específico do tipo */}
+                    {taskType === 'date' && (
+                        <div>
+                            <label className="block text-[10px] font-bold text-[#92bbc9] uppercase tracking-wider mb-1">
+                                Data
+                            </label>
+                            <input
+                                type="date"
+                                value={pendingDate}
+                                onChange={(e) => setPendingDate(e.target.value)}
+                                className="w-full bg-[#101d22] border border-[#233f48] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13b6ec]"
+                            />
+                        </div>
+                    )}
+
+                    {taskType === 'number' && (
+                        <div>
+                            <label className="block text-[10px] font-bold text-[#92bbc9] uppercase tracking-wider mb-1">
+                                Valor
+                            </label>
+                            <input
+                                type="number"
+                                inputMode="decimal"
+                                value={pendingNumber}
+                                onChange={(e) => setPendingNumber(e.target.value)}
+                                placeholder="Digite o valor"
+                                className="w-full bg-[#101d22] border border-[#233f48] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13b6ec]"
+                            />
+                            {(task.task_config?.min_value !== undefined || task.task_config?.max_value !== undefined) && (
+                                <p className="text-[10px] text-[#92bbc9] mt-1">
+                                    Faixa esperada:
+                                    {task.task_config?.min_value !== undefined && ` mín ${task.task_config.min_value}`}
+                                    {task.task_config?.max_value !== undefined && ` máx ${task.task_config.max_value}`}
+                                </p>
+                            )}
+                        </div>
+                    )}
+
+                    {taskType === 'rating' && (
+                        <div>
+                            <label className="block text-[10px] font-bold text-[#92bbc9] uppercase tracking-wider mb-2">
+                                Avaliação
+                            </label>
+                            <div className="flex items-center gap-2">
+                                {[1, 2, 3, 4, 5].map((n) => (
+                                    <button
+                                        key={n}
+                                        type="button"
+                                        onClick={() => setPendingRating(n)}
+                                        className="p-1 rounded-lg active:scale-95 transition-transform"
+                                        aria-label={`${n} estrela(s)`}
+                                    >
+                                        <span className={`material-symbols-outlined text-[28px] ${n <= pendingRating ? 'text-yellow-400' : 'text-[#325a67]'}`}>
+                                            {n <= pendingRating ? 'star' : 'star_border'}
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Multi-foto */}
+                    {requiresPhoto && (
+                        <div className="flex flex-col gap-2">
+                            <label className="block text-[10px] font-bold text-[#92bbc9] uppercase tracking-wider">
+                                Fotos
+                                {maxPhotos !== null && (
+                                    <span className="text-[#92bbc9]/60"> ({pendingPhotos.length}/{maxPhotos})</span>
+                                )}
+                            </label>
+                            {pendingPhotos.length > 0 && (
+                                <div className="flex flex-wrap gap-2">
+                                    {pendingPhotos.map((path, i) => (
+                                        <div key={`${path}-${i}`} className="relative bg-[#101d22] border border-[#13b6ec]/30 rounded-lg px-3 py-2 text-xs text-[#13b6ec] flex items-center gap-2">
+                                            <span className="material-symbols-outlined text-[14px]">photo</span>
+                                            Foto {i + 1}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRemovePhoto(i)}
+                                                className="ml-1 text-[#92bbc9] hover:text-white transition-colors"
+                                                aria-label="Remover foto"
+                                            >
+                                                <span className="material-symbols-outlined text-[14px]">close</span>
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            {(maxPhotos === null || pendingPhotos.length < maxPhotos) && (
+                                <PhotoUpload
+                                    key={`photo-slot-${pendingPhotos.length}`}
+                                    restaurantId={restaurantId}
+                                    onUpload={(filePath) => handlePhotoUploaded(filePath)}
+                                    disabled={false}
+                                />
+                            )}
+                            {photoError && (
+                                <p className="text-red-400 text-xs font-semibold flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-[14px]">error</span>
+                                    {photoError}
+                                </p>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Observação */}
+                    {(requiresObservation || taskType !== 'boolean') && (
+                        <div>
+                            <label className="block text-[10px] font-bold text-[#92bbc9] uppercase tracking-wider mb-1">
+                                Observação {requiresObservation ? <span className="text-red-400">*</span> : <span className="text-[#92bbc9]/60">(opcional)</span>}
+                            </label>
+                            <textarea
+                                value={pendingObservation}
+                                onChange={(e) => setPendingObservation(e.target.value)}
+                                placeholder={requiresObservation ? 'Obrigatório...' : 'Adicione uma observação (opcional)'}
+                                rows={2}
+                                className="w-full bg-[#101d22] border border-[#233f48] rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-[#13b6ec] resize-none"
+                            />
+                        </div>
+                    )}
+
+                    {pendingHasAlert && alertMessage && (
+                        <p className="text-amber-400 text-xs font-medium flex items-center gap-1.5">
+                            <span className="material-symbols-outlined text-[14px]">warning</span>
+                            {alertMessage}
+                        </p>
+                    )}
+
+                    {validationError && (
+                        <p className="text-red-400 text-xs font-semibold flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[14px]">error</span>
+                            {validationError}
+                        </p>
+                    )}
+
+                    <button
+                        onClick={handleConclude}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 active:scale-[0.98] bg-[#13b6ec] text-[#0a1215] shadow-[0_4px_12px_rgba(19,182,236,0.25)]"
+                    >
+                        <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                        Concluir tarefa
+                    </button>
+
+                    <button
+                        onClick={() => onReportProblem(task.id)}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15 transition-colors active:scale-[0.98]"
+                    >
+                        <span className="material-symbols-outlined text-[16px]">warning</span>
+                        Reportar problema
+                    </button>
+                </div>
             )}
         </div>
     );

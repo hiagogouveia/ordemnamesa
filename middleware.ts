@@ -31,7 +31,23 @@ export async function middleware(request: NextRequest) {
         data: { user },
     } = await supabase.auth.getUser()
 
-    const publicRoutes = ['/', '/login', '/cadastro', '/signup']
+    // ===== admin-leads-control-hub: painel isolado =====
+    const PANEL_BASE_PATH = '/control-hub-admin'
+    if (request.nextUrl.pathname.startsWith(PANEL_BASE_PATH)) {
+        const isLogin = request.nextUrl.pathname.startsWith(`${PANEL_BASE_PATH}/login`)
+        if (isLogin) return supabaseResponse
+        if (!user) {
+            return NextResponse.redirect(new URL(`${PANEL_BASE_PATH}/login`, request.url))
+        }
+        return supabaseResponse
+    }
+
+    // ===== /qualificacao é público (form de lead) =====
+    if (request.nextUrl.pathname === '/qualificacao') {
+        return supabaseResponse
+    }
+
+    const publicRoutes = ['/', '/login', '/cadastro', '/signup', '/forgot-password', '/reset-password']
     const isPublicRoute =
         publicRoutes.includes(request.nextUrl.pathname) ||
         request.nextUrl.pathname.startsWith('/blog')

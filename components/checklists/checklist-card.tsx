@@ -20,7 +20,7 @@ export function ChecklistCard({ checklist, isSelected, onClick, currentMinutes =
         switch (status) {
             case 'active': return <span className="bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide">Ativo</span>;
             case 'archived': return <span className="bg-amber-500/20 text-amber-500 border border-amber-500/30 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide">Arquivado</span>;
-            default: return <span className="bg-gray-500/20 text-gray-400 border border-gray-500/30 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide">Rascunho</span>;
+            default: return null;
         }
     };
 
