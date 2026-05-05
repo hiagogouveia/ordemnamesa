@@ -121,7 +121,7 @@ export function ChecklistRow({
         <tr
             className={`border-b border-[#1a2c32] transition-colors cursor-pointer ${
                 checked ? "bg-[#13b6ec]/8" : isSelected ? "bg-[#13b6ec]/5" : "hover:bg-[#16262c]"
-            } ${checklist.status === "draft" ? "opacity-70" : (!checklist.active ? "opacity-50" : "")}`}
+            } ${!checklist.active ? "opacity-50" : ""}`}
         >
             {/* Checkbox de seleção (visão global) */}
             {selectable && (
@@ -205,31 +205,24 @@ export function ChecklistRow({
 
             {/* Disponibilidade */}
             <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
-                {checklist.status === "draft" ? (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border bg-amber-500/20 text-amber-400 border-amber-500/30">
-                        <span className="inline-block w-3 h-3 rounded-full bg-amber-400" />
-                        Rascunho
-                    </span>
-                ) : (
-                    <button
-                        onClick={() => onStatusToggle(!checklist.active)}
-                        role="switch"
-                        aria-checked={checklist.active}
-                        className={`group flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border cursor-pointer transition-all duration-200 active:scale-95 ${
-                            checklist.active
-                                ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30 hover:border-emerald-400/50 hover:shadow-[0_0_8px_rgba(16,185,129,0.2)]"
-                                : "bg-gray-500/20 text-gray-400 border-gray-500/30 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30 hover:shadow-[0_0_8px_rgba(239,68,68,0.15)]"
-                        }`}
-                        title={checklist.active ? "Clique para desativar" : "Clique para ativar"}
-                    >
-                        <span className={`inline-block w-3 h-3 rounded-full transition-colors duration-200 ${
-                            checklist.active
-                                ? "bg-emerald-400 group-hover:bg-emerald-300"
-                                : "bg-gray-500 group-hover:bg-red-400"
-                        }`} />
-                        {checklist.active ? "Ativo" : "Inativo"}
-                    </button>
-                )}
+                <button
+                    onClick={() => onStatusToggle(!checklist.active)}
+                    role="switch"
+                    aria-checked={checklist.active}
+                    className={`group flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border cursor-pointer transition-all duration-200 active:scale-95 ${
+                        checklist.active
+                            ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30 hover:border-emerald-400/50 hover:shadow-[0_0_8px_rgba(16,185,129,0.2)]"
+                            : "bg-gray-500/20 text-gray-400 border-gray-500/30 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30 hover:shadow-[0_0_8px_rgba(239,68,68,0.15)]"
+                    }`}
+                    title={checklist.active ? "Clique para desativar" : "Clique para ativar"}
+                >
+                    <span className={`inline-block w-3 h-3 rounded-full transition-colors duration-200 ${
+                        checklist.active
+                            ? "bg-emerald-400 group-hover:bg-emerald-300"
+                            : "bg-gray-500 group-hover:bg-red-400"
+                    }`} />
+                    {checklist.active ? "Ativo" : "Inativo"}
+                </button>
             </td>
 
             {/* Status (execução) */}

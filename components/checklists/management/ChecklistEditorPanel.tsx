@@ -250,11 +250,6 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose }: Checkl
                         >
                             {checklist.active ? "Ativo" : "Inativo"}
                         </span>
-                        {checklist.status === "draft" && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-amber-500/20 text-amber-400 border-amber-500/30">
-                                Rascunho
-                            </span>
-                        )}
                     </div>
                 </div>
                 <button
