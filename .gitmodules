@@ -1,0 +1,3 @@
+[submodule ".agent/saas-skills"]
+	path = .agent/saas-skills
+	url = https://github.com/hiagogouveia/saas-skills.git
