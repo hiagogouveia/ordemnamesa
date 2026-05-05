@@ -154,7 +154,7 @@ export function TaskItem({ task, equipe, onUpdate, onRemove, onEnter, setInputRe
                         </div>
                     </div>
 
-                    {/* Linha 2 — responsável + toggle descrição */}
+                    {/* Linha 2 — toggle descrição */}
                     <div className="flex items-center gap-3 mt-2">
                         <button
                             type="button"
@@ -166,19 +166,6 @@ export function TaskItem({ task, equipe, onUpdate, onRemove, onEnter, setInputRe
                             </span>
                             {showDescription ? "Ocultar descrição" : (task.description ? "Ver descrição" : "Adicionar descrição")}
                         </button>
-
-                        <div className="ml-auto w-40">
-                            <select
-                                value={task.assigned_to_user_id || ""}
-                                onChange={(e) => onUpdate(task.tempId, { assigned_to_user_id: e.target.value || undefined })}
-                                className="w-full bg-[#101d22] border border-[#325a67] text-[#92bbc9] text-xs rounded px-2 py-1 outline-none focus:border-[#13b6ec]"
-                            >
-                                <option value="">Qualquer pessoa</option>
-                                {equipe.map(member => (
-                                    <option key={member.id} value={member.user_id}>{member.name}</option>
-                                ))}
-                            </select>
-                        </div>
                     </div>
 
                     {/* Linha 3 — descrição (colapsável) */}
