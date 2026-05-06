@@ -4,6 +4,7 @@ import { getBrazilDateKey } from '@/lib/utils/brazil-date';
 import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
 import { getAccountBilling, canExecuteTasks } from '@/lib/billing/subscription-access';
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
+import { trackChecklistEvent } from '@/lib/analytics/track-event';
 
 const getAdminSupabase = () =>
     createClient(
@@ -110,6 +111,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             if (error) return NextResponse.json({ error: error.message }, { status: 500 });
             assumption = data;
         }
+
+        await trackChecklistEvent('checklist_completed', {
+            accountId,
+            restaurantId: restaurant_id,
+            userId: user.id,
+            metadata: {
+                checklist_id: checklistId,
+                assumption_id: assumption?.id ?? null,
+                date_key: dateKey,
+                has_observation: !!observation?.trim(),
+            },
+        });
 
         // Gerar notificações para managers/owners se houver observação
         if (observation && observation.trim()) {

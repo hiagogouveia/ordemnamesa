@@ -10,6 +10,7 @@ import { logAdminAction } from '@/lib/admin-leads-control-hub/log-admin-action'
 import { sendSetupEmail } from '@/lib/admin-leads-control-hub/email'
 import { config } from '@/lead-control-hub.config'
 import type { Lead } from '@/lib/admin-leads-control-hub/types'
+import { trackAdminEvent, trackOnboardingEvent } from '@/lib/analytics/track-event'
 
 export interface ApproveLeadResult {
     ok?: boolean
@@ -113,6 +114,15 @@ export async function approveLeadAction(leadId: string): Promise<ApproveLeadResu
         ipAddress,
         userAgent,
     })
+    await trackAdminEvent('lead_approved', {
+        userId,
+        metadata: { lead_id: leadId, entity_id: entityResult.entityId, is_new_user: isNewUser },
+    })
+    await trackOnboardingEvent('restaurant_created', {
+        restaurantId: entityResult.entityId,
+        userId,
+        metadata: { source: 'lead_approval', lead_id: leadId, is_new_user: isNewUser },
+    })
 
     if (isNewUser) {
         const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || ''
@@ -173,6 +183,9 @@ export async function rejectLeadAction(
         targetId: leadId,
         metadata: { reason: reason ?? null },
         ipAddress,
+    })
+    await trackAdminEvent('lead_rejected', {
+        metadata: { lead_id: leadId, reason: reason ?? null },
     })
 
     revalidatePath(`${config.panelBasePath}/leads`)

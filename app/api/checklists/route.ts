@@ -7,6 +7,7 @@ import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
 import { getAccountBilling, canCreateResources } from '@/lib/billing/subscription-access';
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
 import { processRecurrencePayload } from '@/lib/api/recurrence-payload';
+import { trackChecklistEvent } from '@/lib/analytics/track-event';
 
 const getAdminSupabase = () => {
     return createClient(
@@ -330,6 +331,17 @@ export async function POST(request: Request) {
             console.error('[POST /api/checklists] Erro ao criar checklist mestre:', checklistError);
             return NextResponse.json({ error: checklistError.message }, { status: 500 });
         }
+
+        await trackChecklistEvent('checklist_created', {
+            restaurantId: restaurant_id,
+            userId: user.id,
+            metadata: {
+                checklist_id: newChecklist.id,
+                shift,
+                checklist_type: checklist_type || 'regular',
+                tasks_count: Array.isArray(tasks) ? tasks.length : 0,
+            },
+        });
 
         // 2. Inserir Tasks com Rollback
         let insertedTasks = [];

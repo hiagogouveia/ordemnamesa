@@ -8,6 +8,7 @@ import { logAdminAction } from '@/lib/admin-leads-control-hub/log-admin-action'
 import { sendEmail } from '@/lib/email/send-email'
 import { renderActionEmail } from '@/lib/email/templates'
 import { config } from '@/lead-control-hub.config'
+import { trackAdminEvent } from '@/lib/analytics/track-event'
 
 export interface AdminActionResult {
     ok?: boolean
@@ -110,6 +111,11 @@ export async function resetOwnerPasswordAction(
         ipAddress,
         userAgent,
     })
+    await trackAdminEvent('manual_password_reset', {
+        restaurantId: restaurant.id,
+        userId: owner.id,
+        metadata: { triggered_by: adminEmail },
+    })
 
     revalidatePath(`${config.panelBasePath}/restaurants/${restaurantId}`)
     return { ok: true }
@@ -159,6 +165,11 @@ export async function suspendAccountAction(
         ipAddress: ctx.ipAddress,
         userAgent: ctx.userAgent,
     })
+    await trackAdminEvent('account_suspended', {
+        accountId: restaurant.account_id,
+        restaurantId: restaurant.id,
+        metadata: { reason: trimmed, by: guard.ctx.user.email?.toLowerCase() ?? null },
+    })
     revalidateRestaurant(restaurantId)
     return { ok: true }
 }
@@ -188,6 +199,11 @@ export async function reactivateAccountAction(
         metadata: { restaurant_id: restaurant.id, restaurant_name: restaurant.name },
         ipAddress: ctx.ipAddress,
         userAgent: ctx.userAgent,
+    })
+    await trackAdminEvent('account_reactivated', {
+        accountId: restaurant.account_id,
+        restaurantId: restaurant.id,
+        metadata: { by: guard.ctx.user.email?.toLowerCase() ?? null },
     })
     revalidateRestaurant(restaurantId)
     return { ok: true }
@@ -240,6 +256,11 @@ export async function extendTrialAction(
         },
         ipAddress: ctx.ipAddress,
         userAgent: ctx.userAgent,
+    })
+    await trackAdminEvent('trial_extended', {
+        accountId: restaurant.account_id,
+        restaurantId: restaurant.id,
+        metadata: { days, before_ends_at: sub.ends_at, after_ends_at: newEnds },
     })
     revalidateRestaurant(restaurantId)
     return { ok: true }
@@ -299,6 +320,17 @@ export async function changePlanAction(
         ipAddress: ctx.ipAddress,
         userAgent: ctx.userAgent,
     })
+    await trackAdminEvent('plan_changed', {
+        accountId: restaurant.account_id,
+        restaurantId: restaurant.id,
+        metadata: {
+            before_plan_id: sub.plan_id,
+            after_plan_id: plan.id,
+            after_plan_code: plan.code,
+            before_cycle: sub.billing_cycle,
+            after_cycle: billingCycle,
+        },
+    })
     revalidateRestaurant(restaurantId)
     return { ok: true }
 }
@@ -336,6 +368,11 @@ export async function toggleVipAction(
         metadata: { restaurant_id: restaurant.id, vip },
         ipAddress: ctx.ipAddress,
         userAgent: ctx.userAgent,
+    })
+    await trackAdminEvent('vip_toggled', {
+        accountId: restaurant.account_id,
+        restaurantId: restaurant.id,
+        metadata: { vip },
     })
     revalidateRestaurant(restaurantId)
     return { ok: true }

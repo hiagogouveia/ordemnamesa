@@ -1,5 +1,6 @@
 import { supabaseAdmin } from './supabase-admin'
 import { computeHealthScore, type HealthResult } from './health'
+import { getRestaurantEngagementBatch, type RestaurantEngagement } from '@/lib/analytics/queries'
 
 export type SubscriptionStatus =
     | 'trial'
@@ -312,9 +313,7 @@ export async function listRestaurantsAdmin(
         }
     }
 
-    // Last sign-in is only needed on detail; on list, we pass minimal owner info
-    // and rely on auth.users only when strictly necessary. Skipping listUsers here
-    // keeps the list query fast.
+    const engagementMap = await getRestaurantEngagementBatch(restaurantIds)
 
     let items: RestaurantAdminListItem[] = restaurants.map((r) => {
         const account = accountMap.get(r.account_id)
@@ -327,6 +326,7 @@ export async function listRestaurantsAdmin(
         const lastAssumptionAt = lastAssumptionMap.get(r.id) ?? null
         const executions7d = executions7dMap.get(r.id) ?? 0
         const accountSummary = toAccountSummary(account, r.created_at, r.account_id)
+        const eng = engagementMap.get(r.id)
         const health = computeHealthScore({
             accountActive: accountSummary.active,
             subscriptionStatus: sub?.status ?? null,
@@ -335,6 +335,11 @@ export async function listRestaurantsAdmin(
             executionsLast7d: executions7d,
             ownerLastSignInAt: null,
             createdAt: r.created_at,
+            eventsLast7d: eng?.events_last_7d,
+            distinctUsersLast7d: eng?.distinct_users_last_7d,
+            lastEventAt: eng?.last_event_at,
+            hasFirstChecklist: eng?.has_first_checklist,
+            hasFirstTaskCompleted: eng?.has_first_task_completed,
         })
         return {
             id: r.id,
@@ -529,6 +534,8 @@ export async function getRestaurantAdminDetail(
     }
 
     const accountSummary = toAccountSummary(account ?? null, restaurant.created_at, restaurant.account_id)
+    const engagementMap = await getRestaurantEngagementBatch([restaurant.id])
+    const eng: RestaurantEngagement | undefined = engagementMap.get(restaurant.id)
     const health = computeHealthScore({
         accountActive: accountSummary.active,
         subscriptionStatus: sub?.status ?? null,
@@ -537,6 +544,11 @@ export async function getRestaurantAdminDetail(
         executionsLast7d: executions7d,
         ownerLastSignInAt: ownerSummary?.last_sign_in_at ?? null,
         createdAt: restaurant.created_at,
+        eventsLast7d: eng?.events_last_7d,
+        distinctUsersLast7d: eng?.distinct_users_last_7d,
+        lastEventAt: eng?.last_event_at,
+        hasFirstChecklist: eng?.has_first_checklist,
+        hasFirstTaskCompleted: eng?.has_first_task_completed,
     })
 
     return {

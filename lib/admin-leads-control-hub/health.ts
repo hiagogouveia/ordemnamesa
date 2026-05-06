@@ -10,6 +10,10 @@ export interface HealthConfig {
     ownerNoLoginWarning: number
     ownerNoLoginRisk: number
     trialEndingWarningDays: number
+    onboardingIncompleteWarningDays: number
+    onboardingIncompleteRiskDays: number
+    noEventsRiskDays: number
+    weeklyActiveUsersWarning: number
 }
 
 export const HEALTH_CONFIG: HealthConfig = {
@@ -20,6 +24,10 @@ export const HEALTH_CONFIG: HealthConfig = {
     ownerNoLoginWarning: 14,
     ownerNoLoginRisk: 30,
     trialEndingWarningDays: 7,
+    onboardingIncompleteWarningDays: 3,
+    onboardingIncompleteRiskDays: 7,
+    noEventsRiskDays: 14,
+    weeklyActiveUsersWarning: 1,
 }
 
 export interface HealthInput {
@@ -30,6 +38,12 @@ export interface HealthInput {
     executionsLast7d: number
     ownerLastSignInAt: string | null
     createdAt: string
+    // V2 — engagement signals (opcionais; ausentes mantêm comportamento V1)
+    eventsLast7d?: number
+    distinctUsersLast7d?: number
+    lastEventAt?: string | null
+    hasFirstChecklist?: boolean
+    hasFirstTaskCompleted?: boolean
 }
 
 export interface HealthSignal {
@@ -135,6 +149,52 @@ export function computeHealthScore(
             severity: 'warning',
         })
         bump('warning')
+    }
+
+    // V2 — engagement signals (só avaliam se foram fornecidos)
+    if (input.eventsLast7d !== undefined && input.lastEventAt !== undefined) {
+        const accountAgeDays = daysBetween(input.createdAt) ?? 0
+        const daysSinceEvent = daysBetween(input.lastEventAt ?? null)
+
+        if (daysSinceEvent === null && accountAgeDays > config.noEventsRiskDays) {
+            signals.push({ label: 'Sem nenhum evento registrado', severity: 'risk' })
+            bump('risk')
+        } else if (daysSinceEvent !== null && daysSinceEvent >= config.noEventsRiskDays) {
+            signals.push({
+                label: `Sem eventos há ${daysSinceEvent}d`,
+                severity: 'risk',
+            })
+            bump('risk')
+        }
+
+        if (
+            input.distinctUsersLast7d !== undefined &&
+            daysSinceEvent !== null &&
+            daysSinceEvent < config.noEventsRiskDays &&
+            input.distinctUsersLast7d <= config.weeklyActiveUsersWarning
+        ) {
+            signals.push({
+                label: `WAU baixo (${input.distinctUsersLast7d} usuário${input.distinctUsersLast7d === 1 ? '' : 's'})`,
+                severity: 'warning',
+            })
+            bump('warning')
+        }
+
+        if (
+            input.hasFirstChecklist !== undefined &&
+            input.hasFirstTaskCompleted !== undefined
+        ) {
+            const onboardingComplete = input.hasFirstChecklist && input.hasFirstTaskCompleted
+            if (!onboardingComplete) {
+                if (accountAgeDays >= config.onboardingIncompleteRiskDays) {
+                    signals.push({ label: 'Onboarding incompleto', severity: 'risk' })
+                    bump('risk')
+                } else if (accountAgeDays >= config.onboardingIncompleteWarningDays) {
+                    signals.push({ label: 'Onboarding incompleto', severity: 'warning' })
+                    bump('warning')
+                }
+            }
+        }
     }
 
     if (signals.length === 0) {
