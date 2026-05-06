@@ -19,9 +19,6 @@ export default function ResetPasswordPage() {
         const supabase = createClient()
         let cancelled = false
 
-        const log = (msg: string, extra?: Record<string, unknown>) =>
-            console.log(`[reset-password] ${msg}`, extra ?? '')
-
         async function init() {
             const url = new URL(window.location.href)
             const hashParams = new URLSearchParams(url.hash.replace(/^#/, ''))
@@ -31,17 +28,6 @@ export default function ResetPasswordPage() {
             const code = url.searchParams.get('code')
             const accessToken = hashParams.get('access_token')
             const refreshToken = hashParams.get('refresh_token')
-            const recoveryType = hashParams.get('type') || url.searchParams.get('type')
-
-            log('init', {
-                href: window.location.href,
-                hasCode: !!code,
-                hasAccessToken: !!accessToken,
-                hasRefreshToken: !!refreshToken,
-                type: recoveryType,
-                queryError,
-                hashError,
-            })
 
             if (queryError || hashError) {
                 if (cancelled) return
@@ -51,36 +37,30 @@ export default function ResetPasswordPage() {
             }
 
             if (accessToken && refreshToken) {
-                log('detected implicit flow (hash)')
                 const { error: setErr } = await supabase.auth.setSession({
                     access_token: accessToken,
                     refresh_token: refreshToken,
                 })
                 if (cancelled) return
                 if (setErr) {
-                    log('setSession failed', { msg: setErr.message })
                     setError(setErr.message)
                     setStatus('invalid')
                     return
                 }
                 window.history.replaceState({}, '', url.pathname)
-                log('setSession ok → ready')
                 setStatus('ready')
                 return
             }
 
             if (code) {
-                log('detected pkce flow (code)')
                 const { error: exErr } = await supabase.auth.exchangeCodeForSession(code)
                 if (cancelled) return
                 if (exErr) {
-                    log('exchangeCodeForSession failed', { msg: exErr.message })
                     setError(exErr.message)
                     setStatus('invalid')
                     return
                 }
                 window.history.replaceState({}, '', url.pathname)
-                log('exchangeCodeForSession ok → ready')
                 setStatus('ready')
                 return
             }
@@ -88,16 +68,13 @@ export default function ResetPasswordPage() {
             const { data } = await supabase.auth.getSession()
             if (cancelled) return
             if (data.session) {
-                log('existing session found → ready')
                 setStatus('ready')
                 return
             }
-            log('no token, no code, no session → invalid')
             setStatus('invalid')
         }
 
         const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-            log('onAuthStateChange', { event })
             if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
                 setStatus('ready')
                 setError(null)
