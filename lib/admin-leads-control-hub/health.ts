@@ -5,6 +5,7 @@ export type HealthScore = 'HEALTHY' | 'WARNING' | 'RISK'
 export interface HealthConfig {
     inactiveDaysWarning: number
     inactiveDaysRisk: number
+    inactiveDaysCritical: number
     lowExecutionsWarning: number
     lowExecutionsRisk: number
     ownerNoLoginWarning: number
@@ -19,6 +20,7 @@ export interface HealthConfig {
 export const HEALTH_CONFIG: HealthConfig = {
     inactiveDaysWarning: 7,
     inactiveDaysRisk: 14,
+    inactiveDaysCritical: 30,
     lowExecutionsWarning: 5,
     lowExecutionsRisk: 1,
     ownerNoLoginWarning: 14,
@@ -49,6 +51,12 @@ export interface HealthInput {
 export interface HealthSignal {
     label: string
     severity: 'info' | 'warning' | 'risk'
+    /**
+     * Sinais críticos disparam score = RISK isoladamente, sem precisar de
+     * agregação. Usado para condições inequívocas: conta suspensa, assinatura
+     * cancelada/inadimplente, trial expirado sem atividade, ≥30d sem atividade.
+     */
+    critical?: boolean
 }
 
 export interface HealthResult {
@@ -68,103 +76,99 @@ export function computeHealthScore(
     config: HealthConfig = HEALTH_CONFIG
 ): HealthResult {
     const signals: HealthSignal[] = []
-    let highest: 'info' | 'warning' | 'risk' = 'info'
-    const bump = (sev: 'info' | 'warning' | 'risk') => {
-        if (sev === 'risk') highest = 'risk'
-        else if (sev === 'warning' && highest !== 'risk') highest = 'warning'
-    }
+    const push = (s: HealthSignal) => signals.push(s)
+
+    const accountAgeDays = daysBetween(input.createdAt) ?? 0
+    const inactiveDays = daysBetween(input.lastAssumptionAt)
+    const isInactiveLong =
+        inactiveDays === null
+            ? accountAgeDays > config.inactiveDaysCritical
+            : inactiveDays >= config.inactiveDaysCritical
 
     if (!input.accountActive) {
-        signals.push({ label: 'Conta suspensa', severity: 'risk' })
-        bump('risk')
+        push({ label: 'Conta suspensa', severity: 'risk', critical: true })
     }
 
     if (input.subscriptionStatus === 'past_due' || input.subscriptionStatus === 'unpaid') {
-        signals.push({ label: `Assinatura ${input.subscriptionStatus}`, severity: 'risk' })
-        bump('risk')
+        push({
+            label: `Assinatura ${input.subscriptionStatus}`,
+            severity: 'risk',
+            critical: true,
+        })
     } else if (input.subscriptionStatus === 'canceled') {
-        signals.push({ label: 'Assinatura cancelada', severity: 'risk' })
-        bump('risk')
+        push({ label: 'Assinatura cancelada', severity: 'risk', critical: true })
     } else if (input.subscriptionStatus === 'trial' && input.subscriptionEndsAt) {
         const daysToEnd = -((Date.parse(input.subscriptionEndsAt) - Date.now()) / 86_400_000)
         if (daysToEnd >= 0) {
-            signals.push({ label: 'Trial expirado', severity: 'risk' })
-            bump('risk')
+            // Crítico apenas quando o trial expirou E não há atividade — combina
+            // os dois sinais "trial_expired_and_inactive"
+            const trialCritical = isInactiveLong || inactiveDays === null
+            push({
+                label: 'Trial expirado',
+                severity: 'risk',
+                critical: trialCritical,
+            })
         } else if (-daysToEnd <= config.trialEndingWarningDays) {
-            signals.push({
+            push({
                 label: `Trial expira em ${Math.ceil(-daysToEnd)}d`,
                 severity: 'warning',
             })
-            bump('warning')
         }
     }
 
-    const inactiveDays = daysBetween(input.lastAssumptionAt) ?? Number.POSITIVE_INFINITY
     if (input.lastAssumptionAt === null) {
-        const accountAgeDays = daysBetween(input.createdAt) ?? 0
-        if (accountAgeDays > config.inactiveDaysRisk) {
-            signals.push({ label: 'Sem execuções desde criação', severity: 'risk' })
-            bump('risk')
+        if (accountAgeDays > config.inactiveDaysCritical) {
+            push({ label: 'Sem execuções desde criação', severity: 'risk', critical: true })
+        } else if (accountAgeDays > config.inactiveDaysRisk) {
+            push({ label: 'Sem execuções desde criação', severity: 'risk' })
         } else if (accountAgeDays > config.inactiveDaysWarning) {
-            signals.push({ label: 'Sem execuções desde criação', severity: 'warning' })
-            bump('warning')
+            push({ label: 'Sem execuções desde criação', severity: 'warning' })
         }
-    } else if (inactiveDays >= config.inactiveDaysRisk) {
-        signals.push({ label: `Sem atividade há ${inactiveDays}d`, severity: 'risk' })
-        bump('risk')
-    } else if (inactiveDays >= config.inactiveDaysWarning) {
-        signals.push({ label: `Sem atividade há ${inactiveDays}d`, severity: 'warning' })
-        bump('warning')
+    } else if (inactiveDays !== null) {
+        if (inactiveDays >= config.inactiveDaysCritical) {
+            push({
+                label: `Sem atividade há ${inactiveDays}d`,
+                severity: 'risk',
+                critical: true,
+            })
+        } else if (inactiveDays >= config.inactiveDaysRisk) {
+            push({ label: `Sem atividade há ${inactiveDays}d`, severity: 'risk' })
+        } else if (inactiveDays >= config.inactiveDaysWarning) {
+            push({ label: `Sem atividade há ${inactiveDays}d`, severity: 'warning' })
+        }
     }
 
     if (input.executionsLast7d <= config.lowExecutionsRisk) {
         if (input.lastAssumptionAt) {
-            signals.push({
+            push({
                 label: `Apenas ${input.executionsLast7d} execuções nos últimos 7d`,
                 severity: 'risk',
             })
-            bump('risk')
         }
     } else if (input.executionsLast7d <= config.lowExecutionsWarning) {
-        signals.push({
+        push({
             label: `Poucas execuções nos últimos 7d (${input.executionsLast7d})`,
             severity: 'warning',
         })
-        bump('warning')
     }
 
     const ownerInactiveDays = daysBetween(input.ownerLastSignInAt)
     if (ownerInactiveDays === null) {
-        signals.push({ label: 'Owner nunca acessou', severity: 'warning' })
-        bump('warning')
+        push({ label: 'Owner nunca acessou', severity: 'warning' })
     } else if (ownerInactiveDays >= config.ownerNoLoginRisk) {
-        signals.push({
-            label: `Owner sem login há ${ownerInactiveDays}d`,
-            severity: 'risk',
-        })
-        bump('risk')
+        push({ label: `Owner sem login há ${ownerInactiveDays}d`, severity: 'risk' })
     } else if (ownerInactiveDays >= config.ownerNoLoginWarning) {
-        signals.push({
-            label: `Owner sem login há ${ownerInactiveDays}d`,
-            severity: 'warning',
-        })
-        bump('warning')
+        push({ label: `Owner sem login há ${ownerInactiveDays}d`, severity: 'warning' })
     }
 
     // V2 — engagement signals (só avaliam se foram fornecidos)
     if (input.eventsLast7d !== undefined && input.lastEventAt !== undefined) {
-        const accountAgeDays = daysBetween(input.createdAt) ?? 0
         const daysSinceEvent = daysBetween(input.lastEventAt ?? null)
 
         if (daysSinceEvent === null && accountAgeDays > config.noEventsRiskDays) {
-            signals.push({ label: 'Sem nenhum evento registrado', severity: 'risk' })
-            bump('risk')
+            push({ label: 'Sem nenhum evento registrado', severity: 'risk' })
         } else if (daysSinceEvent !== null && daysSinceEvent >= config.noEventsRiskDays) {
-            signals.push({
-                label: `Sem eventos há ${daysSinceEvent}d`,
-                severity: 'risk',
-            })
-            bump('risk')
+            push({ label: `Sem eventos há ${daysSinceEvent}d`, severity: 'risk' })
         }
 
         if (
@@ -173,11 +177,10 @@ export function computeHealthScore(
             daysSinceEvent < config.noEventsRiskDays &&
             input.distinctUsersLast7d <= config.weeklyActiveUsersWarning
         ) {
-            signals.push({
+            push({
                 label: `WAU baixo (${input.distinctUsersLast7d} usuário${input.distinctUsersLast7d === 1 ? '' : 's'})`,
                 severity: 'warning',
             })
-            bump('warning')
         }
 
         if (
@@ -187,22 +190,27 @@ export function computeHealthScore(
             const onboardingComplete = input.hasFirstChecklist && input.hasFirstTaskCompleted
             if (!onboardingComplete) {
                 if (accountAgeDays >= config.onboardingIncompleteRiskDays) {
-                    signals.push({ label: 'Onboarding incompleto', severity: 'risk' })
-                    bump('risk')
+                    push({ label: 'Onboarding incompleto', severity: 'risk' })
                 } else if (accountAgeDays >= config.onboardingIncompleteWarningDays) {
-                    signals.push({ label: 'Onboarding incompleto', severity: 'warning' })
-                    bump('warning')
+                    push({ label: 'Onboarding incompleto', severity: 'warning' })
                 }
             }
         }
     }
 
     if (signals.length === 0) {
-        signals.push({ label: 'Operando normalmente', severity: 'info' })
+        push({ label: 'Operando normalmente', severity: 'info' })
     }
 
-    const score: HealthScore =
-        highest === 'risk' ? 'RISK' : highest === 'warning' ? 'WARNING' : 'HEALTHY'
+    // Nova fórmula (Ajuste C): mais conservadora
+    const criticalCount = signals.filter((s) => s.critical).length
+    const riskCount = signals.filter((s) => s.severity === 'risk').length
+    const warningCount = signals.filter((s) => s.severity === 'warning').length
+
+    let score: HealthScore
+    if (criticalCount >= 1 || riskCount >= 2) score = 'RISK'
+    else if (riskCount === 1 || warningCount >= 2) score = 'WARNING'
+    else score = 'HEALTHY'
 
     return { score, signals }
 }

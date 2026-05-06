@@ -27,9 +27,15 @@ export interface RestaurantEngagement {
 }
 
 /**
- * Carrega engagement signals para uma lista de restaurant_ids em uma única query.
- * Janela de 30 dias é suficiente para health score; window maior exige mais I/O
- * sem ganho na sinalização operacional.
+ * Carrega engagement signals para uma lista de restaurant_ids.
+ *
+ * Estratégia em camadas (resolve dados pré-deploy do tracking):
+ *   - Janela de 30d em event_logs para events_7d/events_30d/users_7d
+ *   - Fallback A: has_first_checklist e has_first_task_completed também são
+ *     derivados das tabelas operacionais (checklists, task_executions),
+ *     garantindo que onboarding histórico anterior ao tracking seja reconhecido
+ *   - Fallback B: last_event_at = MAX(event_logs, checklist_assumptions,
+ *     task_executions) — janela de 90d para fallback
  */
 export async function getRestaurantEngagementBatch(
     restaurantIds: string[]
@@ -38,14 +44,52 @@ export async function getRestaurantEngagementBatch(
     if (restaurantIds.length === 0) return out
 
     const since30d = isoDaysAgo(30)
-    const { data, error } = await supabaseAdmin
-        .from('event_logs')
-        .select('event_name, event_category, restaurant_id, user_id, created_at')
-        .in('restaurant_id', restaurantIds)
-        .gte('created_at', since30d)
-    if (error || !data) return out
+    const since90d = isoDaysAgo(90)
 
-    const rows = data as Array<Pick<RawEventRow, 'event_name' | 'event_category' | 'restaurant_id' | 'user_id' | 'created_at'>>
+    const [eventsResp, checklistsResp, doneTasksResp, recentAssumptionsResp, recentDoneTasksResp] =
+        await Promise.all([
+            supabaseAdmin
+                .from('event_logs')
+                .select('event_name, event_category, restaurant_id, user_id, created_at')
+                .in('restaurant_id', restaurantIds)
+                .gte('created_at', since30d),
+            supabaseAdmin
+                .from('checklists')
+                .select('restaurant_id')
+                .in('restaurant_id', restaurantIds),
+            supabaseAdmin
+                .from('task_executions')
+                .select('restaurant_id')
+                .in('restaurant_id', restaurantIds)
+                .eq('status', 'done')
+                .limit(50_000),
+            supabaseAdmin
+                .from('checklist_assumptions')
+                .select('restaurant_id, assumed_at')
+                .in('restaurant_id', restaurantIds)
+                .gte('assumed_at', since90d),
+            supabaseAdmin
+                .from('task_executions')
+                .select('restaurant_id, executed_at')
+                .in('restaurant_id', restaurantIds)
+                .eq('status', 'done')
+                .gte('executed_at', since90d),
+        ])
+
+    const events = (eventsResp.data ?? []) as Array<
+        Pick<RawEventRow, 'event_name' | 'event_category' | 'restaurant_id' | 'user_id' | 'created_at'>
+    >
+    const checklistRows = (checklistsResp.data ?? []) as Array<{ restaurant_id: string | null }>
+    const doneTasksRows = (doneTasksResp.data ?? []) as Array<{ restaurant_id: string | null }>
+    const recentAssumptions = (recentAssumptionsResp.data ?? []) as Array<{
+        restaurant_id: string | null
+        assumed_at: string
+    }>
+    const recentDoneTasks = (recentDoneTasksResp.data ?? []) as Array<{
+        restaurant_id: string | null
+        executed_at: string | null
+    }>
+
     const since7dMs = Date.now() - 7 * DAY_MS
 
     for (const id of restaurantIds) {
@@ -53,15 +97,30 @@ export async function getRestaurantEngagementBatch(
             restaurant_id: id,
             events_last_7d: 0,
             events_last_30d: 0,
-            distinct_users_last_7d: new Set<string>().size,
+            distinct_users_last_7d: 0,
             last_event_at: null,
             has_first_checklist: false,
             has_first_task_completed: false,
         })
     }
-    const usersBy7d = new Map<string, Set<string>>()
 
-    for (const ev of rows) {
+    // Fallback A — onboarding histórico via tabelas operacionais
+    const checklistRestaurants = new Set(
+        checklistRows.map((r) => r.restaurant_id).filter((x): x is string => !!x)
+    )
+    const doneTaskRestaurants = new Set(
+        doneTasksRows.map((r) => r.restaurant_id).filter((x): x is string => !!x)
+    )
+    for (const id of restaurantIds) {
+        const cur = out.get(id)
+        if (!cur) continue
+        if (checklistRestaurants.has(id)) cur.has_first_checklist = true
+        if (doneTaskRestaurants.has(id)) cur.has_first_task_completed = true
+    }
+
+    // Métricas de event_logs (events_7d/30d, users_7d) — fontes específicas
+    const usersBy7d = new Map<string, Set<string>>()
+    for (const ev of events) {
         if (!ev.restaurant_id) continue
         const cur = out.get(ev.restaurant_id)
         if (!cur) continue
@@ -78,6 +137,7 @@ export async function getRestaurantEngagementBatch(
                 set.add(ev.user_id)
             }
         }
+        // Fallback A reforço — eventos também sinalizam onboarding
         if (ev.event_name === 'checklist_created') cur.has_first_checklist = true
         if (ev.event_name === 'task_completed') cur.has_first_task_completed = true
     }
@@ -85,6 +145,54 @@ export async function getRestaurantEngagementBatch(
         const cur = out.get(rid)
         if (cur) cur.distinct_users_last_7d = set.size
     }
+
+    // Fallback B — last_event_at e WAU consideram atividade operacional real
+    const since7dIso = isoDaysAgo(7)
+    const fallbackUsersResp = await supabaseAdmin
+        .from('checklist_assumptions')
+        .select('restaurant_id, user_id, assumed_at')
+        .in('restaurant_id', restaurantIds)
+        .gte('assumed_at', since7dIso)
+    const fallbackUsersRows = (fallbackUsersResp.data ?? []) as Array<{
+        restaurant_id: string | null
+        user_id: string | null
+        assumed_at: string
+    }>
+    const fallbackUsersBy7d = new Map<string, Set<string>>()
+    for (const u of fallbackUsersRows) {
+        if (!u.restaurant_id || !u.user_id) continue
+        let set = fallbackUsersBy7d.get(u.restaurant_id)
+        if (!set) {
+            set = new Set()
+            fallbackUsersBy7d.set(u.restaurant_id, set)
+        }
+        set.add(u.user_id)
+    }
+    for (const a of recentAssumptions) {
+        if (!a.restaurant_id) continue
+        const cur = out.get(a.restaurant_id)
+        if (!cur) continue
+        if (!cur.last_event_at || a.assumed_at > cur.last_event_at) {
+            cur.last_event_at = a.assumed_at
+        }
+    }
+    for (const t of recentDoneTasks) {
+        if (!t.restaurant_id || !t.executed_at) continue
+        const cur = out.get(t.restaurant_id)
+        if (!cur) continue
+        if (!cur.last_event_at || t.executed_at > cur.last_event_at) {
+            cur.last_event_at = t.executed_at
+        }
+    }
+    // distinct_users_last_7d só faz fallback se event_logs não trouxe nada — assim
+    // mantemos a precisão do tracking quando ele estiver ativo, e não pioramos o
+    // sinal quando ele estiver vazio.
+    for (const [rid, set] of fallbackUsersBy7d) {
+        const cur = out.get(rid)
+        if (!cur) continue
+        if (cur.distinct_users_last_7d === 0) cur.distinct_users_last_7d = set.size
+    }
+
     return out
 }
 
