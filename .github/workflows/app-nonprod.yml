@@ -58,6 +58,10 @@ jobs:
             type=sha,prefix=nonprod-,format=short
             type=raw,value=nonprod-latest
 
+      # Extrair vars NEXT_PUBLIC_* do secret único NONPROD_APP_ENV para build-args
+      - name: Extrair vars de build
+        run: echo "${{ secrets.NONPROD_APP_ENV }}" | grep -E "^NEXT_PUBLIC_" >> $GITHUB_ENV
+
       - name: Build e Push
         uses: docker/build-push-action@v6
         with:
@@ -67,8 +71,9 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+            NEXT_PUBLIC_SUPABASE_URL=${{ env.NEXT_PUBLIC_SUPABASE_URL }}
+            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ env.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+            NEXT_PUBLIC_SITE_URL=${{ env.NEXT_PUBLIC_SITE_URL }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:nonprod-latest
           cache-to: type=inline
 
@@ -94,11 +99,14 @@ jobs:
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          APP_ENV: ${{ secrets.NONPROD_APP_ENV }}
+          IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
         with:
           host: ${{ secrets.VM_HOST }}
           username: ubuntu
           key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
-          envs: IMAGE_TAG
+          envs: APP_ENV,IMAGE_TAG
           script: |
             set -euo pipefail
 
@@ -107,14 +115,12 @@ jobs:
             # Autenticar no GHCR para pull de imagem privada
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # Criar .env com variáveis da aplicação
-            cat > .env << 'EOF'
-            IMAGE_TAG=${{ needs.build-and-push.outputs.image_tag }}
-            NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-            SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-            RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}
-            EOF
+            # Escrever .env whitelistando apenas chaves conhecidas da aplicação
+            # (protege contra secret contendo comentários, SSH keys ou outras vars)
+            {
+              printf '%s\n' "$APP_ENV" | grep -E '^(NEXT_PUBLIC_SUPABASE_URL|NEXT_PUBLIC_SUPABASE_ANON_KEY|NEXT_PUBLIC_SITE_URL|SUPABASE_SERVICE_ROLE_KEY|RESEND_API_KEY|RESEND_FROM|WHATSAPP_ADMIN_NUMBER)=' || true
+              printf 'IMAGE_TAG=%s\n' "$IMAGE_TAG"
+            } > .env
 
             # Mover traefik.yml para o diretório correto
             mkdir -p traefik
