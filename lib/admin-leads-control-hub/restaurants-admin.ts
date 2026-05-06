@@ -1,4 +1,5 @@
 import { supabaseAdmin } from './supabase-admin'
+import { computeHealthScore, type HealthResult } from './health'
 
 export type SubscriptionStatus =
     | 'trial'
@@ -44,6 +45,11 @@ export interface AccountSummary {
     name: string
     active: boolean
     created_at: string
+    suspended_at: string | null
+    suspended_reason: string | null
+    is_vip: boolean
+    tags: string[]
+    internal_notes: string | null
 }
 
 export interface RestaurantAdminListItem {
@@ -61,6 +67,9 @@ export interface RestaurantAdminListItem {
     derived_status: AdminRestaurantStatus
     users_count: number
     checklists_count: number
+    last_assumption_at: string | null
+    executions_last_7d: number
+    health: HealthResult
 }
 
 export interface RestaurantAdminDetail extends RestaurantAdminListItem {
@@ -103,6 +112,31 @@ interface AccountRow {
     active: boolean
     created_at: string
     plan_id: string | null
+    metadata: Record<string, unknown> | null
+    internal_notes: string | null
+    suspended_at: string | null
+    suspended_reason: string | null
+}
+
+const ACCOUNT_SELECT =
+    'id, name, active, created_at, plan_id, metadata, internal_notes, suspended_at, suspended_reason'
+
+function toAccountSummary(row: AccountRow | null | undefined, fallbackCreatedAt: string, fallbackId: string): AccountSummary {
+    const meta = (row?.metadata ?? {}) as { vip?: unknown; tags?: unknown }
+    const tags = Array.isArray(meta.tags)
+        ? meta.tags.filter((t): t is string => typeof t === 'string')
+        : []
+    return {
+        id: row?.id ?? fallbackId,
+        name: row?.name ?? '—',
+        active: row?.active ?? false,
+        created_at: row?.created_at ?? fallbackCreatedAt,
+        suspended_at: row?.suspended_at ?? null,
+        suspended_reason: row?.suspended_reason ?? null,
+        is_vip: meta.vip === true,
+        tags,
+        internal_notes: row?.internal_notes ?? null,
+    }
 }
 
 interface SubscriptionRow {
@@ -154,6 +188,8 @@ export interface ListRestaurantsArgs {
     plan?: string
     status?: AdminRestaurantStatus | 'all'
     trialExpired?: boolean
+    vip?: boolean
+    health?: 'HEALTHY' | 'WARNING' | 'RISK' | 'all'
     page?: number
     perPage?: number
 }
@@ -171,6 +207,7 @@ export async function listRestaurantsAdmin(
     const page = Math.max(1, args.page ?? 1)
     const perPage = Math.min(100, Math.max(5, args.perPage ?? 25))
 
+    // 1. Restaurants (active, not soft-deleted) with optional name/cnpj search
     let q = supabaseAdmin
         .from('restaurants')
         .select(
@@ -185,6 +222,8 @@ export async function listRestaurantsAdmin(
         q = q.or(`name.ilike.%${term}%,slug.ilike.%${term}%,cnpj.ilike.%${term}%`)
     }
 
+    // Pagination boundary; we filter further in-memory because plan/status/owner-email
+    // aren't all directly indexable in one query.
     q = q.range((page - 1) * perPage, page * perPage - 1)
 
     const { data: restaurantsRaw, error, count } = await q
@@ -198,29 +237,37 @@ export async function listRestaurantsAdmin(
     const restaurantIds = restaurants.map((r) => r.id)
     const ownerIds = Array.from(new Set(restaurants.map((r) => r.owner_id)))
 
-    const [accountsResp, subsResp, plansResp, usersResp, checklistsResp, restaurantUsersResp] =
-        await Promise.all([
-            supabaseAdmin
-                .from('accounts')
-                .select('id, name, active, created_at, plan_id')
-                .in('id', accountIds),
-            supabaseAdmin
-                .from('subscriptions')
-                .select(
-                    'account_id, plan_id, billing_cycle, status, started_at, ends_at, canceled_at, stripe_customer_id, stripe_subscription_id'
-                )
-                .in('account_id', accountIds),
-            supabaseAdmin.from('plans').select('id, code, name, price_monthly_cents, price_yearly_cents'),
-            supabaseAdmin.from('users').select('id, email, name').in('id', ownerIds),
-            supabaseAdmin
-                .from('checklists')
-                .select('restaurant_id')
-                .in('restaurant_id', restaurantIds),
-            supabaseAdmin
-                .from('restaurant_users')
-                .select('restaurant_id, user_id')
-                .in('restaurant_id', restaurantIds),
-        ])
+    const since30dIso = new Date(Date.now() - 30 * 86_400_000).toISOString()
+
+    const [
+        accountsResp,
+        subsResp,
+        plansResp,
+        usersResp,
+        checklistsResp,
+        restaurantUsersResp,
+        assumptionsResp,
+    ] = await Promise.all([
+        supabaseAdmin.from('accounts').select(ACCOUNT_SELECT).in('id', accountIds),
+        supabaseAdmin
+            .from('subscriptions')
+            .select(
+                'account_id, plan_id, billing_cycle, status, started_at, ends_at, canceled_at, stripe_customer_id, stripe_subscription_id'
+            )
+            .in('account_id', accountIds),
+        supabaseAdmin.from('plans').select('id, code, name, price_monthly_cents, price_yearly_cents'),
+        supabaseAdmin.from('users').select('id, email, name').in('id', ownerIds),
+        supabaseAdmin.from('checklists').select('restaurant_id').in('restaurant_id', restaurantIds),
+        supabaseAdmin
+            .from('restaurant_users')
+            .select('restaurant_id, user_id')
+            .in('restaurant_id', restaurantIds),
+        supabaseAdmin
+            .from('checklist_assumptions')
+            .select('restaurant_id, assumed_at')
+            .in('restaurant_id', restaurantIds)
+            .gte('assumed_at', since30dIso),
+    ])
 
     const accounts = (accountsResp.data ?? []) as AccountRow[]
     const subs = (subsResp.data ?? []) as SubscriptionRow[]
@@ -228,6 +275,10 @@ export async function listRestaurantsAdmin(
     const users = (usersResp.data ?? []) as UserRow[]
     const checklists = (checklistsResp.data ?? []) as Array<{ restaurant_id: string }>
     const ru = (restaurantUsersResp.data ?? []) as Array<{ restaurant_id: string; user_id: string }>
+    const assumptions = (assumptionsResp.data ?? []) as Array<{
+        restaurant_id: string
+        assumed_at: string
+    }>
 
     const accountMap = new Map(accounts.map((a) => [a.id, a]))
     const subMap = new Map(subs.map((s) => [s.account_id, s]))
@@ -247,6 +298,23 @@ export async function listRestaurantsAdmin(
         }
         set.add(r.user_id)
     }
+    const lastAssumptionMap = new Map<string, string>()
+    const executions7dMap = new Map<string, number>()
+    const since7dMs = Date.now() - 7 * 86_400_000
+    for (const a of assumptions) {
+        const prev = lastAssumptionMap.get(a.restaurant_id)
+        if (!prev || a.assumed_at > prev) lastAssumptionMap.set(a.restaurant_id, a.assumed_at)
+        if (Date.parse(a.assumed_at) >= since7dMs) {
+            executions7dMap.set(
+                a.restaurant_id,
+                (executions7dMap.get(a.restaurant_id) ?? 0) + 1
+            )
+        }
+    }
+
+    // Last sign-in is only needed on detail; on list, we pass minimal owner info
+    // and rely on auth.users only when strictly necessary. Skipping listUsers here
+    // keeps the list query fast.
 
     let items: RestaurantAdminListItem[] = restaurants.map((r) => {
         const account = accountMap.get(r.account_id)
@@ -256,6 +324,18 @@ export async function listRestaurantsAdmin(
             !subPlan && account?.plan_id ? planMap.get(account.plan_id) ?? null : null
         const plan = subPlan ?? accountPlan
         const userRow = userMap.get(r.owner_id)
+        const lastAssumptionAt = lastAssumptionMap.get(r.id) ?? null
+        const executions7d = executions7dMap.get(r.id) ?? 0
+        const accountSummary = toAccountSummary(account, r.created_at, r.account_id)
+        const health = computeHealthScore({
+            accountActive: accountSummary.active,
+            subscriptionStatus: sub?.status ?? null,
+            subscriptionEndsAt: sub?.ends_at ?? null,
+            lastAssumptionAt,
+            executionsLast7d: executions7d,
+            ownerLastSignInAt: null,
+            createdAt: r.created_at,
+        })
         return {
             id: r.id,
             name: r.name,
@@ -265,12 +345,7 @@ export async function listRestaurantsAdmin(
             active: r.active,
             created_at: r.created_at,
             is_primary: r.is_primary,
-            account: {
-                id: r.account_id,
-                name: account?.name ?? '—',
-                active: account?.active ?? false,
-                created_at: account?.created_at ?? r.created_at,
-            },
+            account: accountSummary,
             owner: userRow
                 ? {
                       user_id: userRow.id,
@@ -303,6 +378,9 @@ export async function listRestaurantsAdmin(
             derived_status: deriveStatus(r.active, account?.active ?? false, sub),
             users_count: usersByRestaurant.get(r.id)?.size ?? 0,
             checklists_count: checklistsCountMap.get(r.id) ?? 0,
+            last_assumption_at: lastAssumptionAt,
+            executions_last_7d: executions7d,
+            health,
         }
     })
 
@@ -314,6 +392,12 @@ export async function listRestaurantsAdmin(
     }
     if (args.trialExpired) {
         items = items.filter((i) => i.billing.trial_expired)
+    }
+    if (args.vip) {
+        items = items.filter((i) => i.account.is_vip)
+    }
+    if (args.health && args.health !== 'all') {
+        items = items.filter((i) => i.health.score === args.health)
     }
     if (args.search && args.search.trim()) {
         const term = args.search.trim().toLowerCase()
@@ -343,11 +427,22 @@ export async function getRestaurantAdminDetail(
     if (!restaurantRaw) return null
     const restaurant = restaurantRaw
 
-    const [accountResp, subResp, plansResp, ownerResp, siblingsResp, checklistsResp, ruResp, executionsResp] =
-        await Promise.all([
+    const since30dIso = new Date(Date.now() - 30 * 86_400_000).toISOString()
+
+    const [
+        accountResp,
+        subResp,
+        plansResp,
+        ownerResp,
+        siblingsResp,
+        checklistsResp,
+        ruResp,
+        executionsResp,
+        recentAssumptionsResp,
+    ] = await Promise.all([
             supabaseAdmin
                 .from('accounts')
-                .select('id, name, active, created_at, plan_id')
+                .select(ACCOUNT_SELECT)
                 .eq('id', restaurant.account_id)
                 .maybeSingle<AccountRow>(),
             supabaseAdmin
@@ -381,6 +476,12 @@ export async function getRestaurantAdminDetail(
                 .from('checklist_assumptions')
                 .select('id', { count: 'exact', head: true })
                 .eq('restaurant_id', restaurant.id),
+            supabaseAdmin
+                .from('checklist_assumptions')
+                .select('assumed_at')
+                .eq('restaurant_id', restaurant.id)
+                .gte('assumed_at', since30dIso)
+                .order('assumed_at', { ascending: false }),
         ])
 
     const account = accountResp.data
@@ -400,6 +501,11 @@ export async function getRestaurantAdminDetail(
     const accountPlan = !subPlan && account?.plan_id ? planMap.get(account.plan_id) ?? null : null
     const plan = subPlan ?? accountPlan
 
+    const recentAssumptions = (recentAssumptionsResp.data ?? []) as Array<{ assumed_at: string }>
+    const lastAssumptionAt = recentAssumptions[0]?.assumed_at ?? null
+    const since7dMs = Date.now() - 7 * 86_400_000
+    const executions7d = recentAssumptions.filter((a) => Date.parse(a.assumed_at) >= since7dMs).length
+
     let ownerSummary: OwnerSummary | null = null
     if (userRow) {
         let lastSignIn: string | null = null
@@ -410,7 +516,7 @@ export async function getRestaurantAdminDetail(
             lastSignIn = u?.last_sign_in_at ?? null
             confirmed = !!u?.email_confirmed_at
         } catch {
-            /* ignore */
+            /* ignore — auth introspection is best-effort */
         }
         ownerSummary = {
             user_id: userRow.id,
@@ -422,6 +528,17 @@ export async function getRestaurantAdminDetail(
         }
     }
 
+    const accountSummary = toAccountSummary(account ?? null, restaurant.created_at, restaurant.account_id)
+    const health = computeHealthScore({
+        accountActive: accountSummary.active,
+        subscriptionStatus: sub?.status ?? null,
+        subscriptionEndsAt: sub?.ends_at ?? null,
+        lastAssumptionAt,
+        executionsLast7d: executions7d,
+        ownerLastSignInAt: ownerSummary?.last_sign_in_at ?? null,
+        createdAt: restaurant.created_at,
+    })
+
     return {
         id: restaurant.id,
         name: restaurant.name,
@@ -431,13 +548,11 @@ export async function getRestaurantAdminDetail(
         active: restaurant.active,
         created_at: restaurant.created_at,
         is_primary: restaurant.is_primary,
-        account: {
-            id: restaurant.account_id,
-            name: account?.name ?? '—',
-            active: account?.active ?? false,
-            created_at: account?.created_at ?? restaurant.created_at,
-        },
+        account: accountSummary,
         owner: ownerSummary,
+        last_assumption_at: lastAssumptionAt,
+        executions_last_7d: executions7d,
+        health,
         billing: {
             plan: plan
                 ? {

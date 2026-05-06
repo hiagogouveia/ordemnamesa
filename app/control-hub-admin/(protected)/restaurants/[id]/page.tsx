@@ -3,11 +3,14 @@ import { notFound } from 'next/navigation'
 import {
     getAdminLogsForRestaurant,
     getRestaurantAdminDetail,
+    listPlansForFilter,
     type AdminRestaurantStatus,
 } from '@/lib/admin-leads-control-hub/restaurants-admin'
+import type { HealthScore } from '@/lib/admin-leads-control-hub/health'
 import { requireStaff } from '@/lib/admin-leads-control-hub/staff'
 import { config } from '@/lead-control-hub.config'
 import { RestaurantActions } from './restaurant-actions'
+import { OperationalActions } from './operational-actions'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,7 +41,12 @@ export default async function RestaurantAdminDetailPage({
     const detail = await getRestaurantAdminDetail(id)
     if (!detail) notFound()
 
-    const logs = await getAdminLogsForRestaurant(detail)
+    const [logs, plans] = await Promise.all([
+        getAdminLogsForRestaurant(detail),
+        listPlansForFilter(),
+    ])
+    const planOptions = plans.map((p) => ({ id: p.id, code: p.code, name: p.name }))
+    const canExtendTrial = detail.billing.subscription_status === 'trial'
 
     return (
         <div className="space-y-6">
@@ -63,6 +71,11 @@ export default async function RestaurantAdminDetailPage({
                             >
                                 {STATUS_LABEL[detail.derived_status].label}
                             </span>
+                            {detail.account.is_vip && (
+                                <span className="rounded-md border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-300">
+                                    ⭐ VIP
+                                </span>
+                            )}
                             {detail.billing.plan && (
                                 <span className="rounded-md border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
                                     Plano {detail.billing.plan.code} · {detail.billing.plan.name}
@@ -87,6 +100,38 @@ export default async function RestaurantAdminDetailPage({
                     </div>
                 </div>
             </div>
+
+            {!detail.account.active && (
+                <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200">
+                    <div className="font-bold uppercase tracking-wider text-red-300">⛔ Conta suspensa</div>
+                    {detail.account.suspended_at && (
+                        <div className="mt-1 text-xs">
+                            Desde {new Date(detail.account.suspended_at).toLocaleString('pt-BR')}
+                        </div>
+                    )}
+                    {detail.account.suspended_reason && (
+                        <div className="mt-1 text-xs">
+                            <span className="text-red-300/80">Motivo:</span>{' '}
+                            {detail.account.suspended_reason}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            <HealthBanner score={detail.health.score} signals={detail.health.signals} />
+
+            <Section title="Ações operacionais">
+                <OperationalActions
+                    restaurantId={detail.id}
+                    isSuperAdmin={isSuperAdmin}
+                    accountActive={detail.account.active}
+                    isVip={detail.account.is_vip}
+                    canExtendTrial={canExtendTrial}
+                    currentPlanId={detail.billing.plan?.id ?? null}
+                    currentCycle={detail.billing.billing_cycle}
+                    plans={planOptions}
+                />
+            </Section>
 
             <div className="grid gap-6 lg:grid-cols-2">
                 {/* Owner */}
@@ -121,21 +166,28 @@ export default async function RestaurantAdminDetailPage({
                 </Section>
 
                 {/* Métricas */}
-                <Section title="Métricas básicas">
+                <Section title="Métricas & atividade">
                     <div className="grid grid-cols-2 gap-3">
                         <Metric label="Usuários" value={detail.users_count.toString()} />
                         <Metric label="Checklists" value={detail.checklists_count.toString()} />
+                        <Metric label="Execuções (total)" value={detail.executions_count.toString()} />
                         <Metric
-                            label="Execuções"
-                            value={detail.executions_count.toString()}
+                            label="Execuções 7d"
+                            value={detail.executions_last_7d.toString()}
                         />
                         <Metric
-                            label="Último acesso owner"
+                            label="Última execução"
+                            value={
+                                detail.last_assumption_at
+                                    ? new Date(detail.last_assumption_at).toLocaleDateString('pt-BR')
+                                    : '—'
+                            }
+                        />
+                        <Metric
+                            label="Último login owner"
                             value={
                                 detail.owner?.last_sign_in_at
-                                    ? new Date(detail.owner.last_sign_in_at).toLocaleDateString(
-                                          'pt-BR'
-                                      )
+                                    ? new Date(detail.owner.last_sign_in_at).toLocaleDateString('pt-BR')
                                     : '—'
                             }
                         />
@@ -310,6 +362,53 @@ function FieldRow({
             <span className={mono ? 'font-mono text-sm text-white' : 'text-sm text-white'}>
                 {value}
             </span>
+        </div>
+    )
+}
+
+const HEALTH_TONE: Record<HealthScore, { label: string; cls: string; icon: string }> = {
+    HEALTHY: { label: 'Saudável', cls: 'border-success/40 bg-success/10 text-success', icon: '🟢' },
+    WARNING: { label: 'Atenção', cls: 'border-yellow-500/40 bg-yellow-500/10 text-yellow-300', icon: '🟡' },
+    RISK: { label: 'Risco', cls: 'border-red-500/40 bg-red-500/10 text-red-300', icon: '🔴' },
+}
+
+function HealthBanner({
+    score,
+    signals,
+}: {
+    score: HealthScore
+    signals: { label: string; severity: 'info' | 'warning' | 'risk' }[]
+}) {
+    const tone = HEALTH_TONE[score]
+    return (
+        <div className={`rounded-2xl border p-4 ${tone.cls}`}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                    <span className="text-lg">{tone.icon}</span>
+                    <span className="text-xs font-bold uppercase tracking-wider">
+                        Health · {tone.label}
+                    </span>
+                </div>
+                <span className="text-[10px] uppercase tracking-wider opacity-70">
+                    {signals.length} {signals.length === 1 ? 'sinal' : 'sinais'}
+                </span>
+            </div>
+            <ul className="mt-2 flex flex-wrap gap-2">
+                {signals.map((s, i) => (
+                    <li
+                        key={i}
+                        className={
+                            s.severity === 'risk'
+                                ? 'rounded-md border border-red-500/40 bg-red-500/10 px-2 py-0.5 text-[11px] text-red-200'
+                                : s.severity === 'warning'
+                                  ? 'rounded-md border border-yellow-500/40 bg-yellow-500/10 px-2 py-0.5 text-[11px] text-yellow-200'
+                                  : 'rounded-md border border-border-dark bg-surface-deep px-2 py-0.5 text-[11px] text-text-secondary'
+                        }
+                    >
+                        {s.label}
+                    </li>
+                ))}
+            </ul>
         </div>
     )
 }
