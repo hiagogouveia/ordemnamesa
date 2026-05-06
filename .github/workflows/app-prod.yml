@@ -73,6 +73,7 @@ jobs:
           build-args: |
             NEXT_PUBLIC_SUPABASE_URL=${{ env.NEXT_PUBLIC_SUPABASE_URL }}
             NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ env.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+            NEXT_PUBLIC_SITE_URL=${{ env.NEXT_PUBLIC_SITE_URL }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:prod-latest
           cache-to: type=inline
 
@@ -117,7 +118,7 @@ jobs:
             # Escrever .env whitelistando apenas as 4 chaves da aplicação
             # (protege contra secret contendo comentários, SSH keys ou outras vars)
             {
-              printf '%s\n' "$APP_ENV" | grep -E '^(NEXT_PUBLIC_SUPABASE_URL|NEXT_PUBLIC_SUPABASE_ANON_KEY|SUPABASE_SERVICE_ROLE_KEY|RESEND_API_KEY)=' || true
+              printf '%s\n' "$APP_ENV" | grep -E '^(NEXT_PUBLIC_SUPABASE_URL|NEXT_PUBLIC_SUPABASE_ANON_KEY|NEXT_PUBLIC_SITE_URL|SUPABASE_SERVICE_ROLE_KEY|RESEND_API_KEY|RESEND_FROM|WHATSAPP_ADMIN_NUMBER)=' || true
               printf 'IMAGE_TAG=%s\n' "$IMAGE_TAG"
             } > .env
 

@@ -17,9 +17,56 @@ export default function ResetPasswordPage() {
 
     useEffect(() => {
         const supabase = createClient()
+        let cancelled = false
 
-        async function check() {
+        async function init() {
+            const url = new URL(window.location.href)
+            const hashParams = new URLSearchParams(url.hash.replace(/^#/, ''))
+
+            const queryError = url.searchParams.get('error_description') || url.searchParams.get('error')
+            const hashError = hashParams.get('error_description') || hashParams.get('error')
+            const code = url.searchParams.get('code')
+            const accessToken = hashParams.get('access_token')
+            const refreshToken = hashParams.get('refresh_token')
+
+            if (queryError || hashError) {
+                if (cancelled) return
+                setError(queryError || hashError)
+                setStatus('invalid')
+                return
+            }
+
+            if (accessToken && refreshToken) {
+                const { error: setErr } = await supabase.auth.setSession({
+                    access_token: accessToken,
+                    refresh_token: refreshToken,
+                })
+                if (cancelled) return
+                if (setErr) {
+                    setError(setErr.message)
+                    setStatus('invalid')
+                    return
+                }
+                window.history.replaceState({}, '', url.pathname)
+                setStatus('ready')
+                return
+            }
+
+            if (code) {
+                const { error: exErr } = await supabase.auth.exchangeCodeForSession(code)
+                if (cancelled) return
+                if (exErr) {
+                    setError(exErr.message)
+                    setStatus('invalid')
+                    return
+                }
+                window.history.replaceState({}, '', url.pathname)
+                setStatus('ready')
+                return
+            }
+
             const { data } = await supabase.auth.getSession()
+            if (cancelled) return
             if (data.session) {
                 setStatus('ready')
                 return
@@ -30,12 +77,13 @@ export default function ResetPasswordPage() {
         const { data: sub } = supabase.auth.onAuthStateChange((event) => {
             if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
                 setStatus('ready')
+                setError(null)
             }
         })
 
-        const t = setTimeout(check, 800)
+        init()
         return () => {
-            clearTimeout(t)
+            cancelled = true
             sub.subscription.unsubscribe()
         }
     }, [])
@@ -81,6 +129,9 @@ export default function ResetPasswordPage() {
                         <p className="text-slate-500 dark:text-[#93adc8]">
                             Solicite um novo link para redefinir sua senha.
                         </p>
+                        {error && (
+                            <p className="text-xs text-red-400 break-words">Detalhe técnico: {error}</p>
+                        )}
                         <Link
                             href="/forgot-password"
                             className="mt-2 inline-flex items-center justify-center rounded-lg h-12 px-4 bg-primary hover:bg-[#0ea5d6] text-[#111e22] font-bold transition-colors"
