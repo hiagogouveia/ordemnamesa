@@ -17,9 +17,40 @@ export default function ResetPasswordPage() {
 
     useEffect(() => {
         const supabase = createClient()
+        let cancelled = false
 
-        async function check() {
+        async function init() {
+            const url = new URL(window.location.href)
+
+            const queryError = url.searchParams.get('error_description') || url.searchParams.get('error')
+            const hashParams = new URLSearchParams(url.hash.replace(/^#/, ''))
+            const hashError = hashParams.get('error_description') || hashParams.get('error')
+            if (queryError || hashError) {
+                if (!cancelled) setError(queryError || hashError)
+                if (!cancelled) setStatus('invalid')
+                return
+            }
+
+            const code = url.searchParams.get('code')
+            if (code) {
+                const { error: exErr } = await supabase.auth.exchangeCodeForSession(code)
+                if (cancelled) return
+                if (exErr) {
+                    setError(exErr.message)
+                    setStatus('invalid')
+                    return
+                }
+                window.history.replaceState({}, '', url.pathname)
+                setStatus('ready')
+                return
+            }
+
+            if (hashParams.get('access_token')) {
+                await new Promise((r) => setTimeout(r, 200))
+            }
+
             const { data } = await supabase.auth.getSession()
+            if (cancelled) return
             if (data.session) {
                 setStatus('ready')
                 return
@@ -30,12 +61,13 @@ export default function ResetPasswordPage() {
         const { data: sub } = supabase.auth.onAuthStateChange((event) => {
             if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
                 setStatus('ready')
+                setError(null)
             }
         })
 
-        const t = setTimeout(check, 800)
+        init()
         return () => {
-            clearTimeout(t)
+            cancelled = true
             sub.subscription.unsubscribe()
         }
     }, [])
@@ -81,6 +113,9 @@ export default function ResetPasswordPage() {
                         <p className="text-slate-500 dark:text-[#93adc8]">
                             Solicite um novo link para redefinir sua senha.
                         </p>
+                        {error && (
+                            <p className="text-xs text-red-400 break-words">Detalhe técnico: {error}</p>
+                        )}
                         <Link
                             href="/forgot-password"
                             className="mt-2 inline-flex items-center justify-center rounded-lg h-12 px-4 bg-primary hover:bg-[#0ea5d6] text-[#111e22] font-bold transition-colors"
