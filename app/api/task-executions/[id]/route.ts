@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
 import { getAccountBilling, canExecuteTasks } from '@/lib/billing/subscription-access';
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
+import { trackChecklistEvent } from '@/lib/analytics/track-event';
 
 const getAdminSupabase = () => {
     return createClient(
@@ -109,6 +110,34 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         if (execError) {
             console.error('Erro ao editar:', execError);
             return NextResponse.json({ error: execError.message }, { status: 500 });
+        }
+
+        if (status === 'done') {
+            await trackChecklistEvent('task_completed', {
+                accountId,
+                restaurantId: restaurant_id,
+                userId: user.id,
+                metadata: {
+                    task_execution_id: updated.id,
+                    task_id: updated.task_id,
+                    checklist_id: updated.checklist_id,
+                    has_alert: !!updated.has_alert,
+                    type: updated.type_snapshot ?? null,
+                },
+            });
+            const photoCount = Array.isArray(updated.photos) ? updated.photos.length : 0;
+            if (photoCount > 0 || updated.photo_url) {
+                await trackChecklistEvent('photo_uploaded', {
+                    accountId,
+                    restaurantId: restaurant_id,
+                    userId: user.id,
+                    metadata: {
+                        task_execution_id: updated.id,
+                        photos_count: photoCount,
+                        has_legacy_photo_url: !!updated.photo_url,
+                    },
+                });
+            }
         }
 
         return NextResponse.json(updated);

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { trackOnboardingEvent } from '@/lib/analytics/track-event'
 
 // ── Rate limiting (in-memory, por IP) ─────────────────────
 const rateLimit = new Map<string, { count: number; resetAt: number }>()
@@ -235,6 +236,13 @@ export async function POST(request: Request) {
             await adminSupabase.from('accounts').delete().eq('id', newAccountId)
             throw restaurantUserError
         }
+
+        await trackOnboardingEvent('restaurant_created', {
+            accountId: newAccountId,
+            restaurantId: restaurantData.id,
+            userId: newUserId,
+            metadata: { source: 'public_signup' },
+        })
 
         return NextResponse.json({ success: true }, { status: 201 })
 

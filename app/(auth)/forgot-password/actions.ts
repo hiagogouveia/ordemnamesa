@@ -3,6 +3,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { sendEmail } from '@/lib/email/send-email'
 import { renderActionEmail } from '@/lib/email/templates'
+import { trackAuthEvent } from '@/lib/analytics/track-event'
 
 export interface ForgotPasswordResult {
     ok?: boolean
@@ -68,6 +69,8 @@ export async function requestPasswordResetAction(emailRaw: string): Promise<Forg
         if (!result.ok) {
             console.error('[requestPasswordResetAction] sendEmail', { email, error: result.error })
         }
+
+        await trackAuthEvent('password_reset_requested', { metadata: { source: 'forgot_password' } })
     } catch (err) {
         console.error('[requestPasswordResetAction] exception', err instanceof Error ? err.message : err)
     }

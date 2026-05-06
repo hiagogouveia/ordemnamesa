@@ -35,6 +35,8 @@ export default async function ControlHubAdminProtectedLayout({
                         </Link>
                         <nav className="hidden gap-1 sm:flex">
                             <NavLink href={`${config.panelBasePath}/leads`}>Leads</NavLink>
+                            <NavLink href={`${config.panelBasePath}/restaurants`}>Restaurantes</NavLink>
+                            <NavLink href={`${config.panelBasePath}/alerts`}>Alertas</NavLink>
                             <NavLink href={`${config.panelBasePath}/staff`}>Staff</NavLink>
                             <NavLink href={`${config.panelBasePath}/logs`}>Logs</NavLink>
                         </nav>
@@ -49,6 +51,8 @@ export default async function ControlHubAdminProtectedLayout({
                 </div>
                 <nav className="flex gap-1 overflow-x-auto border-t border-border-dark bg-background-dark/40 px-4 py-2 sm:hidden">
                     <NavLink href={`${config.panelBasePath}/leads`}>Leads</NavLink>
+                    <NavLink href={`${config.panelBasePath}/restaurants`}>Restaurantes</NavLink>
+                    <NavLink href={`${config.panelBasePath}/alerts`}>Alertas</NavLink>
                     <NavLink href={`${config.panelBasePath}/staff`}>Staff</NavLink>
                     <NavLink href={`${config.panelBasePath}/logs`}>Logs</NavLink>
                 </nav>
