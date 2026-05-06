@@ -8,6 +8,7 @@ import {
 } from '@/lib/admin-leads-control-hub/restaurants-admin'
 import type { HealthScore } from '@/lib/admin-leads-control-hub/health'
 import { requireStaff } from '@/lib/admin-leads-control-hub/staff'
+import { listOpenAlertsForRestaurant } from '@/lib/automation/queries'
 import { config } from '@/lead-control-hub.config'
 import { RestaurantActions } from './restaurant-actions'
 import { OperationalActions } from './operational-actions'
@@ -41,9 +42,10 @@ export default async function RestaurantAdminDetailPage({
     const detail = await getRestaurantAdminDetail(id)
     if (!detail) notFound()
 
-    const [logs, plans] = await Promise.all([
+    const [logs, plans, openAlerts] = await Promise.all([
         getAdminLogsForRestaurant(detail),
         listPlansForFilter(),
+        listOpenAlertsForRestaurant(detail.id),
     ])
     const planOptions = plans.map((p) => ({ id: p.id, code: p.code, name: p.name }))
     const canExtendTrial = detail.billing.subscription_status === 'trial'
@@ -119,6 +121,44 @@ export default async function RestaurantAdminDetailPage({
             )}
 
             <HealthBanner score={detail.health.score} signals={detail.health.signals} />
+
+            {openAlerts.length > 0 && (
+                <div className="rounded-2xl border border-yellow-500/40 bg-yellow-500/10 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-xs font-bold uppercase tracking-wider text-yellow-300">
+                            🔔 {openAlerts.length} alerta{openAlerts.length === 1 ? '' : 's'} aberto{openAlerts.length === 1 ? '' : 's'}
+                        </div>
+                        <Link
+                            href={`${config.panelBasePath}/alerts?status=open`}
+                            className="text-[11px] text-primary hover:underline"
+                        >
+                            Ver todos →
+                        </Link>
+                    </div>
+                    <ul className="mt-2 space-y-1">
+                        {openAlerts.map((a) => (
+                            <li
+                                key={a.id}
+                                className="flex flex-wrap items-center gap-2 text-xs text-yellow-100"
+                            >
+                                <span
+                                    className={
+                                        a.severity === 'risk'
+                                            ? 'rounded-md border border-red-500/40 bg-red-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-red-300'
+                                            : 'rounded-md border border-yellow-500/40 bg-yellow-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-yellow-300'
+                                    }
+                                >
+                                    {a.severity}
+                                </span>
+                                <span className="font-bold text-white">{a.title}</span>
+                                {a.description && (
+                                    <span className="text-text-secondary">· {a.description}</span>
+                                )}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
 
             <Section title="Ações operacionais">
                 <OperationalActions
