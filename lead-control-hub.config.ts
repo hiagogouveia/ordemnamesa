@@ -1,5 +1,4 @@
 import type { LeadControlHubConfig } from '@/lib/admin-leads-control-hub/types'
-import { createAccountWithRestaurant } from '@/lib/admin-leads-control-hub/create-tenant'
 
 export const config: LeadControlHubConfig = {
     appName: 'Ordem na Mesa',
@@ -46,6 +45,13 @@ export const config: LeadControlHubConfig = {
                 { value: '31+', label: 'Mais de 31' },
             ],
         },
+        {
+            name: 'observacoes',
+            label: 'Observações (opcional)',
+            type: 'textarea',
+            required: false,
+            placeholder: 'Conte um pouco sobre seu desafio operacional…',
+        },
     ],
 
     whatsappTemplate: (lead) =>
@@ -60,18 +66,5 @@ export const config: LeadControlHubConfig = {
         cold: (lead) =>
             lead.custom_fields?.tipo_restaurante === 'fast_food' &&
             lead.custom_fields?.numero_funcionarios === '1-5',
-    },
-
-    createEntityFromLead: async ({ lead, userId, supabaseAdmin }) => {
-        const result = await createAccountWithRestaurant({
-            supabaseAdmin,
-            userId,
-            userEmail: lead.email,
-            userName: lead.name,
-            accountName: lead.organization_name,
-            restaurantName: lead.organization_name,
-            customFields: lead.custom_fields,
-        })
-        return { entityId: result.accountId, entityName: result.accountName }
     },
 }

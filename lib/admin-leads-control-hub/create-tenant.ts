@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { getTrialConfig } from './trial-config'
 
 export interface CreateTenantArgs {
     supabaseAdmin: SupabaseClient
@@ -14,12 +15,16 @@ export interface CreateTenantResult {
     accountId: string
     restaurantId: string
     accountName: string
+    subscriptionId: string
+    trialEndsAt: string
+    trialPlanCode: 'A' | 'B' | 'C' | 'D'
+    trialDays: number
 }
 
 function generateSlug(name: string): string {
     const base = name
         .normalize('NFD')
-        .replace(/[̀-ͯ]/g, '')
+        .replace(/\p{Diacritic}/gu, '')
         .toLowerCase()
         .replace(/[^a-z0-9\s-]/g, '')
         .trim()
@@ -39,6 +44,19 @@ export async function createAccountWithRestaurant(
     args: CreateTenantArgs
 ): Promise<CreateTenantResult> {
     const { supabaseAdmin, userId, userEmail, userName, accountName, restaurantName, customFields } = args
+
+    const trial = getTrialConfig()
+    const { data: planRow, error: planErr } = await supabaseAdmin
+        .from('plans')
+        .select('id, code')
+        .eq('code', trial.planCode)
+        .eq('active', true)
+        .maybeSingle<{ id: string; code: string }>()
+    if (planErr || !planRow) {
+        throw new Error(
+            `Plano trial "${trial.planCode}" não encontrado/ativo (LEAD_TRIAL_PLAN_CODE).`
+        )
+    }
 
     await supabaseAdmin
         .from('users')
@@ -109,5 +127,35 @@ export async function createAccountWithRestaurant(
         throw new Error(`Falha ao vincular owner ao restaurant: ${restaurantUserErr.message}`)
     }
 
-    return { accountId, restaurantId, accountName: accountData.name }
+    // started_at = timestamp do registro (não "início do trial" no sentido comercial).
+    // Em conversão paga / upgrade, criar nova subscription em vez de mutar esta.
+    const trialEndsAt = new Date(Date.now() + trial.trialDays * 86400_000).toISOString()
+    const { data: subData, error: subErr } = await supabaseAdmin
+        .from('subscriptions')
+        .insert({
+            account_id: accountId,
+            plan_id: planRow.id,
+            billing_cycle: 'monthly',
+            status: 'trial',
+            ends_at: trialEndsAt,
+        })
+        .select('id')
+        .single<{ id: string }>()
+    if (subErr || !subData) {
+        await supabaseAdmin.from('restaurant_users').delete().eq('restaurant_id', restaurantId)
+        await supabaseAdmin.from('restaurants').delete().eq('id', restaurantId)
+        await supabaseAdmin.from('account_users').delete().eq('account_id', accountId)
+        await rollbackAccount()
+        throw new Error(`Falha ao criar subscription trial: ${subErr?.message ?? 'unknown'}`)
+    }
+
+    return {
+        accountId,
+        restaurantId,
+        accountName: accountData.name,
+        subscriptionId: subData.id,
+        trialEndsAt,
+        trialPlanCode: trial.planCode,
+        trialDays: trial.trialDays,
+    }
 }
