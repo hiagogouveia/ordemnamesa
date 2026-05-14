@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { useRestaurantStore } from '@/lib/store/restaurant-store';
+import { useSession } from '@/lib/providers/use-session';
 import { useActivityData, useToggleActivityTask, useBlockTask, useResumeTask } from '@/lib/hooks/use-activity-execution';
 import { useChecklistAssumption, useCompleteChecklist } from '@/lib/hooks/use-tasks';
 import { ExecutionItem, type ExecutionToggleInput } from '@/components/turno/execution-item';
@@ -11,7 +11,9 @@ export default function ActivityExecutionPage() {
     const router = useRouter();
     const params = useParams();
     const checklistId = params.id as string;
-    const { restaurantId } = useRestaurantStore();
+    const session = useSession();
+    const restaurantId = session.restaurantId;
+    const sessionLoading = session.status === 'loading';
 
     const [showFinalizeModal, setShowFinalizeModal] = useState(false);
     const [finalizing, setFinalizing] = useState(false);
@@ -24,7 +26,7 @@ export default function ActivityExecutionPage() {
     const [reportError, setReportError] = useState<string | null>(null);
     const [reporting, setReporting] = useState(false);
 
-    const { data: activityData, isLoading, isError } = useActivityData(restaurantId || undefined, checklistId);
+    const { data: activityData, isLoading, isError, isFetched } = useActivityData(restaurantId || undefined, checklistId);
     const { data: assumption } = useChecklistAssumption(restaurantId || undefined, checklistId);
     const toggleTask = useToggleActivityTask();
     const completeMutation = useCompleteChecklist();
@@ -154,7 +156,12 @@ export default function ActivityExecutionPage() {
         }
     };
 
-    if (isLoading) {
+    // Mostrar skeleton enquanto:
+    // - a sessão (cookies) ainda não foi resolvida
+    // - restaurantId ainda não disponível (middleware redireciona se cookie ausente)
+    // - a query ainda não rodou (isFetched=false) ou está carregando
+    // Só decidimos "não encontrada" DEPOIS que a query realmente executou.
+    if (sessionLoading || !restaurantId || isLoading || !isFetched) {
         return (
             <div className="min-h-screen bg-[#101d22] flex flex-col pt-12 p-4 items-center animate-pulse">
                 <div className="h-12 w-full max-w-[480px] bg-[#1a2c32] rounded-xl mb-6"></div>
