@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useSession } from '@/lib/providers/use-session';
-import { useActivityData, useToggleActivityTask } from '@/lib/hooks/use-activity-execution';
+import { useActivityData, useToggleActivityTask, useSkipTask, useUnskipTask } from '@/lib/hooks/use-activity-execution';
 import { useChecklistAssumption, useCompleteChecklist } from '@/lib/hooks/use-tasks';
 import { useTaskIssues } from '@/lib/hooks/use-task-issues';
 import { ExecutionItem, type ExecutionToggleInput } from '@/components/turno/execution-item';
@@ -31,6 +31,8 @@ export default function ActivityExecutionPage() {
     const { data: activityData, isLoading, isError, isFetched } = useActivityData(restaurantId || undefined, checklistId);
     const { data: assumption } = useChecklistAssumption(restaurantId || undefined, checklistId);
     const toggleTask = useToggleActivityTask();
+    const skipTask = useSkipTask();
+    const unskipTask = useUnskipTask();
     const completeMutation = useCompleteChecklist();
 
     const { checklist, tasks, executions } = activityData || {};
@@ -71,12 +73,18 @@ export default function ActivityExecutionPage() {
         return () => clearTimeout(t);
     }, [issueFlash]);
 
-    const progress = useMemo(() => {
-        if (!tasks || tasks.length === 0) return 0;
-        const doneCount = tasks.filter(t =>
-            executions?.some(e => e.task_id === t.id && e.status === 'done')
-        ).length;
-        return Math.round((doneCount / tasks.length) * 100);
+    const { progress, doneCount, skippedCount } = useMemo(() => {
+        if (!tasks || tasks.length === 0) return { progress: 0, doneCount: 0, skippedCount: 0 };
+        let done = 0;
+        let skipped = 0;
+        for (const t of tasks) {
+            const exec = executions?.find(e => e.task_id === t.id);
+            if (!exec) continue;
+            if (exec.status === 'done') done += 1;
+            else if (exec.status === 'skipped') skipped += 1;
+        }
+        const resolved = done + skipped;
+        return { progress: Math.round((resolved / tasks.length) * 100), doneCount: done, skippedCount: skipped };
     }, [tasks, executions]);
 
     const isAllDone = progress === 100;
@@ -127,19 +135,39 @@ export default function ActivityExecutionPage() {
         setEditingIssue(null);
     };
 
+    const handleSkipTask = async (taskId: string, linkedIssueId: string | null) => {
+        if (!restaurantId || !checklistId || isCompleted) return;
+        try {
+            await skipTask.mutateAsync({ restaurantId, checklistId, taskId, issueId: linkedIssueId });
+        } catch (e) {
+            console.error('Erro ao pular tarefa:', e);
+        }
+    };
+
+    const handleUnskipTask = async (taskId: string) => {
+        if (!restaurantId || !checklistId || isCompleted) return;
+        try {
+            await unskipTask.mutateAsync({ restaurantId, checklistId, taskId });
+        } catch (e) {
+            console.error('Erro ao desfazer skip:', e);
+        }
+    };
+
     const handleConfirmFinalize = async () => {
         if (!restaurantId || !checklistId) return;
 
         // Validação de segurança: tasks que exigem foto e não têm foto na execução
+        // Skipped bypassa a regra (não foi possível concluir → sem foto faz sentido).
         // Compat: leitura considera photos[] (Sprint 35) OU photo_url (legado)
-        const missingPhotoTasks = (tasks ?? []).filter(t =>
-            t.requires_photo &&
-            !executions?.some(e =>
-                e.task_id === t.id &&
-                e.status === 'done' &&
-                ((Array.isArray(e.photos) && e.photos.length > 0) || !!e.photo_url)
-            )
-        );
+        const missingPhotoTasks = (tasks ?? []).filter(t => {
+            if (!t.requires_photo) return false;
+            const exec = executions?.find(e => e.task_id === t.id);
+            if (!exec) return true;
+            if (exec.status === 'skipped') return false;
+            if (exec.status !== 'done') return true;
+            const hasPhoto = (Array.isArray(exec.photos) && exec.photos.length > 0) || !!exec.photo_url;
+            return !hasPhoto;
+        });
         if (missingPhotoTasks.length > 0) {
             setPhotoValidationError(
                 `${missingPhotoTasks.length === 1 ? '1 tarefa exige' : `${missingPhotoTasks.length} tarefas exigem`} foto e ainda não ${missingPhotoTasks.length === 1 ? 'foi registrada' : 'foram registradas'}.`
@@ -239,7 +267,7 @@ export default function ActivityExecutionPage() {
                     {isCompleted && (
                         <span className="shrink-0 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1">
                             <span className="material-symbols-outlined text-[12px]">task_alt</span>
-                            {hasAnyOpenIssue ? 'Concluída c/ ocorrência' : 'Concluída'}
+                            {hasAnyOpenIssue || skippedCount > 0 ? 'Concluída c/ ocorrência' : 'Concluída'}
                         </span>
                     )}
                 </div>
@@ -256,7 +284,7 @@ export default function ActivityExecutionPage() {
                         <div
                             className={`h-full transition-all duration-700 ease-out rounded-full ${
                                 isCompleted
-                                    ? hasAnyOpenIssue ? 'bg-amber-500' : 'bg-emerald-500'
+                                    ? (hasAnyOpenIssue || skippedCount > 0) ? 'bg-amber-500' : 'bg-emerald-500'
                                     : isAllDone
                                         ? 'bg-[#13b6ec] shadow-[0_0_10px_rgba(19,182,236,0.5)]'
                                         : 'bg-gradient-to-r from-[#13b6ec]/70 to-[#13b6ec]'
@@ -283,15 +311,18 @@ export default function ActivityExecutionPage() {
                         </div>
                     )}
 
-                    {/* Banner informativo de ocorrências abertas (não bloqueia) */}
-                    {hasAnyOpenIssue && !isCompleted && (
+                    {/* Banner informativo de ocorrências abertas + skips (não bloqueia) */}
+                    {(hasAnyOpenIssue || skippedCount > 0) && !isCompleted && (
                         <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center gap-3">
                             <div className="w-10 h-10 bg-amber-500/20 rounded-full flex items-center justify-center shrink-0">
                                 <span className="material-symbols-outlined text-amber-400 text-xl">warning</span>
                             </div>
                             <div>
                                 <h2 className="text-amber-300 font-bold text-sm">
-                                    {openIssuesByTaskId.size === 1 ? '1 ocorrência registrada' : `${openIssuesByTaskId.size} ocorrências registradas`}
+                                    {[
+                                        openIssuesByTaskId.size > 0 && `${openIssuesByTaskId.size} ocorrência${openIssuesByTaskId.size > 1 ? 's' : ''} registrada${openIssuesByTaskId.size > 1 ? 's' : ''}`,
+                                        skippedCount > 0 && `${skippedCount} tarefa${skippedCount > 1 ? 's' : ''} não concluída${skippedCount > 1 ? 's' : ''}`,
+                                    ].filter(Boolean).join(' · ')}
                                 </h2>
                                 <p className="text-amber-400/70 text-xs mt-0.5">O gestor foi notificado. Você pode continuar e finalizar a rotina normalmente.</p>
                             </div>
@@ -305,7 +336,11 @@ export default function ActivityExecutionPage() {
                                 <span className="material-symbols-outlined text-[#0a1215] text-xl font-bold">celebration</span>
                             </div>
                             <div>
-                                <h2 className="text-[#13b6ec] font-bold text-sm">Todas as tarefas concluídas!</h2>
+                                <h2 className="text-[#13b6ec] font-bold text-sm">
+                                    {skippedCount > 0
+                                        ? `Todas as tarefas tratadas (${doneCount} concluída${doneCount !== 1 ? 's' : ''}, ${skippedCount} não concluída${skippedCount !== 1 ? 's' : ''})`
+                                        : 'Todas as tarefas concluídas!'}
+                                </h2>
                                 <p className="text-[#13b6ec]/70 text-xs mt-0.5">Clique em &quot;Finalizar Atividade&quot; para encerrar.</p>
                             </div>
                         </div>
@@ -336,6 +371,8 @@ export default function ActivityExecutionPage() {
                                     onToggle={handleToggle}
                                     onReportProblem={handleReportProblem}
                                     onEditIssue={handleEditIssue}
+                                    onSkipTask={handleSkipTask}
+                                    onUnskipTask={handleUnskipTask}
                                     locked={isCompleted || isAccessBlocked}
                                     isBlockedSequential={isAccessBlocked}
                                     restaurantId={restaurantId ?? ''}

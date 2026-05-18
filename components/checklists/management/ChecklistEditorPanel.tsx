@@ -480,27 +480,34 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose, focusIss
                                     const execution = executionMap.get(task.id);
                                     const isDone = execution?.status === "done";
                                     const isBlocked = execution?.status === "blocked";
+                                    const isSkipped = execution?.status === "skipped";
                                     const photoUrls = signedUrls[task.id] ?? [];
 
                                     return (
                                         <div
                                             key={task.id}
                                             className={`flex items-start gap-3 p-3 border rounded-xl transition-colors ${
-                                                isBlocked
-                                                    ? "bg-amber-500/5 border-amber-500/20"
-                                                    : isDone
-                                                        ? "bg-emerald-500/5 border-emerald-500/20"
-                                                        : "bg-[#0a1215] border-[#233f48]"
+                                                isSkipped
+                                                    ? "bg-amber-500/5 border-amber-500/30"
+                                                    : isBlocked
+                                                        ? "bg-amber-500/5 border-amber-500/20"
+                                                        : isDone
+                                                            ? "bg-emerald-500/5 border-emerald-500/20"
+                                                            : "bg-[#0a1215] border-[#233f48]"
                                             }`}
                                         >
                                             {/* Status icon */}
                                             <div className="flex flex-col items-center gap-1 shrink-0 mt-0.5">
                                                 <span
                                                     className={`text-xs font-bold w-5 text-right ${
-                                                        isBlocked ? "text-amber-400" : isDone ? "text-emerald-400" : "text-[#325a67]"
+                                                        isSkipped ? "text-amber-400" : isBlocked ? "text-amber-400" : isDone ? "text-emerald-400" : "text-[#325a67]"
                                                     }`}
                                                 >
-                                                    {isBlocked ? (
+                                                    {isSkipped ? (
+                                                        <span className="material-symbols-outlined text-[16px] text-amber-400">
+                                                            block
+                                                        </span>
+                                                    ) : isBlocked ? (
                                                         <span className="material-symbols-outlined text-[16px] text-amber-400">
                                                             warning
                                                         </span>
@@ -517,11 +524,17 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose, focusIss
                                             <div className="flex-1 min-w-0">
                                                 <p
                                                     className={`text-sm font-medium leading-snug ${
-                                                        isBlocked ? "text-amber-300" : isDone ? "text-emerald-300" : "text-white"
+                                                        isSkipped ? "text-amber-300 line-through decoration-amber-400/40" : isBlocked ? "text-amber-300" : isDone ? "text-emerald-300" : "text-white"
                                                     }`}
                                                 >
                                                     {task.title}
                                                 </p>
+                                                {isSkipped && (
+                                                    <p className="text-[11px] text-amber-400 mt-1 flex items-center gap-1 font-semibold uppercase tracking-wide">
+                                                        <span className="material-symbols-outlined text-[12px]">block</span>
+                                                        Não concluída — pulada por ocorrência
+                                                    </p>
+                                                )}
                                                 {task.description && (
                                                     <p className="text-[#92bbc9] text-xs mt-0.5">{task.description}</p>
                                                 )}

@@ -17,7 +17,7 @@ export async function PATCH(
     try {
         const { id } = await params;
         const body = await request.json();
-        const { status, manager_comment, description, photos } = body ?? {};
+        const { status, manager_comment, description, photos, task_execution_id } = body ?? {};
 
         if (status !== undefined && !VALID_STATUSES.includes(status)) {
             return NextResponse.json({ error: 'status inválido' }, { status: 400 });
@@ -59,6 +59,7 @@ export async function PATCH(
         // Detecta intenções:
         const wantsStatusOrComment = status !== undefined || typeof manager_comment === 'string';
         const wantsContentEdit = typeof description === 'string' || Array.isArray(photos);
+        const wantsExecutionLink = typeof task_execution_id === 'string' && task_execution_id.length > 0;
 
         // Permissões:
         // - status / manager_comment → apenas gestor
@@ -74,7 +75,15 @@ export async function PATCH(
                 return NextResponse.json({ error: 'Edição permitida apenas enquanto a ocorrência está aberta.' }, { status: 409 });
             }
         }
-        if (!wantsStatusOrComment && !wantsContentEdit) {
+        // Vínculo com execução (Sprint 46 — skip): autor pode amarrar enquanto issue está open;
+        // gestor pode amarrar sempre. RLS direto bloquearia o autor, por isso passa por aqui.
+        if (wantsExecutionLink) {
+            const allowedAsAuthor = isAuthor && current.status === 'open';
+            if (!isGestor && !allowedAsAuthor) {
+                return NextResponse.json({ error: 'Sem permissão para vincular execução.' }, { status: 403 });
+            }
+        }
+        if (!wantsStatusOrComment && !wantsContentEdit && !wantsExecutionLink) {
             return NextResponse.json({ error: 'Nada para atualizar' }, { status: 400 });
         }
 
@@ -134,6 +143,11 @@ export async function PATCH(
                     event_type: 'comment_added', comment: commentTrimmed, actor_user_id: user.id,
                 });
             }
+        }
+
+        // ── Trilha 3: amarrar/atualizar task_execution_id (skip flow) ──────
+        if (wantsExecutionLink && task_execution_id !== current.task_execution_id) {
+            update.task_execution_id = task_execution_id;
         }
 
         // ── Trilha 2: autor editando description / photos (somente open) ───

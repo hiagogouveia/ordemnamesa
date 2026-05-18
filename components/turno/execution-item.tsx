@@ -25,6 +25,10 @@ interface ExecutionItemProps {
     onReportProblem: (taskId: string) => void;
     /** Sprint 46: callback para abrir o modal em modo edição da ocorrência do autor. */
     onEditIssue?: (issue: TaskIssue) => void;
+    /** Sprint 46: "Não foi possível concluir" — marca task como skipped, opcionalmente vinculada à ocorrência. */
+    onSkipTask?: (taskId: string, linkedIssueId: string | null) => void;
+    /** Sprint 46: desfaz skip. */
+    onUnskipTask?: (taskId: string) => void;
     locked?: boolean;
     isBlockedSequential?: boolean;
     restaurantId: string;
@@ -34,8 +38,9 @@ interface ExecutionItemProps {
     myOpenIssue?: TaskIssue | null;
 }
 
-export function ExecutionItem({ task, execution, onToggle, onReportProblem, onEditIssue, locked = false, isBlockedSequential = false, restaurantId, hasOpenIssue = false, myOpenIssue = null }: ExecutionItemProps) {
+export function ExecutionItem({ task, execution, onToggle, onReportProblem, onEditIssue, onSkipTask, onUnskipTask, locked = false, isBlockedSequential = false, restaurantId, hasOpenIssue = false, myOpenIssue = null }: ExecutionItemProps) {
     const isDone = Boolean(execution && execution.status === 'done');
+    const isSkipped = Boolean(execution && execution.status === 'skipped');
     const [isAnimating, setIsAnimating] = useState(false);
     const [photoError, setPhotoError] = useState<string | null>(null);
 
@@ -202,28 +207,81 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onEd
     // outro staff, ou já em investigating/resolved), continua só o badge.
     const myEditableIssue = myOpenIssue && myOpenIssue.status === 'open' ? myOpenIssue : null;
     const inlineIssueCard = myEditableIssue ? (
-        <div className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 flex items-start gap-2.5">
-            <span className="material-symbols-outlined text-amber-400 text-[18px] shrink-0 mt-0.5">warning</span>
-            <div className="flex-1 min-w-0">
-                <p className="text-[11px] uppercase tracking-wide font-bold text-amber-400">Ocorrência registrada · aguardando conclusão da tarefa</p>
-                <p className="text-xs text-white mt-1 line-clamp-2 whitespace-pre-wrap">{myEditableIssue.description}</p>
-                {myEditableIssue.photos.length > 0 && (
-                    <p className="text-[10px] text-amber-400/70 mt-1 flex items-center gap-1">
-                        <span className="material-symbols-outlined text-[12px]">image</span>
-                        {myEditableIssue.photos.length} foto{myEditableIssue.photos.length > 1 ? 's' : ''}
-                    </p>
+        <div className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 flex flex-col gap-2.5">
+            <div className="flex items-start gap-2.5">
+                <span className="material-symbols-outlined text-amber-400 text-[18px] shrink-0 mt-0.5">warning</span>
+                <div className="flex-1 min-w-0">
+                    <p className="text-[11px] uppercase tracking-wide font-bold text-amber-400">Ocorrência registrada · aguardando conclusão da tarefa</p>
+                    <p className="text-xs text-white mt-1 line-clamp-2 whitespace-pre-wrap">{myEditableIssue.description}</p>
+                    {myEditableIssue.photos.length > 0 && (
+                        <p className="text-[10px] text-amber-400/70 mt-1 flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[12px]">image</span>
+                            {myEditableIssue.photos.length} foto{myEditableIssue.photos.length > 1 ? 's' : ''}
+                        </p>
+                    )}
+                </div>
+                {onEditIssue && !locked && (
+                    <button
+                        onClick={() => onEditIssue(myEditableIssue)}
+                        className="shrink-0 text-[11px] font-semibold text-amber-300 hover:text-amber-200 underline-offset-2 hover:underline"
+                    >
+                        Ver / Editar
+                    </button>
                 )}
             </div>
-            {onEditIssue && !locked && (
+            {onSkipTask && !locked && !isDone && !isSkipped && (
                 <button
-                    onClick={() => onEditIssue(myEditableIssue)}
-                    className="shrink-0 text-[11px] font-semibold text-amber-300 hover:text-amber-200 underline-offset-2 hover:underline"
+                    onClick={() => onSkipTask(task.id, myEditableIssue.id)}
+                    className="self-stretch flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/15 transition-colors"
                 >
-                    Ver / Editar
+                    <span className="material-symbols-outlined text-[14px]">block</span>
+                    Não foi possível concluir
                 </button>
             )}
         </div>
     ) : null;
+
+    // ── RENDER: task pulada (skipped — Sprint 46) ───────────────────────
+    if (isSkipped) {
+        return (
+            <div className="w-full flex flex-col gap-0 rounded-2xl border border-amber-500/30 bg-amber-500/5 overflow-hidden">
+                <div className="flex items-center gap-4 p-4 min-h-[64px]">
+                    <div className="shrink-0 w-7 h-7 rounded-full border-[2px] flex items-center justify-center bg-amber-500/20 border-amber-500 text-amber-400">
+                        <span className="material-symbols-outlined text-[16px] font-bold">block</span>
+                    </div>
+                    <div className="flex-1 py-1">
+                        <div className="flex items-start justify-between gap-3">
+                            <span className="text-base font-semibold leading-snug text-white line-through decoration-amber-400/40">
+                                {task.title}
+                            </span>
+                            <span className="shrink-0 bg-amber-500/15 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-amber-500/30 flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[12px]">block</span>
+                                Não concluída
+                            </span>
+                        </div>
+                        {task.description && (
+                            <p className="text-sm mt-1 text-[#92bbc9]/70">{task.description}</p>
+                        )}
+                        {myEditableIssue && (
+                            <p className="text-[11px] mt-2 text-amber-400/80 flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[12px]">warning</span>
+                                Pulada por ocorrência registrada
+                            </p>
+                        )}
+                    </div>
+                    {!locked && onUnskipTask && (
+                        <button
+                            onClick={() => onUnskipTask(task.id)}
+                            className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full text-[#92bbc9]/60 hover:text-[#92bbc9] hover:bg-[#233f48] transition-colors"
+                            title="Desfazer"
+                        >
+                            <span className="material-symbols-outlined text-[18px]">undo</span>
+                        </button>
+                    )}
+                </div>
+            </div>
+        );
+    }
 
     // ── RENDER: task concluída ──────────────────────────────────────────
     if (isDone) {
