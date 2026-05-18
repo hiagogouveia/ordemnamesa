@@ -163,6 +163,7 @@ export function IssueDetail({ issue, canManage, taskTitle, reporterName }: Issue
                                 {ev.event_type === "comment_added" && "Comentário adicionado"}
                                 {ev.event_type === "resolved" && "Resolvida"}
                                 {ev.event_type === "reopened" && "Reaberta"}
+                                {ev.event_type === "edited" && "Editada pelo autor"}
                             </span>
                             {ev.comment && <span className="text-[#92bbc9]">— {ev.comment}</span>}
                         </li>

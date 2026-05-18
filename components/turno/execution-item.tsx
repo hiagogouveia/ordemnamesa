@@ -4,6 +4,7 @@ import { PhotoUpload } from '@/components/tasks/photo-upload';
 import { useSignedUrl } from '@/lib/hooks/use-signed-url';
 import { resolveTaskType, computeTaskAlert } from '@/lib/utils/task-alert';
 import { formatDateBR } from '@/lib/utils/brazil-date';
+import type { TaskIssue } from '@/lib/types';
 
 export interface ExecutionToggleInput {
     isDone: boolean;
@@ -22,14 +23,18 @@ interface ExecutionItemProps {
     execution?: KanbanExecution;
     onToggle: (taskId: string, executionId: string | undefined, input: ExecutionToggleInput) => void;
     onReportProblem: (taskId: string) => void;
+    /** Sprint 46: callback para abrir o modal em modo edição da ocorrência do autor. */
+    onEditIssue?: (issue: TaskIssue) => void;
     locked?: boolean;
     isBlockedSequential?: boolean;
     restaurantId: string;
-    /** Indica se há ao menos uma ocorrência aberta/investigando para esta task (s44). */
+    /** Indica se há ao menos uma ocorrência aberta/investigando para esta task (s45). */
     hasOpenIssue?: boolean;
+    /** Sprint 46: ocorrência do usuário atual nesta task, quando existe e é dele. */
+    myOpenIssue?: TaskIssue | null;
 }
 
-export function ExecutionItem({ task, execution, onToggle, onReportProblem, locked = false, isBlockedSequential = false, restaurantId, hasOpenIssue = false }: ExecutionItemProps) {
+export function ExecutionItem({ task, execution, onToggle, onReportProblem, onEditIssue, locked = false, isBlockedSequential = false, restaurantId, hasOpenIssue = false, myOpenIssue = null }: ExecutionItemProps) {
     const isDone = Boolean(execution && execution.status === 'done');
     const [isAnimating, setIsAnimating] = useState(false);
     const [photoError, setPhotoError] = useState<string | null>(null);
@@ -192,6 +197,34 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, lock
         </span>
     ) : null;
 
+    // Card editável da própria ocorrência (Sprint 46): aparece quando o usuário é
+    // autor e a ocorrência está em status 'open'. Para outros casos (issue de
+    // outro staff, ou já em investigating/resolved), continua só o badge.
+    const myEditableIssue = myOpenIssue && myOpenIssue.status === 'open' ? myOpenIssue : null;
+    const inlineIssueCard = myEditableIssue ? (
+        <div className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 flex items-start gap-2.5">
+            <span className="material-symbols-outlined text-amber-400 text-[18px] shrink-0 mt-0.5">warning</span>
+            <div className="flex-1 min-w-0">
+                <p className="text-[11px] uppercase tracking-wide font-bold text-amber-400">Ocorrência registrada · aguardando conclusão da tarefa</p>
+                <p className="text-xs text-white mt-1 line-clamp-2 whitespace-pre-wrap">{myEditableIssue.description}</p>
+                {myEditableIssue.photos.length > 0 && (
+                    <p className="text-[10px] text-amber-400/70 mt-1 flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[12px]">image</span>
+                        {myEditableIssue.photos.length} foto{myEditableIssue.photos.length > 1 ? 's' : ''}
+                    </p>
+                )}
+            </div>
+            {onEditIssue && !locked && (
+                <button
+                    onClick={() => onEditIssue(myEditableIssue)}
+                    className="shrink-0 text-[11px] font-semibold text-amber-300 hover:text-amber-200 underline-offset-2 hover:underline"
+                >
+                    Ver / Editar
+                </button>
+            )}
+        </div>
+    ) : null;
+
     // ── RENDER: task concluída ──────────────────────────────────────────
     if (isDone) {
         const allPhotos: string[] = Array.isArray(execution?.photos) && execution.photos.length > 0
@@ -285,6 +318,9 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, lock
                         <img src={donePhotoUrl} alt="Evidência" className="w-full object-cover max-h-32" />
                     </div>
                 )}
+                {inlineIssueCard && (
+                    <div className="px-4 pb-3">{inlineIssueCard}</div>
+                )}
             </div>
         );
     }
@@ -346,7 +382,9 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, lock
                     </div>
                 </button>
 
-                {!locked && !isBlockedSequential && (
+                {inlineIssueCard}
+
+                {!locked && !isBlockedSequential && !myEditableIssue && (
                     <button
                         onClick={() => onReportProblem(task.id)}
                         className="mt-1 self-start ml-11 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-amber-400/70 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
@@ -556,13 +594,17 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, lock
                         Concluir tarefa
                     </button>
 
-                    <button
-                        onClick={() => onReportProblem(task.id)}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15 transition-colors active:scale-[0.98]"
-                    >
-                        <span className="material-symbols-outlined text-[16px]">warning</span>
-                        Registrar ocorrência
-                    </button>
+                    {inlineIssueCard}
+
+                    {!myEditableIssue && (
+                        <button
+                            onClick={() => onReportProblem(task.id)}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15 transition-colors active:scale-[0.98]"
+                        >
+                            <span className="material-symbols-outlined text-[16px]">warning</span>
+                            Registrar ocorrência
+                        </button>
+                    )}
                 </div>
             )}
         </div>

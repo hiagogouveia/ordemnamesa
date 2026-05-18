@@ -120,17 +120,21 @@ export interface UpdateIssueArgs {
     restaurantId: string;
     status?: TaskIssueStatus;
     manager_comment?: string;
+    /** Apenas o autor pode editar, e só enquanto status='open' */
+    description?: string;
+    /** Apenas o autor pode editar, e só enquanto status='open' */
+    photos?: string[];
 }
 
 export const useUpdateIssue = () => {
     const queryClient = useQueryClient();
     return useMutation<TaskIssue, Error, UpdateIssueArgs>({
-        mutationFn: async ({ id, status, manager_comment }) => {
+        mutationFn: async ({ id, status, manager_comment, description, photos }) => {
             const token = await getAuthToken();
             const res = await fetch(`/api/task-issues/${id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ status, manager_comment }),
+                body: JSON.stringify({ status, manager_comment, description, photos }),
             });
             if (!res.ok) throw new Error((await res.json()).error || 'Erro ao atualizar ocorrência');
             const data = await res.json();

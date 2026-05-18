@@ -8,6 +8,7 @@ import { useChecklistAssumption, useCompleteChecklist } from '@/lib/hooks/use-ta
 import { useTaskIssues } from '@/lib/hooks/use-task-issues';
 import { ExecutionItem, type ExecutionToggleInput } from '@/components/turno/execution-item';
 import { IssueReportModal } from '@/components/checklists/issues/IssueReportModal';
+import type { TaskIssue } from '@/lib/types';
 
 export default function ActivityExecutionPage() {
     const router = useRouter();
@@ -24,6 +25,8 @@ export default function ActivityExecutionPage() {
 
     // Modal de ocorrência (substitui o antigo "reportar problema")
     const [reportModalTaskId, setReportModalTaskId] = useState<string | null>(null);
+    const [editingIssue, setEditingIssue] = useState<TaskIssue | null>(null);
+    const [issueFlash, setIssueFlash] = useState<{ kind: 'created' | 'updated' } | null>(null);
 
     const { data: activityData, isLoading, isError, isFetched } = useActivityData(restaurantId || undefined, checklistId);
     const { data: assumption } = useChecklistAssumption(restaurantId || undefined, checklistId);
@@ -48,6 +51,25 @@ export default function ActivityExecutionPage() {
         });
         return map;
     }, [issues]);
+
+    // Sprint 46: ocorrência aberta DO usuário atual por task (apenas status='open' permite edição)
+    const myOpenIssueByTaskId = useMemo(() => {
+        const map = new Map<string, TaskIssue>();
+        if (!session.userId) return map;
+        (issues ?? []).forEach(i => {
+            if (i.status === 'open' && i.reported_by === session.userId) {
+                map.set(i.task_id, i);
+            }
+        });
+        return map;
+    }, [issues, session.userId]);
+
+    // Auto-dismiss banner de sucesso (3s)
+    React.useEffect(() => {
+        if (!issueFlash) return;
+        const t = setTimeout(() => setIssueFlash(null), 3500);
+        return () => clearTimeout(t);
+    }, [issueFlash]);
 
     const progress = useMemo(() => {
         if (!tasks || tasks.length === 0) return 0;
@@ -91,7 +113,18 @@ export default function ActivityExecutionPage() {
     };
 
     const handleReportProblem = (taskId: string) => {
+        setEditingIssue(null);
         setReportModalTaskId(taskId);
+    };
+
+    const handleEditIssue = (issue: TaskIssue) => {
+        setEditingIssue(issue);
+        setReportModalTaskId(issue.task_id);
+    };
+
+    const closeIssueModal = () => {
+        setReportModalTaskId(null);
+        setEditingIssue(null);
     };
 
     const handleConfirmFinalize = async () => {
@@ -163,6 +196,23 @@ export default function ActivityExecutionPage() {
 
     return (
         <div className="min-h-[100dvh] bg-[#101d22] font-sans flex flex-col">
+            {/* Toast transitório de ocorrência (Sprint 46) */}
+            {issueFlash && (
+                <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[60] max-w-[440px] w-[calc(100%-1.5rem)] bg-amber-500 text-[#0c1518] rounded-xl shadow-2xl px-4 py-3 flex items-start gap-2.5 animate-in fade-in slide-in-from-top-4 duration-300">
+                    <span className="material-symbols-outlined text-[20px] shrink-0">warning</span>
+                    <div className="flex-1 text-sm font-semibold leading-tight">
+                        {issueFlash.kind === 'created'
+                            ? 'Ocorrência registrada. Agora conclua a tarefa normalmente.'
+                            : 'Ocorrência atualizada.'}
+                    </div>
+                    <button
+                        onClick={() => setIssueFlash(null)}
+                        className="text-[#0c1518]/70 hover:text-[#0c1518] text-lg leading-none"
+                        aria-label="Fechar"
+                    >×</button>
+                </div>
+            )}
+
             {/* Header Sticky */}
             <header className="sticky top-0 z-30 bg-[#101d22]/95 backdrop-blur-md border-b border-[#233f48] px-4 py-4">
                 <div className="max-w-[480px] mx-auto w-full flex items-center gap-3">
@@ -285,10 +335,12 @@ export default function ActivityExecutionPage() {
                                     execution={execution}
                                     onToggle={handleToggle}
                                     onReportProblem={handleReportProblem}
+                                    onEditIssue={handleEditIssue}
                                     locked={isCompleted || isAccessBlocked}
                                     isBlockedSequential={isAccessBlocked}
                                     restaurantId={restaurantId ?? ''}
                                     hasOpenIssue={openIssuesByTaskId.has(task.id)}
+                                    myOpenIssue={myOpenIssueByTaskId.get(task.id) ?? null}
                                 />
                             );
                         })}
@@ -413,17 +465,20 @@ export default function ActivityExecutionPage() {
                 </div>
             )}
 
-            {/* Modal de registrar ocorrência (substitui o antigo bloqueio) */}
+            {/* Modal de registrar/editar ocorrência (Sprint 46) */}
             {reportModalTaskId && reportingTask && restaurantId && (
                 <IssueReportModal
                     isOpen={!!reportModalTaskId}
-                    onClose={() => setReportModalTaskId(null)}
+                    onClose={closeIssueModal}
                     restaurantId={restaurantId}
                     taskId={reportingTask.id}
                     taskTitle={reportingTask.title}
                     checklistId={checklistId}
                     checklistAssumptionId={assumption?.id ?? null}
                     taskExecutionId={reportingExecution?.id ?? null}
+                    existingIssue={editingIssue}
+                    onCreated={() => setIssueFlash({ kind: 'created' })}
+                    onUpdated={() => setIssueFlash({ kind: 'updated' })}
                 />
             )}
         </div>

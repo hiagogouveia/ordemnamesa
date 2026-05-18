@@ -17,7 +17,7 @@ export async function PATCH(
     try {
         const { id } = await params;
         const body = await request.json();
-        const { status, manager_comment } = body ?? {};
+        const { status, manager_comment, description, photos } = body ?? {};
 
         if (status !== undefined && !VALID_STATUSES.includes(status)) {
             return NextResponse.json({ error: 'status inválido' }, { status: 400 });
@@ -41,7 +41,6 @@ export async function PATCH(
             return NextResponse.json({ error: 'Ocorrência não encontrada' }, { status: 404 });
         }
 
-        // Check role: somente owner/manager pode mexer
         const { data: membership } = await admin
             .from('restaurant_users')
             .select('role')
@@ -50,8 +49,33 @@ export async function PATCH(
             .eq('active', true)
             .maybeSingle();
 
-        if (!membership || (membership.role !== 'owner' && membership.role !== 'manager')) {
-            return NextResponse.json({ error: 'Sem permissão para alterar ocorrência' }, { status: 403 });
+        if (!membership) {
+            return NextResponse.json({ error: 'Sem acesso a este restaurante' }, { status: 403 });
+        }
+
+        const isGestor = membership.role === 'owner' || membership.role === 'manager';
+        const isAuthor = current.reported_by === user.id;
+
+        // Detecta intenções:
+        const wantsStatusOrComment = status !== undefined || typeof manager_comment === 'string';
+        const wantsContentEdit = typeof description === 'string' || Array.isArray(photos);
+
+        // Permissões:
+        // - status / manager_comment → apenas gestor
+        // - description / photos → apenas autor E status='open'
+        if (wantsStatusOrComment && !isGestor) {
+            return NextResponse.json({ error: 'Apenas gestor pode alterar status/comentário.' }, { status: 403 });
+        }
+        if (wantsContentEdit) {
+            if (!isAuthor) {
+                return NextResponse.json({ error: 'Apenas o autor pode editar descrição/fotos.' }, { status: 403 });
+            }
+            if (current.status !== 'open') {
+                return NextResponse.json({ error: 'Edição permitida apenas enquanto a ocorrência está aberta.' }, { status: 409 });
+            }
+        }
+        if (!wantsStatusOrComment && !wantsContentEdit) {
+            return NextResponse.json({ error: 'Nada para atualizar' }, { status: 400 });
         }
 
         const fromStatus = current.status as IssueStatus;
@@ -60,37 +84,88 @@ export async function PATCH(
         const now = new Date().toISOString();
 
         const update: Record<string, unknown> = {};
+        const events: Array<Record<string, unknown>> = [];
 
-        // Aplica novo status (se mudou)
-        if (toStatus && toStatus !== fromStatus) {
-            // Validação: resolver exige comentário non-empty (current ou novo)
-            if (toStatus === 'resolved') {
-                const effectiveComment = commentTrimmed ?? current.manager_comment ?? '';
-                if (!effectiveComment || effectiveComment.length === 0) {
-                    return NextResponse.json(
-                        { error: 'É obrigatório adicionar um comentário ao resolver a ocorrência.' },
-                        { status: 400 }
-                    );
+        // ── Trilha 1: gestor mudando status / comentário ───────────────────
+        if (wantsStatusOrComment) {
+            if (toStatus && toStatus !== fromStatus) {
+                if (toStatus === 'resolved') {
+                    const effectiveComment = commentTrimmed ?? current.manager_comment ?? '';
+                    if (!effectiveComment || effectiveComment.length === 0) {
+                        return NextResponse.json(
+                            { error: 'É obrigatório adicionar um comentário ao resolver a ocorrência.' },
+                            { status: 400 }
+                        );
+                    }
+                    update.status = 'resolved';
+                    update.resolved_by = user.id;
+                    update.resolved_at = now;
+                    if (commentTrimmed) update.manager_comment = commentTrimmed;
+                    events.push({
+                        task_issue_id: id, restaurant_id: current.restaurant_id,
+                        event_type: 'resolved', from_status: fromStatus, to_status: toStatus,
+                        comment: commentTrimmed ?? null, actor_user_id: user.id,
+                    });
+                } else if (fromStatus === 'resolved') {
+                    update.status = toStatus;
+                    update.reopened_by = user.id;
+                    update.reopened_at = now;
+                    update.resolved_by = null;
+                    update.resolved_at = null;
+                    if (commentTrimmed) update.manager_comment = commentTrimmed;
+                    events.push({
+                        task_issue_id: id, restaurant_id: current.restaurant_id,
+                        event_type: 'reopened', from_status: fromStatus, to_status: toStatus,
+                        comment: commentTrimmed ?? null, actor_user_id: user.id,
+                    });
+                } else {
+                    update.status = toStatus;
+                    if (commentTrimmed) update.manager_comment = commentTrimmed;
+                    events.push({
+                        task_issue_id: id, restaurant_id: current.restaurant_id,
+                        event_type: 'status_changed', from_status: fromStatus, to_status: toStatus,
+                        comment: commentTrimmed ?? null, actor_user_id: user.id,
+                    });
                 }
-                update.status = 'resolved';
-                update.resolved_by = user.id;
-                update.resolved_at = now;
-                if (commentTrimmed) update.manager_comment = commentTrimmed;
-            } else if (fromStatus === 'resolved') {
-                // Reabertura
-                update.status = toStatus;
-                update.reopened_by = user.id;
-                update.reopened_at = now;
-                update.resolved_by = null;
-                update.resolved_at = null;
-                if (commentTrimmed) update.manager_comment = commentTrimmed;
-            } else {
-                update.status = toStatus;
-                if (commentTrimmed) update.manager_comment = commentTrimmed;
+            } else if (commentTrimmed && commentTrimmed.length > 0) {
+                update.manager_comment = commentTrimmed;
+                events.push({
+                    task_issue_id: id, restaurant_id: current.restaurant_id,
+                    event_type: 'comment_added', comment: commentTrimmed, actor_user_id: user.id,
+                });
             }
-        } else if (commentTrimmed !== undefined && commentTrimmed.length > 0) {
-            // Apenas comentário
-            update.manager_comment = commentTrimmed;
+        }
+
+        // ── Trilha 2: autor editando description / photos (somente open) ───
+        if (wantsContentEdit) {
+            const changes: Record<string, unknown> = {};
+            if (typeof description === 'string') {
+                const trimmed = description.trim();
+                if (trimmed.length < 3) {
+                    return NextResponse.json({ error: 'Descrição precisa ter ao menos 3 caracteres.' }, { status: 400 });
+                }
+                if (trimmed !== current.description) {
+                    update.description = trimmed;
+                    changes.description = { from: current.description, to: trimmed };
+                }
+            }
+            if (Array.isArray(photos)) {
+                const normalized = photos.filter((p): p is string => typeof p === 'string' && p.length > 0);
+                const prev = Array.isArray(current.photos) ? current.photos : [];
+                const sameLen = prev.length === normalized.length;
+                const sameContent = sameLen && prev.every((p: string, i: number) => p === normalized[i]);
+                if (!sameContent) {
+                    update.photos = normalized;
+                    changes.photos = { from_count: prev.length, to_count: normalized.length };
+                }
+            }
+            if (Object.keys(changes).length > 0) {
+                events.push({
+                    task_issue_id: id, restaurant_id: current.restaurant_id,
+                    event_type: 'edited', actor_user_id: user.id,
+                    metadata: changes,
+                });
+            }
         }
 
         if (Object.keys(update).length === 0) {
@@ -107,50 +182,6 @@ export async function PATCH(
         if (updateError) {
             console.error('[PATCH /api/task-issues/[id]] update error:', updateError);
             return NextResponse.json({ error: updateError.message }, { status: 500 });
-        }
-
-        // Registrar evento(s) apropriado(s)
-        const events: Array<Record<string, unknown>> = [];
-        if (toStatus && toStatus !== fromStatus) {
-            if (toStatus === 'resolved') {
-                events.push({
-                    task_issue_id: id,
-                    restaurant_id: current.restaurant_id,
-                    event_type: 'resolved',
-                    from_status: fromStatus,
-                    to_status: toStatus,
-                    comment: commentTrimmed ?? null,
-                    actor_user_id: user.id,
-                });
-            } else if (fromStatus === 'resolved') {
-                events.push({
-                    task_issue_id: id,
-                    restaurant_id: current.restaurant_id,
-                    event_type: 'reopened',
-                    from_status: fromStatus,
-                    to_status: toStatus,
-                    comment: commentTrimmed ?? null,
-                    actor_user_id: user.id,
-                });
-            } else {
-                events.push({
-                    task_issue_id: id,
-                    restaurant_id: current.restaurant_id,
-                    event_type: 'status_changed',
-                    from_status: fromStatus,
-                    to_status: toStatus,
-                    comment: commentTrimmed ?? null,
-                    actor_user_id: user.id,
-                });
-            }
-        } else if (commentTrimmed && commentTrimmed.length > 0) {
-            events.push({
-                task_issue_id: id,
-                restaurant_id: current.restaurant_id,
-                event_type: 'comment_added',
-                comment: commentTrimmed,
-                actor_user_id: user.id,
-            });
         }
 
         if (events.length > 0) {

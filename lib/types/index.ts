@@ -294,7 +294,7 @@ export interface Notification {
 // ============================================================
 
 export type TaskIssueStatus = 'open' | 'investigating' | 'resolved'
-export type TaskIssueEventType = 'created' | 'status_changed' | 'comment_added' | 'resolved' | 'reopened'
+export type TaskIssueEventType = 'created' | 'status_changed' | 'comment_added' | 'resolved' | 'reopened' | 'edited'
 
 export interface TaskIssue {
     id: string
