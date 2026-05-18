@@ -3,9 +3,11 @@
 import React, { useMemo, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useSession } from '@/lib/providers/use-session';
-import { useActivityData, useToggleActivityTask, useBlockTask, useResumeTask } from '@/lib/hooks/use-activity-execution';
+import { useActivityData, useToggleActivityTask } from '@/lib/hooks/use-activity-execution';
 import { useChecklistAssumption, useCompleteChecklist } from '@/lib/hooks/use-tasks';
+import { useTaskIssues } from '@/lib/hooks/use-task-issues';
 import { ExecutionItem, type ExecutionToggleInput } from '@/components/turno/execution-item';
+import { IssueReportModal } from '@/components/checklists/issues/IssueReportModal';
 
 export default function ActivityExecutionPage() {
     const router = useRouter();
@@ -20,31 +22,32 @@ export default function ActivityExecutionPage() {
     const [observation, setObservation] = useState("");
     const [photoValidationError, setPhotoValidationError] = useState<string | null>(null);
 
-    // Modal de reportar problema
+    // Modal de ocorrência (substitui o antigo "reportar problema")
     const [reportModalTaskId, setReportModalTaskId] = useState<string | null>(null);
-    const [reportReason, setReportReason] = useState("");
-    const [reportError, setReportError] = useState<string | null>(null);
-    const [reporting, setReporting] = useState(false);
 
     const { data: activityData, isLoading, isError, isFetched } = useActivityData(restaurantId || undefined, checklistId);
     const { data: assumption } = useChecklistAssumption(restaurantId || undefined, checklistId);
     const toggleTask = useToggleActivityTask();
     const completeMutation = useCompleteChecklist();
-    const blockTask = useBlockTask();
-    const resumeTask = useResumeTask();
 
     const { checklist, tasks, executions } = activityData || {};
 
     const isCompleted = Boolean(assumption?.completed_at);
 
-    const blockedCount = useMemo(() => {
-        if (!tasks || !executions) return 0;
-        return tasks.filter(t =>
-            executions.some(e => e.task_id === t.id && e.status === 'blocked')
-        ).length;
-    }, [tasks, executions]);
+    const { data: issues } = useTaskIssues({
+        restaurantId: restaurantId || undefined,
+        checklistAssumptionId: assumption?.id,
+    });
 
-    const hasBlockedTasks = blockedCount > 0;
+    const openIssuesByTaskId = useMemo(() => {
+        const map = new Map<string, number>();
+        (issues ?? []).forEach(i => {
+            if (i.status === 'open' || i.status === 'investigating') {
+                map.set(i.task_id, (map.get(i.task_id) ?? 0) + 1);
+            }
+        });
+        return map;
+    }, [issues]);
 
     const progress = useMemo(() => {
         if (!tasks || tasks.length === 0) return 0;
@@ -55,6 +58,7 @@ export default function ActivityExecutionPage() {
     }, [tasks, executions]);
 
     const isAllDone = progress === 100;
+    const hasAnyOpenIssue = openIssuesByTaskId.size > 0;
 
     const handleToggle = async (taskId: string, executionId: string | undefined, input: ExecutionToggleInput) => {
         if (!restaurantId || !checklistId || isCompleted) return;
@@ -86,42 +90,8 @@ export default function ActivityExecutionPage() {
         }
     };
 
-    const handleResumeTask = async (taskId: string, executionId: string) => {
-        if (!restaurantId || !checklistId) return;
-        try {
-            await resumeTask.mutateAsync({ restaurantId, checklistId, taskId, executionId });
-        } catch (e) {
-            console.error('Erro ao retomar tarefa:', e);
-        }
-    };
-
     const handleReportProblem = (taskId: string) => {
         setReportModalTaskId(taskId);
-        setReportReason("");
-        setReportError(null);
-    };
-
-    const handleConfirmReport = async () => {
-        if (!restaurantId || !checklistId || !reportModalTaskId) return;
-        if (!reportReason.trim()) {
-            setReportError("Descreva o problema encontrado.");
-            return;
-        }
-        setReporting(true);
-        setReportError(null);
-        try {
-            await blockTask.mutateAsync({
-                restaurantId,
-                checklistId,
-                taskId: reportModalTaskId,
-                reason: reportReason.trim(),
-            });
-            setReportModalTaskId(null);
-        } catch (e) {
-            setReportError((e as Error).message || 'Erro ao reportar problema');
-        } finally {
-            setReporting(false);
-        }
     };
 
     const handleConfirmFinalize = async () => {
@@ -156,11 +126,6 @@ export default function ActivityExecutionPage() {
         }
     };
 
-    // Mostrar skeleton enquanto:
-    // - a sessão (cookies) ainda não foi resolvida
-    // - restaurantId ainda não disponível (middleware redireciona se cookie ausente)
-    // - a query ainda não rodou (isFetched=false) ou está carregando
-    // Só decidimos "não encontrada" DEPOIS que a query realmente executou.
     if (sessionLoading || !restaurantId || isLoading || !isFetched) {
         return (
             <div className="min-h-screen bg-[#101d22] flex flex-col pt-12 p-4 items-center animate-pulse">
@@ -191,8 +156,10 @@ export default function ActivityExecutionPage() {
         );
     }
 
-    // Nome da task sendo reportada (para o modal)
     const reportingTask = reportModalTaskId ? tasks.find(t => t.id === reportModalTaskId) : null;
+    const reportingExecution = reportModalTaskId
+        ? executions?.find(e => e.task_id === reportModalTaskId)
+        : null;
 
     return (
         <div className="min-h-[100dvh] bg-[#101d22] font-sans flex flex-col">
@@ -222,7 +189,7 @@ export default function ActivityExecutionPage() {
                     {isCompleted && (
                         <span className="shrink-0 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1">
                             <span className="material-symbols-outlined text-[12px]">task_alt</span>
-                            Concluída
+                            {hasAnyOpenIssue ? 'Concluída c/ ocorrência' : 'Concluída'}
                         </span>
                     )}
                 </div>
@@ -239,12 +206,10 @@ export default function ActivityExecutionPage() {
                         <div
                             className={`h-full transition-all duration-700 ease-out rounded-full ${
                                 isCompleted
-                                    ? 'bg-emerald-500'
+                                    ? hasAnyOpenIssue ? 'bg-amber-500' : 'bg-emerald-500'
                                     : isAllDone
                                         ? 'bg-[#13b6ec] shadow-[0_0_10px_rgba(19,182,236,0.5)]'
-                                        : hasBlockedTasks
-                                            ? 'bg-gradient-to-r from-amber-500/70 to-amber-500'
-                                            : 'bg-gradient-to-r from-[#13b6ec]/70 to-[#13b6ec]'
+                                        : 'bg-gradient-to-r from-[#13b6ec]/70 to-[#13b6ec]'
                             }`}
                             style={{ width: `${progress}%` }}
                         />
@@ -268,23 +233,23 @@ export default function ActivityExecutionPage() {
                         </div>
                     )}
 
-                    {/* Banner de impedimento */}
-                    {hasBlockedTasks && !isCompleted && (
+                    {/* Banner informativo de ocorrências abertas (não bloqueia) */}
+                    {hasAnyOpenIssue && !isCompleted && (
                         <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center gap-3">
                             <div className="w-10 h-10 bg-amber-500/20 rounded-full flex items-center justify-center shrink-0">
                                 <span className="material-symbols-outlined text-amber-400 text-xl">warning</span>
                             </div>
                             <div>
                                 <h2 className="text-amber-300 font-bold text-sm">
-                                    {blockedCount === 1 ? '1 tarefa com impedimento' : `${blockedCount} tarefas com impedimento`}
+                                    {openIssuesByTaskId.size === 1 ? '1 ocorrência registrada' : `${openIssuesByTaskId.size} ocorrências registradas`}
                                 </h2>
-                                <p className="text-amber-400/70 text-xs mt-0.5">Não é possível finalizar a rotina enquanto houver impedimentos.</p>
+                                <p className="text-amber-400/70 text-xs mt-0.5">O gestor foi notificado. Você pode continuar e finalizar a rotina normalmente.</p>
                             </div>
                         </div>
                     )}
 
                     {/* All done — ready to finalize banner */}
-                    {isAllDone && !isCompleted && !hasBlockedTasks && (
+                    {isAllDone && !isCompleted && (
                         <div className="bg-[#13b6ec]/10 border border-[#13b6ec]/30 rounded-2xl p-4 flex items-center gap-3">
                             <div className="w-10 h-10 bg-[#13b6ec] rounded-full flex items-center justify-center shrink-0 shadow-[0_0_16px_rgba(19,182,236,0.4)]">
                                 <span className="material-symbols-outlined text-[#0a1215] text-xl font-bold">celebration</span>
@@ -320,10 +285,10 @@ export default function ActivityExecutionPage() {
                                     execution={execution}
                                     onToggle={handleToggle}
                                     onReportProblem={handleReportProblem}
-                                    onResumeTask={handleResumeTask}
                                     locked={isCompleted || isAccessBlocked}
                                     isBlockedSequential={isAccessBlocked}
                                     restaurantId={restaurantId ?? ''}
+                                    hasOpenIssue={openIssuesByTaskId.has(task.id)}
                                 />
                             );
                         })}
@@ -334,8 +299,8 @@ export default function ActivityExecutionPage() {
                         )}
                     </div>
 
-                    {/* Observation Field (Appears only when all done, no blocked tasks, and not completed) */}
-                    {isAllDone && !isCompleted && !hasBlockedTasks && (
+                    {/* Observation Field */}
+                    {isAllDone && !isCompleted && (
                         <div className="mt-6 flex flex-col gap-2 animate-in fade-in slide-in-from-bottom-4 duration-300">
                             <label className="text-white text-base font-bold ml-1 flex flex-col">
                                 Observações (opcional)
@@ -377,7 +342,7 @@ export default function ActivityExecutionPage() {
                             <span className="material-symbols-outlined text-[20px]">arrow_back</span>
                             Voltar ao Turno
                         </button>
-                    ) : isAllDone && !hasBlockedTasks ? (
+                    ) : isAllDone ? (
                         <button
                             onClick={() => setShowFinalizeModal(true)}
                             className="w-full bg-[#13b6ec] hover:bg-[#10a1d4] text-[#0a1215] font-bold text-base py-4 rounded-xl shadow-[0_8px_20px_rgba(19,182,236,0.3)] active:scale-95 transition-all flex items-center justify-center gap-2"
@@ -385,11 +350,6 @@ export default function ActivityExecutionPage() {
                             <span className="material-symbols-outlined text-[20px]">check_circle</span>
                             Finalizar Atividade
                         </button>
-                    ) : hasBlockedTasks ? (
-                        <div className="text-center text-amber-400/70 text-xs py-2 flex items-center justify-center gap-1.5">
-                            <span className="material-symbols-outlined text-[14px]">warning</span>
-                            Existem tarefas com impedimento
-                        </div>
                     ) : (
                         <div className="text-center text-[#325a67] text-xs py-2">
                             Complete todas as tarefas para finalizar
@@ -411,6 +371,14 @@ export default function ActivityExecutionPage() {
                                 Você tem certeza que deseja finalizar esta atividade?
                                 Após finalizar, as tarefas não poderão mais ser alteradas.
                             </p>
+                            {hasAnyOpenIssue && (
+                                <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-start gap-2">
+                                    <span className="material-symbols-outlined text-amber-400 text-[16px] shrink-0 mt-0.5">warning</span>
+                                    <p className="text-amber-300 text-xs leading-snug">
+                                        Esta rotina será finalizada com ocorrência aberta. O gestor já foi notificado.
+                                    </p>
+                                </div>
+                            )}
                             {photoValidationError && (
                                 <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 flex items-start gap-2">
                                     <span className="material-symbols-outlined text-red-400 text-[16px] shrink-0 mt-0.5">error</span>
@@ -445,63 +413,18 @@ export default function ActivityExecutionPage() {
                 </div>
             )}
 
-            {/* Report Problem Modal */}
-            {reportModalTaskId && reportingTask && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-                    <div className="bg-[#1a2c32] border border-[#233f48] rounded-2xl w-full max-w-[400px] flex flex-col gap-0 shadow-2xl overflow-hidden">
-                        <div className="p-6 flex flex-col gap-3">
-                            <div className="w-12 h-12 bg-amber-500/15 rounded-full flex items-center justify-center mb-1">
-                                <span className="material-symbols-outlined text-amber-400 text-2xl">warning</span>
-                            </div>
-                            <h3 className="text-white font-bold text-lg leading-tight">Reportar problema</h3>
-                            <p className="text-[#92bbc9] text-sm leading-relaxed">
-                                Tarefa: <span className="text-white font-semibold">{reportingTask.title}</span>
-                            </p>
-                            <p className="text-[#92bbc9] text-xs">
-                                Descreva o problema que impede a conclusão desta tarefa.
-                            </p>
-                            <textarea
-                                value={reportReason}
-                                onChange={(e) => setReportReason(e.target.value)}
-                                placeholder="Ex: Não tem água no banheiro, equipamento quebrado..."
-                                className="w-full bg-[#0d1a1f] border border-[#233f48] rounded-xl p-4 text-white text-sm placeholder:text-[#92bbc9]/50 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 resize-none transition-all min-h-[100px]"
-                                autoFocus
-                            />
-                            {reportError && (
-                                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 flex items-start gap-2">
-                                    <span className="material-symbols-outlined text-red-400 text-[16px] shrink-0 mt-0.5">error</span>
-                                    <p className="text-red-400 text-xs font-semibold leading-snug">{reportError}</p>
-                                </div>
-                            )}
-                        </div>
-                        <div className="flex border-t border-[#233f48]">
-                            <button
-                                onClick={() => setReportModalTaskId(null)}
-                                disabled={reporting}
-                                className="flex-1 py-4 text-[#92bbc9] font-bold text-sm hover:bg-[#233f48]/50 transition-colors border-r border-[#233f48] disabled:opacity-50"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                onClick={handleConfirmReport}
-                                disabled={reporting || !reportReason.trim()}
-                                className="flex-1 py-4 text-amber-400 font-bold text-sm hover:bg-amber-500/10 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                            >
-                                {reporting ? (
-                                    <>
-                                        <span className="material-symbols-outlined animate-spin text-[16px]">progress_activity</span>
-                                        Enviando...
-                                    </>
-                                ) : (
-                                    <>
-                                        <span className="material-symbols-outlined text-[16px]">warning</span>
-                                        Reportar
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                </div>
+            {/* Modal de registrar ocorrência (substitui o antigo bloqueio) */}
+            {reportModalTaskId && reportingTask && restaurantId && (
+                <IssueReportModal
+                    isOpen={!!reportModalTaskId}
+                    onClose={() => setReportModalTaskId(null)}
+                    restaurantId={restaurantId}
+                    taskId={reportingTask.id}
+                    taskTitle={reportingTask.title}
+                    checklistId={checklistId}
+                    checklistAssumptionId={assumption?.id ?? null}
+                    taskExecutionId={reportingExecution?.id ?? null}
+                />
             )}
         </div>
     );

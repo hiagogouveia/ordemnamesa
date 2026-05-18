@@ -2,6 +2,7 @@
 
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
 import { UnitBadge } from "@/components/ui/unit-badge";
+import { IssueBadge } from "@/components/checklists/issues/IssueBadge";
 
 const SHIFT_LABELS: Record<string, string> = {
     morning: "Manhã",
@@ -18,6 +19,8 @@ interface ChecklistBoardCardProps {
     selectable?: boolean;
     checked?: boolean;
     onCheckChange?: (checked: boolean) => void;
+    /** Sprint 45: contagem de ocorrências abertas (open + investigating) */
+    openIssuesCount?: number;
 }
 
 export function ChecklistBoardCard({
@@ -27,16 +30,22 @@ export function ChecklistBoardCard({
     selectable,
     checked,
     onCheckChange,
+    openIssuesCount = 0,
 }: ChecklistBoardCardProps) {
     const taskCount = checklist.tasks?.length ?? 0;
     const isExecuting = Boolean(checklist.assumed_by_name) && checklist.execution_status !== "done";
     const responsibleName = checklist.assumed_by_name || checklist.responsible?.name;
+    const hasOpenIssues = openIssuesCount > 0;
 
     return (
         <div
             onClick={onSelect}
             className={`relative bg-[#0a1215] border rounded-xl p-3 cursor-pointer select-none transition-shadow ${
-                checked ? "border-[#13b6ec]/40 bg-[#13b6ec]/5" : "border-[#233f48] hover:border-[#325a67]"
+                checked
+                    ? "border-[#13b6ec]/40 bg-[#13b6ec]/5"
+                    : hasOpenIssues
+                        ? "border-amber-500/40 hover:border-amber-500/60 border-l-4 border-l-amber-500"
+                        : "border-[#233f48] hover:border-[#325a67]"
             }`}
         >
             {/* Checkbox de seleção (visão global) */}
@@ -126,6 +135,7 @@ export function ChecklistBoardCard({
                             Fotos
                         </span>
                     )}
+                    <IssueBadge count={openIssuesCount} compact />
                 </div>
                 <div className="flex items-center gap-2">
                     {checklist.start_time && (

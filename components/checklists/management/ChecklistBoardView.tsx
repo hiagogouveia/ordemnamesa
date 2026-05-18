@@ -30,6 +30,8 @@ interface ChecklistBoardViewProps {
     selectable?: boolean;
     selectedIds?: Set<string>;
     onSelectionChange?: (id: string, checked: boolean) => void;
+    /** Sprint 45: contagens de ocorrências abertas por checklist_id */
+    issueCounts?: Record<string, number>;
 }
 
 export function ChecklistBoardView({
@@ -42,6 +44,7 @@ export function ChecklistBoardView({
     selectable,
     selectedIds,
     onSelectionChange,
+    issueCounts,
 }: ChecklistBoardViewProps) {
     const scrollRef = useRef<HTMLDivElement>(null);
     const [isDragging, setIsDragging] = useState(false);
@@ -134,6 +137,7 @@ export function ChecklistBoardView({
                     selectable={selectable}
                     selectedIds={selectedIds}
                     onSelectionChange={onSelectionChange}
+                    issueCounts={issueCounts}
                 />
             ))}
         </div>

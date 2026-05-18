@@ -6,9 +6,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useAccountSessionStore } from "@/lib/store/account-session-store";
 import { useChecklists, useCreateChecklist, useDeleteChecklist, useToggleChecklistStatus } from "@/lib/hooks/use-checklists";
+import { useIssueCountsByChecklist } from "@/lib/hooks/use-task-issues";
 import { useShifts } from "@/lib/hooks/use-shifts";
 import { shouldChecklistAppearToday } from "@/lib/utils/should-checklist-appear-today";
-import { getBrazilNow } from "@/lib/utils/brazil-date";
+import { getBrazilNow, getBrazilDateKey } from "@/lib/utils/brazil-date";
 import { BulkActionBar } from "@/components/checklists/management/BulkActionBar";
 import { CopyChecklistModal } from "@/components/checklists/management/CopyChecklistModal";
 import { useChecklistOrders, useUpdateChecklistOrders } from "@/lib/hooks/use-checklist-orders";
@@ -72,6 +73,7 @@ function ChecklistsContent() {
         return () => clearInterval(id);
     }, []);
 
+    const focusIssueId = searchParams.get("issue");
     const selectedShift = searchParams.get("shift") ?? "";
     const selectedAreaId = searchParams.get("area_id") ?? "";
     // Compat: URLs antigos com ?availability=draft caem em "active" (sem-op)
@@ -107,6 +109,7 @@ function ChecklistsContent() {
             ? { restaurantId: null, accountId, mode: 'global' }
             : (restaurantId ?? null)
     );
+    const { data: issueCounts = {} } = useIssueCountsByChecklist(restaurantId ?? undefined, getBrazilDateKey());
 
     // Mutations
     const { mutate: toggleStatus } = useToggleChecklistStatus();
@@ -530,6 +533,7 @@ function ChecklistsContent() {
                             selectedIds={selectedIds}
                             onSelectionChange={handleSelectionChange}
                             onSelectAll={handleSelectAll}
+                            issueCounts={issueCounts}
                         />
                     ) : (
                         <ChecklistBoardView
@@ -542,6 +546,7 @@ function ChecklistsContent() {
                             selectable={canBulkAction}
                             selectedIds={selectedIds}
                             onSelectionChange={handleSelectionChange}
+                            issueCounts={issueCounts}
                         />
                     )}
                 </div>
@@ -556,6 +561,7 @@ function ChecklistsContent() {
                             onClose={() => setEditorState(null)}
                             onSaved={handleEditorSaved}
                             restaurantId={restaurantId ?? undefined}
+                            focusIssueId={focusIssueId}
                         />
                     </div>
                 )}

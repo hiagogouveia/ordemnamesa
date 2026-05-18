@@ -7,6 +7,7 @@ import type { ExecutionStatus } from "@/lib/types";
 import { getOperationalStatus } from "@/lib/utils/get-operational-status";
 import { describeRecurrence } from "@/lib/utils/recurrence/describe";
 import { UnitBadge } from "@/components/ui/unit-badge";
+import { IssueBadge } from "@/components/checklists/issues/IssueBadge";
 
 const SHIFT_LABELS: Record<string, string> = {
     morning: "Manhã",
@@ -55,6 +56,7 @@ interface ChecklistRowProps {
     selectable?: boolean;
     checked?: boolean;
     onCheckChange?: (checked: boolean) => void;
+    openIssuesCount?: number;
 }
 
 export function ChecklistRow({
@@ -70,6 +72,7 @@ export function ChecklistRow({
     selectable,
     checked,
     onCheckChange,
+    openIssuesCount = 0,
 }: ChecklistRowProps) {
     const [menuOpen, setMenuOpen] = useState(false);
     const buttonRef = useRef<HTMLButtonElement>(null);
@@ -137,7 +140,10 @@ export function ChecklistRow({
 
             {/* Título */}
             <td className="px-3 py-3" onClick={onSelect}>
-                <span className="font-semibold text-white text-sm">{checklist.name}</span>
+                <div className="flex items-center gap-2">
+                    <span className="font-semibold text-white text-sm">{checklist.name}</span>
+                    <IssueBadge count={openIssuesCount} compact />
+                </div>
                 {checklist.description && (
                     <p className="text-[#92bbc9] text-xs mt-0.5 line-clamp-1">{checklist.description}</p>
                 )}
