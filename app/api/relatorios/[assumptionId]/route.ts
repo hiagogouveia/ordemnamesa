@@ -1,23 +1,15 @@
 /**
- * GET /api/relatorios
+ * GET /api/relatorios/[assumptionId]
  *
- * Lista paginada da Central de Auditoria Operacional.
- * Aceita JSON (default) ou CSV (?format=csv) — ambos com os MESMOS filtros.
- *
- * Esta route handler é intencionalmente fina: validar auth + escopo,
- * delegar tudo ao audit-service.
+ * Detalhe completo de uma execução para o painel de auditoria e a página de
+ * impressão (PDF). Gera signed URLs sob demanda — somente aqui, nunca na lista.
  */
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolveGlobalScope, isGlobalScopeResult } from '@/lib/api/global-scope';
-import {
-    buildCsv,
-    csvFilename,
-    fetchAuditList,
-    parseFiltersFromSearchParams,
-} from '@/lib/services/audit-service';
+import { fetchAuditDetail } from '@/lib/services/audit-service';
 import type { UnitInfo } from '@/lib/types/audit';
 
 const getAdminSupabase = () => createClient(
@@ -50,11 +42,7 @@ async function resolveScope(
         }
         const result = await resolveGlobalScope(admin, account_id, userId);
         if (!isGlobalScopeResult(result)) return result;
-        return {
-            restaurantIds: result.restaurantIds,
-            unitsById: result.unitsById,
-            isGlobal: true,
-        };
+        return { restaurantIds: result.restaurantIds, unitsById: result.unitsById, isGlobal: true };
     }
 
     if (!restaurant_id) {
@@ -76,15 +64,19 @@ async function resolveScope(
         return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
     }
 
-    return {
-        restaurantIds: [restaurant_id],
-        unitsById: {},
-        isGlobal: false,
-    };
+    return { restaurantIds: [restaurant_id], unitsById: {}, isGlobal: false };
 }
 
-export async function GET(request: Request) {
+export async function GET(
+    request: Request,
+    { params }: { params: Promise<{ assumptionId: string }> },
+) {
     try {
+        const { assumptionId } = await params;
+        if (!assumptionId) {
+            return NextResponse.json({ error: 'assumptionId obrigatório' }, { status: 400 });
+        }
+
         const authHeader = request.headers.get('Authorization');
         if (!authHeader) {
             return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
@@ -99,31 +91,19 @@ export async function GET(request: Request) {
         const scope = await resolveScope(request, admin, user.id);
         if (scope instanceof NextResponse) return scope;
 
-        const { searchParams } = new URL(request.url);
-        const filters = parseFiltersFromSearchParams(searchParams);
-
-        const list = await fetchAuditList(
+        const detail = await fetchAuditDetail(
             admin,
+            assumptionId,
             scope.restaurantIds,
-            filters,
             scope.unitsById,
             scope.isGlobal,
         );
 
-        if (searchParams.get('format') === 'csv') {
-            const csv = buildCsv(list, scope.isGlobal);
-            return new NextResponse(csv, {
-                headers: {
-                    'Content-Type': 'text/csv; charset=utf-8',
-                    'Content-Disposition': `attachment; filename="${csvFilename(filters)}"`,
-                },
-            });
+        if (!detail) {
+            return NextResponse.json({ error: 'Execução não encontrada' }, { status: 404 });
         }
 
-        return NextResponse.json({
-            ...list,
-            filters, // ecoa os filtros aplicados (útil para URL sync e debug)
-        });
+        return NextResponse.json(detail);
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Erro interno';
         return NextResponse.json({ error: message }, { status: 500 });
