@@ -94,6 +94,7 @@ interface ChecklistListViewProps {
     selectedIds?: Set<string>;
     onSelectionChange?: (id: string, checked: boolean) => void;
     onSelectAll?: (checked: boolean) => void;
+    issueCounts?: Record<string, number>;
 }
 
 export function ChecklistListView({
@@ -119,6 +120,7 @@ export function ChecklistListView({
     selectedIds,
     onSelectionChange,
     onSelectAll,
+    issueCounts,
 }: ChecklistListViewProps) {
     const [reorderMode, setReorderMode] = useState(false);
     const [localItems, setLocalItems] = useState<ExtendedChecklist[]>([]);
@@ -471,6 +473,7 @@ export function ChecklistListView({
                                     selectable={selectable && !reorderMode}
                                     checked={selectedIds?.has(checklist.id)}
                                     onCheckChange={(checked) => onSelectionChange?.(checklist.id, checked)}
+                                    openIssuesCount={issueCounts?.[checklist.id] ?? 0}
                                 />
                             ))
                         )}

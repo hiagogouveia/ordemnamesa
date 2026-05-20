@@ -8,6 +8,11 @@ import { ChecklistForm } from "@/components/checklists/checklist-form";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
 import { getBrazilDateKey, formatDateBR } from "@/lib/utils/brazil-date";
 import { describeRecurrence } from "@/lib/utils/recurrence/describe";
+import { useTaskIssues } from "@/lib/hooks/use-task-issues";
+import { IssueList } from "@/components/checklists/issues/IssueList";
+import { IssueDetail } from "@/components/checklists/issues/IssueDetail";
+import { useRestaurantStore } from "@/lib/store/restaurant-store";
+import type { TaskIssue } from "@/lib/types";
 
 const SHIFT_LABELS: Record<string, string> = {
     morning: "Manhã",
@@ -42,6 +47,7 @@ interface TaskExecution {
 }
 
 interface AssumptionDetail {
+    id: string;
     user_name: string | null;
     observation: string | null;
     completed_at: string | null;
@@ -80,7 +86,7 @@ function useAssumptionDetail(checklistId: string, restaurantId: string) {
 
             const { data } = await supabase
                 .from("checklist_assumptions")
-                .select("user_name, observation, completed_at, execution_status")
+                .select("id, user_name, observation, completed_at, execution_status")
                 .eq("checklist_id", checklistId)
                 .eq("restaurant_id", restaurantId)
                 .eq("date_key", dateKey)
@@ -146,6 +152,7 @@ interface ChecklistViewPanelProps {
     restaurantId?: string;
     onEdit: () => void;
     onClose: () => void;
+    focusIssueId?: string | null;
 }
 
 // Normaliza fotos da execução: photos[] (Sprint 35) tem precedência, fallback para photo_url (legado)
@@ -156,9 +163,12 @@ function getExecutionPhotos(execution: TaskExecution | undefined): string[] {
     return [];
 }
 
-function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose }: ChecklistViewPanelProps) {
+function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose, focusIssueId }: ChecklistViewPanelProps) {
+    const userRole = useRestaurantStore((s) => s.userRole);
+    const canManageIssues = userRole === "owner" || userRole === "manager";
     const [selectedPhoto, setSelectedPhoto] = useState<{ url: string; title: string } | null>(null);
     const [signedUrls, setSignedUrls] = useState<Record<string, string[]>>({});
+    const [selectedIssue, setSelectedIssue] = useState<TaskIssue | null>(null);
 
     const { data: executions = [], isLoading: execLoading } = useChecklistExecutions(
         checklist.id,
@@ -204,6 +214,33 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose }: Checkl
         checklist.id,
         restaurantId ?? ""
     );
+
+    // Sprint 45 — ocorrências da assumption de hoje
+    const { data: issues = [] } = useTaskIssues({
+        restaurantId: restaurantId,
+        checklistAssumptionId: assumptionDetail?.id,
+    });
+
+    const openIssuesCount = useMemo(
+        () => issues.filter(i => i.status === "open" || i.status === "investigating").length,
+        [issues]
+    );
+
+    const taskTitleById = useMemo(() => {
+        const map: Record<string, string> = {};
+        (checklist.tasks ?? []).forEach(t => { map[t.id] = t.title; });
+        return map;
+    }, [checklist.tasks]);
+
+    // Auto-seleciona issue se veio via deep-link, ou primeira aberta
+    useEffect(() => {
+        if (issues.length === 0) { setSelectedIssue(null); return; }
+        if (focusIssueId) {
+            const target = issues.find(i => i.id === focusIssueId);
+            if (target) { setSelectedIssue(target); return; }
+        }
+        setSelectedIssue(prev => prev ?? issues[0]);
+    }, [issues, focusIssueId]);
 
     const executionMap = new Map(executions.map((e) => [e.task_id, e]));
     const hasExecution = executions.length > 0 || !!assumptionDetail;
@@ -389,6 +426,37 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose }: Checkl
                     </div>
                 </div>
 
+                {/* ── Ocorrências (Sprint 45) ────────────────────────────────── */}
+                {assumptionDetail?.id && issues.length > 0 && (
+                    <div id="issues-section" className="p-4 border-b border-[#1a2c32] bg-[#0c1518]">
+                        <div className="flex items-center justify-between mb-3">
+                            <p className="text-[#92bbc9] text-xs font-bold uppercase tracking-wide">
+                                Ocorrências
+                            </p>
+                            {openIssuesCount > 0 && (
+                                <span className="text-[10px] font-bold rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/40 px-2 py-0.5">
+                                    {openIssuesCount} aberta{openIssuesCount > 1 ? "s" : ""}
+                                </span>
+                            )}
+                        </div>
+                        <IssueList
+                            issues={issues}
+                            selectedId={selectedIssue?.id ?? null}
+                            onSelect={(i) => setSelectedIssue(i)}
+                            taskTitleById={taskTitleById}
+                        />
+                        {selectedIssue && (
+                            <div className="mt-4 pt-4 border-t border-[#233f48]">
+                                <IssueDetail
+                                    issue={selectedIssue}
+                                    canManage={canManageIssues}
+                                    taskTitle={taskTitleById[selectedIssue.task_id]}
+                                />
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* ── Tarefas (com status de execução e fotos) ──────────────── */}
                 <div className="p-4">
                     <div className="flex items-center justify-between mb-3">
@@ -412,27 +480,34 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose }: Checkl
                                     const execution = executionMap.get(task.id);
                                     const isDone = execution?.status === "done";
                                     const isBlocked = execution?.status === "blocked";
+                                    const isSkipped = execution?.status === "skipped";
                                     const photoUrls = signedUrls[task.id] ?? [];
 
                                     return (
                                         <div
                                             key={task.id}
                                             className={`flex items-start gap-3 p-3 border rounded-xl transition-colors ${
-                                                isBlocked
-                                                    ? "bg-amber-500/5 border-amber-500/20"
-                                                    : isDone
-                                                        ? "bg-emerald-500/5 border-emerald-500/20"
-                                                        : "bg-[#0a1215] border-[#233f48]"
+                                                isSkipped
+                                                    ? "bg-amber-500/5 border-amber-500/30"
+                                                    : isBlocked
+                                                        ? "bg-amber-500/5 border-amber-500/20"
+                                                        : isDone
+                                                            ? "bg-emerald-500/5 border-emerald-500/20"
+                                                            : "bg-[#0a1215] border-[#233f48]"
                                             }`}
                                         >
                                             {/* Status icon */}
                                             <div className="flex flex-col items-center gap-1 shrink-0 mt-0.5">
                                                 <span
                                                     className={`text-xs font-bold w-5 text-right ${
-                                                        isBlocked ? "text-amber-400" : isDone ? "text-emerald-400" : "text-[#325a67]"
+                                                        isSkipped ? "text-amber-400" : isBlocked ? "text-amber-400" : isDone ? "text-emerald-400" : "text-[#325a67]"
                                                     }`}
                                                 >
-                                                    {isBlocked ? (
+                                                    {isSkipped ? (
+                                                        <span className="material-symbols-outlined text-[16px] text-amber-400">
+                                                            block
+                                                        </span>
+                                                    ) : isBlocked ? (
                                                         <span className="material-symbols-outlined text-[16px] text-amber-400">
                                                             warning
                                                         </span>
@@ -449,11 +524,17 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose }: Checkl
                                             <div className="flex-1 min-w-0">
                                                 <p
                                                     className={`text-sm font-medium leading-snug ${
-                                                        isBlocked ? "text-amber-300" : isDone ? "text-emerald-300" : "text-white"
+                                                        isSkipped ? "text-amber-300 line-through decoration-amber-400/40" : isBlocked ? "text-amber-300" : isDone ? "text-emerald-300" : "text-white"
                                                     }`}
                                                 >
                                                     {task.title}
                                                 </p>
+                                                {isSkipped && (
+                                                    <p className="text-[11px] text-amber-400 mt-1 flex items-center gap-1 font-semibold uppercase tracking-wide">
+                                                        <span className="material-symbols-outlined text-[12px]">block</span>
+                                                        Não concluída — pulada por ocorrência
+                                                    </p>
+                                                )}
                                                 {task.description && (
                                                     <p className="text-[#92bbc9] text-xs mt-0.5">{task.description}</p>
                                                 )}
@@ -597,6 +678,7 @@ export interface ChecklistEditorPanelProps {
     onClose: () => void;
     onSaved: () => void;
     restaurantId?: string;
+    focusIssueId?: string | null;
 }
 
 export function ChecklistEditorPanel({
@@ -606,6 +688,7 @@ export function ChecklistEditorPanel({
     onClose,
     onSaved,
     restaurantId,
+    focusIssueId,
 }: ChecklistEditorPanelProps) {
     if (mode === "view" && checklist) {
         return (
@@ -614,6 +697,7 @@ export function ChecklistEditorPanel({
                 restaurantId={restaurantId}
                 onEdit={() => onModeChange("edit")}
                 onClose={onClose}
+                focusIssueId={focusIssueId}
             />
         );
     }

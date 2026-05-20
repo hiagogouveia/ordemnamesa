@@ -1,13 +1,17 @@
 'use server'
 
-import crypto from 'crypto'
 import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
-import type { User } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/admin-leads-control-hub/supabase-admin'
 import { requireStaff } from '@/lib/admin-leads-control-hub/staff'
 import { logAdminAction } from '@/lib/admin-leads-control-hub/log-admin-action'
 import { sendSetupEmail } from '@/lib/admin-leads-control-hub/email'
+import { provisionLeadAccount } from '@/lib/admin-leads-control-hub/provision-lead-account'
+import {
+    checkLeadDuplicates,
+    hasBlockingDuplicates,
+    type DuplicateCheckResult,
+} from '@/lib/admin-leads-control-hub/duplicate-check'
 import { config } from '@/lead-control-hub.config'
 import type { Lead } from '@/lib/admin-leads-control-hub/types'
 import { trackAdminEvent, trackOnboardingEvent } from '@/lib/analytics/track-event'
@@ -16,6 +20,8 @@ export interface ApproveLeadResult {
     ok?: boolean
     error?: string
     entityId?: string
+    requiresConfirmation?: boolean
+    duplicates?: DuplicateCheckResult
 }
 
 export interface RejectLeadResult {
@@ -23,26 +29,10 @@ export interface RejectLeadResult {
     error?: string
 }
 
-async function findExistingUserByEmail(email: string): Promise<User | null> {
-    let page = 1
-    while (true) {
-        const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 200 })
-        if (error) return null
-        const found = data.users.find(
-            (u) => (u.email ?? '').toLowerCase() === email.toLowerCase()
-        )
-        if (found) return found
-        if (data.users.length < 200) return null
-        page += 1
-        if (page > 25) return null
-    }
-}
-
-function generateThrowawayPassword(): string {
-    return crypto.randomBytes(24).toString('base64url') + 'Aa1!'
-}
-
-export async function approveLeadAction(leadId: string): Promise<ApproveLeadResult> {
+export async function approveLeadAction(
+    leadId: string,
+    options: { force?: boolean } = {}
+): Promise<ApproveLeadResult> {
     const guard = await requireStaff()
     if ('error' in guard) return { error: guard.error }
     const adminEmail = guard.ctx.user.email!.toLowerCase()
@@ -61,84 +51,103 @@ export async function approveLeadAction(leadId: string): Promise<ApproveLeadResu
     if (lead.status === 'approved') return { error: 'Este lead já foi aprovado.' }
     if (lead.status === 'rejected') return { error: 'Lead rejeitado, não é possível aprovar.' }
 
-    const email = lead.email.toLowerCase()
-    const existing = await findExistingUserByEmail(email)
-    const isNewUser = !existing
-
-    let userId: string
-    if (existing) {
-        userId = existing.id
-    } else {
-        const { data, error } = await supabaseAdmin.auth.admin.createUser({
-            email,
-            password: generateThrowawayPassword(),
-            email_confirm: true,
-            user_metadata: { full_name: lead.name },
-        })
-        if (error || !data?.user) {
-            console.error('[approveLeadAction] createUser error', error)
-            return { error: 'Falha ao criar usuário.' }
-        }
-        userId = data.user.id
+    const duplicates = await checkLeadDuplicates(lead)
+    if (!options.force && hasBlockingDuplicates(duplicates)) {
+        return { requiresConfirmation: true, duplicates }
     }
 
-    let entityResult
+    let provisioned
     try {
-        entityResult = await config.createEntityFromLead({
-            lead,
-            userId,
-            isNewUser,
-            supabaseAdmin,
-        })
+        provisioned = await provisionLeadAccount({ lead })
     } catch (err) {
-        console.error('[approveLeadAction] createEntityFromLead failed', err)
-        if (isNewUser) await supabaseAdmin.auth.admin.deleteUser(userId).catch(() => {})
-        return { error: 'Falha ao criar restaurante.' }
+        console.error('[approveLeadAction] provisionLeadAccount failed', err)
+        return {
+            error:
+                err instanceof Error
+                    ? `Falha ao provisionar conta: ${err.message}`
+                    : 'Falha ao provisionar conta.',
+        }
     }
 
     await supabaseAdmin
         .from('leads')
         .update({
             status: 'approved',
-            approved_entity_id: entityResult.entityId,
-            approved_user_id: userId,
+            approved_entity_id: provisioned.accountId,
+            approved_user_id: provisioned.userId,
         })
         .eq('id', leadId)
+
+    const leadSource = (lead.custom_fields?.lead_source as string | undefined) ?? null
 
     await logAdminAction({
         adminEmail,
         action: 'approve_lead',
         targetType: 'lead',
         targetId: leadId,
-        metadata: { isNewUser, entityId: entityResult.entityId, entityName: entityResult.entityName },
+        metadata: {
+            isNewUser: provisioned.isNewUser,
+            account_id: provisioned.accountId,
+            restaurant_id: provisioned.restaurantId,
+            entity_name: provisioned.accountName,
+            lead_source: leadSource,
+            forced: !!options.force,
+        },
         ipAddress,
         userAgent,
     })
-    await trackAdminEvent('lead_approved', {
-        userId,
-        metadata: { lead_id: leadId, entity_id: entityResult.entityId, is_new_user: isNewUser },
-    })
-    await trackOnboardingEvent('restaurant_created', {
-        restaurantId: entityResult.entityId,
-        userId,
-        metadata: { source: 'lead_approval', lead_id: leadId, is_new_user: isNewUser },
+    await logAdminAction({
+        adminEmail,
+        action: 'trial_created',
+        targetType: 'subscription',
+        targetId: provisioned.subscriptionId,
+        metadata: {
+            lead_id: leadId,
+            account_id: provisioned.accountId,
+            restaurant_id: provisioned.restaurantId,
+            plan_code: provisioned.trialPlanCode,
+            trial_days: provisioned.trialDays,
+            trial_ends_at: provisioned.trialEndsAt,
+        },
+        ipAddress,
+        userAgent,
     })
 
-    if (isNewUser) {
+    await trackAdminEvent('lead_approved', {
+        userId: provisioned.userId,
+        metadata: {
+            lead_id: leadId,
+            entity_id: provisioned.accountId,
+            is_new_user: provisioned.isNewUser,
+            lead_source: leadSource,
+        },
+    })
+    await trackOnboardingEvent('restaurant_created', {
+        restaurantId: provisioned.restaurantId,
+        userId: provisioned.userId,
+        metadata: {
+            source: 'lead_approval',
+            lead_id: leadId,
+            is_new_user: provisioned.isNewUser,
+        },
+    })
+
+    if (provisioned.isNewUser) {
         const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || ''
         try {
             const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
                 type: 'recovery',
-                email,
+                email: lead.email.toLowerCase(),
                 options: { redirectTo: `${siteUrl}/reset-password` },
             })
             const setupLink = linkData?.properties?.action_link
             if (setupLink) {
                 await sendSetupEmail({
-                    to: email,
+                    to: lead.email.toLowerCase(),
                     setupLink,
-                    entityName: entityResult.entityName,
+                    entityName: provisioned.accountName,
                     leadName: lead.name,
+                    trialDays: provisioned.trialDays,
                 })
             }
         } catch (err) {
@@ -148,7 +157,7 @@ export async function approveLeadAction(leadId: string): Promise<ApproveLeadResu
 
     revalidatePath(`${config.panelBasePath}/leads`)
     revalidatePath(`${config.panelBasePath}/leads/${leadId}`)
-    return { ok: true, entityId: entityResult.entityId }
+    return { ok: true, entityId: provisioned.accountId }
 }
 
 export async function rejectLeadAction(

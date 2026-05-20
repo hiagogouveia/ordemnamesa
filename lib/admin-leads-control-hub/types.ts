@@ -1,5 +1,3 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
-
 export interface Lead {
     id: string
     name: string
@@ -17,19 +15,14 @@ export interface Lead {
     updated_at: string
 }
 
-export interface CreateEntityInput {
-    lead: Lead
-    userId: string
-    isNewUser: boolean
-    supabaseAdmin: SupabaseClient
-}
-
-export interface CreateEntityOutput {
-    entityId: string
-    entityName: string
-}
-
-export type CustomFieldType = 'text' | 'email' | 'tel' | 'select' | 'segmented' | 'boolean'
+export type CustomFieldType =
+    | 'text'
+    | 'email'
+    | 'tel'
+    | 'select'
+    | 'segmented'
+    | 'boolean'
+    | 'textarea'
 
 export interface CustomFieldConfig {
     name: string
@@ -37,6 +30,7 @@ export interface CustomFieldConfig {
     type: CustomFieldType
     required?: boolean
     helper?: string
+    placeholder?: string
     options?: { value: string; label: string }[]
 }
 
@@ -56,5 +50,4 @@ export interface LeadControlHubConfig {
     whatsappAdminNumber: string
     whatsappTemplate?: (lead: Pick<Lead, 'name' | 'organization_name' | 'custom_fields'>) => string
     leadScoring?: LeadScoringConfig
-    createEntityFromLead: (input: CreateEntityInput) => Promise<CreateEntityOutput>
 }

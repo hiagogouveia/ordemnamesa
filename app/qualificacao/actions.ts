@@ -48,8 +48,18 @@ export async function submitLeadAction(
                 return { error: `Valor inválido para "${labelForError}".` }
             }
         }
+        if (field.type === 'textarea') {
+            const trimmed = String(raw).trim().slice(0, 2000)
+            if (!trimmed) continue
+            custom_fields[field.name] = trimmed
+            continue
+        }
         custom_fields[field.name] = raw
     }
+
+    const leadSourceRaw = (formData.get('lead_source') as string | null)?.trim() || ''
+    const leadSource = leadSourceRaw.slice(0, 100) || 'organic'
+    custom_fields.lead_source = leadSource
 
     const { data: lead, error } = await supabaseAdmin
         .from('leads')

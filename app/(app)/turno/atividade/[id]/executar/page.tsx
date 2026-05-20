@@ -2,57 +2,93 @@
 
 import React, { useMemo, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { useRestaurantStore } from '@/lib/store/restaurant-store';
-import { useActivityData, useToggleActivityTask, useBlockTask, useResumeTask } from '@/lib/hooks/use-activity-execution';
+import { useSession } from '@/lib/providers/use-session';
+import { useActivityData, useToggleActivityTask, useSkipTask, useUnskipTask } from '@/lib/hooks/use-activity-execution';
 import { useChecklistAssumption, useCompleteChecklist } from '@/lib/hooks/use-tasks';
+import { useTaskIssues } from '@/lib/hooks/use-task-issues';
 import { ExecutionItem, type ExecutionToggleInput } from '@/components/turno/execution-item';
+import { IssueReportModal } from '@/components/checklists/issues/IssueReportModal';
+import type { TaskIssue } from '@/lib/types';
 
 export default function ActivityExecutionPage() {
     const router = useRouter();
     const params = useParams();
     const checklistId = params.id as string;
-    const { restaurantId } = useRestaurantStore();
+    const session = useSession();
+    const restaurantId = session.restaurantId;
+    const sessionLoading = session.status === 'loading';
 
     const [showFinalizeModal, setShowFinalizeModal] = useState(false);
     const [finalizing, setFinalizing] = useState(false);
     const [observation, setObservation] = useState("");
     const [photoValidationError, setPhotoValidationError] = useState<string | null>(null);
 
-    // Modal de reportar problema
+    // Modal de ocorrência (substitui o antigo "reportar problema")
     const [reportModalTaskId, setReportModalTaskId] = useState<string | null>(null);
-    const [reportReason, setReportReason] = useState("");
-    const [reportError, setReportError] = useState<string | null>(null);
-    const [reporting, setReporting] = useState(false);
+    const [editingIssue, setEditingIssue] = useState<TaskIssue | null>(null);
+    const [issueFlash, setIssueFlash] = useState<{ kind: 'created' | 'updated' } | null>(null);
 
-    const { data: activityData, isLoading, isError } = useActivityData(restaurantId || undefined, checklistId);
+    const { data: activityData, isLoading, isError, isFetched } = useActivityData(restaurantId || undefined, checklistId);
     const { data: assumption } = useChecklistAssumption(restaurantId || undefined, checklistId);
     const toggleTask = useToggleActivityTask();
+    const skipTask = useSkipTask();
+    const unskipTask = useUnskipTask();
     const completeMutation = useCompleteChecklist();
-    const blockTask = useBlockTask();
-    const resumeTask = useResumeTask();
 
     const { checklist, tasks, executions } = activityData || {};
 
     const isCompleted = Boolean(assumption?.completed_at);
 
-    const blockedCount = useMemo(() => {
-        if (!tasks || !executions) return 0;
-        return tasks.filter(t =>
-            executions.some(e => e.task_id === t.id && e.status === 'blocked')
-        ).length;
-    }, [tasks, executions]);
+    const { data: issues } = useTaskIssues({
+        restaurantId: restaurantId || undefined,
+        checklistAssumptionId: assumption?.id,
+    });
 
-    const hasBlockedTasks = blockedCount > 0;
+    const openIssuesByTaskId = useMemo(() => {
+        const map = new Map<string, number>();
+        (issues ?? []).forEach(i => {
+            if (i.status === 'open' || i.status === 'investigating') {
+                map.set(i.task_id, (map.get(i.task_id) ?? 0) + 1);
+            }
+        });
+        return map;
+    }, [issues]);
 
-    const progress = useMemo(() => {
-        if (!tasks || tasks.length === 0) return 0;
-        const doneCount = tasks.filter(t =>
-            executions?.some(e => e.task_id === t.id && e.status === 'done')
-        ).length;
-        return Math.round((doneCount / tasks.length) * 100);
+    // Sprint 46: ocorrência aberta DO usuário atual por task (apenas status='open' permite edição)
+    const myOpenIssueByTaskId = useMemo(() => {
+        const map = new Map<string, TaskIssue>();
+        if (!session.userId) return map;
+        (issues ?? []).forEach(i => {
+            if (i.status === 'open' && i.reported_by === session.userId) {
+                map.set(i.task_id, i);
+            }
+        });
+        return map;
+    }, [issues, session.userId]);
+
+    // Auto-dismiss banner de sucesso (3s)
+    React.useEffect(() => {
+        if (!issueFlash) return;
+        const t = setTimeout(() => setIssueFlash(null), 3500);
+        return () => clearTimeout(t);
+    }, [issueFlash]);
+
+    const { progress, doneCount, skippedCount } = useMemo(() => {
+        if (!tasks || tasks.length === 0) return { progress: 0, doneCount: 0, skippedCount: 0 };
+        let done = 0;
+        let skipped = 0;
+        for (const t of tasks) {
+            const exec = executions?.find(e => e.task_id === t.id);
+            if (!exec) continue;
+            if (exec.status === 'done') done += 1;
+            else if (exec.status === 'skipped') skipped += 1;
+        }
+        const resolved = done + skipped;
+        return { progress: Math.round((resolved / tasks.length) * 100), doneCount: done, skippedCount: skipped };
     }, [tasks, executions]);
 
     const isAllDone = progress === 100;
+    const hasAnyOpenIssue = openIssuesByTaskId.size > 0;
 
     const handleToggle = async (taskId: string, executionId: string | undefined, input: ExecutionToggleInput) => {
         if (!restaurantId || !checklistId || isCompleted) return;
@@ -84,41 +120,36 @@ export default function ActivityExecutionPage() {
         }
     };
 
-    const handleResumeTask = async (taskId: string, executionId: string) => {
-        if (!restaurantId || !checklistId) return;
-        try {
-            await resumeTask.mutateAsync({ restaurantId, checklistId, taskId, executionId });
-        } catch (e) {
-            console.error('Erro ao retomar tarefa:', e);
-        }
-    };
-
     const handleReportProblem = (taskId: string) => {
+        setEditingIssue(null);
         setReportModalTaskId(taskId);
-        setReportReason("");
-        setReportError(null);
     };
 
-    const handleConfirmReport = async () => {
-        if (!restaurantId || !checklistId || !reportModalTaskId) return;
-        if (!reportReason.trim()) {
-            setReportError("Descreva o problema encontrado.");
-            return;
-        }
-        setReporting(true);
-        setReportError(null);
+    const handleEditIssue = (issue: TaskIssue) => {
+        setEditingIssue(issue);
+        setReportModalTaskId(issue.task_id);
+    };
+
+    const closeIssueModal = () => {
+        setReportModalTaskId(null);
+        setEditingIssue(null);
+    };
+
+    const handleSkipTask = async (taskId: string, linkedIssueId: string | null) => {
+        if (!restaurantId || !checklistId || isCompleted) return;
         try {
-            await blockTask.mutateAsync({
-                restaurantId,
-                checklistId,
-                taskId: reportModalTaskId,
-                reason: reportReason.trim(),
-            });
-            setReportModalTaskId(null);
+            await skipTask.mutateAsync({ restaurantId, checklistId, taskId, issueId: linkedIssueId });
         } catch (e) {
-            setReportError((e as Error).message || 'Erro ao reportar problema');
-        } finally {
-            setReporting(false);
+            console.error('Erro ao pular tarefa:', e);
+        }
+    };
+
+    const handleUnskipTask = async (taskId: string) => {
+        if (!restaurantId || !checklistId || isCompleted) return;
+        try {
+            await unskipTask.mutateAsync({ restaurantId, checklistId, taskId });
+        } catch (e) {
+            console.error('Erro ao desfazer skip:', e);
         }
     };
 
@@ -126,15 +157,17 @@ export default function ActivityExecutionPage() {
         if (!restaurantId || !checklistId) return;
 
         // Validação de segurança: tasks que exigem foto e não têm foto na execução
+        // Skipped bypassa a regra (não foi possível concluir → sem foto faz sentido).
         // Compat: leitura considera photos[] (Sprint 35) OU photo_url (legado)
-        const missingPhotoTasks = (tasks ?? []).filter(t =>
-            t.requires_photo &&
-            !executions?.some(e =>
-                e.task_id === t.id &&
-                e.status === 'done' &&
-                ((Array.isArray(e.photos) && e.photos.length > 0) || !!e.photo_url)
-            )
-        );
+        const missingPhotoTasks = (tasks ?? []).filter(t => {
+            if (!t.requires_photo) return false;
+            const exec = executions?.find(e => e.task_id === t.id);
+            if (!exec) return true;
+            if (exec.status === 'skipped') return false;
+            if (exec.status !== 'done') return true;
+            const hasPhoto = (Array.isArray(exec.photos) && exec.photos.length > 0) || !!exec.photo_url;
+            return !hasPhoto;
+        });
         if (missingPhotoTasks.length > 0) {
             setPhotoValidationError(
                 `${missingPhotoTasks.length === 1 ? '1 tarefa exige' : `${missingPhotoTasks.length} tarefas exigem`} foto e ainda não ${missingPhotoTasks.length === 1 ? 'foi registrada' : 'foram registradas'}.`
@@ -154,7 +187,7 @@ export default function ActivityExecutionPage() {
         }
     };
 
-    if (isLoading) {
+    if (sessionLoading || !restaurantId || isLoading || !isFetched) {
         return (
             <div className="min-h-screen bg-[#101d22] flex flex-col pt-12 p-4 items-center animate-pulse">
                 <div className="h-12 w-full max-w-[480px] bg-[#1a2c32] rounded-xl mb-6"></div>
@@ -184,11 +217,30 @@ export default function ActivityExecutionPage() {
         );
     }
 
-    // Nome da task sendo reportada (para o modal)
     const reportingTask = reportModalTaskId ? tasks.find(t => t.id === reportModalTaskId) : null;
+    const reportingExecution = reportModalTaskId
+        ? executions?.find(e => e.task_id === reportModalTaskId)
+        : null;
 
     return (
         <div className="min-h-[100dvh] bg-[#101d22] font-sans flex flex-col">
+            {/* Toast transitório de ocorrência (Sprint 46) */}
+            {issueFlash && (
+                <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[60] max-w-[440px] w-[calc(100%-1.5rem)] bg-amber-500 text-[#0c1518] rounded-xl shadow-2xl px-4 py-3 flex items-start gap-2.5 animate-in fade-in slide-in-from-top-4 duration-300">
+                    <span className="material-symbols-outlined text-[20px] shrink-0">warning</span>
+                    <div className="flex-1 text-sm font-semibold leading-tight">
+                        {issueFlash.kind === 'created'
+                            ? 'Ocorrência registrada. Agora conclua a tarefa normalmente.'
+                            : 'Ocorrência atualizada.'}
+                    </div>
+                    <button
+                        onClick={() => setIssueFlash(null)}
+                        className="text-[#0c1518]/70 hover:text-[#0c1518] text-lg leading-none"
+                        aria-label="Fechar"
+                    >×</button>
+                </div>
+            )}
+
             {/* Header Sticky */}
             <header className="sticky top-0 z-30 bg-[#101d22]/95 backdrop-blur-md border-b border-[#233f48] px-4 py-4">
                 <div className="max-w-[480px] mx-auto w-full flex items-center gap-3">
@@ -215,7 +267,7 @@ export default function ActivityExecutionPage() {
                     {isCompleted && (
                         <span className="shrink-0 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1">
                             <span className="material-symbols-outlined text-[12px]">task_alt</span>
-                            Concluída
+                            {hasAnyOpenIssue || skippedCount > 0 ? 'Concluída c/ ocorrência' : 'Concluída'}
                         </span>
                     )}
                 </div>
@@ -232,12 +284,10 @@ export default function ActivityExecutionPage() {
                         <div
                             className={`h-full transition-all duration-700 ease-out rounded-full ${
                                 isCompleted
-                                    ? 'bg-emerald-500'
+                                    ? (hasAnyOpenIssue || skippedCount > 0) ? 'bg-amber-500' : 'bg-emerald-500'
                                     : isAllDone
                                         ? 'bg-[#13b6ec] shadow-[0_0_10px_rgba(19,182,236,0.5)]'
-                                        : hasBlockedTasks
-                                            ? 'bg-gradient-to-r from-amber-500/70 to-amber-500'
-                                            : 'bg-gradient-to-r from-[#13b6ec]/70 to-[#13b6ec]'
+                                        : 'bg-gradient-to-r from-[#13b6ec]/70 to-[#13b6ec]'
                             }`}
                             style={{ width: `${progress}%` }}
                         />
@@ -261,29 +311,36 @@ export default function ActivityExecutionPage() {
                         </div>
                     )}
 
-                    {/* Banner de impedimento */}
-                    {hasBlockedTasks && !isCompleted && (
+                    {/* Banner informativo de ocorrências abertas + skips (não bloqueia) */}
+                    {(hasAnyOpenIssue || skippedCount > 0) && !isCompleted && (
                         <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center gap-3">
                             <div className="w-10 h-10 bg-amber-500/20 rounded-full flex items-center justify-center shrink-0">
                                 <span className="material-symbols-outlined text-amber-400 text-xl">warning</span>
                             </div>
                             <div>
                                 <h2 className="text-amber-300 font-bold text-sm">
-                                    {blockedCount === 1 ? '1 tarefa com impedimento' : `${blockedCount} tarefas com impedimento`}
+                                    {[
+                                        openIssuesByTaskId.size > 0 && `${openIssuesByTaskId.size} ocorrência${openIssuesByTaskId.size > 1 ? 's' : ''} registrada${openIssuesByTaskId.size > 1 ? 's' : ''}`,
+                                        skippedCount > 0 && `${skippedCount} tarefa${skippedCount > 1 ? 's' : ''} não concluída${skippedCount > 1 ? 's' : ''}`,
+                                    ].filter(Boolean).join(' · ')}
                                 </h2>
-                                <p className="text-amber-400/70 text-xs mt-0.5">Não é possível finalizar a rotina enquanto houver impedimentos.</p>
+                                <p className="text-amber-400/70 text-xs mt-0.5">O gestor foi notificado. Você pode continuar e finalizar a rotina normalmente.</p>
                             </div>
                         </div>
                     )}
 
                     {/* All done — ready to finalize banner */}
-                    {isAllDone && !isCompleted && !hasBlockedTasks && (
+                    {isAllDone && !isCompleted && (
                         <div className="bg-[#13b6ec]/10 border border-[#13b6ec]/30 rounded-2xl p-4 flex items-center gap-3">
                             <div className="w-10 h-10 bg-[#13b6ec] rounded-full flex items-center justify-center shrink-0 shadow-[0_0_16px_rgba(19,182,236,0.4)]">
                                 <span className="material-symbols-outlined text-[#0a1215] text-xl font-bold">celebration</span>
                             </div>
                             <div>
-                                <h2 className="text-[#13b6ec] font-bold text-sm">Todas as tarefas concluídas!</h2>
+                                <h2 className="text-[#13b6ec] font-bold text-sm">
+                                    {skippedCount > 0
+                                        ? `Todas as tarefas tratadas (${doneCount} concluída${doneCount !== 1 ? 's' : ''}, ${skippedCount} não concluída${skippedCount !== 1 ? 's' : ''})`
+                                        : 'Todas as tarefas concluídas!'}
+                                </h2>
                                 <p className="text-[#13b6ec]/70 text-xs mt-0.5">Clique em &quot;Finalizar Atividade&quot; para encerrar.</p>
                             </div>
                         </div>
@@ -313,10 +370,14 @@ export default function ActivityExecutionPage() {
                                     execution={execution}
                                     onToggle={handleToggle}
                                     onReportProblem={handleReportProblem}
-                                    onResumeTask={handleResumeTask}
+                                    onEditIssue={handleEditIssue}
+                                    onSkipTask={handleSkipTask}
+                                    onUnskipTask={handleUnskipTask}
                                     locked={isCompleted || isAccessBlocked}
                                     isBlockedSequential={isAccessBlocked}
                                     restaurantId={restaurantId ?? ''}
+                                    hasOpenIssue={openIssuesByTaskId.has(task.id)}
+                                    myOpenIssue={myOpenIssueByTaskId.get(task.id) ?? null}
                                 />
                             );
                         })}
@@ -327,8 +388,8 @@ export default function ActivityExecutionPage() {
                         )}
                     </div>
 
-                    {/* Observation Field (Appears only when all done, no blocked tasks, and not completed) */}
-                    {isAllDone && !isCompleted && !hasBlockedTasks && (
+                    {/* Observation Field */}
+                    {isAllDone && !isCompleted && (
                         <div className="mt-6 flex flex-col gap-2 animate-in fade-in slide-in-from-bottom-4 duration-300">
                             <label className="text-white text-base font-bold ml-1 flex flex-col">
                                 Observações (opcional)
@@ -370,7 +431,7 @@ export default function ActivityExecutionPage() {
                             <span className="material-symbols-outlined text-[20px]">arrow_back</span>
                             Voltar ao Turno
                         </button>
-                    ) : isAllDone && !hasBlockedTasks ? (
+                    ) : isAllDone ? (
                         <button
                             onClick={() => setShowFinalizeModal(true)}
                             className="w-full bg-[#13b6ec] hover:bg-[#10a1d4] text-[#0a1215] font-bold text-base py-4 rounded-xl shadow-[0_8px_20px_rgba(19,182,236,0.3)] active:scale-95 transition-all flex items-center justify-center gap-2"
@@ -378,11 +439,6 @@ export default function ActivityExecutionPage() {
                             <span className="material-symbols-outlined text-[20px]">check_circle</span>
                             Finalizar Atividade
                         </button>
-                    ) : hasBlockedTasks ? (
-                        <div className="text-center text-amber-400/70 text-xs py-2 flex items-center justify-center gap-1.5">
-                            <span className="material-symbols-outlined text-[14px]">warning</span>
-                            Existem tarefas com impedimento
-                        </div>
                     ) : (
                         <div className="text-center text-[#325a67] text-xs py-2">
                             Complete todas as tarefas para finalizar
@@ -404,6 +460,14 @@ export default function ActivityExecutionPage() {
                                 Você tem certeza que deseja finalizar esta atividade?
                                 Após finalizar, as tarefas não poderão mais ser alteradas.
                             </p>
+                            {hasAnyOpenIssue && (
+                                <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-start gap-2">
+                                    <span className="material-symbols-outlined text-amber-400 text-[16px] shrink-0 mt-0.5">warning</span>
+                                    <p className="text-amber-300 text-xs leading-snug">
+                                        Esta rotina será finalizada com ocorrência aberta. O gestor já foi notificado.
+                                    </p>
+                                </div>
+                            )}
                             {photoValidationError && (
                                 <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 flex items-start gap-2">
                                     <span className="material-symbols-outlined text-red-400 text-[16px] shrink-0 mt-0.5">error</span>
@@ -438,63 +502,21 @@ export default function ActivityExecutionPage() {
                 </div>
             )}
 
-            {/* Report Problem Modal */}
-            {reportModalTaskId && reportingTask && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-                    <div className="bg-[#1a2c32] border border-[#233f48] rounded-2xl w-full max-w-[400px] flex flex-col gap-0 shadow-2xl overflow-hidden">
-                        <div className="p-6 flex flex-col gap-3">
-                            <div className="w-12 h-12 bg-amber-500/15 rounded-full flex items-center justify-center mb-1">
-                                <span className="material-symbols-outlined text-amber-400 text-2xl">warning</span>
-                            </div>
-                            <h3 className="text-white font-bold text-lg leading-tight">Reportar problema</h3>
-                            <p className="text-[#92bbc9] text-sm leading-relaxed">
-                                Tarefa: <span className="text-white font-semibold">{reportingTask.title}</span>
-                            </p>
-                            <p className="text-[#92bbc9] text-xs">
-                                Descreva o problema que impede a conclusão desta tarefa.
-                            </p>
-                            <textarea
-                                value={reportReason}
-                                onChange={(e) => setReportReason(e.target.value)}
-                                placeholder="Ex: Não tem água no banheiro, equipamento quebrado..."
-                                className="w-full bg-[#0d1a1f] border border-[#233f48] rounded-xl p-4 text-white text-sm placeholder:text-[#92bbc9]/50 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 resize-none transition-all min-h-[100px]"
-                                autoFocus
-                            />
-                            {reportError && (
-                                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 flex items-start gap-2">
-                                    <span className="material-symbols-outlined text-red-400 text-[16px] shrink-0 mt-0.5">error</span>
-                                    <p className="text-red-400 text-xs font-semibold leading-snug">{reportError}</p>
-                                </div>
-                            )}
-                        </div>
-                        <div className="flex border-t border-[#233f48]">
-                            <button
-                                onClick={() => setReportModalTaskId(null)}
-                                disabled={reporting}
-                                className="flex-1 py-4 text-[#92bbc9] font-bold text-sm hover:bg-[#233f48]/50 transition-colors border-r border-[#233f48] disabled:opacity-50"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                onClick={handleConfirmReport}
-                                disabled={reporting || !reportReason.trim()}
-                                className="flex-1 py-4 text-amber-400 font-bold text-sm hover:bg-amber-500/10 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                            >
-                                {reporting ? (
-                                    <>
-                                        <span className="material-symbols-outlined animate-spin text-[16px]">progress_activity</span>
-                                        Enviando...
-                                    </>
-                                ) : (
-                                    <>
-                                        <span className="material-symbols-outlined text-[16px]">warning</span>
-                                        Reportar
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                </div>
+            {/* Modal de registrar/editar ocorrência (Sprint 46) */}
+            {reportModalTaskId && reportingTask && restaurantId && (
+                <IssueReportModal
+                    isOpen={!!reportModalTaskId}
+                    onClose={closeIssueModal}
+                    restaurantId={restaurantId}
+                    taskId={reportingTask.id}
+                    taskTitle={reportingTask.title}
+                    checklistId={checklistId}
+                    checklistAssumptionId={assumption?.id ?? null}
+                    taskExecutionId={reportingExecution?.id ?? null}
+                    existingIssue={editingIssue}
+                    onCreated={() => setIssueFlash({ kind: 'created' })}
+                    onUpdated={() => setIssueFlash({ kind: 'updated' })}
+                />
             )}
         </div>
     );

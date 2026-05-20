@@ -1,61 +1,21 @@
-"use client";
+'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useRelatorios } from '@/lib/hooks/use-relatorios';
-import { Avatar } from '@/components/ui/avatar';
-import { UnitBadge } from '@/components/ui/unit-badge';
+import { useMemo, useState } from 'react';
+import { downloadRelatorioCsv, useRelatorios } from '@/lib/hooks/use-relatorios';
+import { DEFAULT_FILTERS } from '@/lib/services/audit-service';
+import type { AuditFilters, PeriodPreset } from '@/lib/types/audit';
+import { AUDIT_STATUS_LABEL, SHIFT_LABEL } from '@/lib/types/audit';
 import type { Scope } from '@/lib/types/scope';
+import { AuditFiltersBar } from './audit-filters';
+import { AuditExecutionList } from './audit-execution-list';
+import { AuditExecutionPanel } from './audit-execution-panel';
 
-// ─── Skeleton ────────────────────────────────────────────────────────────────
-
-function RelatoriosSkeleton() {
-    return (
-        <div className="flex-1 p-4 md:p-8 bg-[#101d22] animate-pulse">
-            <div className="max-w-5xl mx-auto flex flex-col gap-6">
-                {/* header */}
-                <div className="flex items-center justify-between">
-                    <div className="h-8 w-40 rounded bg-[#233f48]" />
-                    <div className="h-10 w-28 rounded-lg bg-[#233f48]" />
-                </div>
-                {/* metric cards */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    {[1, 2, 3, 4].map(i => (
-                        <div key={i} className="bg-[#1a2c32] rounded-xl p-5 border border-[#233f48] flex flex-col gap-3">
-                            <div className="h-3 w-20 rounded bg-[#233f48]" />
-                            <div className="h-8 w-14 rounded bg-[#233f48]" />
-                        </div>
-                    ))}
-                </div>
-                {/* performers + recent */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="bg-[#1a2c32] rounded-xl border border-[#233f48] overflow-hidden">
-                        <div className="h-12 bg-[#192d33] border-b border-[#233f48]" />
-                        {[1, 2, 3].map(i => (
-                            <div key={i} className="flex items-center gap-3 px-5 py-4 border-b border-[#233f48]">
-                                <div className="size-10 rounded-full bg-[#233f48] shrink-0" />
-                                <div className="flex-1 flex flex-col gap-2">
-                                    <div className="h-3 w-28 rounded bg-[#233f48]" />
-                                    <div className="h-2 w-full rounded-full bg-[#233f48]" />
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                    <div className="bg-[#1a2c32] rounded-xl border border-[#233f48] overflow-hidden">
-                        <div className="h-12 bg-[#192d33] border-b border-[#233f48]" />
-                        {[1, 2, 3, 4].map(i => (
-                            <div key={i} className="flex items-center gap-3 px-5 py-4 border-b border-[#233f48]">
-                                <div className="size-6 rounded-full bg-[#233f48] shrink-0" />
-                                <div className="flex-1 h-3 rounded bg-[#233f48]" />
-                                <div className="h-5 w-16 rounded-full bg-[#233f48]" />
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}
+const PRESET_LABEL: Record<PeriodPreset, string> = {
+    today: 'Hoje',
+    '7days': 'Últimos 7 dias',
+    '30days': 'Últimos 30 dias',
+    custom: 'Período personalizado',
+};
 
 interface Props {
     scope: Scope;
@@ -64,348 +24,211 @@ interface Props {
 }
 
 export function RelatoriosClient({ scope, isGlobal, accountName }: Props) {
-    const router = useRouter();
+    const [filters, setFilters] = useState<AuditFilters>(DEFAULT_FILTERS);
+    const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [csvLoading, setCsvLoading] = useState(false);
+    const [csvError, setCsvError] = useState<string | null>(null);
 
-    const [startDate, setStartDate] = useState(() => {
-        const d = new Date();
-        d.setDate(d.getDate() - 30);
-        return d.toISOString();
-    });
-    const [endDate] = useState(() => new Date().toISOString());
+    const { data, isLoading, isFetching, error } = useRelatorios(scope, filters);
 
-    const { data: relData, isLoading, error } = useRelatorios(scope, startDate, endDate);
+    const entries = data?.entries ?? [];
+    const total = data?.total ?? 0;
 
-    if (isLoading) {
-        return <RelatoriosSkeleton />;
-    }
+    const activeChips = useMemo(() => buildActiveChips(filters), [filters]);
 
-    if (error) {
-        return (
-            <div className="flex flex-col h-screen items-center justify-center bg-[#101d22] gap-4">
-                <span className="material-symbols-outlined text-red-500 text-6xl">error</span>
-                <p className="text-white">Erro ao carregar os dados dos relatórios.</p>
-            </div>
-        );
-    }
-
-    const { metrics, consistencia_semanal, top_performers, registros_recentes } = relData || {
-        metrics: { taxa_conclusao: 0, taxa_conclusao_diff: 0, tarefas_pendentes: 0, colaboradores_ativos: 0, avaliacao: '0.0', total_registros: 0 },
-        consistencia_semanal: [],
-        top_performers: [],
-        registros_recentes: []
-    };
-
-    const handlePeriodChange = (val: string) => {
-        const d = new Date();
-        if (val === '7days') d.setDate(d.getDate() - 7);
-        else if (val === '30days') d.setDate(d.getDate() - 30);
-        else if (val === '90days') d.setDate(d.getDate() - 90);
-        setStartDate(d.toISOString());
-    };
-
-    const handleExport = async () => {
+    async function handleExportCsv() {
+        setCsvLoading(true);
+        setCsvError(null);
         try {
-            const supabase = (await import('@/lib/supabase/client')).createClient();
-            const { data: { session } } = await supabase.auth.getSession();
-            const token = session?.access_token || '';
-
-            let exportUrl = `/api/relatorios?start_date=${startDate}&end_date=${endDate}&format=csv`;
-            if (isGlobal && scope.mode === 'global') {
-                exportUrl += `&account_id=${scope.accountId}&mode=global`;
-            } else if (scope.mode === 'single') {
-                exportUrl += `&restaurant_id=${scope.restaurantId}`;
-            }
-
-            const response = await fetch(exportUrl, {
-                headers: { 'Authorization': `Bearer ${token}` },
-            });
-            if (!response.ok) return;
-
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `relatorio.csv`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
-        } catch (error) {
-            console.error('Erro ao exportar CSV:', error);
+            await downloadRelatorioCsv(scope, filters);
+        } catch (e) {
+            setCsvError(e instanceof Error ? e.message : 'Falha ao gerar CSV');
+        } finally {
+            setCsvLoading(false);
         }
-    };
+    }
 
     return (
-        <div className="flex-1 flex flex-col h-full overflow-hidden bg-background-light dark:bg-background-dark relative">
-            <header className="md:hidden flex items-center justify-between p-4 border-b border-[#233f48] bg-[#101d22] sticky top-0 z-20">
-                <div className="flex items-center gap-3">
-                    <div className="bg-primary/20 text-primary rounded-lg size-8 flex items-center justify-center">
-                        <span className="material-symbols-outlined text-sm">restaurant</span>
-                    </div>
-                    <span className="text-white font-bold text-sm">Ordem na Mesa</span>
-                </div>
-                <button className="text-white">
-                    <span className="material-symbols-outlined">menu</span>
-                </button>
-            </header>
+        <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#101d22]">
+            <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-10">
+                <div className="max-w-[1400px] mx-auto flex flex-col gap-6">
 
-            <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-12">
-                <div className="max-w-7xl mx-auto flex flex-col gap-8">
-                    {/* Page Heading & Actions */}
+                    {/* ── Cabeçalho ── */}
                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                         <div className="flex flex-col gap-2">
-                            <h2 className="text-white text-3xl md:text-4xl font-black tracking-tight">
-                                {isGlobal ? 'Relatórios — Visão Global' : 'Relatórios da Unidade'}
-                            </h2>
-                            <p className="text-[#92bbc9] text-base">
+                            <div className="flex items-center gap-2 text-[#92bbc9]">
+                                <span className="material-symbols-outlined">fact_check</span>
+                                <span className="text-xs uppercase tracking-wider font-bold">
+                                    Central de Auditoria Operacional
+                                </span>
+                            </div>
+                            <h1 className="text-white text-3xl md:text-4xl font-black tracking-tight">
+                                Relatórios
+                            </h1>
+                            <p className="text-[#92bbc9] text-sm max-w-2xl">
                                 {isGlobal
-                                    ? `Análise consolidada de todas as unidades${accountName ? ` · ${accountName}` : ''}`
-                                    : 'Análise de desempenho, consistência e registros do seu restaurante.'}
+                                    ? `Histórico auditável das execuções de todas as unidades${accountName ? ` · ${accountName}` : ''}.`
+                                    : 'Histórico auditável das execuções, com evidências, observações e status por tarefa.'}
                             </p>
                         </div>
-                        <button onClick={handleExport} className="flex items-center justify-center gap-2 bg-primary hover:bg-cyan-400 text-[#111e22] font-bold py-2.5 px-6 rounded-lg transition-all shadow-md active:scale-95">
-                            <span className="material-symbols-outlined text-[20px]">download</span>
-                            <span>Exportar CSV</span>
+                        <button
+                            onClick={handleExportCsv}
+                            disabled={csvLoading || isLoading}
+                            className="self-start md:self-auto inline-flex items-center justify-center gap-2 bg-[#13b6ec] hover:bg-[#0fa3d4] disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold py-2.5 px-5 rounded-lg transition-colors active:scale-[0.99]"
+                        >
+                            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                                {csvLoading ? 'progress_activity' : 'download'}
+                            </span>
+                            {csvLoading ? 'Gerando...' : 'Exportar CSV'}
                         </button>
                     </div>
 
-                    {/* Toolbar: Filters */}
-                    <div className="flex flex-col md:flex-row gap-4 bg-[#1a2c32] p-4 rounded-xl border border-[#233f48] items-center justify-between">
-                        <div className="flex gap-3 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
-                            <div className="flex border border-[#233f48] rounded-lg bg-[#101d22] p-1">
-                                <button className="px-4 py-1.5 text-sm font-medium text-white bg-[#233f48] rounded shadow-sm whitespace-nowrap">
-                                    Visão Geral
-                                </button>
-                                <button className="px-4 py-1.5 text-sm font-medium text-[#92bbc9] hover:text-white transition-colors whitespace-nowrap">
-                                    Por Checklist
-                                </button>
-                                <button className="px-4 py-1.5 text-sm font-medium text-[#92bbc9] hover:text-white transition-colors whitespace-nowrap">
-                                    Incidentes
-                                </button>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-3 w-full md:w-auto">
-                            <span className="text-[#92bbc9] text-sm whitespace-nowrap">Período de Análise:</span>
-                            <select
-                                defaultValue="30days"
-                                onChange={(e) => handlePeriodChange(e.target.value)}
-                                className="bg-[#101d22] text-white border border-[#233f48] rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-primary focus:border-primary w-full md:w-48 cursor-pointer">
-                                <option value="7days">Últimos 7 dias</option>
-                                <option value="30days">Últimos 30 dias</option>
-                                <option value="90days">Últimos 90 dias</option>
-                            </select>
-                        </div>
-                    </div>
+                    {/* ── Filtros ── */}
+                    <AuditFiltersBar scope={scope} filters={filters} onChange={setFilters} />
 
-                    {/* Resumo Overview */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div className="bg-[#1a2c32] border border-[#233f48] rounded-xl p-5 shadow-sm">
-                            <p className="text-[#92bbc9] font-medium text-sm mb-2">Taxa de Conclusão</p>
-                            <div className="flex items-end gap-3">
-                                <h3 className="text-white text-3xl font-bold leading-none">{metrics.taxa_conclusao}%</h3>
-                                <span className={`text-sm font-medium flex items-center mb-1 ${metrics.taxa_conclusao_diff > 0 ? 'text-[#0bda57]' : 'text-red-400'}`}>
-                                    <span className="material-symbols-outlined text-[16px] mr-0.5">{metrics.taxa_conclusao_diff > 0 ? 'trending_up' : 'trending_down'}</span>
-                                    {metrics.taxa_conclusao_diff}%
+                    {/* ── Resumo leve ── */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+                        <div className="flex items-center gap-2 text-sm text-[#92bbc9]">
+                            <span className="font-bold text-white">
+                                {isFetching ? '…' : entries.length}
+                            </span>
+                            {filters.statuses.length > 0 ? (
+                                <span>
+                                    de até <span className="text-white">{total}</span> {pluralize(total, 'registro', 'registros')} no período
                                 </span>
-                            </div>
+                            ) : (
+                                <span>
+                                    {pluralize(entries.length, 'registro', 'registros')} de <span className="text-white">{total}</span>
+                                </span>
+                            )}
+                            <span className="text-[#557682]">·</span>
+                            <span>{PRESET_LABEL[filters.preset]}</span>
                         </div>
-                        <div className="bg-[#1a2c32] border border-[#233f48] rounded-xl p-5 shadow-sm">
-                            <p className="text-[#92bbc9] font-medium text-sm mb-2">Tarefas Pendentes/Alertas</p>
-                            <div className="flex items-end gap-3">
-                                <h3 className={`text-3xl font-bold leading-none ${metrics.tarefas_pendentes > 0 ? 'text-red-400' : 'text-white'}`}>{metrics.tarefas_pendentes}</h3>
-                                <span className="text-[#92bbc9] text-sm font-medium mb-1">no período</span>
-                            </div>
-                        </div>
-                        <div className="bg-[#1a2c32] border border-[#233f48] rounded-xl p-5 shadow-sm">
-                            <p className="text-[#92bbc9] font-medium text-sm mb-2">Colaboradores Ativos</p>
-                            <div className="flex items-end gap-3">
-                                <h3 className="text-white text-3xl font-bold leading-none">{metrics.colaboradores_ativos}</h3>
-                            </div>
-                        </div>
-                        <div className="bg-[#1a2c32] border border-[#233f48] rounded-xl p-5 shadow-sm">
-                            <p className="text-[#92bbc9] font-medium text-sm mb-2">Avaliação Média</p>
-                            <div className="flex items-end gap-2">
-                                <h3 className="text-white text-3xl font-bold leading-none">{metrics.avaliacao}</h3>
-                                <div className="flex mb-1">
-                                    <span className="material-symbols-outlined text-yellow-500 text-[18px]">star</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Coluna Principal: Gráficos e Tabelas */}
-                        <div className="lg:col-span-2 flex flex-col gap-6">
-
-                            {/* Consistência Semanal (Visual) */}
-                            <div className="bg-[#1a2c32] border border-[#233f48] rounded-xl p-6 shadow-sm">
-                                <h3 className="text-white text-lg font-bold mb-1">Consistência da Operação</h3>
-                                <p className="text-[#92bbc9] text-sm mb-8">Volumetria de conclusão das tarefas (Exibição Últimos 7 dias em relação à média)</p>
-
-                                <div className="h-64 w-full flex items-end justify-between gap-1 sm:gap-2 pt-8 border-b border-[#233f48] pb-2 relative">
-                                    <div className="absolute inset-0 flex flex-col justify-between pointer-events-none pb-2 pt-8">
-                                        <div className="border-t border-dashed border-[#233f48] opacity-30 h-0"></div>
-                                        <div className="border-t border-dashed border-[#233f48] opacity-30 h-0"></div>
-                                        <div className="border-t border-dashed border-[#233f48] opacity-30 h-0"></div>
-                                        <div className="border-t border-dashed border-[#233f48] opacity-30 h-0"></div>
-                                    </div>
-
-                                    {consistencia_semanal.length > 0 ? consistencia_semanal.map((dia, idx) => {
-                                        const isHigh = dia.percent >= 80;
-                                        return (
-                                            <div key={idx} className="flex flex-col items-center flex-1 z-10 group h-full justify-end cursor-pointer">
-                                                <div
-                                                    className={`w-full max-w-[48px] rounded-t-lg transition-all relative ${isHigh ? 'bg-primary/80 hover:bg-primary' : 'bg-[#233f48] hover:bg-[#233f48]/80'}`}
-                                                    style={{ height: `${dia.percent > 0 ? dia.percent : 10}%` }}
-                                                >
-                                                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#111e22] text-white text-xs px-2 py-1 rounded border border-[#233f48] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
-                                                        {dia.percent}%
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    }) : (
-                                        <div className="w-full text-center text-[#92bbc9]">Sem dados semanais.</div>
-                                    )}
-                                </div>
-                                <div className="flex justify-between mt-2 px-1 text-xs text-[#92bbc9] uppercase font-bold tracking-wider">
-                                    {consistencia_semanal.map((dia, i) => (
-                                        <span key={i} className="flex-1 text-center">{dia.date_label}</span>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Registros Recentes Tabela Restrita */}
-                            <div className="bg-[#1a2c32] border border-[#233f48] rounded-xl shadow-sm overflow-hidden flex flex-col flex-1 h-[400px]">
-                                <div className="p-5 border-b border-[#233f48] bg-[#1a2c32]">
-                                    <h3 className="text-white text-lg font-bold">Registros Recentes de Tarefas</h3>
-                                </div>
-                                <div className="overflow-y-auto flex-1 h-full">
-                                    <table className="w-full text-left border-collapse">
-                                        <thead className="bg-[#152328] sticky top-0 z-10">
-                                            <tr>
-                                                <th className="p-4 text-xs font-semibold text-[#92bbc9] uppercase border-y border-[#233f48]">Atividade</th>
-                                                <th className="p-4 text-xs font-semibold text-[#92bbc9] uppercase border-y border-[#233f48]">Status</th>
-                                                <th className="p-4 text-xs font-semibold text-[#92bbc9] uppercase border-y border-[#233f48]">Responsável</th>
-                                                <th className="p-4 text-xs font-semibold text-[#92bbc9] uppercase border-y border-[#233f48] text-right">Data/Hora</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-[#233f48]">
-                                            {registros_recentes.length === 0 ? (
-                                                <tr><td colSpan={4} className="p-8 text-center text-[#92bbc9]">Nenhum registro para este período.</td></tr>
-                                            ) : registros_recentes.map((reg) => (
-                                                <tr key={reg.id} className="hover:bg-[#233f48]/30 transition-colors">
-                                                    <td className="p-4">
-                                                        <div className="flex flex-col gap-1">
-                                                            <span className="text-white text-sm font-medium">{reg.task_name}</span>
-                                                            {reg.unit && <UnitBadge name={reg.unit.name} />}
-                                                        </div>
-                                                    </td>
-                                                    <td className="p-4">
-                                                        {(reg.status === 'done' || reg.status === 'completed') && (
-                                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-[#0bda57]/10 text-[#0bda57] uppercase tracking-wider">
-                                                                Concluído
-                                                            </span>
-                                                        )}
-                                                        {reg.status === 'flagged' && (
-                                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/10 text-red-400 uppercase tracking-wider">
-                                                                Incidente
-                                                            </span>
-                                                        )}
-                                                        {reg.status === 'skipped' && (
-                                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-yellow-500/10 text-yellow-500 uppercase tracking-wider">
-                                                                Pulada
-                                                            </span>
-                                                        )}
-                                                        {reg.status === 'doing' && (
-                                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/10 text-blue-400 uppercase tracking-wider">
-                                                                Em andamento
-                                                            </span>
-                                                        )}
-                                                        {reg.status === 'partial' && (
-                                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-yellow-500/10 text-yellow-500 uppercase tracking-wider">
-                                                                Parcial
-                                                            </span>
-                                                        )}
-                                                    </td>
-                                                    <td className="p-4">
-                                                        <div className="flex items-center gap-2">
-                                                            <Avatar
-                                                                src={reg.executor_avatar}
-                                                                name={reg.executor_name}
-                                                                size={24}
-                                                                border="border-[#233f48]"
-                                                            />
-                                                            <span className="text-[#92bbc9] text-sm truncate max-w-[120px]" title={reg.executor_name}>{reg.executor_name}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="p-4 text-right">
-                                                        <span className="text-white text-sm whitespace-nowrap">{new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(reg.executed_at)).replace(',', ' às')}</span>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Coluna Lateral: Top Performers */}
-                        <div className="lg:col-span-1">
-                            <div className="bg-[#1a2c32] border border-[#233f48] rounded-xl p-6 shadow-sm flex flex-col h-full">
-                                <h3 className="text-white text-lg font-bold mb-1">Desempenho por Colaborador</h3>
-                                <p className="text-[#92bbc9] text-sm mb-6">Top contribuintes no período selecionado</p>
-
-                                <div className="flex flex-col gap-5 flex-1 overflow-y-auto pr-2">
-                                    {top_performers.length === 0 ? (
-                                        <p className="text-[#92bbc9] text-sm text-center my-8">Sem execuções no período.</p>
-                                    ) : top_performers.map((perf, idx) => {
-                                        let medalColor = "text-white";
-                                        let medalIcon = "";
-                                        if (idx === 0) { medalColor = "text-yellow-400"; medalIcon = "workspace_premium"; }
-                                        else if (idx === 1) { medalColor = "text-gray-300"; medalIcon = "military_tech"; }
-                                        else if (idx === 2) { medalColor = "text-amber-600"; medalIcon = "military_tech"; }
-
-                                        return (
-                                            <div key={idx} className="flex flex-col gap-2 p-3 bg-[#111e22] rounded-lg border border-[#233f48] hover:border-primary/50 transition-colors">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-3">
-                                                        <Avatar
-                                                            src={perf.avatar}
-                                                            name={perf.name}
-                                                            size={40}
-                                                            border="border-[#233f48]"
-                                                        />
-                                                        <div>
-                                                            <p className="text-white font-bold text-sm truncate max-w-[120px]" title={perf.name}>{perf.name}</p>
-                                                            <p className="text-[#92bbc9] text-xs font-medium">{perf.total_done} Tarefas Concluídas</p>
-                                                            {perf.unit && <UnitBadge name={perf.unit.name} />}
-                                                        </div>
-                                                    </div>
-                                                    {medalIcon && (
-                                                        <span className={`material-symbols-outlined text-[28px] ${medalColor}`} title={`#${idx + 1} Lugar`}>
-                                                            {medalIcon}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div className="flex items-center gap-2 mt-1">
-                                                    <div className="flex-1 h-1.5 bg-[#233f48] rounded-full overflow-hidden">
-                                                        <div className="h-full bg-primary rounded-full" style={{ width: `${perf.percent}%` }}></div>
-                                                    </div>
-                                                    <span className="text-[10px] text-[#92bbc9] font-bold w-6 text-right">{perf.percent}%</span>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-
-                                <button onClick={() => router.push('/equipe')} className="w-full mt-6 py-2.5 rounded-lg border border-[#233f48] text-white text-sm font-bold hover:bg-[#233f48] transition-colors">
-                                    Ver Todos da Equipe
+                        {activeChips.length > 0 && (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                                {activeChips.map((c, i) => (
+                                    <span
+                                        key={i}
+                                        className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full bg-[#13b6ec]/10 text-[#13b6ec] border border-[#13b6ec]/20"
+                                    >
+                                        {c}
+                                    </span>
+                                ))}
+                                <button
+                                    type="button"
+                                    onClick={() => setFilters(DEFAULT_FILTERS)}
+                                    className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full text-[#92bbc9] hover:text-white"
+                                >
+                                    Limpar
                                 </button>
                             </div>
-                        </div>
+                        )}
                     </div>
+
+                    {/* ── Erros ── */}
+                    {error && (
+                        <div className="bg-red-500/10 border border-red-900/50 rounded-xl p-4 text-red-400 text-sm">
+                            <p className="font-medium">Erro ao carregar a lista</p>
+                            <p className="text-xs mt-0.5 opacity-80">{error.message}</p>
+                        </div>
+                    )}
+                    {csvError && (
+                        <div className="bg-red-500/10 border border-red-900/50 rounded-xl p-3 text-red-400 text-sm">
+                            {csvError}
+                        </div>
+                    )}
+
+                    {/* ── Lista ── */}
+                    <AuditExecutionList
+                        entries={entries}
+                        isLoading={isLoading}
+                        isGlobal={isGlobal}
+                        onSelect={setSelectedId}
+                    />
+
+                    {/* ── Paginação ── */}
+                    <Pagination
+                        page={filters.page}
+                        limit={filters.limit}
+                        total={total}
+                        currentCount={entries.length}
+                        onChange={page => setFilters({ ...filters, page })}
+                    />
                 </div>
+            </div>
+
+            <AuditExecutionPanel
+                scope={scope}
+                assumptionId={selectedId}
+                onClose={() => setSelectedId(null)}
+            />
+        </div>
+    );
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function pluralize(n: number, singular: string, plural: string): string {
+    return n === 1 ? singular : plural;
+}
+
+function buildActiveChips(filters: AuditFilters): string[] {
+    const chips: string[] = [];
+    if (filters.search.trim()) chips.push(`Busca: "${filters.search.trim()}"`);
+    if (filters.area_ids.length) chips.push(`${filters.area_ids.length} ${pluralize(filters.area_ids.length, 'área', 'áreas')}`);
+    if (filters.user_ids.length) chips.push(`${filters.user_ids.length} ${pluralize(filters.user_ids.length, 'colaborador', 'colaboradores')}`);
+    if (filters.shifts.length) chips.push(`Turnos: ${filters.shifts.map(s => SHIFT_LABEL[s]).join(', ')}`);
+    if (filters.statuses.length) chips.push(`Status: ${filters.statuses.map(s => AUDIT_STATUS_LABEL[s]).join(', ')}`);
+    return chips;
+}
+
+interface PaginationProps {
+    page: number;
+    limit: number;
+    total: number;
+    currentCount: number;
+    onChange: (page: number) => void;
+}
+
+function Pagination({ page, limit, total, currentCount, onChange }: PaginationProps) {
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const start = total === 0 ? 0 : page * limit + 1;
+    const end = Math.min((page + 1) * limit, total);
+    const canPrev = page > 0;
+    const canNext = (page + 1) < totalPages && currentCount > 0;
+
+    if (total === 0) return null;
+
+    return (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#16262c] border border-[#325a67] rounded-xl px-4 py-3">
+            <div className="text-xs text-[#92bbc9]">
+                <span className="hidden sm:inline">Mostrando </span>
+                <span className="text-white font-semibold">{start}–{end}</span>
+                <span> de </span>
+                <span className="text-white font-semibold">{total}</span>
+            </div>
+            <div className="flex items-center gap-2">
+                <button
+                    type="button"
+                    disabled={!canPrev}
+                    onClick={() => onChange(page - 1)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[#325a67] bg-[#101d22] text-[#92bbc9] hover:text-white hover:border-[#13b6ec]/40 text-sm disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                    <span className="material-symbols-outlined" style={{ fontSize: 16 }}>chevron_left</span>
+                    Anterior
+                </button>
+                <span className="text-xs text-[#557682] tabular-nums">
+                    Página {page + 1} de {totalPages}
+                </span>
+                <button
+                    type="button"
+                    disabled={!canNext}
+                    onClick={() => onChange(page + 1)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[#325a67] bg-[#101d22] text-[#92bbc9] hover:text-white hover:border-[#13b6ec]/40 text-sm disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                    Próxima
+                    <span className="material-symbols-outlined" style={{ fontSize: 16 }}>chevron_right</span>
+                </button>
             </div>
         </div>
     );
