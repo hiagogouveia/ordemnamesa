@@ -12,7 +12,7 @@ export function AdminNav() {
     const links = [
         { href: "/admin", icon: "dashboard", label: "Dashboard" },
         { href: "/admin/checklists", icon: "checklist", label: "Checklists" },
-        { href: "/admin/relatorios", icon: "monitoring", label: "Relatórios" },
+        { href: "/relatorios", icon: "monitoring", label: "Relatórios" },
         { href: "/admin/colaboradores", icon: "group", label: "Colaboradores" },
         { href: "/admin/configuracoes", icon: "settings", label: "Configurações" },
     ];

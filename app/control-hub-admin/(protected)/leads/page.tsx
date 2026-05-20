@@ -6,8 +6,10 @@ import {
     compareByTemperature,
     type LeadTemperature,
 } from '@/lib/admin-leads-control-hub/lead-scoring'
+import { buildLeadOutboundWhatsappLink } from '@/lib/admin-leads-control-hub/whatsapp-link'
 import { config } from '@/lead-control-hub.config'
 import type { Lead } from '@/lib/admin-leads-control-hub/types'
+import { LeadQuickActions } from './lead-quick-actions'
 
 export const dynamic = 'force-dynamic'
 
@@ -104,29 +106,47 @@ function FilterLink({ current, value, label }: { current: string; value: string;
 
 function LeadRow({ lead, temperature }: { lead: Lead; temperature: LeadTemperature }) {
     const t = LEAD_TEMPERATURE_CONFIG[temperature]
+    const detailHref = `${config.panelBasePath}/leads/${lead.id}`
+    const whatsappUrl = buildLeadOutboundWhatsappLink({
+        leadName: lead.name,
+        leadPhone: lead.phone,
+        appName: config.appName,
+    })
+    const leadSource = (lead.custom_fields?.lead_source as string | undefined) ?? null
+
     return (
-        <Link
-            href={`${config.panelBasePath}/leads/${lead.id}`}
-            className="block rounded-2xl border border-border-dark bg-surface-dark p-5 transition-colors duration-200 hover:border-primary/40"
-        >
+        <div className="rounded-2xl border border-border-dark bg-surface-dark p-5 transition-colors duration-200 hover:border-primary/40">
             <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
+                <Link href={detailHref} className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                         <span className={`rounded-md border px-2 py-0.5 text-xs font-bold ${t.cls}`}>
                             {t.emoji} {t.label}
                         </span>
                         <StatusBadge status={lead.status} />
+                        {leadSource && leadSource !== 'organic' && (
+                            <span className="rounded-md border border-border-dark bg-surface-deep px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-text-secondary">
+                                {leadSource}
+                            </span>
+                        )}
                     </div>
                     <div className="mt-2 truncate text-base font-bold text-white">{lead.organization_name}</div>
                     <div className="text-sm text-text-secondary">
                         {lead.name} · {lead.email}
                     </div>
-                </div>
-                <div className="text-xs text-text-secondary">
-                    {new Date(lead.created_at).toLocaleString('pt-BR')}
+                </Link>
+                <div className="flex flex-col items-end gap-2">
+                    <div className="text-xs text-text-secondary">
+                        {new Date(lead.created_at).toLocaleString('pt-BR')}
+                    </div>
+                    <LeadQuickActions
+                        leadId={lead.id}
+                        status={lead.status}
+                        whatsappUrl={whatsappUrl}
+                        detailHref={detailHref}
+                    />
                 </div>
             </div>
-        </Link>
+        </div>
     )
 }
 

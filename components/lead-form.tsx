@@ -1,6 +1,7 @@
 'use client'
 
 import { useActionState, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { config } from '@/lead-control-hub.config'
 import { submitLeadAction, type SubmitLeadResult } from '@/app/qualificacao/actions'
@@ -18,6 +19,11 @@ const labelClass = 'mb-1.5 block text-sm font-semibold text-slate-700 dark:text-
 export function LeadForm() {
     const [state, formAction, pending] = useActionState(submitLeadAction, INITIAL)
     const [done, setDone] = useState(false)
+    const searchParams = useSearchParams()
+    const leadSource =
+        searchParams?.get('source')?.trim() ||
+        searchParams?.get('utm_source')?.trim() ||
+        'organic'
 
     useEffect(() => {
         if (state?.ok) setDone(true)
@@ -55,6 +61,7 @@ export function LeadForm() {
 
     return (
         <form action={formAction} className="mx-auto w-full max-w-lg">
+            <input type="hidden" name="lead_source" value={leadSource} />
             <div className="rounded-2xl border border-border-dark bg-surface-dark p-6 shadow-2xl shadow-primary/10 sm:p-8">
                 <div className="mb-6">
                     <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
@@ -172,6 +179,24 @@ function CustomField({
                         </option>
                     ))}
                 </select>
+                {field.helper && <span className="mt-1 block text-xs text-text-secondary">{field.helper}</span>}
+            </label>
+        )
+    }
+
+    if (field.type === 'textarea') {
+        return (
+            <label className="block">
+                {labelEl}
+                <textarea
+                    name={field.name}
+                    required={field.required}
+                    placeholder={field.placeholder}
+                    rows={4}
+                    className={
+                        inputClass.replace('h-12 lg:h-14', 'min-h-[96px] py-3') + ' resize-y'
+                    }
+                />
                 {field.helper && <span className="mt-1 block text-xs text-text-secondary">{field.helper}</span>}
             </label>
         )

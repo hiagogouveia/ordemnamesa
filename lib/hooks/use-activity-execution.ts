@@ -309,6 +309,136 @@ export const useToggleActivityTask = () => {
     });
 };
 
+// ============================================================
+// Sprint 46: pular task ("Não foi possível concluir")
+// Cria/atualiza execução com status='skipped'. Opcionalmente vincula a
+// um task_issue existente preenchendo issue.task_execution_id.
+// ============================================================
+
+interface SkipTaskInput {
+    restaurantId: string;
+    checklistId: string;
+    taskId: string;
+    /** Se passado, vincula o issue à execução pulada (auditoria do motivo). */
+    issueId?: string | null;
+}
+
+export const useSkipTask = () => {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async ({ restaurantId, checklistId, taskId, issueId }: SkipTaskInput) => {
+            const supabase = createClient();
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Usuário não logado');
+
+            // 1) Procurar execução existente desta task hoje
+            const startOfDay = new Date();
+            startOfDay.setHours(0, 0, 0, 0);
+            const { data: existing } = await supabase
+                .from('task_executions')
+                .select('id, checklist_assumption_id')
+                .eq('task_id', taskId)
+                .eq('checklist_id', checklistId)
+                .gte('executed_at', startOfDay.toISOString())
+                .maybeSingle();
+
+            const now = new Date().toISOString();
+            let executionId: string;
+
+            if (existing) {
+                const { data, error } = await supabase
+                    .from('task_executions')
+                    .update({ status: 'skipped', executed_at: now })
+                    .eq('id', existing.id)
+                    .select()
+                    .single();
+                if (error) throw error;
+                executionId = data.id;
+            } else {
+                // Buscar assumption ativa para vincular
+                const { data: assumption } = await supabase
+                    .from('checklist_assumptions')
+                    .select('id')
+                    .eq('checklist_id', checklistId)
+                    .eq('restaurant_id', restaurantId)
+                    .is('completed_at', null)
+                    .order('assumed_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                const { data, error } = await supabase
+                    .from('task_executions')
+                    .insert({
+                        restaurant_id: restaurantId,
+                        task_id: taskId,
+                        checklist_id: checklistId,
+                        checklist_assumption_id: assumption?.id ?? null,
+                        user_id: user.id,
+                        status: 'skipped',
+                        executed_at: now,
+                    })
+                    .select()
+                    .single();
+                if (error) throw error;
+                executionId = data.id;
+            }
+
+            // 2) Vincular issue ↔ execução, se aplicável (usa endpoint PATCH, mas só
+            //    autor + status='open' passa pela regra do server — coerente).
+            if (issueId) {
+                const token = await getAuthToken();
+                await fetch(`/api/task-issues/${issueId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({ task_execution_id: executionId }),
+                }).catch(() => { /* não bloqueia o skip se vínculo falhar */ });
+            }
+
+            return { executionId };
+        },
+        onSettled: (_data, _error, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['activity', variables.restaurantId, variables.checklistId] });
+        }
+    });
+};
+
+export const useUnskipTask = () => {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async ({ restaurantId, checklistId, taskId }: {
+            restaurantId: string; checklistId: string; taskId: string;
+        }) => {
+            const supabase = createClient();
+            const startOfDay = new Date();
+            startOfDay.setHours(0, 0, 0, 0);
+
+            const { data: exec } = await supabase
+                .from('task_executions')
+                .select('id')
+                .eq('task_id', taskId)
+                .eq('checklist_id', checklistId)
+                .eq('status', 'skipped')
+                .gte('executed_at', startOfDay.toISOString())
+                .maybeSingle();
+
+            if (exec) {
+                const { error } = await supabase
+                    .from('task_executions')
+                    .delete()
+                    .eq('id', exec.id);
+                if (error) throw error;
+                return { deleted: true };
+            }
+            return { deleted: false };
+        },
+        onSettled: (_data, _error, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['activity', variables.restaurantId, variables.checklistId] });
+        }
+    });
+};
+
 export const useBlockTask = () => {
     const queryClient = useQueryClient();
 

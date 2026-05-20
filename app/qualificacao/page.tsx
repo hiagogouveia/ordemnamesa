@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { Logo } from '@/components/ui/Logo'
 import { LeadForm } from '@/components/lead-form'
@@ -49,7 +50,9 @@ export default function QualificacaoPage() {
                     </div>
 
                     <div className="flex justify-center lg:justify-end">
-                        <LeadForm />
+                        <Suspense fallback={null}>
+                            <LeadForm />
+                        </Suspense>
                     </div>
                 </div>
             </div>

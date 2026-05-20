@@ -4,6 +4,7 @@ import { PhotoUpload } from '@/components/tasks/photo-upload';
 import { useSignedUrl } from '@/lib/hooks/use-signed-url';
 import { resolveTaskType, computeTaskAlert } from '@/lib/utils/task-alert';
 import { formatDateBR } from '@/lib/utils/brazil-date';
+import type { TaskIssue } from '@/lib/types';
 
 export interface ExecutionToggleInput {
     isDone: boolean;
@@ -22,15 +23,24 @@ interface ExecutionItemProps {
     execution?: KanbanExecution;
     onToggle: (taskId: string, executionId: string | undefined, input: ExecutionToggleInput) => void;
     onReportProblem: (taskId: string) => void;
-    onResumeTask?: (taskId: string, executionId: string) => void;
+    /** Sprint 46: callback para abrir o modal em modo edição da ocorrência do autor. */
+    onEditIssue?: (issue: TaskIssue) => void;
+    /** Sprint 46: "Não foi possível concluir" — marca task como skipped, opcionalmente vinculada à ocorrência. */
+    onSkipTask?: (taskId: string, linkedIssueId: string | null) => void;
+    /** Sprint 46: desfaz skip. */
+    onUnskipTask?: (taskId: string) => void;
     locked?: boolean;
     isBlockedSequential?: boolean;
     restaurantId: string;
+    /** Indica se há ao menos uma ocorrência aberta/investigando para esta task (s45). */
+    hasOpenIssue?: boolean;
+    /** Sprint 46: ocorrência do usuário atual nesta task, quando existe e é dele. */
+    myOpenIssue?: TaskIssue | null;
 }
 
-export function ExecutionItem({ task, execution, onToggle, onReportProblem, onResumeTask, locked = false, isBlockedSequential = false, restaurantId }: ExecutionItemProps) {
+export function ExecutionItem({ task, execution, onToggle, onReportProblem, onEditIssue, onSkipTask, onUnskipTask, locked = false, isBlockedSequential = false, restaurantId, hasOpenIssue = false, myOpenIssue = null }: ExecutionItemProps) {
     const isDone = Boolean(execution && execution.status === 'done');
-    const isBlocked = Boolean(execution && execution.status === 'blocked');
+    const isSkipped = Boolean(execution && execution.status === 'skipped');
     const [isAnimating, setIsAnimating] = useState(false);
     const [photoError, setPhotoError] = useState<string | null>(null);
 
@@ -142,7 +152,7 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onRe
     };
 
     const handleSimpleToggle = () => {
-        if (locked || isBlocked) return;
+        if (locked) return;
         // Bool simples sem foto/observação/etc — fluxo legado intacto
         animateToggle();
         onToggle(task.id, execution?.id, buildToggleInput({ isDone: !isDone }));
@@ -184,52 +194,91 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onRe
         setPendingPhotos((prev) => prev.filter((_, i) => i !== index));
     };
 
-    // ── RENDER: task bloqueada (impedimento) ──────────────────────────────
-    if (isBlocked) {
+    // Badge inline reutilizável de ocorrência (não-bloqueante)
+    const issueBadge = hasOpenIssue ? (
+        <span className="shrink-0 bg-amber-500/15 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-amber-500/30 flex items-center gap-1">
+            <span className="material-symbols-outlined text-[12px]">warning</span>
+            Ocorrência
+        </span>
+    ) : null;
+
+    // Card editável da própria ocorrência (Sprint 46): aparece quando o usuário é
+    // autor e a ocorrência está em status 'open'. Para outros casos (issue de
+    // outro staff, ou já em investigating/resolved), continua só o badge.
+    const myEditableIssue = myOpenIssue && myOpenIssue.status === 'open' ? myOpenIssue : null;
+    const inlineIssueCard = myEditableIssue ? (
+        <div className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 flex flex-col gap-2.5">
+            <div className="flex items-start gap-2.5">
+                <span className="material-symbols-outlined text-amber-400 text-[18px] shrink-0 mt-0.5">warning</span>
+                <div className="flex-1 min-w-0">
+                    <p className="text-[11px] uppercase tracking-wide font-bold text-amber-400">Ocorrência registrada · aguardando conclusão da tarefa</p>
+                    <p className="text-xs text-white mt-1 line-clamp-2 whitespace-pre-wrap">{myEditableIssue.description}</p>
+                    {myEditableIssue.photos.length > 0 && (
+                        <p className="text-[10px] text-amber-400/70 mt-1 flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[12px]">image</span>
+                            {myEditableIssue.photos.length} foto{myEditableIssue.photos.length > 1 ? 's' : ''}
+                        </p>
+                    )}
+                </div>
+                {onEditIssue && !locked && (
+                    <button
+                        onClick={() => onEditIssue(myEditableIssue)}
+                        className="shrink-0 text-[11px] font-semibold text-amber-300 hover:text-amber-200 underline-offset-2 hover:underline"
+                    >
+                        Ver / Editar
+                    </button>
+                )}
+            </div>
+            {onSkipTask && !locked && !isDone && !isSkipped && (
+                <button
+                    onClick={() => onSkipTask(task.id, myEditableIssue.id)}
+                    className="self-stretch flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/15 transition-colors"
+                >
+                    <span className="material-symbols-outlined text-[14px]">block</span>
+                    Não foi possível concluir
+                </button>
+            )}
+        </div>
+    ) : null;
+
+    // ── RENDER: task pulada (skipped — Sprint 46) ───────────────────────
+    if (isSkipped) {
         return (
-            <div className="w-full flex flex-col gap-0 rounded-2xl border text-left bg-amber-500/5 border-amber-500/30 shadow-[0_4px_12px_rgba(234,179,8,0.05)] overflow-hidden relative">
-                <div className="absolute inset-0 bg-gradient-to-r from-amber-500/10 to-transparent pointer-events-none" />
-
-                <div className="relative flex items-center gap-4 p-4 min-h-[64px]">
-                    <div className="shrink-0 flex items-center justify-center">
-                        <div className="w-7 h-7 rounded-full border-[2px] flex items-center justify-center bg-amber-500/20 border-amber-500 text-amber-400">
-                            <span className="material-symbols-outlined text-[16px] font-bold">warning</span>
-                        </div>
+            <div className="w-full flex flex-col gap-0 rounded-2xl border border-amber-500/30 bg-amber-500/5 overflow-hidden">
+                <div className="flex items-center gap-4 p-4 min-h-[64px]">
+                    <div className="shrink-0 w-7 h-7 rounded-full border-[2px] flex items-center justify-center bg-amber-500/20 border-amber-500 text-amber-400">
+                        <span className="material-symbols-outlined text-[16px] font-bold">block</span>
                     </div>
-
                     <div className="flex-1 py-1">
                         <div className="flex items-start justify-between gap-3">
-                            <span className="text-base font-semibold leading-snug text-white">
+                            <span className="text-base font-semibold leading-snug text-white line-through decoration-amber-400/40">
                                 {task.title}
                             </span>
-                            <span className="shrink-0 bg-amber-500/15 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-amber-500/30">
-                                Impedimento
+                            <span className="shrink-0 bg-amber-500/15 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-amber-500/30 flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[12px]">block</span>
+                                Não concluída
                             </span>
                         </div>
                         {task.description && (
                             <p className="text-sm mt-1 text-[#92bbc9]/70">{task.description}</p>
                         )}
-                        {execution?.blocked_reason && (
-                            <div className="mt-2 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5">
-                                <p className="text-amber-300/90 text-xs leading-relaxed">
-                                    <span className="font-bold">Motivo:</span> {execution.blocked_reason}
-                                </p>
-                            </div>
+                        {myEditableIssue && (
+                            <p className="text-[11px] mt-2 text-amber-400/80 flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[12px]">warning</span>
+                                Pulada por ocorrência registrada
+                            </p>
                         )}
                     </div>
-                </div>
-
-                {!locked && onResumeTask && execution && (
-                    <div className="relative px-4 pb-3">
+                    {!locked && onUnskipTask && (
                         <button
-                            onClick={() => onResumeTask(task.id, execution.id)}
-                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/15 transition-colors active:scale-[0.98]"
+                            onClick={() => onUnskipTask(task.id)}
+                            className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full text-[#92bbc9]/60 hover:text-[#92bbc9] hover:bg-[#233f48] transition-colors"
+                            title="Desfazer"
                         >
-                            <span className="material-symbols-outlined text-[16px]">play_arrow</span>
-                            Retomar tarefa
+                            <span className="material-symbols-outlined text-[18px]">undo</span>
                         </button>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
         );
     }
@@ -264,12 +313,15 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onRe
                             <span className="text-base font-semibold leading-snug text-white">
                                 {task.title}
                             </span>
-                            {hasAlertSaved && (
-                                <span className="shrink-0 bg-amber-500/15 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-amber-500/30 flex items-center gap-1">
-                                    <span className="material-symbols-outlined text-[12px]">warning</span>
-                                    Alerta
-                                </span>
-                            )}
+                            <div className="flex items-center gap-1.5">
+                                {issueBadge}
+                                {hasAlertSaved && (
+                                    <span className="shrink-0 bg-amber-500/15 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-amber-500/30 flex items-center gap-1">
+                                        <span className="material-symbols-outlined text-[12px]">warning</span>
+                                        Alerta
+                                    </span>
+                                )}
+                            </div>
                         </div>
                         {task.description && (
                             <p className="text-sm mt-1 text-[#92bbc9]/70">{task.description}</p>
@@ -324,6 +376,9 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onRe
                         <img src={donePhotoUrl} alt="Evidência" className="w-full object-cover max-h-32" />
                     </div>
                 )}
+                {inlineIssueCard && (
+                    <div className="px-4 pb-3">{inlineIssueCard}</div>
+                )}
             </div>
         );
     }
@@ -364,11 +419,14 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onRe
                             <span className="text-base font-semibold leading-snug text-[#e0e0e0]">
                                 {task.title}
                             </span>
-                            {task.is_critical && !locked && (
-                                <span className="shrink-0 bg-red-500/10 text-red-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                                    Crítica
-                                </span>
-                            )}
+                            <div className="flex items-center gap-1.5">
+                                {issueBadge}
+                                {task.is_critical && !locked && (
+                                    <span className="shrink-0 bg-red-500/10 text-red-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                        Crítica
+                                    </span>
+                                )}
+                            </div>
                         </div>
                         {task.description && (
                             <p className="text-sm mt-1 text-[#92bbc9]">{task.description}</p>
@@ -382,13 +440,15 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onRe
                     </div>
                 </button>
 
-                {!locked && !isBlockedSequential && (
+                {inlineIssueCard}
+
+                {!locked && !isBlockedSequential && !myEditableIssue && (
                     <button
                         onClick={() => onReportProblem(task.id)}
                         className="mt-1 self-start ml-11 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-amber-400/70 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
                     >
                         <span className="material-symbols-outlined text-[14px]">warning</span>
-                        Reportar problema
+                        Registrar ocorrência
                     </button>
                 )}
             </div>
@@ -426,11 +486,14 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onRe
                         <span className="text-base font-semibold leading-snug text-[#e0e0e0]">
                             {task.title}
                         </span>
-                        {task.is_critical && (
-                            <span className="shrink-0 bg-red-500/10 text-red-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                                Crítica
-                            </span>
-                        )}
+                        <div className="flex items-center gap-1.5">
+                            {issueBadge}
+                            {task.is_critical && (
+                                <span className="shrink-0 bg-red-500/10 text-red-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                    Crítica
+                                </span>
+                            )}
+                        </div>
                     </div>
                     {task.description && (
                         <p className="text-sm mt-1 text-[#92bbc9]">{task.description}</p>
@@ -589,13 +652,17 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onRe
                         Concluir tarefa
                     </button>
 
-                    <button
-                        onClick={() => onReportProblem(task.id)}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15 transition-colors active:scale-[0.98]"
-                    >
-                        <span className="material-symbols-outlined text-[16px]">warning</span>
-                        Reportar problema
-                    </button>
+                    {inlineIssueCard}
+
+                    {!myEditableIssue && (
+                        <button
+                            onClick={() => onReportProblem(task.id)}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15 transition-colors active:scale-[0.98]"
+                        >
+                            <span className="material-symbols-outlined text-[16px]">warning</span>
+                            Registrar ocorrência
+                        </button>
+                    )}
                 </div>
             )}
         </div>

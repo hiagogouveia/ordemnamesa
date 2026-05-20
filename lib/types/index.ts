@@ -37,6 +37,8 @@ export interface AccountUser {
 }
 
 export type ChecklistStatus = 'active' | 'archived'
+// 'blocked' deprecado em s44 — preservado para compat de leitura de dados antigos.
+// Novo fluxo: ocorrências vivem em TaskIssue (ver abaixo) e não bloqueiam execução.
 export type ExecutionStatus = 'not_started' | 'in_progress' | 'done' | 'blocked' | 'overdue' | 'incomplete'
 export type ShiftType = 'morning' | 'afternoon' | 'evening' | 'any' // Rename to avoid conflict with Shift table or keep? Let's keep it Shift for now, but the new table is 'shifts'
 export type UserRole = 'owner' | 'manager' | 'staff'
@@ -283,6 +285,51 @@ export interface Notification {
     created_at: string
     metadata?: Record<string, unknown> | null
     related_id?: string | null
+}
+
+// ============================================================
+// Sprint 45 — Ocorrências operacionais (task_issues)
+// Desacoplado de task_executions: a task pode ser concluída normalmente
+// mesmo com ocorrência aberta. Gestor/owner trata via status + comentário.
+// ============================================================
+
+export type TaskIssueStatus = 'open' | 'investigating' | 'resolved'
+export type TaskIssueEventType = 'created' | 'status_changed' | 'comment_added' | 'resolved' | 'reopened' | 'edited'
+
+export interface TaskIssue {
+    id: string
+    restaurant_id: string
+    task_execution_id: string | null
+    task_id: string
+    checklist_id: string
+    checklist_assumption_id: string | null
+    reported_by: string
+    description: string
+    photos: string[]
+    status: TaskIssueStatus
+    manager_comment: string | null
+    resolved_by: string | null
+    resolved_at: string | null
+    reopened_by: string | null
+    reopened_at: string | null
+    severity: string | null
+    category: string | null
+    requires_photo: boolean
+    created_at: string
+    updated_at: string
+}
+
+export interface TaskIssueEvent {
+    id: string
+    task_issue_id: string
+    restaurant_id: string
+    event_type: TaskIssueEventType
+    from_status: TaskIssueStatus | null
+    to_status: TaskIssueStatus | null
+    comment: string | null
+    metadata: Record<string, unknown>
+    actor_user_id: string
+    created_at: string
 }
 
 export interface PurchaseItem {
