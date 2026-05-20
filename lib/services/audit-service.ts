@@ -18,6 +18,7 @@ import type {
     AuditExecution,
     AuditExecutionDetail,
     AuditFilters,
+    AuditIssue,
     AuditListResponse,
     AuditStatus,
     AuditTaskDetail,
@@ -165,30 +166,27 @@ function mapTaskExecutionStatus(raw: string | null | undefined): AuditTaskStatus
 }
 
 /**
- * Status FINAL da assumption.
+ * Status FINAL da assumption (Sprint 45 — ocorrências em `task_issues`).
  *
- * Source of truth: `checklist_assumptions.execution_status='done'` — a lista
- * já filtra. Status agregado nesta entrega é sempre 'completed' para as
- * rotinas que entram no relatório.
+ * Source of truth: `checklist_assumptions.execution_status='done'` (a lista
+ * filtra) + ocorrências (`task_issues`) vinculadas à execução.
  *
- * Histórico de impedimento NÃO entra mais como status final: é exposto
- * separadamente via `AuditExecution.had_impediment` (badge secundária).
+ * - 'impediment' → existe ocorrência PENDENTE: `task_issues.status` em
+ *   (open|investigating) E a task afetada NÃO foi concluída na janela
+ *   (sem task_execution status='done'). É o caso "encerrou com problema".
+ * - 'completed'  → demais casos. Quando houve ocorrência mas a task foi
+ *   retomada/concluída (ou o gestor resolveu o issue), `had_impediment=true`
+ *   sinaliza o evento via badge secundária, sem rebaixar o status.
  *
- * - 'impediment' e 'incomplete' permanecem no enum, reservados para fluxos
- *   futuros (encerramento definitivo com impedimento / abandono real).
+ * NÃO usamos mais `task_executions.status='blocked'`: a s45 removeu esse
+ * status do schema e migrou o conceito para `task_issues`.
  *
- * Notas técnicas / saneamento (fora do escopo desta entrega):
- *   1. `useResumeTask` ([lib/hooks/use-activity-execution.ts]) DELETA a
- *      task_execution `status='blocked'` ao retomar — eliminando o rastro
- *      do impedimento histórico. Consequência: `had_impediment` será
- *      `false` para a maioria das execuções legadas que passaram por
- *      impedimento. Forward-compatible.
- *   2. Existem assumptions com `completed_at != null` mas
- *      `execution_status='in_progress'` — resíduo do bug s26
- *      (`20260414_s26_fix_execution_status_integrity.sql`). Hoje ficam fora
- *      da lista por causa do filtro `done`. Revisitar como tarefa de legado.
+ * Nota de saneamento (fora do escopo): assumptions com `completed_at != null`
+ * mas `execution_status='in_progress'` (resíduo do bug s26) ficam fora da
+ * lista pelo filtro `done`. Revisitar como tarefa de legado.
  */
-function deriveAssumptionStatus(): AuditStatus {
+function deriveAssumptionStatus(opts: { hasPendingIssue: boolean }): AuditStatus {
+    if (opts.hasPendingIssue) return 'impediment';
     return 'completed';
 }
 
@@ -234,6 +232,30 @@ interface RawTaskExec {
     photo_url: string | null;
     photos: unknown; // JSONB array
     blocked_reason: string | null;
+}
+
+interface RawTaskIssue {
+    id: string;
+    checklist_assumption_id: string | null;
+    checklist_id: string;
+    task_id: string;
+    reported_by: string;
+    description: string;
+    photos: unknown; // text[]
+    status: 'open' | 'investigating' | 'resolved';
+    manager_comment: string | null;
+    resolved_at: string | null;
+    created_at: string;
+}
+
+const ISSUE_OPEN_STATUSES: ReadonlySet<string> = new Set(['open', 'investigating']);
+
+/** text[] do Postgres pode vir como array JS ou string — normaliza. */
+function normalizePhotoArray(raw: unknown): string[] {
+    if (Array.isArray(raw)) {
+        return raw.filter((p): p is string => typeof p === 'string' && p.length > 0);
+    }
+    return [];
 }
 
 /** Window de tempo em que uma task_execution conta como pertencente à assumption. */
@@ -359,6 +381,21 @@ export async function fetchAuditList(
     if (execErr) throw execErr;
     const allExecs = (execsRaw ?? []) as RawTaskExec[];
 
+    // ── Ocorrências (task_issues) por assumption ────────────────────────────
+    const assumptionIds = rawAssumptions.map(a => a.id);
+    const issuesByAssumption: Record<string, RawTaskIssue[]> = {};
+    {
+        const { data: issuesRaw, error: iErr } = await admin
+            .from('task_issues')
+            .select('id, checklist_assumption_id, checklist_id, task_id, reported_by, description, photos, status, manager_comment, resolved_at, created_at')
+            .in('checklist_assumption_id', assumptionIds);
+        if (iErr) throw iErr;
+        for (const it of (issuesRaw ?? []) as RawTaskIssue[]) {
+            if (!it.checklist_assumption_id) continue;
+            (issuesByAssumption[it.checklist_assumption_id] ??= []).push(it);
+        }
+    }
+
     // ── Áreas ───────────────────────────────────────────────────────────────
     const areaIds = Array.from(new Set(
         rawAssumptions
@@ -421,20 +458,33 @@ export async function fetchAuditList(
 
         const totalTasks = taskTotalByChecklist[a.checklist_id] ?? 0;
         let completedCount = 0;
-        let impedimentCount = 0;
         let evidenceCount = 0;
-        let hasImpedimentTask = false;
         for (const e of dedupedExecs) {
             const s = mapTaskExecutionStatus(e.status);
             if (s === 'completed') completedCount++;
-            if (s === 'impediment') { impedimentCount++; hasImpedimentTask = true; }
             evidenceCount += extractPhotoPaths(e).length;
         }
+        // Tasks concluídas (done) na janela — usado para resolver pendência de ocorrência
+        const doneTaskIds = new Set(
+            dedupedExecs.filter(e => e.status === 'done').map(e => e.task_id!).filter(Boolean),
+        );
+
+        // ── Ocorrências da execução ──
+        const issuesForA = issuesByAssumption[a.id] ?? [];
+        const pendingIssueTaskIds = new Set<string>();
+        for (const it of issuesForA) {
+            const taskConcluida = doneTaskIds.has(it.task_id);
+            const isPending = ISSUE_OPEN_STATUSES.has(it.status) && !taskConcluida;
+            if (isPending) pendingIssueTaskIds.add(it.task_id);
+        }
+        const hasAnyIssue = issuesForA.length > 0;
+        const hasPendingIssue = pendingIssueTaskIds.size > 0;
+
         // Contagem informativa — diferença vs. template ATUAL. Não afeta o status agregado.
         const executedTaskIds = new Set(dedupedExecs.map(e => e.task_id!).filter(Boolean));
         const incompleteCount = Math.max(0, totalTasks - executedTaskIds.size);
 
-        const status = deriveAssumptionStatus();
+        const status = deriveAssumptionStatus({ hasPendingIssue });
 
         const duration_seconds = a.completed_at
             ? Math.max(0, Math.round(
@@ -453,7 +503,7 @@ export async function fetchAuditList(
             completed_at: a.completed_at,
             duration_seconds,
             status,
-            had_impediment: hasImpedimentTask,
+            had_impediment: hasAnyIssue,
             checklist: {
                 id: cl?.id ?? a.checklist_id,
                 name: cl?.name ?? '—',
@@ -469,7 +519,7 @@ export async function fetchAuditList(
             task_counts: {
                 total: totalTasks,
                 completed: completedCount,
-                impediment: impedimentCount,
+                impediment: pendingIssueTaskIds.size,
                 incomplete: incompleteCount,
             },
             evidence_count: evidenceCount,
@@ -566,11 +616,77 @@ export async function fetchAuditDetail(
             lastByTask[e.task_id] = e;
         }
     }
+    const doneTaskIds = new Set(
+        execList.filter(e => e.status === 'done').map(e => e.task_id!).filter(Boolean),
+    );
+
+    // ── Ocorrências (task_issues) da execução ───────────────────────────────
+    const { data: issuesRaw, error: iErr } = await admin
+        .from('task_issues')
+        .select('id, checklist_assumption_id, checklist_id, task_id, reported_by, description, photos, status, manager_comment, resolved_at, created_at')
+        .eq('checklist_assumption_id', assumptionId)
+        .order('created_at', { ascending: true });
+    if (iErr) throw iErr;
+    const rawIssues = (issuesRaw ?? []) as RawTaskIssue[];
+
+    // Nomes dos reporters
+    const reporterIds = Array.from(new Set(rawIssues.map(it => it.reported_by).filter(Boolean)));
+    const reporterMap: Record<string, string> = {};
+    if (reporterIds.length > 0) {
+        const { data: reporters } = await admin
+            .from('users')
+            .select('id, name')
+            .in('id', reporterIds);
+        for (const r of (reporters ?? []) as Array<{ id: string; name: string | null }>) {
+            reporterMap[r.id] = r.name ?? 'Colaborador';
+        }
+    }
+
+    const taskTitleById: Record<string, string> = {};
+    for (const t of taskList) taskTitleById[t.id] = t.title;
+
+    // Monta AuditIssue[] com signed URLs das fotos da ocorrência
+    const auditIssues: AuditIssue[] = await Promise.all(
+        rawIssues.map(async (it): Promise<AuditIssue> => {
+            const photoPaths = normalizePhotoArray(it.photos);
+            const photos: AuditEvidence[] = await Promise.all(
+                photoPaths.map(async (path) => {
+                    const { data: signed } = await admin.storage
+                        .from(STORAGE_BUCKET)
+                        .createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
+                    return { storage_path: path, signed_url: signed?.signedUrl ?? null };
+                }),
+            );
+            const taskConcluida = doneTaskIds.has(it.task_id);
+            const isPending = ISSUE_OPEN_STATUSES.has(it.status) && !taskConcluida;
+            return {
+                id: it.id,
+                task_id: it.task_id,
+                task_title: taskTitleById[it.task_id] ?? 'Tarefa',
+                description: it.description,
+                photos,
+                status: it.status,
+                is_pending: isPending,
+                reporter_name: reporterMap[it.reported_by] ?? 'Colaborador',
+                manager_comment: it.manager_comment,
+                created_at: it.created_at,
+                resolved_at: it.resolved_at,
+            };
+        }),
+    );
+
+    // Tasks com ocorrência pendente → marcadas como impediment na lista de tasks
+    const pendingIssueByTask: Record<string, AuditIssue> = {};
+    for (const it of auditIssues) {
+        if (it.is_pending) pendingIssueByTask[it.task_id] = it;
+    }
+    const hasPendingIssue = Object.keys(pendingIssueByTask).length > 0;
 
     // Signed URLs em paralelo (sob demanda — só no detalhe)
     const taskDetails: AuditTaskDetail[] = await Promise.all(
         taskList.map(async (t, idx): Promise<AuditTaskDetail> => {
             const ex = lastByTask[t.id];
+            const pendingIssue = pendingIssueByTask[t.id];
             const evidences: AuditEvidence[] = [];
             if (ex) {
                 const paths = extractPhotoPaths(ex);
@@ -584,6 +700,10 @@ export async function fetchAuditDetail(
                     });
                 }
             }
+            // Task com ocorrência pendente assume status 'impediment' (sobrepõe skipped/etc)
+            const status: AuditTaskStatus = pendingIssue
+                ? 'impediment'
+                : mapTaskExecutionStatus(ex?.status);
             return {
                 task_id: t.id,
                 title: t.title,
@@ -591,9 +711,9 @@ export async function fetchAuditDetail(
                 is_critical: !!t.is_critical,
                 order: idx,
                 execution_id: ex?.id ?? null,
-                status: mapTaskExecutionStatus(ex?.status),
+                status,
                 observation: ex ? consolidateObservation(ex) : null,
-                impediment_reason: ex?.blocked_reason ?? null,
+                impediment_reason: pendingIssue?.description ?? null,
                 executed_at: ex?.executed_at ?? null,
                 started_at: ex?.started_at ?? null,
                 evidences,
@@ -601,8 +721,8 @@ export async function fetchAuditDetail(
         }),
     );
 
-    const status = deriveAssumptionStatus();
-    const hadImpediment = taskDetails.some(t => t.status === 'impediment');
+    const status = deriveAssumptionStatus({ hasPendingIssue });
+    const hadImpediment = auditIssues.length > 0;
 
     const duration_seconds = a.completed_at
         ? Math.max(0, Math.round(
@@ -645,6 +765,7 @@ export async function fetchAuditDetail(
             avatar_url: u?.avatar_url ?? null,
         },
         tasks: taskDetails,
+        issues: auditIssues,
     };
     if (isGlobal) {
         const unit = unitsById[a.restaurant_id];

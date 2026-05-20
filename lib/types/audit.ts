@@ -10,16 +10,18 @@
 /**
  * Status FINAL da execução exibido na tela (resultado da rotina).
  *
- * Nota semântica: 'impediment' NÃO é mais status final nesta entrega.
- * Rotinas que tiveram impedimento e foram retomadas/concluídas aparecem como
- * 'completed', com a flag `had_impediment` sinalizando o evento histórico
- * (badge secundária na UI). O valor permanece no enum reservado para um
- * futuro fluxo de "encerramento definitivo com impedimento".
+ * Semântica (Sprint 45 — ocorrências em `task_issues`):
+ * - 'completed'  → rotina finalizada. Pode ter `had_impediment=true` quando
+ *                  houve ocorrência mas a task afetada foi retomada/concluída.
+ * - 'impediment' → rotina finalizada COM ocorrência pendente: existe
+ *                  task_issue aberta/investigando cuja task NÃO foi concluída.
+ * - 'incomplete' → reservado para fluxo futuro de abandono/não-finalização
+ *                  (não atribuído atualmente).
  */
 export type AuditStatus =
-    | 'completed'    // Concluído
-    | 'incomplete'   // Incompleto (reservado — fluxo futuro de abandono)
-    | 'impediment';  // Reservado — fluxo futuro de encerramento c/ impedimento
+    | 'completed'
+    | 'incomplete'
+    | 'impediment';
 
 /** Status de uma TASK individual no detalhe. */
 export type AuditTaskStatus = AuditStatus | 'pending';
@@ -124,6 +126,28 @@ export interface AuditTaskDetail {
     evidences: AuditEvidence[];     // pode ter 0, 1 ou N fotos
 }
 
+/** Ocorrência operacional (task_issues) vinculada à execução. */
+export interface AuditIssue {
+    id: string;
+    task_id: string;
+    task_title: string;
+    description: string;
+    photos: AuditEvidence[];
+    status: 'open' | 'investigating' | 'resolved';
+    /** open/investigating + task não concluída na janela. */
+    is_pending: boolean;
+    reporter_name: string;
+    manager_comment: string | null;
+    created_at: string;
+    resolved_at: string | null;
+}
+
+export const TASK_ISSUE_STATUS_LABEL: Record<AuditIssue['status'], string> = {
+    open: 'Aberta',
+    investigating: 'Em análise',
+    resolved: 'Resolvida',
+};
+
 export interface AuditExecutionDetail {
     assumption_id: string;
     status: AuditStatus;
@@ -144,6 +168,8 @@ export interface AuditExecutionDetail {
     user: UserInfo;
     unit?: UnitInfo;
     tasks: AuditTaskDetail[];
+    /** Ocorrências operacionais registradas durante a execução. */
+    issues: AuditIssue[];
 }
 
 /** Labels canônicos. */
@@ -154,11 +180,10 @@ export const AUDIT_STATUS_LABEL: Record<AuditStatus, string> = {
 };
 
 /**
- * Opções OFICIAIS visíveis no filtro de Status do usuário (esta entrega).
- * 'impediment' fica fora — vide JSDoc em `AuditStatus`. Reincluir quando o
- * fluxo de encerramento definitivo com impedimento for implementado.
+ * Opções visíveis no filtro de Status do usuário.
+ * 'incomplete' fica fora — não é atribuído atualmente (reservado p/ futuro).
  */
-export const AUDIT_STATUS_OFFICIAL: AuditStatus[] = ['completed', 'incomplete'];
+export const AUDIT_STATUS_OFFICIAL: AuditStatus[] = ['completed', 'impediment'];
 
 export const AUDIT_TASK_STATUS_LABEL: Record<AuditTaskStatus, string> = {
     completed: 'Concluída',

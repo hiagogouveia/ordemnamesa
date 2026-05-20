@@ -6,7 +6,8 @@ import Link from 'next/link';
 import { Avatar } from '@/components/ui/avatar';
 import { UnitBadge } from '@/components/ui/unit-badge';
 import { useRelatorioDetail } from '@/lib/hooks/use-relatorios-detail';
-import type { AuditExecutionDetail, AuditTaskDetail } from '@/lib/types/audit';
+import type { AuditExecutionDetail, AuditIssue, AuditTaskDetail } from '@/lib/types/audit';
+import { TASK_ISSUE_STATUS_LABEL } from '@/lib/types/audit';
 import type { Scope } from '@/lib/types/scope';
 import { StatusBadge } from './status-badge';
 import { EvidenceLightbox } from './evidence-lightbox';
@@ -180,7 +181,7 @@ function PanelContent({
                     </div>
                     <div className="flex flex-col items-end gap-1 shrink-0">
                         <StatusBadge status={detail.status} />
-                        {detail.had_impediment && (
+                        {detail.status === 'completed' && detail.had_impediment && (
                             <span
                                 className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide text-[#fbbf24] bg-[#fbbf24]/10 border border-[#fbbf24]/20"
                                 title="Esta rotina passou por impedimento durante a execução."
@@ -239,47 +240,55 @@ function PanelContent({
                 </div>
             )}
 
-            {detail.had_impediment && (() => {
-                const affected = detail.tasks.filter(t => t.status === 'impediment');
-                return (
-                    <div className="p-4 rounded-xl bg-[#fbbf24]/5 border border-[#fbbf24]/30 flex flex-col gap-3">
-                        <div className="flex items-start gap-3">
-                            <span className="material-symbols-outlined text-[#fbbf24] shrink-0 mt-0.5" style={{ fontSize: 20 }}>history</span>
-                            <div className="min-w-0">
-                                <p className="text-white font-medium text-sm">
-                                    Esta rotina teve um impedimento durante a execução
-                                    {affected.length === 0 ? ' e foi retomada posteriormente.' : '.'}
-                                </p>
-                                <p className="text-[#92bbc9] text-xs mt-1">
-                                    O status final permanece como <span className="text-white font-semibold">Concluída</span>. As ocorrências abaixo ficam registradas para auditoria.
-                                </p>
-                            </div>
+            {/* ── Ocorrências operacionais (task_issues) ── */}
+            {detail.issues.length > 0 && (
+                <div className="flex flex-col gap-3">
+                    <div className={`p-4 rounded-xl border flex items-start gap-3 ${
+                        detail.status === 'impediment'
+                            ? 'bg-[#fa5f38]/5 border-[#fa5f38]/30'
+                            : 'bg-[#fbbf24]/5 border-[#fbbf24]/30'
+                    }`}>
+                        <span
+                            className={`material-symbols-outlined shrink-0 mt-0.5 ${
+                                detail.status === 'impediment' ? 'text-[#fa5f38]' : 'text-[#fbbf24]'
+                            }`}
+                            style={{ fontSize: 20 }}
+                        >
+                            {detail.status === 'impediment' ? 'report_problem' : 'history'}
+                        </span>
+                        <div className="min-w-0">
+                            {detail.status === 'impediment' ? (
+                                <>
+                                    <p className="text-white font-medium text-sm">
+                                        Esta rotina foi encerrada com ocorrência pendente.
+                                    </p>
+                                    <p className="text-[#92bbc9] text-xs mt-1">
+                                        Há pelo menos uma ocorrência aberta cuja tarefa não foi concluída. Por isso o status é <span className="text-[#fa5f38] font-semibold">Com impedimento</span>.
+                                    </p>
+                                </>
+                            ) : (
+                                <>
+                                    <p className="text-white font-medium text-sm">
+                                        Esta rotina teve ocorrência durante a execução e foi concluída mesmo assim.
+                                    </p>
+                                    <p className="text-[#92bbc9] text-xs mt-1">
+                                        As tarefas afetadas foram retomadas ou as ocorrências resolvidas. Status final: <span className="text-white font-semibold">Concluída</span>.
+                                    </p>
+                                </>
+                            )}
                         </div>
-                        {affected.length > 0 && (
-                            <ul className="flex flex-col gap-2 ml-1">
-                                {affected.map(t => (
-                                    <li
-                                        key={t.task_id}
-                                        className="bg-[#101d22] border border-[#233f48] rounded-lg px-3 py-2"
-                                    >
-                                        <p className="text-white text-sm font-medium">{t.title}</p>
-                                        {t.impediment_reason && (
-                                            <p className="text-[#92bbc9] text-xs mt-1 whitespace-pre-wrap">
-                                                <span className="text-[#fbbf24] font-semibold">Motivo:</span> {t.impediment_reason}
-                                            </p>
-                                        )}
-                                        {t.executed_at && (
-                                            <p className="text-[#557682] text-[10px] mt-1">
-                                                {formatDateTime(t.executed_at)}
-                                            </p>
-                                        )}
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
                     </div>
-                );
-            })()}
+
+                    <h3 className="text-xs uppercase tracking-wider text-[#557682] font-bold">
+                        Ocorrências ({detail.issues.length})
+                    </h3>
+                    <div className="flex flex-col gap-2">
+                        {detail.issues.map(issue => (
+                            <IssueCard key={issue.id} issue={issue} onOpenEvidence={onOpenEvidence} />
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {detail.impediment_reason && (
                 <div className="p-3 rounded-xl bg-[#fa5f38]/10 border border-[#fa5f38]/30">
@@ -346,6 +355,69 @@ function Tally({ label, value, color }: { label: string; value: number; color: s
         <div className="bg-[#101d22] border border-[#233f48] rounded-lg px-2 py-2 text-center">
             <p className={`text-lg font-black leading-none ${color}`}>{value}</p>
             <p className="text-[10px] uppercase tracking-wider text-[#557682] font-bold mt-1">{label}</p>
+        </div>
+    );
+}
+
+function IssueCard({
+    issue, onOpenEvidence,
+}: {
+    issue: AuditIssue;
+    onOpenEvidence: (src: string, title: string) => void;
+}) {
+    const photos = issue.photos.filter(p => !!p.signed_url);
+    const accent = issue.is_pending ? '#fa5f38' : '#fbbf24';
+    return (
+        <div
+            className="rounded-xl p-3 flex flex-col gap-2 border"
+            style={{ backgroundColor: `${accent}0d`, borderColor: `${accent}4d` }}
+        >
+            <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                    <p className="text-white text-sm font-medium">{issue.task_title}</p>
+                    <p className="text-[#557682] text-[10px] mt-0.5">
+                        Reportado por {issue.reporter_name} · {formatDateTime(issue.created_at)}
+                    </p>
+                </div>
+                <span
+                    className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide border"
+                    style={{ color: accent, borderColor: `${accent}4d`, backgroundColor: `${accent}1a` }}
+                >
+                    {issue.is_pending ? 'Pendente' : TASK_ISSUE_STATUS_LABEL[issue.status]}
+                </span>
+            </div>
+
+            <p className="text-[#92bbc9] text-sm whitespace-pre-wrap">{issue.description}</p>
+
+            {issue.manager_comment && (
+                <div className="bg-[#101d22] border border-[#233f48] rounded-lg px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-wider text-[#557682] font-bold mb-0.5">
+                        Comentário do gestor
+                    </p>
+                    <p className="text-[#92bbc9] text-sm whitespace-pre-wrap">{issue.manager_comment}</p>
+                </div>
+            )}
+
+            {photos.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                    {photos.map((ph, i) => (
+                        <button
+                            key={ph.storage_path}
+                            type="button"
+                            onClick={() => onOpenEvidence(ph.signed_url!, issue.task_title)}
+                            className="size-14 rounded overflow-hidden bg-black/30 border border-[#325a67] hover:border-[#13b6ec]/50 transition-colors"
+                            title={`Evidência ${i + 1}`}
+                        >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                                src={ph.signed_url!}
+                                alt={`Evidência ${i + 1} da ocorrência`}
+                                className="w-full h-full object-cover"
+                            />
+                        </button>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }

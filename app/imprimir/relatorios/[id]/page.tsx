@@ -7,6 +7,7 @@ import {
     AUDIT_STATUS_LABEL,
     AUDIT_TASK_STATUS_LABEL,
     SHIFT_LABEL,
+    TASK_ISSUE_STATUS_LABEL,
 } from '@/lib/types/audit';
 import type { AuditExecutionDetail, AuditTaskDetail } from '@/lib/types/audit';
 import type { Scope } from '@/lib/types/scope';
@@ -137,32 +138,57 @@ function PrintLayout({ detail }: { detail: AuditExecutionDetail }) {
                     />
                 </section>
 
-                {detail.had_impediment && (() => {
-                    const affected = detail.tasks.filter(t => t.status === 'impediment');
+                {detail.issues.length > 0 && (() => {
+                    const isImpediment = detail.status === 'impediment';
+                    const border = isImpediment ? 'border-red-300' : 'border-amber-300';
+                    const bg = isImpediment ? 'bg-red-50' : 'bg-amber-50';
+                    const titleColor = isImpediment ? 'text-red-800' : 'text-amber-800';
+                    const bodyColor = isImpediment ? 'text-red-900' : 'text-amber-900';
                     return (
-                        <section className="mt-5 border border-amber-300 bg-amber-50 rounded-md px-4 py-3">
-                            <p className="text-xs uppercase tracking-wider text-amber-800 font-bold mb-1">
-                                Ocorrências durante execução
+                        <section className={`mt-5 border ${border} ${bg} rounded-md px-4 py-3`}>
+                            <p className={`text-xs uppercase tracking-wider ${titleColor} font-bold mb-1`}>
+                                Ocorrências durante execução ({detail.issues.length})
                             </p>
-                            <p className="text-sm text-amber-900">
-                                Esta rotina teve um impedimento durante a execução
-                                {affected.length === 0 ? ' e foi retomada posteriormente.' : '.'}
-                                {' '}O status final permanece como Concluída.
+                            <p className={`text-sm ${bodyColor}`}>
+                                {isImpediment
+                                    ? 'Rotina encerrada com ocorrência pendente (tarefa afetada não concluída). Status final: Com impedimento.'
+                                    : 'Houve ocorrência durante a execução, mas a rotina foi concluída. Status final: Concluída.'}
                             </p>
-                            {affected.length > 0 && (
-                                <ul className="mt-2 text-xs text-amber-900 list-disc pl-5 space-y-1">
-                                    {affected.map(t => (
-                                        <li key={t.task_id}>
-                                            <span className="font-semibold">{t.title}</span>
-                                            {t.impediment_reason && (
-                                                <> — {t.impediment_reason}</>
-                                            )}
-                                            {t.executed_at && (
-                                                <span className="text-amber-700"> ({formatTime(t.executed_at)})</span>
-                                            )}
-                                        </li>
-                                    ))}
-                                </ul>
+                            <ul className={`mt-2 text-xs ${bodyColor} space-y-2`}>
+                                {detail.issues.map(issue => (
+                                    <li key={issue.id} className="border-t border-black/10 pt-2 first:border-t-0 first:pt-0">
+                                        <div className="flex items-baseline justify-between gap-2">
+                                            <span className="font-semibold">{issue.task_title}</span>
+                                            <span className="uppercase text-[10px] tracking-wide">
+                                                {issue.is_pending ? 'Pendente' : TASK_ISSUE_STATUS_LABEL[issue.status]}
+                                            </span>
+                                        </div>
+                                        <p className="mt-0.5 whitespace-pre-wrap">{issue.description}</p>
+                                        <p className="text-[10px] opacity-70 mt-0.5">
+                                            Reportado por {issue.reporter_name} · {formatDateTime(issue.created_at)}
+                                            {issue.photos.length > 0 && ` · ${issue.photos.length} foto(s)`}
+                                        </p>
+                                        {issue.manager_comment && (
+                                            <p className="mt-1"><span className="font-semibold">Gestor:</span> {issue.manager_comment}</p>
+                                        )}
+                                    </li>
+                                ))}
+                            </ul>
+                            {detail.issues.some(i => i.photos.length > 0) && (
+                                <div className="mt-3 grid grid-cols-3 sm:grid-cols-4 gap-2">
+                                    {detail.issues.flatMap(issue =>
+                                        issue.photos
+                                            .filter(p => !!p.signed_url)
+                                            .map((p, i) => (
+                                                <figure key={`${issue.id}-${i}`} className="border border-black/10 rounded overflow-hidden">
+                                                    <div className="aspect-square bg-slate-100 flex items-center justify-center">
+                                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                        <img src={p.signed_url!} alt={`Evidência da ocorrência: ${issue.task_title}`} className="w-full h-full object-cover" />
+                                                    </div>
+                                                </figure>
+                                            )),
+                                    )}
+                                </div>
                             )}
                         </section>
                     );

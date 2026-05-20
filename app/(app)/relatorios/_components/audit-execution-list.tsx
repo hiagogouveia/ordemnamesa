@@ -140,7 +140,7 @@ export function AuditExecutionList({ entries, isLoading, onSelect, isGlobal }: P
                                     <td className="px-4 py-3.5">
                                         <div className="flex items-center gap-1.5 flex-wrap">
                                             <StatusBadge status={e.status} size="sm" />
-                                            {e.had_impediment && <ImpedimentMarker />}
+                                            {e.status === 'completed' && e.had_impediment && <ImpedimentMarker />}
                                         </div>
                                     </td>
                                     <td className="px-4 py-3.5 text-right text-sm whitespace-nowrap">
@@ -193,7 +193,7 @@ export function AuditExecutionList({ entries, isLoading, onSelect, isGlobal }: P
                             </div>
                             <div className="flex flex-col items-end gap-1 shrink-0">
                                 <StatusBadge status={e.status} size="sm" />
-                                {e.had_impediment && <ImpedimentMarker />}
+                                {e.status === 'completed' && e.had_impediment && <ImpedimentMarker />}
                             </div>
                         </div>
 
