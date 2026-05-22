@@ -48,6 +48,7 @@ export interface AccountBilling {
 
 export type AccessReason =
     | 'no_subscription'
+    | 'trial_expired'
     | 'canceled'
     | 'past_due_blocks_writes'
     | 'past_due_blocks_execution'

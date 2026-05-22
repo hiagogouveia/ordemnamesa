@@ -168,7 +168,11 @@ export function canCreateResources(billing: AccountBilling | null): AccessCheck 
     if (!billing) return { allowed: false, reason: 'no_subscription' }
     const { status } = billing.subscription
 
-    if (status === 'trial' || status === 'active') return { allowed: true }
+    // Trial expirado (ends_at no passado) bloqueia, mesmo com status ainda 'trial'.
+    if (status === 'trial') {
+        return billing.is_expired ? { allowed: false, reason: 'trial_expired' } : { allowed: true }
+    }
+    if (status === 'active') return { allowed: true }
     if (status === 'canceled') return { allowed: false, reason: 'canceled' }
     if (status === 'past_due') return { allowed: false, reason: 'past_due_blocks_writes' }
     // incomplete / unpaid também bloqueiam criação
@@ -187,7 +191,11 @@ export function canExecuteTasks(billing: AccountBilling | null): AccessCheck {
     if (!billing) return { allowed: false, reason: 'no_subscription' }
     const { status, block_task_exec_on_past_due } = billing.subscription
 
-    if (status === 'trial' || status === 'active') return { allowed: true }
+    // Trial expirado bloqueia execução também.
+    if (status === 'trial') {
+        return billing.is_expired ? { allowed: false, reason: 'trial_expired' } : { allowed: true }
+    }
+    if (status === 'active') return { allowed: true }
     if (status === 'canceled') return { allowed: false, reason: 'canceled' }
     if (status === 'past_due') {
         return block_task_exec_on_past_due
