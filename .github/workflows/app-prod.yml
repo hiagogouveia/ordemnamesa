@@ -115,10 +115,10 @@ jobs:
             # Autenticar no GHCR para pull de imagem privada
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # Escrever .env whitelistando apenas as 4 chaves da aplicação
+            # Escrever .env whitelistando apenas chaves conhecidas da aplicação
             # (protege contra secret contendo comentários, SSH keys ou outras vars)
             {
-              printf '%s\n' "$APP_ENV" | grep -E '^(NEXT_PUBLIC_SUPABASE_URL|NEXT_PUBLIC_SUPABASE_ANON_KEY|NEXT_PUBLIC_SITE_URL|SUPABASE_SERVICE_ROLE_KEY|RESEND_API_KEY|RESEND_FROM|WHATSAPP_ADMIN_NUMBER)=' || true
+              printf '%s\n' "$APP_ENV" | grep -E '^(NEXT_PUBLIC_SUPABASE_URL|NEXT_PUBLIC_SUPABASE_ANON_KEY|NEXT_PUBLIC_SITE_URL|SUPABASE_SERVICE_ROLE_KEY|RESEND_API_KEY|RESEND_FROM|WHATSAPP_ADMIN_NUMBER|STRIPE_SECRET_KEY|STRIPE_WEBHOOK_SECRET)=' || true
               printf 'IMAGE_TAG=%s\n' "$IMAGE_TAG"
             } > .env
 

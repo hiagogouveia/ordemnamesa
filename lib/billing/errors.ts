@@ -12,6 +12,8 @@ interface AccessDeniedBody {
 const MESSAGES: Record<AccessReason, string> = {
     no_subscription:
         'Conta sem assinatura ativa. Entre em contato com o suporte.',
+    trial_expired:
+        'Seu período de teste terminou. Assine um plano para continuar.',
     canceled:
         'Sua assinatura foi cancelada. Para voltar a criar/executar, reative o plano.',
     past_due_blocks_writes:
@@ -26,6 +28,7 @@ const MESSAGES: Record<AccessReason, string> = {
 
 const HTTP_STATUS: Record<AccessReason, number> = {
     no_subscription: 402,
+    trial_expired: 402,
     canceled: 402,
     past_due_blocks_writes: 402,
     past_due_blocks_execution: 402,
