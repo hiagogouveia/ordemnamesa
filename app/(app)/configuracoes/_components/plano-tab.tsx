@@ -6,6 +6,7 @@ import { usePlans, type CatalogPlan } from "@/lib/hooks/use-plans"
 import { useCheckout } from "@/lib/hooks/use-checkout"
 import { usePortal } from "@/lib/hooks/use-portal"
 import { useChangePlan } from "@/lib/hooks/use-change-plan"
+import { useUsage } from "@/lib/hooks/use-usage"
 import { useAccountSessionStore } from "@/lib/store/account-session-store"
 import { useAccountUnits } from "@/lib/hooks/use-account-units"
 import type { BillingCycle } from "@/lib/billing/types"
@@ -87,8 +88,11 @@ export function PlanoTab() {
     const accountId = useAccountSessionStore((s) => s.accountId)
     const { data: units = [] } = useAccountUnits(accountId)
 
+    const { data: usage } = useUsage()
+
     // Hooks SEMPRE antes de qualquer return condicional (rules of hooks).
     const [cycle, setCycle] = useState<BillingCycle>("monthly")
+    const [confirmDowngrade, setConfirmDowngrade] = useState<{ plan: CatalogPlan; exceeded: string[] } | null>(null)
     const checkout = useCheckout()
     const portal = usePortal()
     const changePlan = useChangePlan()
@@ -119,6 +123,17 @@ export function PlanoTab() {
     const mutating = checkout.isPending || changePlan.isPending
     const actionError = checkout.error?.message ?? changePlan.error?.message ?? null
 
+    // Limites do plano alvo que o uso atual excede (vazio = dentro do limite).
+    function exceededLimits(p: CatalogPlan): string[] {
+        if (!usage) return []
+        const out: string[] = []
+        if (usage.units > p.max_units) out.push(`${usage.units} unidades utilizadas (limite: ${p.max_units})`)
+        if (usage.managers > p.max_managers) out.push(`${usage.managers} gestores (limite: ${p.max_managers})`)
+        if (usage.max_staff_per_unit > p.max_staff_per_unit)
+            out.push(`${usage.max_staff_per_unit} operadores numa unidade (limite: ${p.max_staff_per_unit})`)
+        return out
+    }
+
     // Define o CTA de cada card do comparador conforme estado da assinatura.
     function planCta(p: CatalogPlan) {
         const isCurrent = isActive && p.code === plan.code && cycle === subscription.billing_cycle
@@ -145,7 +160,12 @@ export function PlanoTab() {
             label,
             disabled: mutating,
             current: false,
-            onClick: () => changePlan.mutate({ plan_code: p.code, cycle }),
+            onClick: () => {
+                // Pré-validação de downgrade: se o uso excede o plano alvo, confirma antes.
+                const exceeded = exceededLimits(p)
+                if (exceeded.length > 0) setConfirmDowngrade({ plan: p, exceeded })
+                else changePlan.mutate({ plan_code: p.code, cycle })
+            },
         }
     }
 
@@ -338,6 +358,59 @@ export function PlanoTab() {
                             </>
                         )}
                     </button>
+                </div>
+            )}
+
+            {/* Confirmação de downgrade que excede limites do plano alvo */}
+            {confirmDowngrade && (
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-4">
+                    <div className="bg-[#16262c] border border-[#233f48] rounded-2xl p-6 w-full max-w-md flex flex-col gap-4">
+                        <div className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-amber-400 text-[22px]">warning</span>
+                            <h3 className="text-lg font-bold text-white">Confirmar downgrade</h3>
+                        </div>
+                        <p className="text-sm text-[#92bbc9]">
+                            Seu uso atual excede os limites do plano <strong className="text-white">{confirmDowngrade.plan.name}</strong>:
+                        </p>
+                        <ul className="flex flex-col gap-1.5 bg-[#101d22] border border-[#233f48] rounded-xl p-3">
+                            {confirmDowngrade.exceeded.map((e) => (
+                                <li key={e} className="flex items-center gap-2 text-sm text-amber-300">
+                                    <span className="material-symbols-outlined text-[16px]">error</span>
+                                    {e}
+                                </li>
+                            ))}
+                        </ul>
+                        <div className="text-sm text-[#92bbc9] flex flex-col gap-1">
+                            <span className="flex items-center gap-2">
+                                <span className="material-symbols-outlined text-emerald-400 text-[16px]">check_circle</span>
+                                Seus dados <strong className="text-white">não serão removidos</strong>.
+                            </span>
+                            <span className="flex items-center gap-2">
+                                <span className="material-symbols-outlined text-amber-400 text-[16px]">block</span>
+                                Novas criações ficam bloqueadas até adequar ao novo limite.
+                            </span>
+                        </div>
+                        <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end pt-1">
+                            <button
+                                type="button"
+                                onClick={() => setConfirmDowngrade(null)}
+                                className="px-4 py-2.5 rounded-lg text-sm font-semibold text-[#92bbc9] bg-[#1a2c32] border border-[#233f48] hover:text-white transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                disabled={changePlan.isPending}
+                                onClick={() => {
+                                    changePlan.mutate({ plan_code: confirmDowngrade.plan.code, cycle })
+                                    setConfirmDowngrade(null)
+                                }}
+                                className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-amber-500 text-[#101d22] hover:bg-amber-400 transition-colors disabled:opacity-60"
+                            >
+                                Continuar downgrade
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
