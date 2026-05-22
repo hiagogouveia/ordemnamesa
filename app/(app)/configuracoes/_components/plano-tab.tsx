@@ -92,7 +92,7 @@ export function PlanoTab() {
 
     // Hooks SEMPRE antes de qualquer return condicional (rules of hooks).
     const [cycle, setCycle] = useState<BillingCycle>("monthly")
-    const [confirmDowngrade, setConfirmDowngrade] = useState<{ plan: CatalogPlan; exceeded: string[] } | null>(null)
+    const [confirmChange, setConfirmChange] = useState<{ plan: CatalogPlan; exceeded: string[] } | null>(null)
     const checkout = useCheckout()
     const portal = usePortal()
     const changePlan = useChangePlan()
@@ -160,12 +160,9 @@ export function PlanoTab() {
             label,
             disabled: mutating,
             current: false,
-            onClick: () => {
-                // Pré-validação de downgrade: se o uso excede o plano alvo, confirma antes.
-                const exceeded = exceededLimits(p)
-                if (exceeded.length > 0) setConfirmDowngrade({ plan: p, exceeded })
-                else changePlan.mutate({ plan_code: p.code, cycle })
-            },
+            // Toda troca passa pela confirmação financeira (proration). Se o uso
+            // excede o plano alvo (downgrade), o modal também mostra o aviso.
+            onClick: () => setConfirmChange({ plan: p, exceeded: exceededLimits(p) }),
         }
     }
 
@@ -361,58 +358,98 @@ export function PlanoTab() {
                 </div>
             )}
 
-            {/* Confirmação de downgrade que excede limites do plano alvo */}
-            {confirmDowngrade && (
-                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-4">
-                    <div className="bg-[#16262c] border border-[#233f48] rounded-2xl p-6 w-full max-w-md flex flex-col gap-4">
-                        <div className="flex items-center gap-2">
-                            <span className="material-symbols-outlined text-amber-400 text-[22px]">warning</span>
-                            <h3 className="text-lg font-bold text-white">Confirmar downgrade</h3>
-                        </div>
-                        <p className="text-sm text-[#92bbc9]">
-                            Seu uso atual excede os limites do plano <strong className="text-white">{confirmDowngrade.plan.name}</strong>:
-                        </p>
-                        <ul className="flex flex-col gap-1.5 bg-[#101d22] border border-[#233f48] rounded-xl p-3">
-                            {confirmDowngrade.exceeded.map((e) => (
-                                <li key={e} className="flex items-center gap-2 text-sm text-amber-300">
-                                    <span className="material-symbols-outlined text-[16px]">error</span>
-                                    {e}
+            {/* Confirmação financeira da troca de plano (proration via Stripe) */}
+            {confirmChange && (() => {
+                const target = confirmChange.plan
+                const currentCents =
+                    subscription.billing_cycle === "yearly" ? plan.price_yearly_cents : plan.price_monthly_cents
+                const newCents = cycle === "yearly" ? target.price_yearly_cents : target.price_monthly_cents
+                const currentCycleLabel = subscription.billing_cycle === "yearly" ? "anual" : "mensal"
+                const newCycleLabel = cycle === "yearly" ? "anual" : "mensal"
+                const isUpgrade = target.price_monthly_cents > plan.price_monthly_cents
+                const sameCycle = subscription.billing_cycle === cycle
+                const title =
+                    target.code === plan.code
+                        ? "Mudar ciclo de cobrança"
+                        : isUpgrade
+                          ? "Confirmar upgrade"
+                          : "Confirmar downgrade"
+                return (
+                    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-4">
+                        <div className="bg-[#16262c] border border-[#233f48] rounded-2xl p-6 w-full max-w-md flex flex-col gap-4">
+                            <h3 className="text-lg font-bold text-white">{title}</h3>
+
+                            {/* Resumo atual → novo */}
+                            <div className="bg-[#101d22] border border-[#233f48] rounded-xl p-4 flex items-center justify-between gap-3">
+                                <div className="text-sm">
+                                    <p className="text-[#92bbc9] text-xs mb-0.5">Atual</p>
+                                    <p className="text-white font-semibold">{plan.name}</p>
+                                    <p className="text-[#92bbc9]">{formatCents(currentCents)}/mês · {currentCycleLabel}</p>
+                                </div>
+                                <span className="material-symbols-outlined text-[#13b6ec]">arrow_forward</span>
+                                <div className="text-sm text-right">
+                                    <p className="text-[#92bbc9] text-xs mb-0.5">Novo</p>
+                                    <p className="text-white font-semibold">{target.name}</p>
+                                    <p className="text-[#13b6ec]">{formatCents(newCents)}/mês · {newCycleLabel}</p>
+                                </div>
+                            </div>
+
+                            {/* Explicação clara (Stripe cuida da proration) */}
+                            <ul className="flex flex-col gap-1.5 text-sm text-[#92bbc9]">
+                                <li className="flex items-start gap-2">
+                                    <span className="material-symbols-outlined text-[#13b6ec] text-[16px] mt-0.5">bolt</span>
+                                    A alteração é aplicada <strong className="text-white">imediatamente</strong>.
                                 </li>
-                            ))}
-                        </ul>
-                        <div className="text-sm text-[#92bbc9] flex flex-col gap-1">
-                            <span className="flex items-center gap-2">
-                                <span className="material-symbols-outlined text-emerald-400 text-[16px]">check_circle</span>
-                                Seus dados <strong className="text-white">não serão removidos</strong>.
-                            </span>
-                            <span className="flex items-center gap-2">
-                                <span className="material-symbols-outlined text-amber-400 text-[16px]">block</span>
-                                Novas criações ficam bloqueadas até adequar ao novo limite.
-                            </span>
-                        </div>
-                        <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end pt-1">
-                            <button
-                                type="button"
-                                onClick={() => setConfirmDowngrade(null)}
-                                className="px-4 py-2.5 rounded-lg text-sm font-semibold text-[#92bbc9] bg-[#1a2c32] border border-[#233f48] hover:text-white transition-colors"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                type="button"
-                                disabled={changePlan.isPending}
-                                onClick={() => {
-                                    changePlan.mutate({ plan_code: confirmDowngrade.plan.code, cycle })
-                                    setConfirmDowngrade(null)
-                                }}
-                                className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-amber-500 text-[#101d22] hover:bg-amber-400 transition-colors disabled:opacity-60"
-                            >
-                                Continuar downgrade
-                            </button>
+                                <li className="flex items-start gap-2">
+                                    <span className="material-symbols-outlined text-[#13b6ec] text-[16px] mt-0.5">balance</span>
+                                    A Stripe calcula automaticamente {isUpgrade && sameCycle ? "a cobrança" : "cobranças ou créditos"} proporcionais.
+                                </li>
+                                <li className="flex items-start gap-2">
+                                    <span className="material-symbols-outlined text-[#13b6ec] text-[16px] mt-0.5">event_repeat</span>
+                                    No próximo ciclo você paga o valor do novo plano.
+                                </li>
+                            </ul>
+
+                            {/* Aviso de limites excedidos (downgrade) */}
+                            {confirmChange.exceeded.length > 0 && (
+                                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex flex-col gap-1.5">
+                                    <p className="text-sm text-amber-300 font-medium flex items-center gap-2">
+                                        <span className="material-symbols-outlined text-[16px]">warning</span>
+                                        Seu uso excede o novo plano
+                                    </p>
+                                    {confirmChange.exceeded.map((e) => (
+                                        <p key={e} className="text-xs text-amber-300 pl-6">• {e}</p>
+                                    ))}
+                                    <p className="text-xs text-[#92bbc9] pl-6">
+                                        Seus dados não serão removidos; apenas novas criações ficam bloqueadas até adequar.
+                                    </p>
+                                </div>
+                            )}
+
+                            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end pt-1">
+                                <button
+                                    type="button"
+                                    onClick={() => setConfirmChange(null)}
+                                    className="px-4 py-2.5 rounded-lg text-sm font-semibold text-[#92bbc9] bg-[#1a2c32] border border-[#233f48] hover:text-white transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={changePlan.isPending}
+                                    onClick={() => {
+                                        changePlan.mutate({ plan_code: target.code, cycle })
+                                        setConfirmChange(null)
+                                    }}
+                                    className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold bg-[#13b6ec] text-[#101d22] hover:bg-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                                >
+                                    {changePlan.isPending ? "Processando…" : "Confirmar troca"}
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            })()}
         </div>
     )
 }
