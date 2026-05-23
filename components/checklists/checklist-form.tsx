@@ -21,6 +21,8 @@ import { useShifts } from "@/lib/hooks/use-shifts";
 import isEqual from "lodash/isEqual";
 import { getDraft, saveDraft, removeDraft, type DraftData } from "@/lib/utils/draft-storage";
 import { describeRecurrence } from "@/lib/utils/recurrence/describe";
+import { useCanManageChecklists } from "@/lib/hooks/use-can-manage-checklists";
+import { isBillingError } from "@/lib/billing/client-errors";
 
 const DAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
@@ -149,7 +151,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     const [tasks, setTasks] = useState<(Partial<ChecklistTask> & { tempId: string })[]>([]);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
-    const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+    const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error" | "blocked">("idle");
+    const canManage = useCanManageChecklists();
+    const blockedByBilling = !canManage.loading && !canManage.allowed;
     const isFirstLoad = useRef(true);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const previousStateRef = useRef<any>(null);
@@ -449,6 +453,15 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         if (isEqual(previousStateRef.current, formState)) return;
         if (isPublishingRef.current) return;
 
+        // GUARD 4: Billing bloqueado — não agenda o save remoto, mantém o draft
+        // local para o usuário retomar após assinar. Bloqueia o ciclo inteiro
+        // (debounce + mutation), não apenas o submit final.
+        if (blockedByBilling) {
+            saveDraft(checklist?.id ?? null, restaurantId, formState);
+            setSaveState("blocked");
+            return;
+        }
+
         saveDraft(checklist?.id ?? null, restaurantId, formState);
 
         const handler = setTimeout(async () => {
@@ -508,15 +521,22 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                     setSaveState("saved"); // Apenas local para creation
                 }
             } catch (error) {
-                console.error("Autosave Remoto Falhou", error);
-                setSaveState("error");
+                if (isBillingError(error)) {
+                    // Race condition: client achava que podia salvar (cache stale),
+                    // mas o server retornou 402. Refletir como bloqueado, sem
+                    // fallback enganoso de "salvo localmente".
+                    setSaveState("blocked");
+                } else {
+                    console.error("Autosave Remoto Falhou", error);
+                    setSaveState("error");
+                }
             } finally {
                 isSavingRef.current = false;
             }
         }, 1500);
 
         return () => clearTimeout(handler);
-    }, [name, description, shift, checklistType, assignedToUserId, isIndividualMode, isRequired, recurrence, startTime, endTime, hasTimeWindow, recurrenceConfig, enforceSequentialOrder, areaId, tasks, checklist, restaurantId, updateMutation]);
+    }, [name, description, shift, checklistType, assignedToUserId, isIndividualMode, isRequired, recurrence, startTime, endTime, hasTimeWindow, recurrenceConfig, enforceSequentialOrder, areaId, tasks, checklist, restaurantId, updateMutation, blockedByBilling]);
 
     const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 8 } });
     const keyboardSensor = useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates });
@@ -811,6 +831,16 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                              <span className="material-symbols-outlined text-[14px]">cloud_off</span>
                              Erro - salvo apenas neste dispositivo
                          </span>
+                    )}
+                    {saveState === "blocked" && (
+                         <a
+                             href="/configuracoes?tab=plano"
+                             className="text-xs text-amber-400 italic mr-2 flex items-center gap-1 hover:text-amber-300 hover:underline"
+                             title="Período gratuito encerrado — assine um plano para continuar editando"
+                         >
+                             <span className="material-symbols-outlined text-[14px]">lock</span>
+                             Edição bloqueada — assine um plano
+                         </a>
                     )}
                     {checklist && (
                         <button
