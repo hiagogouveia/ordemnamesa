@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import type Stripe from "stripe"
 import { createClient } from "@supabase/supabase-js"
 import { listUserAccountIds } from "@/lib/supabase/accounts"
 import { getStripe } from "@/lib/stripe/server"
@@ -13,6 +14,55 @@ const getAdminSupabase = () =>
 
 const VALID_CODES: PlanCode[] = ["A", "B", "C", "D"]
 const VALID_CYCLES: BillingCycle[] = ["monthly", "yearly"]
+
+type PromoFailure = { reason: string; message: string; status: number }
+type PromoSuccess = { promoId: string }
+
+/**
+ * Resolve um promotion code (string digitada pelo usuário) para o ID Stripe
+ * e valida regras de uso. Retorna {promoId} OU {reason,message,status} amigável.
+ *
+ * Defesa em profundidade: a chamada subscriptions.update ainda pode falhar
+ * (ex.: race de redemption), mas pré-validar dá mensagens claras na maioria dos casos.
+ */
+async function resolveAndValidatePromo(
+    stripe: Stripe,
+    codeRaw: string,
+    subscription: Stripe.Subscription
+): Promise<PromoSuccess | PromoFailure> {
+    const code = codeRaw.trim()
+    if (!code) return { reason: "invalid_code", message: "Código não encontrado.", status: 422 }
+
+    // Stripe lookup é case-insensitive; passamos como digitado (sem normalizar agressivo).
+    const list = await stripe.promotionCodes.list({ code, active: true, limit: 1 })
+    const promo = list.data[0]
+    if (!promo) return { reason: "invalid_code", message: "Código não encontrado.", status: 422 }
+
+    if (promo.expires_at && promo.expires_at * 1000 < Date.now()) {
+        return { reason: "expired", message: "Código expirado.", status: 422 }
+    }
+    if (promo.max_redemptions != null && promo.times_redeemed >= promo.max_redemptions) {
+        return { reason: "exhausted", message: "Código esgotado.", status: 422 }
+    }
+    const subCustomer =
+        typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id
+    if (promo.customer && promo.customer !== subCustomer) {
+        return {
+            reason: "not_for_this_account",
+            message: "Este código não está disponível para sua conta.",
+            status: 422,
+        }
+    }
+    if (promo.restrictions?.first_time_transaction) {
+        return {
+            reason: "first_time_only",
+            message: "Código válido apenas para nova assinatura.",
+            status: 422,
+        }
+    }
+    // Currency mismatch fica para o catch do execute (Stripe rejeita com mensagem clara em runtime).
+    return { promoId: promo.id }
+}
 
 /**
  * POST /api/stripe/change-plan
@@ -41,6 +91,7 @@ export async function POST(request: Request) {
             plan_code?: string
             cycle?: string
             account_id?: string
+            promotion_code?: string
         }
         const planCode = body.plan_code as PlanCode
         const cycle = body.cycle as BillingCycle
@@ -120,12 +171,60 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Você já está neste plano/ciclo.", reason: "same_plan" }, { status: 409 })
         }
 
+        // Promotion code (opcional): resolver + validar ANTES da update.
+        // Se o campo vier vazio/ausente, NÃO incluímos `discounts` na chamada —
+        // preserva qualquer desconto ativo (regra do replace-by-set do Stripe).
+        const promoRaw = body.promotion_code
+        let discountsParam: Array<{ promotion_code: string }> | undefined
+        if (promoRaw && promoRaw.trim().length > 0) {
+            const result = await resolveAndValidatePromo(stripe, promoRaw, current)
+            if ("reason" in result) {
+                return NextResponse.json({ error: result.message, reason: result.reason }, { status: result.status })
+            }
+            discountsParam = [{ promotion_code: result.promoId }]
+        }
+
+        // Idempotency-key determinística: protege contra double-submit e double-redemption.
+        // Mesma operação (mesma sub + mesmo destino + mesmo promo) → Stripe deduplica por 24h.
+        const idempotencyKey =
+            `chgplan:${sub.stripe_subscription_id}:${targetPrice}:${discountsParam ? discountsParam[0].promotion_code : "none"}`
+
         // Troca via Stripe; proration do Stripe; webhook sincroniza o banco.
-        await stripe.subscriptions.update(sub.stripe_subscription_id, {
-            items: [{ id: item.id, price: targetPrice }],
-            proration_behavior: "create_prorations",
-            metadata: { account_id: accountId, plan_code: planCode, cycle },
-        })
+        try {
+            await stripe.subscriptions.update(
+                sub.stripe_subscription_id,
+                {
+                    items: [{ id: item.id, price: targetPrice }],
+                    proration_behavior: "create_prorations",
+                    metadata: { account_id: accountId, plan_code: planCode, cycle },
+                    ...(discountsParam ? { discounts: discountsParam } : {}),
+                },
+                { idempotencyKey }
+            )
+        } catch (err) {
+            // Mapeia erros conhecidos do Stripe para mensagens amigáveis (defesa em runtime).
+            const msg = (err as Error).message ?? ""
+            if (/minimum amount/i.test(msg)) {
+                return NextResponse.json({ error: "Valor mínimo não atingido para este código.", reason: "minimum_amount" }, { status: 422 })
+            }
+            if (/first.time/i.test(msg) || /not.eligible/i.test(msg)) {
+                return NextResponse.json({ error: "Código válido apenas para nova assinatura.", reason: "first_time_only" }, { status: 422 })
+            }
+            if (/expired|inactive|redemptions/i.test(msg)) {
+                return NextResponse.json({ error: "Código não pôde ser aplicado. Tente novamente.", reason: "promo_error" }, { status: 422 })
+            }
+            if (/currency/i.test(msg)) {
+                return NextResponse.json({ error: "Código não disponível em BRL.", reason: "currency_mismatch" }, { status: 422 })
+            }
+            stripeLog.error({
+                op: "checkout",
+                event: "change_plan_stripe_error",
+                account_id: accountId,
+                stripe_subscription_id: sub.stripe_subscription_id,
+                msg,
+            })
+            throw err
+        }
 
         stripeLog.info({
             op: "checkout",

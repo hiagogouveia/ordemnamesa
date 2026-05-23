@@ -93,6 +93,7 @@ export function PlanoTab() {
     // Hooks SEMPRE antes de qualquer return condicional (rules of hooks).
     const [cycle, setCycle] = useState<BillingCycle>("monthly")
     const [confirmChange, setConfirmChange] = useState<{ plan: CatalogPlan; exceeded: string[] } | null>(null)
+    const [promoInput, setPromoInput] = useState("")
     const checkout = useCheckout()
     const portal = usePortal()
     const changePlan = useChangePlan()
@@ -199,7 +200,11 @@ export function PlanoTab() {
             current: false,
             // Toda troca passa pela confirmação financeira (proration). Se o uso
             // excede o plano alvo (downgrade), o modal também mostra o aviso.
-            onClick: () => setConfirmChange({ plan: p, exceeded: exceededLimits(p) }),
+            onClick: () => {
+                setConfirmChange({ plan: p, exceeded: exceededLimits(p) })
+                setPromoInput("")
+                changePlan.reset()
+            },
         }
     }
 
@@ -463,10 +468,44 @@ export function PlanoTab() {
                                 </div>
                             )}
 
+                            {/* Código promocional (opcional, mobile-first) */}
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-medium text-[#92bbc9]">
+                                    Código promocional (opcional)
+                                </label>
+                                <input
+                                    type="text"
+                                    value={promoInput}
+                                    onChange={(e) => {
+                                        setPromoInput(e.target.value)
+                                        if (changePlan.isError) changePlan.reset()
+                                    }}
+                                    placeholder="Ex.: SMOKEGOLIVE"
+                                    autoComplete="off"
+                                    autoCapitalize="characters"
+                                    spellCheck={false}
+                                    className="bg-[#101d22] border border-[#233f48] rounded-lg px-3 py-2 text-sm text-white placeholder-[#325a67] focus:border-[#13b6ec] outline-none"
+                                />
+                                {promoInput.trim().length > 0 && (
+                                    <p className="text-xs text-[#92bbc9]">
+                                        Este código substituirá qualquer desconto ativo.
+                                    </p>
+                                )}
+                                {changePlan.isError && (
+                                    <p className="text-xs text-red-400">
+                                        {changePlan.error?.message ?? "Não foi possível aplicar."}
+                                    </p>
+                                )}
+                            </div>
+
                             <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end pt-1">
                                 <button
                                     type="button"
-                                    onClick={() => setConfirmChange(null)}
+                                    onClick={() => {
+                                        setConfirmChange(null)
+                                        setPromoInput("")
+                                        changePlan.reset()
+                                    }}
                                     className="px-4 py-2.5 rounded-lg text-sm font-semibold text-[#92bbc9] bg-[#1a2c32] border border-[#233f48] hover:text-white transition-colors"
                                 >
                                     Cancelar
@@ -475,8 +514,20 @@ export function PlanoTab() {
                                     type="button"
                                     disabled={changePlan.isPending}
                                     onClick={() => {
-                                        changePlan.mutate({ plan_code: target.code, cycle })
-                                        setConfirmChange(null)
+                                        // Fecha o modal APENAS no sucesso, para o erro de cupom ficar inline.
+                                        changePlan.mutate(
+                                            {
+                                                plan_code: target.code,
+                                                cycle,
+                                                promotion_code: promoInput.trim() || undefined,
+                                            },
+                                            {
+                                                onSuccess: () => {
+                                                    setConfirmChange(null)
+                                                    setPromoInput("")
+                                                },
+                                            }
+                                        )
                                     }}
                                     className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold bg-[#13b6ec] text-[#101d22] hover:bg-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                                 >

@@ -8,6 +8,8 @@ import type { BillingCycle, PlanCode } from "@/lib/billing/types"
 interface ChangePlanInput {
     plan_code: PlanCode
     cycle: BillingCycle
+    /** Código promocional digitado pelo usuário (opcional). Resolvido server-side. */
+    promotion_code?: string
 }
 
 /**
@@ -19,7 +21,7 @@ export function useChangePlan() {
     const qc = useQueryClient()
 
     return useMutation<void, Error, ChangePlanInput>({
-        mutationFn: async ({ plan_code, cycle }) => {
+        mutationFn: async ({ plan_code, cycle, promotion_code }) => {
             const supabase = createClient()
             const {
                 data: { session },
@@ -32,7 +34,13 @@ export function useChangePlan() {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${session.access_token}`,
                 },
-                body: JSON.stringify({ plan_code, cycle, account_id: accountId ?? undefined }),
+                body: JSON.stringify({
+                    plan_code,
+                    cycle,
+                    account_id: accountId ?? undefined,
+                    // Só envia se o usuário informou algo (preserva descontos existentes).
+                    promotion_code: promotion_code && promotion_code.trim().length > 0 ? promotion_code.trim() : undefined,
+                }),
             })
             const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string }
             if (!res.ok || !data.ok) throw new Error(data.error ?? "Não foi possível trocar de plano.")
