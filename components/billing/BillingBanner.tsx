@@ -12,6 +12,24 @@ export function BillingBanner() {
 
     if (status === "active") return null
 
+    // Trial expirado: status ainda é 'trial' até o webhook/cron migrar para
+    // canceled/past_due, mas o acesso de escrita já foi bloqueado pelo gate.
+    // Mensagem específica (não confundir com past_due, que é Stripe ativo).
+    if (status === "trial" && billing.is_expired) {
+        return (
+            <div className="flex items-center justify-center gap-3 bg-red-500/10 border-b border-red-500/30 px-4 py-2.5 text-sm text-red-400">
+                <span className="material-symbols-outlined text-[18px] shrink-0">lock</span>
+                <span>Seu período gratuito expirou. Assine um plano para continuar editando e operando.</span>
+                <a
+                    href="/configuracoes?tab=plano"
+                    className="underline underline-offset-2 hover:opacity-80 font-medium whitespace-nowrap"
+                >
+                    Ver planos
+                </a>
+            </div>
+        )
+    }
+
     if (status === "trial") {
         // 3 níveis de urgência sem sair da paleta amber/info — sem vermelho/alarmismo.
         const level: "info" | "soft" | "strong" =
