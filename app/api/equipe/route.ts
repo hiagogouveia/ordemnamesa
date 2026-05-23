@@ -24,6 +24,65 @@ const getAdminSupabase = () => {
     );
 };
 
+// MIRROR REQUIRED: account_users — keep in sync. Service layer planned for sprint+1.
+// Garante que (account_id, user_id) está ativo em account_users com a role correta.
+// Preserva can_view_global se já existir; default: true para owner, false para manager.
+async function mirrorAccountUserOnUpsert(
+    admin: ReturnType<typeof getAdminSupabase>,
+    accountId: string,
+    userId: string,
+    role: 'owner' | 'manager'
+) {
+    const { data: existing } = await admin
+        .from('account_users')
+        .select('id, can_view_global')
+        .eq('account_id', accountId)
+        .eq('user_id', userId)
+        .maybeSingle<{ id: string; can_view_global: boolean }>();
+
+    if (existing) {
+        const { error } = await admin
+            .from('account_users')
+            .update({ role, active: true })
+            .eq('id', existing.id);
+        if (error) console.error('[mirrorAccountUserOnUpsert] update error:', error);
+    } else {
+        const can_view_global = role === 'owner';
+        const { error } = await admin
+            .from('account_users')
+            .insert({ account_id: accountId, user_id: userId, role, active: true, can_view_global });
+        if (error) console.error('[mirrorAccountUserOnUpsert] insert error:', error);
+    }
+}
+
+// Desativa AU se o user não tem outra RU(active, owner|manager) na mesma account.
+// Preserva histórico (NÃO deleta). No-op se não existe AU row.
+async function mirrorAccountUserOnDowngrade(
+    admin: ReturnType<typeof getAdminSupabase>,
+    accountId: string,
+    userId: string
+) {
+    // Há outra RU ativa como owner/manager nesta account? Se sim, NÃO desativar.
+    const { data: otherActive } = await admin
+        .from('restaurant_users')
+        .select('id, restaurants!inner(account_id)')
+        .eq('user_id', userId)
+        .eq('active', true)
+        .in('role', ['owner', 'manager'])
+        .eq('restaurants.account_id', accountId)
+        .limit(1);
+
+    if (otherActive && otherActive.length > 0) return;
+
+    const { error } = await admin
+        .from('account_users')
+        .update({ active: false })
+        .eq('account_id', accountId)
+        .eq('user_id', userId)
+        .eq('active', true);
+    if (error) console.error('[mirrorAccountUserOnDowngrade] update error:', error);
+}
+
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
@@ -426,7 +485,10 @@ export async function POST(request: Request) {
 
         if (existingLink) {
             if (existingLink.active) {
-                // Já está ativo neste restaurante — idempotência
+                // Já está ativo neste restaurante — idempotência (mirror AU também é idempotente)
+                if (role === 'owner' || role === 'manager') {
+                    await mirrorAccountUserOnUpsert(adminSupabase, accountId, userId, role);
+                }
                 return NextResponse.json({ success: true, user_id: userId });
             }
 
@@ -438,6 +500,11 @@ export async function POST(request: Request) {
 
             if (reactivateError) throw reactivateError;
 
+            // MIRROR REQUIRED: account_users — keep in sync. Service layer planned for sprint+1.
+            if (role === 'owner' || role === 'manager') {
+                await mirrorAccountUserOnUpsert(adminSupabase, accountId, userId, role);
+            }
+
             return NextResponse.json({ success: true, user_id: userId });
         }
 
@@ -447,6 +514,11 @@ export async function POST(request: Request) {
             .insert({ restaurant_id, user_id: userId, role, active: true });
 
         if (ruError) throw ruError;
+
+        // MIRROR REQUIRED: account_users — keep in sync. Service layer planned for sprint+1.
+        if (role === 'owner' || role === 'manager') {
+            await mirrorAccountUserOnUpsert(adminSupabase, accountId, userId, role);
+        }
 
         return NextResponse.json({ success: true, user_id: userId });
 
@@ -572,6 +644,20 @@ export async function PUT(request: Request) {
             .single();
 
         if (error) throw error;
+
+        // MIRROR REQUIRED: account_users — keep in sync. Service layer planned for sprint+1.
+        // Determina estado final pós-update.
+        const finalRole = (role ?? target.role) as 'owner' | 'manager' | 'staff';
+        const finalActive = active === undefined ? true : active;
+        const accountIdMirror = await getAccountIdForRestaurant(adminSupabase, restaurant_id);
+        if (accountIdMirror) {
+            if (finalActive && (finalRole === 'owner' || finalRole === 'manager')) {
+                await mirrorAccountUserOnUpsert(adminSupabase, accountIdMirror, target.user_id, finalRole);
+            } else {
+                // staff OU inativo → desativar AU se não houver outra RU ativa owner/manager na mesma account
+                await mirrorAccountUserOnDowngrade(adminSupabase, accountIdMirror, target.user_id);
+            }
+        }
 
         return NextResponse.json({ success: true, data });
 
