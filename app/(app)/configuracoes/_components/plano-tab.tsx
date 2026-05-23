@@ -7,6 +7,7 @@ import { useCheckout } from "@/lib/hooks/use-checkout"
 import { usePortal } from "@/lib/hooks/use-portal"
 import { useChangePlan } from "@/lib/hooks/use-change-plan"
 import { useUsage } from "@/lib/hooks/use-usage"
+import { useSubscriptionDiscount, type ActiveDiscount } from "@/lib/hooks/use-subscription-discount"
 import { useAccountSessionStore } from "@/lib/store/account-session-store"
 import { useAccountUnits } from "@/lib/hooks/use-account-units"
 import type { BillingCycle } from "@/lib/billing/types"
@@ -34,6 +35,48 @@ function formatCents(cents: number) {
 function formatDate(iso: string | null) {
     if (!iso) return "—"
     return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })
+}
+
+function formatEpoch(epoch: number | null): string {
+    if (!epoch) return "—"
+    return new Date(epoch * 1000).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })
+}
+
+/** "50% OFF" / "R$ 10,00 OFF" — vindos do coupon do Stripe. */
+function discountAmountText(d: ActiveDiscount): string {
+    if (d.percent_off != null) {
+        const n = Number.isInteger(d.percent_off) ? d.percent_off : d.percent_off.toFixed(2)
+        return `${n}% OFF`
+    }
+    if (d.amount_off != null) return `${formatCents(d.amount_off)} OFF`
+    return "Desconto"
+}
+
+/** "vitalício" / "por 3 meses" / "apenas na próxima cobrança" — direto do Stripe. */
+function discountDurationText(d: ActiveDiscount): string {
+    if (d.duration === "once") return "apenas na próxima cobrança"
+    if (d.duration === "forever") return "vitalício"
+    if (d.duration_in_months) return `por ${d.duration_in_months} ${d.duration_in_months === 1 ? "mês" : "meses"}`
+    return "recorrente"
+}
+
+/**
+ * Estimativa da próxima cobrança: preço do ciclo atual menos desconto.
+ * Sem proration, sem upcoming-invoice. Apenas multiplica/subtrai do coupon.
+ * Suficiente como "estimada"; valor exato sai no Dashboard / na fatura real.
+ */
+function nextChargeCentsEstimate(
+    plan: { price_monthly_cents: number; price_yearly_cents: number },
+    cycle: BillingCycle,
+    discount: ActiveDiscount | null | undefined
+): number {
+    // billing_cycle=yearly → cobrança anual = monthly-equivalente × 12.
+    const base = cycle === "yearly" ? plan.price_yearly_cents * 12 : plan.price_monthly_cents
+    if (!discount) return base
+    let v = base
+    if (discount.percent_off != null) v = v * (1 - discount.percent_off / 100)
+    if (discount.amount_off != null) v = v - discount.amount_off
+    return Math.max(0, Math.round(v))
 }
 
 interface LimitCardProps {
@@ -89,6 +132,7 @@ export function PlanoTab() {
     const { data: units = [] } = useAccountUnits(accountId)
 
     const { data: usage } = useUsage()
+    const { data: discount } = useSubscriptionDiscount()
 
     // Hooks SEMPRE antes de qualquer return condicional (rules of hooks).
     const [cycle, setCycle] = useState<BillingCycle>("monthly")
@@ -250,6 +294,50 @@ export function PlanoTab() {
                     </div>
                 )}
             </div>
+
+            {/* Desconto ativo (Stripe é source of truth; sem persistência local) */}
+            {discount && (
+                <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-5 flex flex-col gap-3">
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-emerald-400 text-[20px]">local_offer</span>
+                            <div>
+                                <p className="text-xs uppercase tracking-wider text-emerald-300 font-semibold">Desconto ativo</p>
+                                <p className="text-sm text-white font-semibold mt-0.5">
+                                    {discount.label}
+                                    <span className="text-[#92bbc9] font-normal"> · {discountAmountText(discount)} {discountDurationText(discount)}</span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                        <div className="bg-[#101d22] border border-[#233f48] rounded-lg p-3">
+                            <p className="text-xs text-[#92bbc9] mb-0.5">Próxima cobrança estimada</p>
+                            <p className="text-white font-semibold">
+                                {formatCents(nextChargeCentsEstimate(plan, subscription.billing_cycle, discount))}
+                                <span className="text-xs text-[#92bbc9] font-normal ml-1">
+                                    ({subscription.billing_cycle === "yearly" ? "anual" : "mensal"})
+                                </span>
+                            </p>
+                        </div>
+                        {discount.duration === "repeating" && discount.ends_at && (
+                            <div className="bg-[#101d22] border border-[#233f48] rounded-lg p-3">
+                                <p className="text-xs text-[#92bbc9] mb-0.5">Desconto termina em</p>
+                                <p className="text-white font-semibold">{formatEpoch(discount.ends_at)}</p>
+                            </div>
+                        )}
+                    </div>
+
+                    <p className="text-xs text-[#325a67]">
+                        {discount.duration === "once"
+                            ? "Após esta cobrança, o valor volta ao preço cheio do plano."
+                            : discount.duration === "repeating"
+                              ? "Após o término do desconto, o valor volta ao preço cheio do plano."
+                              : "O desconto permanece em todas as cobranças, inclusive após upgrade/downgrade."}
+                    </p>
+                </div>
+            )}
 
             {/* Limites de uso */}
             <div>
@@ -487,9 +575,18 @@ export function PlanoTab() {
                                     className="bg-[#101d22] border border-[#233f48] rounded-lg px-3 py-2 text-sm text-white placeholder-[#325a67] focus:border-[#13b6ec] outline-none"
                                 />
                                 {promoInput.trim().length > 0 && (
-                                    <p className="text-xs text-[#92bbc9]">
-                                        Este código substituirá qualquer desconto ativo.
-                                    </p>
+                                    discount ? (
+                                        <div className="text-xs bg-amber-500/5 border border-amber-500/20 rounded-lg p-2 flex flex-col gap-0.5">
+                                            <p className="text-amber-300">
+                                                <span className="font-semibold">Desconto atual:</span> {discount.label} — {discountAmountText(discount)} {discountDurationText(discount)}
+                                            </p>
+                                            <p className="text-[#92bbc9]">O novo código substituirá o desconto atual.</p>
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-[#92bbc9]">
+                                            Este código será aplicado à sua assinatura.
+                                        </p>
+                                    )
                                 )}
                                 {changePlan.isError && (
                                     <p className="text-xs text-red-400">
