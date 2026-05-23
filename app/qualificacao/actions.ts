@@ -20,9 +20,18 @@ export async function submitLeadAction(
     const phoneRaw = (formData.get('phone') as string | null) || ''
     const city = (formData.get('city') as string | null)?.trim() || ''
     const state = (formData.get('state') as string | null)?.trim() || ''
+    const cnpjRaw = (formData.get('cnpj') as string | null)?.trim() || ''
 
     if (!name || !organizationName || !email || !phoneRaw) {
         return { error: 'Preencha todos os campos obrigatórios.' }
+    }
+
+    let cnpjDigits = ''
+    if (cnpjRaw) {
+        cnpjDigits = cnpjRaw.replace(/\D/g, '')
+        if (cnpjDigits.length !== 14) {
+            return { error: 'CNPJ inválido. Informe os 14 dígitos.' }
+        }
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         return { error: 'E-mail inválido.' }
@@ -60,6 +69,10 @@ export async function submitLeadAction(
     const leadSourceRaw = (formData.get('lead_source') as string | null)?.trim() || ''
     const leadSource = leadSourceRaw.slice(0, 100) || 'organic'
     custom_fields.lead_source = leadSource
+
+    if (cnpjDigits) {
+        custom_fields.cnpj = cnpjDigits
+    }
 
     const { data: lead, error } = await supabaseAdmin
         .from('leads')

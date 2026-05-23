@@ -16,9 +16,18 @@ const inputClass =
 
 const labelClass = 'mb-1.5 block text-sm font-semibold text-slate-700 dark:text-text-secondary'
 
+function maskCnpj(v: string): string {
+    return v.replace(/\D/g, '').slice(0, 14)
+        .replace(/^(\d{2})(\d)/, '$1.$2')
+        .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+        .replace(/\.(\d{3})(\d)/, '.$1/$2')
+        .replace(/(\d{4})(\d)/, '$1-$2')
+}
+
 export function LeadForm() {
     const [state, formAction, pending] = useActionState(submitLeadAction, INITIAL)
     const [done, setDone] = useState(false)
+    const [cnpj, setCnpj] = useState('')
     const searchParams = useSearchParams()
     const leadSource =
         searchParams?.get('source')?.trim() ||
@@ -78,6 +87,22 @@ export function LeadForm() {
                 <div className="space-y-4">
                     <Field label="Seu nome" name="name" required />
                     <Field label="Nome do restaurante" name="organizationName" required />
+                    <label className="block">
+                        <span className={labelClass}>
+                            CNPJ do restaurante <span className="text-text-secondary font-normal">(opcional)</span>
+                        </span>
+                        <input
+                            name="cnpj"
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="off"
+                            value={cnpj}
+                            onChange={(e) => setCnpj(maskCnpj(e.target.value))}
+                            placeholder="00.000.000/0000-00"
+                            maxLength={18}
+                            className={inputClass}
+                        />
+                    </label>
                     <Field label="E-mail" name="email" type="email" required />
                     <Field label="WhatsApp (DDD + número)" name="phone" type="tel" required placeholder="11999999999" />
 
