@@ -293,51 +293,32 @@ export function PlanoTab() {
                         <span>Conta cancelada em {formatDate(subscription.canceled_at)}. Assine para reativar.</span>
                     </div>
                 )}
-            </div>
 
-            {/* Desconto ativo (Stripe é source of truth; sem persistência local) */}
-            {discount && (
-                <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-5 flex flex-col gap-3">
-                    <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-2">
-                            <span className="material-symbols-outlined text-emerald-400 text-[20px]">local_offer</span>
-                            <div>
-                                <p className="text-xs uppercase tracking-wider text-emerald-300 font-semibold">Desconto ativo</p>
-                                <p className="text-sm text-white font-semibold mt-0.5">
-                                    {discount.label}
-                                    <span className="text-[#92bbc9] font-normal"> · {discountAmountText(discount)} {discountDurationText(discount)}</span>
-                                </p>
-                            </div>
+                {/* Desconto ativo: contextualizado como benefício do plano, não como banner */}
+                {discount && (
+                    <div className="border-t border-emerald-500/15 pt-3 flex flex-col gap-1">
+                        <div className="flex items-center gap-2 text-sm flex-wrap">
+                            <span className="material-symbols-outlined text-emerald-400 text-[18px]">local_offer</span>
+                            <span className="text-white font-medium">{discount.label}</span>
+                            <span className="text-[#92bbc9]">·</span>
+                            <span className="text-emerald-300">{discountAmountText(discount)}</span>
+                            <span className="text-[#92bbc9]">{discountDurationText(discount)}</span>
                         </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-                        <div className="bg-[#101d22] border border-[#233f48] rounded-lg p-3">
-                            <p className="text-xs text-[#92bbc9] mb-0.5">Próxima cobrança estimada</p>
-                            <p className="text-white font-semibold">
+                        <p className="text-xs text-[#92bbc9] pl-[26px]">
+                            Próxima cobrança:{" "}
+                            <span className="text-white font-semibold">
                                 {formatCents(nextChargeCentsEstimate(plan, subscription.billing_cycle, discount))}
-                                <span className="text-xs text-[#92bbc9] font-normal ml-1">
-                                    ({subscription.billing_cycle === "yearly" ? "anual" : "mensal"})
-                                </span>
-                            </p>
-                        </div>
-                        {discount.duration === "repeating" && discount.ends_at && (
-                            <div className="bg-[#101d22] border border-[#233f48] rounded-lg p-3">
-                                <p className="text-xs text-[#92bbc9] mb-0.5">Desconto termina em</p>
-                                <p className="text-white font-semibold">{formatEpoch(discount.ends_at)}</p>
-                            </div>
-                        )}
+                            </span>
+                            <span className="text-[#325a67]">
+                                {" "}({subscription.billing_cycle === "yearly" ? "anual" : "mensal"})
+                            </span>
+                            {discount.duration === "repeating" && discount.ends_at && (
+                                <span> · termina em {formatEpoch(discount.ends_at)}</span>
+                            )}
+                        </p>
                     </div>
-
-                    <p className="text-xs text-[#325a67]">
-                        {discount.duration === "once"
-                            ? "Após esta cobrança, o valor volta ao preço cheio do plano."
-                            : discount.duration === "repeating"
-                              ? "Após o término do desconto, o valor volta ao preço cheio do plano."
-                              : "O desconto permanece em todas as cobranças, inclusive após upgrade/downgrade."}
-                    </p>
-                </div>
-            )}
+                )}
+            </div>
 
             {/* Limites de uso */}
             <div>
