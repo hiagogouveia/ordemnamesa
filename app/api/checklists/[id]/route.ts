@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { processRecurrencePayload } from '@/lib/api/recurrence-payload';
+import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
+import { getAccountBilling, canManageChecklists, canDeleteChecklists } from '@/lib/billing/subscription-access';
+import { buildAccessDeniedResponse } from '@/lib/billing/errors';
 
 const getAdminSupabase = () => {
     return createClient(
@@ -46,6 +49,15 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         if (!userRole || userRole.role === 'staff') {
             return NextResponse.json({ error: 'Permissões insuficientes.' }, { status: 403 });
         }
+
+        // Enforcement billing: edição é uma operação de escrita
+        const putAccountId = await getAccountIdForRestaurant(adminSupabase, restaurant_id);
+        if (!putAccountId) {
+            return NextResponse.json({ error: 'Unidade não pertence a nenhuma account.' }, { status: 404 });
+        }
+        const putBilling = await getAccountBilling(adminSupabase, putAccountId);
+        const putAccess = canManageChecklists(putBilling);
+        if (!putAccess.allowed) return buildAccessDeniedResponse(putAccess);
 
         // 1. Buscar estado atual para proteger campos críticos contra remoção acidental
         const { data: currentChecklist } = await adminSupabase
@@ -313,6 +325,15 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
             return NextResponse.json({ error: 'Permissões insuficientes.' }, { status: 403 });
         }
 
+        // Enforcement billing: PATCH (toggle active/archived) é escrita
+        const patchAccountId = await getAccountIdForRestaurant(adminSupabase, restaurant_id);
+        if (!patchAccountId) {
+            return NextResponse.json({ error: 'Unidade não pertence a nenhuma account.' }, { status: 404 });
+        }
+        const patchBilling = await getAccountBilling(adminSupabase, patchAccountId);
+        const patchAccess = canManageChecklists(patchBilling);
+        if (!patchAccess.allowed) return buildAccessDeniedResponse(patchAccess);
+
         const updateData: Record<string, unknown> = {};
         if (active !== undefined) updateData.active = active;
 
@@ -368,6 +389,16 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
         if (!userRole || userRole.role === 'staff') {
             return NextResponse.json({ error: 'Permissões insuficientes' }, { status: 403 });
         }
+
+        // Enforcement billing: trial expirado e past_due PODEM deletar (regra de negócio).
+        // Apenas accounts efetivamente mortas (canceled) ficam bloqueadas.
+        const delAccountId = await getAccountIdForRestaurant(adminSupabase, restaurant_id);
+        if (!delAccountId) {
+            return NextResponse.json({ error: 'Unidade não pertence a nenhuma account.' }, { status: 404 });
+        }
+        const delBilling = await getAccountBilling(adminSupabase, delAccountId);
+        const delAccess = canDeleteChecklists(delBilling);
+        if (!delAccess.allowed) return buildAccessDeniedResponse(delAccess);
 
         // Deletar task_executions antes (sem cascade automático)
         const { error: execError } = await adminSupabase

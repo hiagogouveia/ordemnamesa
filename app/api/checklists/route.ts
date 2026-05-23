@@ -4,7 +4,7 @@ import type { ExecutionStatus } from '@/lib/types';
 import { getBrazilDateKey } from '@/lib/utils/brazil-date';
 import { resolveGlobalScope, rejectIfGlobal, isGlobalScopeResult } from '@/lib/api/global-scope';
 import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
-import { getAccountBilling, canCreateResources } from '@/lib/billing/subscription-access';
+import { getAccountBilling, canManageChecklists } from '@/lib/billing/subscription-access';
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
 import { processRecurrencePayload } from '@/lib/api/recurrence-payload';
 import { trackChecklistEvent } from '@/lib/analytics/track-event';
@@ -268,7 +268,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Unidade não pertence a nenhuma account.' }, { status: 404 });
         }
         const billing = await getAccountBilling(adminSupabase, accountId);
-        const accessCheck = canCreateResources(billing);
+        const accessCheck = canManageChecklists(billing);
         if (!accessCheck.allowed) return buildAccessDeniedResponse(accessCheck);
 
         // Validação de domínio: responsável deve pertencer à área selecionada

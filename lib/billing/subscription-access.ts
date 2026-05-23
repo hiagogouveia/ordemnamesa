@@ -6,8 +6,20 @@ import type {
     Subscription,
     SubscriptionStatus,
 } from './types'
+import { getBrazilStartAndEndOfDay } from '@/lib/utils/brazil-date'
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000
+
+/**
+ * Considera o trial válido até o **fim do dia em America/Sao_Paulo**.
+ * Trials antigos foram persistidos como meia-noite UTC (= 21h SP), o que
+ * causava expiração prematura em ~3h. Corrigir aqui (na leitura) cobre
+ * tanto os trials históricos quanto eventuais novos com formato incorreto.
+ */
+function endOfDayInBrazilMs(endsAtIso: string): number {
+    const { end } = getBrazilStartAndEndOfDay(new Date(endsAtIso))
+    return Date.parse(end)
+}
 
 interface SubscriptionRow {
     id: string
@@ -125,7 +137,9 @@ export async function getAccountBilling(
     }
 
     const now = Date.now()
-    const endsAtMs = subscription.ends_at ? Date.parse(subscription.ends_at) : null
+    // Comparação baseada no fim do dia em São Paulo (UTC-3) para evitar
+    // expiração prematura quando ends_at foi gravado em meia-noite UTC.
+    const endsAtMs = subscription.ends_at ? endOfDayInBrazilMs(subscription.ends_at) : null
     const days_until_expiration =
         endsAtMs === null ? null : Math.ceil((endsAtMs - now) / MS_PER_DAY)
     const is_expired = endsAtMs !== null && endsAtMs < now
@@ -137,7 +151,7 @@ export async function getAccountBilling(
 export function isTrialActive(sub: Subscription): boolean {
     if (sub.status !== 'trial') return false
     if (!sub.ends_at) return true
-    return Date.parse(sub.ends_at) > Date.now()
+    return endOfDayInBrazilMs(sub.ends_at) > Date.now()
 }
 
 /** Subscription em past_due (inadimplente mas ainda no grace do negócio). */
@@ -202,5 +216,36 @@ export function canExecuteTasks(billing: AccountBilling | null): AccessCheck {
             ? { allowed: false, reason: 'past_due_blocks_execution' }
             : { allowed: true }
     }
+    return { allowed: false, reason: 'unknown_status' }
+}
+
+/**
+ * Permite editar/criar/duplicar/publicar checklists (operações de escrita).
+ *
+ * Mesmas regras de canCreateResources, exposto com nome semanticamente
+ * correto por intenção. Evita reutilizar canCreateResources para UPDATE
+ * (a leitura do código fica confusa).
+ */
+export function canManageChecklists(billing: AccountBilling | null): AccessCheck {
+    return canCreateResources(billing)
+}
+
+/**
+ * Permite deletar checklists.
+ *
+ * Regra de negócio (definida pelo produto):
+ * - trial expirado PODE deletar (manter sensação de controle/higiene).
+ * - past_due PODE deletar (mesma razão).
+ * - canceled/incomplete/unpaid bloqueiam (account efetivamente morta).
+ * - Sem billing → no_subscription.
+ */
+export function canDeleteChecklists(billing: AccountBilling | null): AccessCheck {
+    if (!billing) return { allowed: false, reason: 'no_subscription' }
+    const { status } = billing.subscription
+
+    if (status === 'trial') return { allowed: true }
+    if (status === 'active') return { allowed: true }
+    if (status === 'past_due') return { allowed: true }
+    if (status === 'canceled') return { allowed: false, reason: 'canceled' }
     return { allowed: false, reason: 'unknown_status' }
 }
