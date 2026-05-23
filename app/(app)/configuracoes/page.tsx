@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { ShiftsTab } from "./_components/shifts-tab";
 import { AreasTab } from "./_components/areas-tab";
 import { UnidadesTab } from "./_components/unidades-tab";
@@ -12,9 +13,26 @@ import { useAccountUnits } from "@/lib/hooks/use-account-units";
 import { useAccountAccess } from "@/lib/hooks/use-account-access";
 
 type TabId = "unidades" | "turnos" | "funcoes" | "conta" | "plano" | "geral";
+const VALID_TABS: TabId[] = ["unidades", "turnos", "funcoes", "conta", "plano", "geral"];
 
 export default function ConfiguracoesPage() {
-    const [activeTab, setActiveTab] = useState<TabId>("unidades");
+    // Persistência da aba via querystring (?tab=...). Init lê da URL; troca usa
+    // router.replace para não poluir o histórico. Sem localStorage/zustand.
+    const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+    const urlTab = searchParams.get("tab");
+    const initialTab: TabId = VALID_TABS.includes(urlTab as TabId) ? (urlTab as TabId) : "unidades";
+    const [activeTab, setActiveTabState] = useState<TabId>(initialTab);
+    const setActiveTab = useCallback(
+        (t: TabId) => {
+            setActiveTabState(t);
+            const params = new URLSearchParams(searchParams.toString());
+            params.set("tab", t);
+            router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+        },
+        [router, pathname, searchParams]
+    );
     const userRole = useRestaurantStore((s) => s.userRole);
     const accountMode = useAccountSessionStore((s) => s.mode);
     const accountId = useAccountSessionStore((s) => s.accountId);

@@ -135,7 +135,8 @@ export function PlanoTab() {
     const { data: discount } = useSubscriptionDiscount()
 
     // Hooks SEMPRE antes de qualquer return condicional (rules of hooks).
-    const [cycle, setCycle] = useState<BillingCycle>("monthly")
+    // Default "yearly" — enfatiza economia do plano anual no comparador.
+    const [cycle, setCycle] = useState<BillingCycle>("yearly")
     const [confirmChange, setConfirmChange] = useState<{ plan: CatalogPlan; exceeded: string[] } | null>(null)
     const [promoInput, setPromoInput] = useState("")
     const checkout = useCheckout()
@@ -293,31 +294,6 @@ export function PlanoTab() {
                         <span>Conta cancelada em {formatDate(subscription.canceled_at)}. Assine para reativar.</span>
                     </div>
                 )}
-
-                {/* Desconto ativo: contextualizado como benefício do plano, não como banner */}
-                {discount && (
-                    <div className="border-t border-emerald-500/15 pt-3 flex flex-col gap-1">
-                        <div className="flex items-center gap-2 text-sm flex-wrap">
-                            <span className="material-symbols-outlined text-emerald-400 text-[18px]">local_offer</span>
-                            <span className="text-white font-medium">{discount.label}</span>
-                            <span className="text-[#92bbc9]">·</span>
-                            <span className="text-emerald-300">{discountAmountText(discount)}</span>
-                            <span className="text-[#92bbc9]">{discountDurationText(discount)}</span>
-                        </div>
-                        <p className="text-xs text-[#92bbc9] pl-[26px]">
-                            Próxima cobrança:{" "}
-                            <span className="text-white font-semibold">
-                                {formatCents(nextChargeCentsEstimate(plan, subscription.billing_cycle, discount))}
-                            </span>
-                            <span className="text-[#325a67]">
-                                {" "}({subscription.billing_cycle === "yearly" ? "anual" : "mensal"})
-                            </span>
-                            {discount.duration === "repeating" && discount.ends_at && (
-                                <span> · termina em {formatEpoch(discount.ends_at)}</span>
-                            )}
-                        </p>
-                    </div>
-                )}
             </div>
 
             {/* Limites de uso */}
@@ -409,6 +385,25 @@ export function PlanoTab() {
                                         </li>
                                     ))}
                                 </ul>
+                                {cta.current && discount && (
+                                    <div className="border-t border-emerald-500/15 pt-2 flex flex-col gap-0.5">
+                                        <div className="flex items-center gap-1.5 text-xs flex-wrap">
+                                            <span className="material-symbols-outlined text-emerald-400 text-[14px]">local_offer</span>
+                                            <span className="text-white font-medium">{discount.label}</span>
+                                            <span className="text-[#92bbc9]">· {discountAmountText(discount)} {discountDurationText(discount)}</span>
+                                        </div>
+                                        <p className="text-[11px] text-[#92bbc9] pl-[22px]">
+                                            Próxima cobrança:{" "}
+                                            <span className="text-white font-semibold">
+                                                {formatCents(nextChargeCentsEstimate(plan, subscription.billing_cycle, discount))}
+                                            </span>
+                                            <span className="text-[#325a67]"> ({subscription.billing_cycle === "yearly" ? "anual" : "mensal"})</span>
+                                            {discount.duration === "repeating" && discount.ends_at && (
+                                                <span> · termina em {formatEpoch(discount.ends_at)}</span>
+                                            )}
+                                        </p>
+                                    </div>
+                                )}
                                 <button
                                     type="button"
                                     disabled={cta.disabled}
