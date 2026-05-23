@@ -9,6 +9,7 @@ import { PlanoTab } from "./_components/plano-tab";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useAccountSessionStore } from "@/lib/store/account-session-store";
 import { useAccountUnits } from "@/lib/hooks/use-account-units";
+import { useAccountAccess } from "@/lib/hooks/use-account-access";
 
 type TabId = "unidades" | "turnos" | "funcoes" | "conta" | "plano" | "geral";
 
@@ -18,6 +19,10 @@ export default function ConfiguracoesPage() {
     const accountMode = useAccountSessionStore((s) => s.mode);
     const accountId = useAccountSessionStore((s) => s.accountId);
     const isGlobal = accountMode === 'global';
+    // Aba "Conta" continua liberada para gestor global (AU). Aba "Plano" é
+    // exclusiva do owner — fonte de verdade é o AU role do endpoint /access.
+    const { data: accountAccess } = useAccountAccess(accountId);
+    const isAccountOwner = accountAccess?.role === 'owner';
     const isOwner = userRole === "owner" || isGlobal;
 
     // Em global, buscar unidades da conta para o seletor
@@ -78,7 +83,7 @@ export default function ConfiguracoesPage() {
                             Conta
                         </button>
                     )}
-                    {isOwner && (
+                    {isAccountOwner && (
                         <button
                             onClick={() => setActiveTab("plano")}
                             className={`pb-4 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeTab === "plano" ? "border-[#13b6ec] text-[#13b6ec]" : "border-transparent text-[#92bbc9] hover:text-white"}`}
