@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useBilling } from "@/lib/hooks/use-billing"
+import { useBilling, ApiError as BillingApiError } from "@/lib/hooks/use-billing"
 import { usePlans, type CatalogPlan } from "@/lib/hooks/use-plans"
 import { useCheckout } from "@/lib/hooks/use-checkout"
 import { usePortal } from "@/lib/hooks/use-portal"
@@ -83,7 +83,7 @@ function LimitCard({ icon, label, used, limit, unit }: LimitCardProps) {
 }
 
 export function PlanoTab() {
-    const { data: billing, isLoading } = useBilling()
+    const { data: billing, isLoading, error: billingError } = useBilling()
     const { data: plans = [] } = usePlans()
     const accountId = useAccountSessionStore((s) => s.accountId)
     const { data: units = [] } = useAccountUnits(accountId)
@@ -108,6 +108,33 @@ export function PlanoTab() {
     }
 
     if (!billing) {
+        const code = billingError instanceof BillingApiError ? billingError.code : undefined
+        if (code === "not_account_member") {
+            return (
+                <div className="flex flex-col items-center justify-center min-h-[300px] gap-3 text-center">
+                    <span className="material-symbols-outlined text-[#325a67] text-5xl">link_off</span>
+                    <p className="text-[#92bbc9] text-sm max-w-md">
+                        Sua conta de usuário ainda não foi vinculada a esta unidade na camada de billing.
+                        Contate o proprietário ou suporte.
+                    </p>
+                </div>
+            )
+        }
+        if (code === "no_subscription") {
+            return (
+                <div className="flex flex-col items-center justify-center min-h-[300px] gap-3 text-center">
+                    <span className="material-symbols-outlined text-[#325a67] text-5xl">workspace_premium</span>
+                    <p className="text-[#92bbc9] text-sm">Nenhum plano contratado nesta conta.</p>
+                    <button
+                        type="button"
+                        onClick={() => window.location.reload()}
+                        className="mt-2 inline-flex items-center justify-center gap-2 bg-[#13b6ec] text-[#101d22] px-4 py-2.5 rounded-lg font-semibold hover:bg-white transition-colors text-sm"
+                    >
+                        Contratar um plano
+                    </button>
+                </div>
+            )
+        }
         return (
             <div className="flex flex-col items-center justify-center min-h-[300px] gap-3 text-center">
                 <span className="material-symbols-outlined text-[#325a67] text-5xl">workspace_premium</span>

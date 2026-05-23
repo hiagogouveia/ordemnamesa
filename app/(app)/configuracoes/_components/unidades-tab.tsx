@@ -9,6 +9,7 @@ import {
     useUpdateUnit,
     useSetPrimaryUnit,
     useDeleteUnit,
+    ApiError,
     type Unit,
 } from "@/lib/hooks/use-units";
 import { useBilling } from "@/lib/hooks/use-billing";
@@ -153,12 +154,15 @@ export function UnidadesTab() {
     }
 
     if (error) {
+        const code = error instanceof ApiError ? error.code : undefined;
+        const friendly =
+            code === "not_account_member"
+                ? "Sua conta de usuário ainda não foi vinculada a esta unidade na camada de billing. Contate o proprietário ou suporte."
+                : (error instanceof Error ? error.message : "Tente novamente.");
         return (
             <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-center">
                 <p className="text-white font-semibold mb-1">Erro ao carregar unidades</p>
-                <p className="text-[#92bbc9] text-sm">
-                    {error instanceof Error ? error.message : "Tente novamente."}
-                </p>
+                <p className="text-[#92bbc9] text-sm">{friendly}</p>
             </div>
         );
     }
