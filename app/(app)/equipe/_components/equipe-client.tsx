@@ -100,7 +100,7 @@ export function EquipeClient({ restaurantId, accountId = null, isGlobal = false,
             ? { restaurantId: null, accountId, mode: 'global' }
             : restaurantId
     );
-    const updateMember = useUpdateEquipeMember(restaurantId);
+    const updateMember = useUpdateEquipeMember(restaurantId, accountId);
     const { data: areas = [] } = useAllAreas(restaurantId ?? undefined);
     const { data: shifts = [] } = useShifts(restaurantId ?? undefined);
     const { data: billing } = useBilling();
@@ -225,6 +225,12 @@ export function EquipeClient({ restaurantId, accountId = null, isGlobal = false,
             }
 
             queryClient.invalidateQueries({ queryKey: ['equipe', restaurantId] });
+            // Mirror em account_users pode ter sido criado/reativado — invalida caches dependentes.
+            if (accountId) {
+                queryClient.invalidateQueries({ queryKey: ['account-access', accountId] });
+                queryClient.invalidateQueries({ queryKey: ['units', accountId] });
+                queryClient.invalidateQueries({ queryKey: ['billing-status', accountId] });
+            }
             setIsModalOpen(false);
             setSelectedAreas([]);
             setSelectedShift('');

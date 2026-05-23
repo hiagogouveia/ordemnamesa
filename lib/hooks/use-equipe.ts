@@ -141,7 +141,7 @@ export const useChangeCollaboratorPassword = (restaurantId: string | null) => {
     });
 };
 
-export const useUpdateEquipeMember = (restaurantId: string | null) => {
+export const useUpdateEquipeMember = (restaurantId: string | null, accountId?: string | null) => {
     const queryClient = useQueryClient();
 
     return useMutation({
@@ -166,6 +166,12 @@ export const useUpdateEquipeMember = (restaurantId: string | null) => {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['equipe', restaurantId] });
+            // Mirror em account_users pode ter mudado (role/active) — invalida caches dependentes.
+            if (accountId) {
+                queryClient.invalidateQueries({ queryKey: ['account-access', accountId] });
+                queryClient.invalidateQueries({ queryKey: ['units', accountId] });
+                queryClient.invalidateQueries({ queryKey: ['billing-status', accountId] });
+            }
         }
     });
 };
