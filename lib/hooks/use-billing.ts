@@ -47,6 +47,14 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
     return headers
 }
 
+export class ApiError extends Error {
+    code?: string
+    constructor(message: string, code?: string) {
+        super(message)
+        this.code = code
+    }
+}
+
 export function useBilling() {
     const accountId = useAccountSessionStore((s) => s.accountId)
 
@@ -58,7 +66,16 @@ export function useBilling() {
                 ? `/api/billing/status?account_id=${accountId}`
                 : "/api/billing/status"
             const res = await fetch(url, { headers })
-            if (!res.ok) throw new Error("Erro ao carregar status do plano")
+            if (!res.ok) {
+                let message = "Erro ao carregar status do plano"
+                let code: string | undefined
+                try {
+                    const body = (await res.json()) as { error?: string; code?: string }
+                    if (body.error) message = body.error
+                    code = body.code
+                } catch { /* keep default */ }
+                throw new ApiError(message, code)
+            }
             return res.json() as Promise<BillingStatus>
         },
         staleTime: 5 * 60 * 1000,

@@ -22,12 +22,20 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
     return headers
 }
 
-async function parseError(res: Response, fallback: string): Promise<string> {
+export class ApiError extends Error {
+    code?: string
+    constructor(message: string, code?: string) {
+        super(message)
+        this.code = code
+    }
+}
+
+async function parseError(res: Response, fallback: string): Promise<ApiError> {
     try {
-        const body = (await res.json()) as { error?: string }
-        return body.error ?? fallback
+        const body = (await res.json()) as { error?: string; code?: string }
+        return new ApiError(body.error ?? fallback, body.code)
     } catch {
-        return fallback
+        return new ApiError(fallback)
     }
 }
 
@@ -38,7 +46,7 @@ export function useUnits(accountId: string | null | undefined) {
             if (!accountId) return []
             const headers = await getAuthHeaders()
             const res = await fetch(`/api/units?account_id=${accountId}`, { headers })
-            if (!res.ok) throw new Error(await parseError(res, "Erro ao buscar unidades."))
+            if (!res.ok) throw (await parseError(res, "Erro ao buscar unidades."))
             const data = (await res.json()) as { units: Unit[] }
             return data.units ?? []
         },
@@ -64,7 +72,7 @@ export function useCreateUnit() {
                 headers,
                 body: JSON.stringify(input),
             })
-            if (!res.ok) throw new Error(await parseError(res, "Erro ao criar unidade."))
+            if (!res.ok) throw (await parseError(res, "Erro ao criar unidade."))
             const data = (await res.json()) as { unit: Unit }
             return data.unit
         },
@@ -90,7 +98,7 @@ export function useUpdateUnit() {
                 headers,
                 body: JSON.stringify({ account_id: input.account_id, name: input.name }),
             })
-            if (!res.ok) throw new Error(await parseError(res, "Erro ao atualizar unidade."))
+            if (!res.ok) throw (await parseError(res, "Erro ao atualizar unidade."))
             const data = (await res.json()) as { unit: Unit }
             return data.unit
         },
@@ -115,7 +123,7 @@ export function useSetPrimaryUnit() {
                 headers,
                 body: JSON.stringify({ account_id: input.account_id, set_primary: true }),
             })
-            if (!res.ok) throw new Error(await parseError(res, "Erro ao definir unidade principal."))
+            if (!res.ok) throw (await parseError(res, "Erro ao definir unidade principal."))
             const data = (await res.json()) as { unit: Unit }
             return data.unit
         },
@@ -139,7 +147,7 @@ export function useDeleteUnit() {
                 `/api/units/${input.id}?account_id=${input.account_id}`,
                 { method: "DELETE", headers }
             )
-            if (!res.ok) throw new Error(await parseError(res, "Erro ao excluir unidade."))
+            if (!res.ok) throw (await parseError(res, "Erro ao excluir unidade."))
         },
         onSuccess: (_data, variables) => {
             queryClient.invalidateQueries({ queryKey: ["units", variables.account_id] })

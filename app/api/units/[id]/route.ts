@@ -34,7 +34,7 @@ async function assertOwner(
     admin: ReturnType<typeof getAdminSupabase>,
     accountId: string,
     userId: string
-) {
+): Promise<{ ok: true } | { ok: false; code: 'not_account_member' | 'forbidden' }> {
     const { data } = await admin
         .from('account_users')
         .select('role')
@@ -42,7 +42,9 @@ async function assertOwner(
         .eq('user_id', userId)
         .eq('active', true)
         .maybeSingle<AccountUserRow>()
-    return !!data && data.role === 'owner'
+    if (!data) return { ok: false, code: 'not_account_member' }
+    if (data.role !== 'owner') return { ok: false, code: 'forbidden' }
+    return { ok: true }
 }
 
 async function loadUnit(
@@ -87,8 +89,12 @@ export async function PATCH(
 
         const admin = getAdminSupabase()
 
-        if (!(await assertOwner(admin, account_id, user.id))) {
-            return NextResponse.json({ error: 'Apenas owners podem editar unidades.' }, { status: 403 })
+        const ownerCheck = await assertOwner(admin, account_id, user.id)
+        if (!ownerCheck.ok) {
+            const msg = ownerCheck.code === 'not_account_member'
+                ? 'Sua conta de usuário ainda não foi vinculada a esta unidade na camada de billing.'
+                : 'Apenas owners podem editar unidades.'
+            return NextResponse.json({ error: msg, code: ownerCheck.code }, { status: 403 })
         }
 
         const unit = await loadUnit(admin, id)
@@ -171,8 +177,12 @@ export async function DELETE(
 
         const admin = getAdminSupabase()
 
-        if (!(await assertOwner(admin, account_id, user.id))) {
-            return NextResponse.json({ error: 'Apenas owners podem excluir unidades.' }, { status: 403 })
+        const ownerCheckDel = await assertOwner(admin, account_id, user.id)
+        if (!ownerCheckDel.ok) {
+            const msg = ownerCheckDel.code === 'not_account_member'
+                ? 'Sua conta de usuário ainda não foi vinculada a esta unidade na camada de billing.'
+                : 'Apenas owners podem excluir unidades.'
+            return NextResponse.json({ error: msg, code: ownerCheckDel.code }, { status: 403 })
         }
 
         const unit = await loadUnit(admin, id)

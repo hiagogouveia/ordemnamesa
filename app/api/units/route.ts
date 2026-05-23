@@ -76,7 +76,10 @@ export async function GET(request: Request) {
             .maybeSingle<AccountUserRow>()
 
         if (!membership) {
-            return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 })
+            return NextResponse.json(
+                { error: 'Sua conta de usuário ainda não foi vinculada a esta unidade na camada de billing.', code: 'not_account_member' },
+                { status: 403 }
+            )
         }
 
         const { data, error } = await admin
@@ -144,8 +147,14 @@ export async function POST(request: Request) {
             .eq('active', true)
             .maybeSingle<AccountUserRow>()
 
-        if (!membership || membership.role !== 'owner') {
-            return NextResponse.json({ error: 'Apenas owners podem criar unidades.' }, { status: 403 })
+        if (!membership) {
+            return NextResponse.json(
+                { error: 'Sua conta de usuário ainda não foi vinculada a esta unidade na camada de billing.', code: 'not_account_member' },
+                { status: 403 }
+            )
+        }
+        if (membership.role !== 'owner') {
+            return NextResponse.json({ error: 'Apenas owners podem criar unidades.', code: 'forbidden' }, { status: 403 })
         }
 
         const unitCheck = await canCreateUnit(admin, account_id)

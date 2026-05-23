@@ -45,7 +45,7 @@ export async function GET(request: Request) {
         const accountIds = await listUserAccountIds(admin, user.id)
         if (accountIds.length === 0) {
             return NextResponse.json(
-                { error: 'Usuário não pertence a nenhuma account.' },
+                { error: 'Usuário não pertence a nenhuma account.', code: 'not_account_member' },
                 { status: 404 }
             )
         }
@@ -70,7 +70,7 @@ export async function GET(request: Request) {
             }
             if (!accountIds.includes(requested)) {
                 return NextResponse.json(
-                    { error: 'Account não pertence ao usuário.' },
+                    { error: 'Account não pertence ao usuário.', code: 'not_account_member' },
                     { status: 403 }
                 )
             }
@@ -84,6 +84,7 @@ export async function GET(request: Request) {
                 {
                     error: 'Account sem subscription. Contate o suporte.',
                     reason: 'no_subscription',
+                    code: 'no_subscription',
                 },
                 { status: 402 }
             )
