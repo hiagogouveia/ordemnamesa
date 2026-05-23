@@ -127,7 +127,7 @@ console.log('\n[A] Segurança cross-account em /api/billing/status')
 
 // Vincular A como owner em accountB também → usuário com 2 accounts
 await admin.from('account_users').insert({
-    account_id: ctxB.account_id, user_id: ctxA.uid, role: 'owner', active: true,
+    account_id: ctxB.account_id, user_id: ctxA.uid, role: 'owner', active: true, can_view_global: true,
 })
 {
     const r = await req('GET', '/api/billing/status', tokenA)

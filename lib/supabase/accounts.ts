@@ -1,5 +1,29 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+export interface OwnerAccountUserRow {
+    account_id: string
+    user_id: string
+    role: 'owner'
+    active: true
+    can_view_global: true
+}
+
+// Invariante owner.can_view_global=true espelha CHECK constraint
+// account_users_owner_must_view_global (migration s47). Use este builder
+// em qualquer call-site que crie um vínculo de owner em account_users.
+export function buildOwnerAccountUserRow(
+    accountId: string,
+    userId: string
+): OwnerAccountUserRow {
+    return {
+        account_id: accountId,
+        user_id: userId,
+        role: 'owner',
+        active: true,
+        can_view_global: true,
+    }
+}
+
 /**
  * Retorna o account_id do restaurant informado, ou null se não encontrado.
  * Usa o client recebido: a RLS é aplicada conforme a sessão do caller.

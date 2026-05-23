@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getTrialConfig } from './trial-config'
 import { getTrialEndsAtIso } from '@/lib/billing/trial'
+import { buildOwnerAccountUserRow } from '@/lib/supabase/accounts'
 
 export interface CreateTenantArgs {
     supabaseAdmin: SupabaseClient
@@ -77,12 +78,9 @@ export async function createAccountWithRestaurant(
         await supabaseAdmin.from('accounts').delete().eq('id', accountId)
     }
 
-    const { error: accountUserErr } = await supabaseAdmin.from('account_users').insert({
-        account_id: accountId,
-        user_id: userId,
-        role: 'owner',
-        active: true,
-    })
+    const { error: accountUserErr } = await supabaseAdmin
+        .from('account_users')
+        .insert(buildOwnerAccountUserRow(accountId, userId))
     if (accountUserErr) {
         await rollbackAccount()
         throw new Error(`Falha ao vincular owner à account: ${accountUserErr.message}`)

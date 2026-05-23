@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { trackOnboardingEvent } from '@/lib/analytics/track-event'
 import { getTrialEndsAtIso } from '@/lib/billing/trial'
+import { buildOwnerAccountUserRow } from '@/lib/supabase/accounts'
 
 // ── Rate limiting (in-memory, por IP) ─────────────────────
 const rateLimit = new Map<string, { count: number; resetAt: number }>()
@@ -151,13 +152,7 @@ export async function POST(request: Request) {
 
         const { error: accountUserError } = await adminSupabase
             .from('account_users')
-            .insert({
-                account_id: newAccountId,
-                user_id: newUserId,
-                role: 'owner',
-                active: true,
-                can_view_global: true,
-            })
+            .insert(buildOwnerAccountUserRow(newAccountId, newUserId))
         if (accountUserError) {
             await adminSupabase.from('accounts').delete().eq('id', newAccountId)
             throw accountUserError
