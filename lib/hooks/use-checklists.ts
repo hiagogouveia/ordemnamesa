@@ -14,6 +14,7 @@ interface ReorderTasksVariables {
 }
 import { createClient } from "@/lib/supabase/client";
 import type { Scope } from "@/lib/types/scope";
+import { BillingError } from "@/lib/billing/client-errors";
 
 export type { Scope };
 
@@ -137,6 +138,9 @@ export function useCreateChecklist() {
             });
             if (!res.ok) {
                 const errData = await res.json().catch(() => ({}));
+                if (res.status === 402 && errData?.reason) {
+                    throw new BillingError(errData.error ?? "Acesso bloqueado pelo plano.", res.status, errData.reason);
+                }
                 throw new Error(errData.error || "Erro ao criar checklist");
             }
             return res.json();
@@ -166,6 +170,9 @@ export function useUpdateChecklist() {
             });
             if (!res.ok) {
                 const errData = await res.json().catch(() => ({}));
+                if (res.status === 402 && errData?.reason) {
+                    throw new BillingError(errData.error ?? "Acesso bloqueado pelo plano.", res.status, errData.reason);
+                }
                 throw new Error(errData.error || "Erro ao atualizar checklist");
             }
             return res.json();
