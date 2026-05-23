@@ -109,6 +109,16 @@ export function PlanoTab() {
 
     if (!billing) {
         const code = billingError instanceof BillingApiError ? billingError.code : undefined
+        if (code === "forbidden_billing") {
+            return (
+                <div className="flex flex-col items-center justify-center min-h-[300px] gap-3 text-center">
+                    <span className="material-symbols-outlined text-[#325a67] text-5xl">lock</span>
+                    <p className="text-[#92bbc9] text-sm max-w-md">
+                        Apenas o proprietário da conta pode gerenciar o plano e a assinatura.
+                    </p>
+                </div>
+            )
+        }
         if (code === "not_account_member") {
             return (
                 <div className="flex flex-col items-center justify-center min-h-[300px] gap-3 text-center">
