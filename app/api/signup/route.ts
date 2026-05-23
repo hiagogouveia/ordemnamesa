@@ -155,6 +155,7 @@ export async function POST(request: Request) {
                 user_id: newUserId,
                 role: 'owner',
                 active: true,
+                can_view_global: true,
             })
         if (accountUserError) {
             await adminSupabase.from('accounts').delete().eq('id', newAccountId)
