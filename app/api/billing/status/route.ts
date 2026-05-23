@@ -77,6 +77,20 @@ export async function GET(request: Request) {
             targetAccountId = requested
         }
 
+        // Guard owner-only: apenas owner ativo da account pode ler status de billing.
+        const { data: ownerCheck } = await admin
+            .from('account_users')
+            .select('role, active')
+            .eq('account_id', targetAccountId)
+            .eq('user_id', user.id)
+            .maybeSingle<{ role: string; active: boolean }>()
+        if (!ownerCheck || !ownerCheck.active || ownerCheck.role !== 'owner') {
+            return NextResponse.json(
+                { error: 'Apenas o proprietário da conta pode gerenciar billing.', code: 'forbidden_billing' },
+                { status: 403 }
+            )
+        }
+
         const billing = await getAccountBilling(admin, targetAccountId)
         if (!billing) {
             // Estado anômalo — backfill deveria garantir que não acontece

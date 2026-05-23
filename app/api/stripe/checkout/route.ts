@@ -84,6 +84,20 @@ export async function POST(request: Request) {
             accountId = requested
         }
 
+        // Guard owner-only: apenas owner ativo da account pode iniciar checkout.
+        const { data: ownerCheck } = await admin
+            .from("account_users")
+            .select("role, active")
+            .eq("account_id", accountId)
+            .eq("user_id", user.id)
+            .maybeSingle<{ role: string; active: boolean }>()
+        if (!ownerCheck || !ownerCheck.active || ownerCheck.role !== "owner") {
+            return NextResponse.json(
+                { error: "Apenas o proprietário da conta pode gerenciar billing.", code: "forbidden_billing" },
+                { status: 403 }
+            )
+        }
+
         // Resolve price_id server-side (fonte de verdade: tabela plans).
         const { data: plan } = await admin
             .from("plans")
