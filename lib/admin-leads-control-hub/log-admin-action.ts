@@ -10,6 +10,7 @@ export type AdminAction =
     | 'reset_staff_password'
     | 'delete_staff'
     | 'manual_password_reset'
+    | 'manual_password_set'
     | 'trial_created'
     | string
 

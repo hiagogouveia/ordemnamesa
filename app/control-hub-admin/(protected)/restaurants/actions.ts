@@ -121,6 +121,68 @@ export async function resetOwnerPasswordAction(
     return { ok: true }
 }
 
+export async function setOwnerPasswordAction(
+    restaurantId: string,
+    newPassword: string
+): Promise<AdminActionResult> {
+    const guard = await requireSuperAdmin()
+    if ('error' in guard) return { error: guard.error }
+    const adminEmail = guard.ctx.user.email!.toLowerCase()
+
+    if (typeof newPassword !== 'string' || newPassword.length < 8) {
+        return { error: 'A senha precisa ter pelo menos 8 caracteres.' }
+    }
+    if (newPassword.length > 72) {
+        return { error: 'A senha não pode ultrapassar 72 caracteres.' }
+    }
+
+    const { data: restaurant } = await supabaseAdmin
+        .from('restaurants')
+        .select('id, name, owner_id, account_id')
+        .eq('id', restaurantId)
+        .maybeSingle<{ id: string; name: string; owner_id: string; account_id: string }>()
+    if (!restaurant) return { error: 'Restaurante não encontrado.' }
+
+    const { data: owner } = await supabaseAdmin
+        .from('users')
+        .select('id, email')
+        .eq('id', restaurant.owner_id)
+        .maybeSingle<{ id: string; email: string }>()
+    if (!owner?.email) return { error: 'Owner do restaurante não encontrado.' }
+
+    const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(owner.id, {
+        password: newPassword,
+    })
+    if (updateErr) {
+        console.error('[setOwnerPasswordAction] updateUserById failed', { code: updateErr.code, status: updateErr.status })
+        return { error: 'Falha ao atualizar senha no Supabase Auth.' }
+    }
+
+    const ctx = await captureRequestContext()
+    await logAdminAction({
+        adminEmail,
+        action: 'manual_password_set',
+        targetType: 'user',
+        targetId: owner.id,
+        metadata: {
+            restaurant_id: restaurant.id,
+            restaurant_name: restaurant.name,
+            account_id: restaurant.account_id,
+            owner_email: owner.email,
+        },
+        ipAddress: ctx.ipAddress,
+        userAgent: ctx.userAgent,
+    })
+    await trackAdminEvent('manual_password_set', {
+        restaurantId: restaurant.id,
+        userId: owner.id,
+        metadata: { triggered_by: adminEmail },
+    })
+
+    revalidateRestaurant(restaurantId)
+    return { ok: true }
+}
+
 export async function suspendAccountAction(
     restaurantId: string,
     reason: string

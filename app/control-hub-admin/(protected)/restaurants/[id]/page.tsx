@@ -78,7 +78,7 @@ export default async function RestaurantAdminDetailPage({
                                     ⭐ VIP
                                 </span>
                             )}
-                            {detail.billing.plan && (
+                            {detail.derived_status !== 'trial' && detail.billing.plan && (
                                 <span className="rounded-md border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
                                     Plano {detail.billing.plan.code} · {detail.billing.plan.name}
                                 </span>
