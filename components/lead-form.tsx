@@ -24,10 +24,25 @@ function maskCnpj(v: string): string {
         .replace(/(\d{4})(\d)/, '$1-$2')
 }
 
+function maskPhone(v: string): string {
+    const d = v.replace(/\D/g, '').slice(0, 11)
+    if (d.length === 0) return ''
+    if (d.length <= 2) return `(${d}`
+    if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`
+    if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`
+    return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`
+}
+
+function maskUf(v: string): string {
+    return v.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 2)
+}
+
 export function LeadForm() {
     const [state, formAction, pending] = useActionState(submitLeadAction, INITIAL)
     const [done, setDone] = useState(false)
     const [cnpj, setCnpj] = useState('')
+    const [phone, setPhone] = useState('')
+    const [uf, setUf] = useState('')
     const searchParams = useSearchParams()
     const leadSource =
         searchParams?.get('source')?.trim() ||
@@ -104,13 +119,41 @@ export function LeadForm() {
                         />
                     </label>
                     <Field label="E-mail" name="email" type="email" required />
-                    <Field label="WhatsApp (DDD + número)" name="phone" type="tel" required placeholder="11999999999" />
+                    <label className="block">
+                        <span className={labelClass}>
+                            WhatsApp (DDD + número) <span className="text-primary">*</span>
+                        </span>
+                        <input
+                            name="phone"
+                            type="tel"
+                            inputMode="numeric"
+                            autoComplete="tel"
+                            required
+                            value={phone}
+                            onChange={(e) => setPhone(maskPhone(e.target.value))}
+                            placeholder="(11) 99999-9999"
+                            maxLength={16}
+                            className={inputClass}
+                        />
+                    </label>
 
                     <div className="grid grid-cols-3 gap-3">
                         <div className="col-span-2">
                             <Field label="Cidade" name="city" />
                         </div>
-                        <Field label="UF" name="state" maxLength={2} />
+                        <label className="block">
+                            <span className={labelClass}>UF</span>
+                            <input
+                                name="state"
+                                type="text"
+                                autoComplete="address-level1"
+                                value={uf}
+                                onChange={(e) => setUf(maskUf(e.target.value))}
+                                placeholder="SP"
+                                maxLength={2}
+                                className={inputClass}
+                            />
+                        </label>
                     </div>
 
                     <div className="my-2 h-px bg-border-dark" />
