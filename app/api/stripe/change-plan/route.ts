@@ -184,10 +184,12 @@ export async function POST(request: Request) {
             discountsParam = [{ promotion_code: result.promoId }]
         }
 
-        // Idempotency-key determinística: protege contra double-submit e double-redemption.
-        // Mesma operação (mesma sub + mesmo destino + mesmo promo) → Stripe deduplica por 24h.
+        // Idempotency-key: protege double-submit dentro de uma janela curta (10s),
+        // mas distingue operações LEGÍTIMAS subsequentes ao mesmo alvo (ex.: A→B→A→B
+        // num único dia). Sem o bucket de tempo, a segunda viagem ao mesmo alvo é
+        // deduplicada pelo Stripe — request 200 sem mutação real, webhook não dispara.
         const idempotencyKey =
-            `chgplan:${sub.stripe_subscription_id}:${targetPrice}:${discountsParam ? discountsParam[0].promotion_code : "none"}`
+            `chgplan:${sub.stripe_subscription_id}:${targetPrice}:${discountsParam ? discountsParam[0].promotion_code : "none"}:${Math.floor(Date.now() / 10000)}`
 
         // Troca via Stripe; proration do Stripe; webhook sincroniza o banco.
         try {

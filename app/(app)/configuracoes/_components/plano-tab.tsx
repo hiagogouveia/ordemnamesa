@@ -245,9 +245,6 @@ export function PlanoTab() {
             // Toda troca passa pela confirmação financeira (proration). Se o uso
             // excede o plano alvo (downgrade), o modal também mostra o aviso.
             onClick: () => {
-                // DIAGNÓSTICO TEMPORÁRIO — remover após investigação
-                // eslint-disable-next-line no-console
-                console.log("[plano-tab] click plan", { code: p.code, mutating, isActive, currentCode: plan.code, cycle })
                 setConfirmChange({ plan: p, exceeded: exceededLimits(p) })
                 setPromoInput("")
                 changePlan.reset()
@@ -493,9 +490,6 @@ export function PlanoTab() {
 
             {/* Confirmação financeira da troca de plano (proration via Stripe) */}
             {confirmChange && (() => {
-                // DIAGNÓSTICO TEMPORÁRIO — remover após investigação
-                // eslint-disable-next-line no-console
-                console.log("[plano-tab] modal renderizando", { target: confirmChange.plan.code, cycle, hasDiscount: !!discount })
                 const target = confirmChange.plan
                 const currentCents =
                     subscription.billing_cycle === "yearly" ? plan.price_yearly_cents : plan.price_monthly_cents
@@ -617,9 +611,6 @@ export function PlanoTab() {
                                     type="button"
                                     disabled={changePlan.isPending}
                                     onClick={() => {
-                                        // DIAGNÓSTICO TEMPORÁRIO — remover após investigação
-                                        // eslint-disable-next-line no-console
-                                        console.log("[plano-tab] confirm clicked", { isPending: changePlan.isPending, target: target.code, cycle, promoInput })
                                         // Fecha o modal APENAS no sucesso, para o erro de cupom ficar inline.
                                         changePlan.mutate(
                                             {
