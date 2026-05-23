@@ -41,9 +41,16 @@ async function mirrorAccountUserOnUpsert(
         .maybeSingle<{ id: string; can_view_global: boolean }>();
 
     if (existing) {
+        // Promovendo para owner: forçar can_view_global=true (invariante owner sempre global).
+        // Para manager: preservar valor atual.
+        const update: { role: 'owner' | 'manager'; active: true; can_view_global?: boolean } = {
+            role,
+            active: true,
+        };
+        if (role === 'owner') update.can_view_global = true;
         const { error } = await admin
             .from('account_users')
-            .update({ role, active: true })
+            .update(update)
             .eq('id', existing.id);
         if (error) console.error('[mirrorAccountUserOnUpsert] update error:', error);
     } else {
