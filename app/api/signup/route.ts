@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { trackOnboardingEvent } from '@/lib/analytics/track-event'
+import { getTrialEndsAtIso } from '@/lib/billing/trial'
 
 // ── Rate limiting (in-memory, por IP) ─────────────────────
 const rateLimit = new Map<string, { count: number; resetAt: number }>()
@@ -174,7 +175,7 @@ export async function POST(request: Request) {
             throw planErr ?? new Error('Plano A não encontrado.')
         }
 
-        const trialEndsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+        const trialEndsAt = getTrialEndsAtIso(30)
         const { error: subError } = await adminSupabase
             .from('subscriptions')
             .insert({

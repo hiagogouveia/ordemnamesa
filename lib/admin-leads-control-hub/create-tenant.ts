@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getTrialConfig } from './trial-config'
+import { getTrialEndsAtIso } from '@/lib/billing/trial'
 
 export interface CreateTenantArgs {
     supabaseAdmin: SupabaseClient
@@ -129,7 +130,7 @@ export async function createAccountWithRestaurant(
 
     // started_at = timestamp do registro (não "início do trial" no sentido comercial).
     // Em conversão paga / upgrade, criar nova subscription em vez de mutar esta.
-    const trialEndsAt = new Date(Date.now() + trial.trialDays * 86400_000).toISOString()
+    const trialEndsAt = getTrialEndsAtIso(trial.trialDays)
     const { data: subData, error: subErr } = await supabaseAdmin
         .from('subscriptions')
         .insert({
