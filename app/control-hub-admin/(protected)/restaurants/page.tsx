@@ -219,7 +219,11 @@ function RestaurantRow({ item }: { item: RestaurantAdminListItem }) {
                 )}
             </td>
             <td className="px-4 py-3">
-                {item.billing.plan ? (
+                {item.derived_status === 'trial' ? (
+                    <span className="rounded-md border border-yellow-500/30 bg-yellow-500/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-yellow-200/80">
+                        Em teste
+                    </span>
+                ) : item.billing.plan ? (
                     <span className="rounded-md border border-border-dark bg-surface-deep px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-text-secondary">
                         {item.billing.plan.code} · {item.billing.plan.name}
                     </span>

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { resetOwnerPasswordAction } from '../actions'
+import { resetOwnerPasswordAction, setOwnerPasswordAction } from '../actions'
 
 interface Props {
     restaurantId: string
@@ -14,6 +14,9 @@ interface Props {
 export function RestaurantActions({ restaurantId, ownerEmail, ownerPhone, isSuperAdmin }: Props) {
     const [pending, startTransition] = useTransition()
     const [feedback, setFeedback] = useState<{ type: 'ok' | 'error'; msg: string } | null>(null)
+    const [showSetPassword, setShowSetPassword] = useState(false)
+    const [newPassword, setNewPassword] = useState('')
+    const [confirmPassword, setConfirmPassword] = useState('')
     const router = useRouter()
 
     function copyEmail() {
@@ -36,6 +39,38 @@ export function RestaurantActions({ restaurantId, ownerEmail, ownerPhone, isSupe
                 setFeedback({ type: 'error', msg: res.error })
             } else {
                 setFeedback({ type: 'ok', msg: 'Link de redefinição enviado por email.' })
+                router.refresh()
+            }
+        })
+    }
+
+    function submitSetPassword(e: React.FormEvent<HTMLFormElement>) {
+        e.preventDefault()
+        if (!isSuperAdmin) {
+            setFeedback({ type: 'error', msg: 'Apenas SUPER_ADMIN pode definir senha.' })
+            return
+        }
+        if (newPassword.length < 8) {
+            setFeedback({ type: 'error', msg: 'A senha precisa ter pelo menos 8 caracteres.' })
+            return
+        }
+        if (newPassword !== confirmPassword) {
+            setFeedback({ type: 'error', msg: 'As senhas não conferem.' })
+            return
+        }
+        setFeedback(null)
+        startTransition(async () => {
+            const res = await setOwnerPasswordAction(restaurantId, newPassword)
+            if (res.error) {
+                setFeedback({ type: 'error', msg: res.error })
+            } else {
+                setFeedback({
+                    type: 'ok',
+                    msg: 'Senha redefinida. Sessões existentes continuam até expirar pelo TTL do token; novo acesso exigirá a nova senha.',
+                })
+                setNewPassword('')
+                setConfirmPassword('')
+                setShowSetPassword(false)
                 router.refresh()
             }
         })
@@ -78,10 +113,83 @@ export function RestaurantActions({ restaurantId, ownerEmail, ownerPhone, isSupe
                 >
                     {pending ? 'Enviando…' : '🔑 Resetar senha'}
                 </button>
+                <button
+                    type="button"
+                    onClick={() => {
+                        setShowSetPassword((v) => !v)
+                        setFeedback(null)
+                    }}
+                    disabled={!isSuperAdmin || !ownerEmail}
+                    className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                    🔒 Definir senha
+                </button>
             </div>
+            {showSetPassword && isSuperAdmin && (
+                <form
+                    onSubmit={submitSetPassword}
+                    className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3"
+                >
+                    <p className="text-[11px] text-text-secondary">
+                        Definir senha manualmente para <span className="font-mono text-white">{ownerEmail}</span>.
+                        A senha não é armazenada em log; sessões antigas continuam até expirar pelo TTL do JWT.
+                    </p>
+                    <div>
+                        <label className="mb-1 block text-[11px] font-semibold text-text-secondary">
+                            Nova senha (mín. 8 caracteres)
+                        </label>
+                        <input
+                            type="password"
+                            autoComplete="new-password"
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            required
+                            minLength={8}
+                            maxLength={72}
+                            className="w-full rounded-md border border-border-dark bg-surface-deep px-3 py-1.5 text-sm text-white placeholder:text-text-secondary focus:border-primary focus:outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label className="mb-1 block text-[11px] font-semibold text-text-secondary">
+                            Confirmar senha
+                        </label>
+                        <input
+                            type="password"
+                            autoComplete="new-password"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            required
+                            minLength={8}
+                            maxLength={72}
+                            className="w-full rounded-md border border-border-dark bg-surface-deep px-3 py-1.5 text-sm text-white placeholder:text-text-secondary focus:border-primary focus:outline-none"
+                        />
+                    </div>
+                    <div className="flex gap-2">
+                        <button
+                            type="submit"
+                            disabled={pending}
+                            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-[#111e22] hover:bg-[#0ea5d6] disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            {pending ? 'Salvando…' : 'Salvar nova senha'}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setShowSetPassword(false)
+                                setNewPassword('')
+                                setConfirmPassword('')
+                            }}
+                            disabled={pending}
+                            className="rounded-lg border border-border-dark bg-surface-deep px-3 py-1.5 text-xs font-semibold text-text-secondary hover:text-white"
+                        >
+                            Cancelar
+                        </button>
+                    </div>
+                </form>
+            )}
             {!isSuperAdmin && (
                 <p className="text-[11px] text-yellow-300/80">
-                    Apenas SUPER_ADMIN pode resetar senha do owner.
+                    Apenas SUPER_ADMIN pode redefinir senha do owner.
                 </p>
             )}
             {feedback && (
