@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRestaurantStore } from '@/lib/store/restaurant-store';
 import {
     useReceivingExpectations,
+    useReceivingCounts,
     useConfirmExpectation,
     useCancelExpectation,
     useMarkOverdue,
@@ -29,6 +30,7 @@ export default function AdminRecebimentosPage() {
         restaurantId || undefined,
         { status: TAB_META[tab].statusParam },
     );
+    const { data: counts } = useReceivingCounts(restaurantId || undefined);
 
     const confirmM = useConfirmExpectation();
     const cancelM = useCancelExpectation();
@@ -43,8 +45,6 @@ export default function AdminRecebimentosPage() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [restaurantId, tab]);
-
-    const counts = useMemo(() => list.length, [list]);
 
     const handleConfirm = async (exp: ReceivingExpectationWithChecklist) => {
         if (!restaurantId) return;
@@ -84,22 +84,33 @@ export default function AdminRecebimentosPage() {
                         </div>
                     </div>
                     <nav className="flex gap-1 overflow-x-auto scrollbar-hide">
-                        {(Object.keys(TAB_META) as Tab[]).map((t) => (
-                            <button
-                                key={t}
-                                onClick={() => setTab(t)}
-                                className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
-                                    tab === t
-                                        ? 'bg-[#13b6ec] text-[#0f1b21]'
-                                        : 'bg-[#182a32] text-[#92bbc9] border border-[#233f48] hover:bg-[#233f48]'
-                                }`}
-                            >
-                                {TAB_META[t].label}
-                                {tab === t && counts > 0 && (
-                                    <span className="ml-1.5 text-[10px] opacity-80">{counts}</span>
-                                )}
-                            </button>
-                        ))}
+                        {(Object.keys(TAB_META) as Tab[]).map((t) => {
+                            const n = counts?.[t] ?? 0;
+                            const isActive = tab === t;
+                            const isOverdueTab = t === 'overdue' && n > 0;
+                            return (
+                                <button
+                                    key={t}
+                                    onClick={() => setTab(t)}
+                                    className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-bold transition-colors flex items-center gap-1.5 ${
+                                        isActive
+                                            ? 'bg-[#13b6ec] text-[#0f1b21]'
+                                            : isOverdueTab
+                                                ? 'bg-amber-500/10 border border-amber-500/40 text-amber-300 hover:bg-amber-500/20'
+                                                : 'bg-[#182a32] text-[#92bbc9] border border-[#233f48] hover:bg-[#233f48]'
+                                    }`}
+                                >
+                                    <span>{TAB_META[t].label}</span>
+                                    {n > 0 && (
+                                        <span className={`text-[10px] font-bold rounded-full px-1.5 ${
+                                            isActive ? 'bg-[#0f1b21]/30' : 'bg-[#101d22] border border-current'
+                                        }`}>
+                                            {n}
+                                        </span>
+                                    )}
+                                </button>
+                            );
+                        })}
                     </nav>
                 </div>
             </header>

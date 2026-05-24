@@ -4,7 +4,6 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { useSession } from '@/lib/providers/use-session';
 import { useAccountSessionStore } from '@/lib/store/account-session-store';
 import { useKanbanTasks, KanbanChecklist } from '@/lib/hooks/use-tasks';
-import { usePurchaseLists } from '@/lib/hooks/use-purchases';
 import { useUserRoles } from '@/lib/hooks/use-user-roles-shifts';
 import { useShifts } from '@/lib/hooks/use-shifts';
 import { useMyAreas } from '@/lib/hooks/use-user-areas';
@@ -39,7 +38,6 @@ export default function KanbanPage() {
     const { data: kanbanData, isLoading: loadingKanban } = useKanbanTasks(scope, userId);
     const { data: shifts = [] } = useShifts(restaurantId || undefined);
     const { data: userRolesData = [], isLoading: loadingUserRoles } = useUserRoles(restaurantId || undefined, userId);
-    const { data: purchaseLists = [] } = usePurchaseLists(isGlobal ? undefined : restaurantId || undefined, 'open');
     const { data: myAreaAssignments = [] } = useMyAreas(restaurantId || undefined, userId);
     // Sprint 48 — Recebimentos (não misturam com rotinas obrigatórias do turno)
     const { data: receivingExpectations = [] } = useReceivingExpectations(
@@ -64,11 +62,6 @@ export default function KanbanPage() {
     const currentShift = useMemo(() => getCurrentShift(shifts, timeNow), [shifts, timeNow]);
     const userRoleIds = useMemo(() => userRolesData.map(ur => ur.role_id), [userRolesData]);
     const hasNoRoles = !userLoading && user !== null && !loadingKanban && (kanbanData?.checklists?.length ?? 0) === 0 && !loadingUserRoles && userRolesData.length === 0;
-
-    const activePurchaseList = useMemo(() => {
-        if (!userRoleIds.length || isGlobal) return null;
-        return purchaseLists.find(pl => pl.target_role_ids?.some((id: string) => userRoleIds.includes(id)));
-    }, [purchaseLists, userRoleIds, isGlobal]);
 
     const currentMinutes = useMemo(() => {
         if (!timeNow) return 0;
@@ -311,19 +304,6 @@ export default function KanbanPage() {
                             <p className="text-amber-300 font-bold text-sm">Você não tem área atribuída</p>
                             <p className="text-[#92bbc9] text-xs mt-0.5">Fale com seu gestor para ser adicionado a uma área.</p>
                         </div>
-                    </div>
-                )}
-
-                {activePurchaseList && (
-                    <div className="bg-[#1a2c32] border border-[#f59e0b] rounded-xl p-4 flex flex-col gap-3 animate-pulse shadow-[0_0_15px_rgba(245,158,11,0.15)]">
-                        <div className="flex items-center gap-2 text-[#f59e0b] font-bold text-sm">
-                            <span className="material-symbols-outlined">inventory_2</span>
-                            Pedido aguardando conferência
-                        </div>
-                        <p className="text-[#92bbc9] text-xs">A lista &ldquo;{activePurchaseList.title}&rdquo; tem itens designados para sua função que acabaram de chegar.</p>
-                        <Link href={`/recebimento/${activePurchaseList.id}`} className="mt-1 flex items-center justify-center gap-2 w-full py-2.5 bg-[#f59e0b] hover:bg-[#d97706] text-[#111e22] rounded-lg font-bold transition-colors">
-                            <span className="material-symbols-outlined text-lg">fact_check</span> Conferir Agora
-                        </Link>
                     </div>
                 )}
 

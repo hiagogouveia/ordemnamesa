@@ -29,6 +29,23 @@ export type ReceivingTemplate = {
     area?: { id: string; name: string; color: string } | null;
 };
 
+export type ReceivingCounts = { pending: number; overdue: number; confirmed: number; cancelled: number };
+
+export function useReceivingCounts(restaurantId: string | undefined) {
+    return useQuery({
+        queryKey: ["receiving-counts", restaurantId],
+        queryFn: async (): Promise<ReceivingCounts> => {
+            if (!restaurantId) return { pending: 0, overdue: 0, confirmed: 0, cancelled: 0 };
+            const headers = await getAuthHeaders();
+            const res = await fetch(`/api/receiving-expectations/counts?restaurant_id=${restaurantId}`, { headers });
+            if (!res.ok) return { pending: 0, overdue: 0, confirmed: 0, cancelled: 0 };
+            return res.json();
+        },
+        enabled: !!restaurantId,
+        staleTime: 30 * 1000,
+    });
+}
+
 export function useReceivingExpectations(
     restaurantId: string | undefined,
     opts?: { date?: string; status?: string },
@@ -90,6 +107,7 @@ export function useConfirmExpectation() {
         },
         onSuccess: (_d, vars) => {
             qc.invalidateQueries({ queryKey: ["receiving-expectations", vars.restaurant_id] });
+            qc.invalidateQueries({ queryKey: ["receiving-counts", vars.restaurant_id] });
         },
     });
 }
@@ -117,6 +135,7 @@ export function useCancelExpectation() {
         },
         onSuccess: (_d, vars) => {
             qc.invalidateQueries({ queryKey: ["receiving-expectations", vars.restaurant_id] });
+            qc.invalidateQueries({ queryKey: ["receiving-counts", vars.restaurant_id] });
         },
     });
 }
@@ -140,6 +159,7 @@ export function useMarkOverdue() {
         },
         onSuccess: (_d, vars) => {
             qc.invalidateQueries({ queryKey: ["receiving-expectations", vars.restaurant_id] });
+            qc.invalidateQueries({ queryKey: ["receiving-counts", vars.restaurant_id] });
         },
     });
 }
@@ -170,6 +190,7 @@ export function useStartReceiving() {
         },
         onSuccess: (_data, vars) => {
             qc.invalidateQueries({ queryKey: ["receiving-expectations", vars.restaurant_id] });
+            qc.invalidateQueries({ queryKey: ["receiving-counts", vars.restaurant_id] });
         },
     });
 }

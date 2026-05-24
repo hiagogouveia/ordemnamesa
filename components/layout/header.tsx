@@ -16,7 +16,7 @@ const TITLES: Record<string, string> = {
     "/configuracoes": "Configurações do Sistema",
     "/turno": "Meu Turno",
     "/historico": "Histórico de Tarefas",
-    "/compras": "Compras",
+    "/admin/recebimentos": "Recebimentos",
 };
 
 export function Header({ onMenuClick }: { onMenuClick?: () => void }) {

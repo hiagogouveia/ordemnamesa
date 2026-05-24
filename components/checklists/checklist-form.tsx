@@ -730,8 +730,6 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 await new Promise(resolve => setTimeout(resolve, 300));
                 removeDraft(null, restaurantId);
                 setSaveState("idle");
-                // Sprint 48: receiving agora é uma variante de checklist normal.
-                // Não redireciona mais para /compras (bridge legada removida).
                 onSaved();
             }
         } catch (e) {

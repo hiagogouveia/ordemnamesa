@@ -218,17 +218,8 @@ export interface UserShiftAssignment {
     shifts?: Shift
 }
 
-export interface PurchaseList {
-    id: string
-    restaurant_id: string
-    title: string
-    status: 'open' | 'closed'
-    target_role_ids: string[]
-    created_by: string
-    closed_at?: string
-    created_at: string
-    updated_at: string
-}
+// Sprint 50: PurchaseList / PurchaseItem removidos (sistema legado de Compras).
+// Substituídos por receiving_expectations + ReceivingExpectation acima.
 
 // ============================================================
 // Sprint 14 — Checklist Management Board
@@ -354,20 +345,3 @@ export interface TaskIssueEvent {
     created_at: string
 }
 
-export interface PurchaseItem {
-    id: string
-    restaurant_id: string
-    purchase_list_id: string
-    name: string
-    quantity: number
-    unit: string
-    brand?: string
-    notes?: string
-    checked: boolean
-    checked_by?: string
-    checked_at?: string
-    has_problem: boolean
-    problem_notes?: string
-    created_at: string
-    updated_at: string
-}
