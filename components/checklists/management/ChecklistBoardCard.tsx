@@ -2,7 +2,9 @@
 
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
 import { UnitBadge } from "@/components/ui/unit-badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { IssueBadge } from "@/components/checklists/issues/IssueBadge";
+import { ChecklistTypeBadge } from "@/components/checklists/management/ChecklistTypeBadge";
 
 const SHIFT_LABELS: Record<string, string> = {
     morning: "Manhã",
@@ -57,11 +59,10 @@ export function ChecklistBoardCard({
                         onCheckChange?.(!checked);
                     }}
                 >
-                    <input
-                        type="checkbox"
+                    <Checkbox
                         checked={checked ?? false}
                         readOnly
-                        className="size-4 accent-[#13b6ec] cursor-pointer"
+                        aria-label={`Selecionar ${checklist.name}`}
                     />
                 </div>
             )}
@@ -81,10 +82,11 @@ export function ChecklistBoardCard({
                 </span>
             </div>
 
-            {/* Unit badge — global mode only */}
-            {isGlobal && checklist.unit?.name && (
-                <div className="mt-1">
-                    <UnitBadge name={checklist.unit.name} />
+            {/* Type + Unit badges */}
+            {(checklist.checklist_type === "receiving" || (isGlobal && checklist.unit?.name)) && (
+                <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                    <ChecklistTypeBadge type={checklist.checklist_type} />
+                    {isGlobal && checklist.unit?.name && <UnitBadge name={checklist.unit.name} />}
                 </div>
             )}
 

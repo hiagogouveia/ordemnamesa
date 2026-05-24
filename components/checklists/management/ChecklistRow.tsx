@@ -7,7 +7,9 @@ import type { ExecutionStatus } from "@/lib/types";
 import { getOperationalStatus } from "@/lib/utils/get-operational-status";
 import { describeRecurrence } from "@/lib/utils/recurrence/describe";
 import { UnitBadge } from "@/components/ui/unit-badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { IssueBadge } from "@/components/checklists/issues/IssueBadge";
+import { ChecklistTypeBadge } from "@/components/checklists/management/ChecklistTypeBadge";
 
 const SHIFT_LABELS: Record<string, string> = {
     morning: "Manhã",
@@ -129,19 +131,19 @@ export function ChecklistRow({
             {/* Checkbox de seleção (visão global) */}
             {selectable && (
                 <td className="pl-3 pr-1 py-3 w-10" onClick={(e) => e.stopPropagation()}>
-                    <input
-                        type="checkbox"
+                    <Checkbox
                         checked={checked ?? false}
                         onChange={(e) => onCheckChange?.(e.target.checked)}
-                        className="size-4 accent-[#13b6ec] cursor-pointer"
+                        aria-label={`Selecionar ${checklist.name}`}
                     />
                 </td>
             )}
 
             {/* Título */}
             <td className="px-3 py-3" onClick={onSelect}>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-white text-sm">{checklist.name}</span>
+                    <ChecklistTypeBadge type={checklist.checklist_type} />
                     <IssueBadge count={openIssuesCount} compact />
                 </div>
                 {checklist.description && (

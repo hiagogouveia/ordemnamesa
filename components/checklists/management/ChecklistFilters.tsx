@@ -3,6 +3,7 @@
 import { FilterDropdown } from "@/components/ui/filter-dropdown";
 import type { Area } from "@/lib/types";
 import type { EquipeMember } from "@/lib/hooks/use-equipe";
+import type { Unit } from "@/lib/hooks/use-units";
 
 const SHIFT_OPTIONS = [
     { value: "", label: "Todos" },
@@ -16,6 +17,12 @@ const AVAILABILITY_OPTIONS = [
     { value: "active", label: "Ativas" },
     { value: "inactive", label: "Inativas" },
     { value: "all", label: "Todas" },
+];
+
+const TYPE_OPTIONS = [
+    { value: "all",         label: "Todos os tipos" },
+    { value: "operational", label: "Operacionais" },
+    { value: "receiving",   label: "Recebimentos" },
 ];
 
 const EXEC_STATUS_OPTIONS = [
@@ -39,9 +46,16 @@ interface ChecklistFiltersProps {
     onAvailabilityChange: (value: string) => void;
     selectedExecStatus: string;
     onExecStatusChange: (value: string) => void;
+    selectedType: "all" | "operational" | "receiving";
+    onTypeChange: (value: "all" | "operational" | "receiving") => void;
     collaborators: EquipeMember[];
     selectedCollaboratorId: string;
     onCollaboratorChange: (userId: string) => void;
+    /** Lista de unidades disponíveis — passar somente em visão global. */
+    units?: Unit[];
+    selectedUnitId?: string;
+    onUnitChange?: (unitId: string) => void;
+    showUnitFilter?: boolean;
 }
 
 export function ChecklistFilters({
@@ -55,10 +69,23 @@ export function ChecklistFilters({
     onAvailabilityChange,
     selectedExecStatus,
     onExecStatusChange,
+    selectedType,
+    onTypeChange,
     collaborators,
     selectedCollaboratorId,
     onCollaboratorChange,
+    units,
+    selectedUnitId,
+    onUnitChange,
+    showUnitFilter,
 }: ChecklistFiltersProps) {
+    const unitOptions = [
+        { value: "", label: "Todas as unidades" },
+        ...(units ?? [])
+            .filter((u) => u.active)
+            .map((u) => ({ value: u.id, label: u.name })),
+    ];
+
     const areaOptions = [
         { value: "", label: "Todas" },
         ...(areas ?? []).map((a) => ({ value: a.id, label: a.name })),
@@ -73,6 +100,12 @@ export function ChecklistFilters({
 
     return (
         <div className="shrink-0 px-4 py-3 border-b border-[#233f48] bg-[#0a1215] flex items-center gap-2 flex-wrap">
+            <FilterDropdown
+                label="Tipo"
+                options={TYPE_OPTIONS}
+                value={selectedType}
+                onChange={(v) => onTypeChange(v as "all" | "operational" | "receiving")}
+            />
             <FilterDropdown
                 label="Disponibilidade"
                 options={AVAILABILITY_OPTIONS}
@@ -104,6 +137,14 @@ export function ChecklistFilters({
                 value={selectedCollaboratorId}
                 onChange={onCollaboratorChange}
             />
+            {showUnitFilter && onUnitChange && (
+                <FilterDropdown
+                    label="Unidade"
+                    options={unitOptions}
+                    value={selectedUnitId ?? ""}
+                    onChange={onUnitChange}
+                />
+            )}
         </div>
     );
 }

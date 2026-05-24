@@ -254,7 +254,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 setRecurrenceConfig(parsed.recurrenceConfig ?? undefined);
                 setEnforceSequentialOrder(parsed.enforceSequentialOrder ?? false);
                 setReceivingMode(parsed.receivingMode ?? 'on_demand');
-                setReceivingGeneration(parsed.receivingGeneration ?? 'automatic');
+                setReceivingGeneration('automatic');
                 setSupplierName(parsed.supplierName ?? "");
                 setAreaId(parsed.areaId ?? checklist.area_id ?? "");
                 setTasks(parsed.tasks ?? []);
@@ -306,7 +306,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             const loadedRecurrenceConfig = checklist.recurrence_config as RecurrenceConfig | undefined;
             const loadedEnforceSequentialOrder = checklist.enforce_sequential_order ?? false;
             const loadedReceivingMode = (checklist.receiving_mode as 'on_demand' | 'recurring' | null | undefined) ?? 'on_demand';
-            const loadedReceivingGeneration = (checklist.receiving_generation as 'automatic' | 'manager_confirmation' | null | undefined) ?? 'automatic';
+            // V1 simplificada: o conceito 'manager_confirmation' foi removido da UX.
+            // Legacy é normalizado para 'automatic' ao reabrir e será re-salvo assim.
+            const loadedReceivingGeneration = 'automatic' as const;
             const loadedSupplierName = checklist.supplier_name ?? "";
             const loadedAreaId = checklist.area_id || "";
             const loadedTasks = (checklist.tasks || []).map((t) => ({ ...t, tempId: t.id }));
@@ -412,7 +414,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         const draftRecurrenceConfig = parsed.recurrenceConfig ?? undefined;
         const draftEnforceSequentialOrder = parsed.enforceSequentialOrder ?? false;
         const draftReceivingMode = parsed.receivingMode ?? 'on_demand';
-        const draftReceivingGeneration = parsed.receivingGeneration ?? 'automatic';
+        const draftReceivingGeneration = 'automatic' as const;
         const draftSupplierName = parsed.supplierName ?? "";
         const draftAreaId = parsed.areaId ?? "";
         const draftTasks = parsed.tasks ?? [];
@@ -1173,47 +1175,10 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                 </div>
                                 <p className="text-[#92bbc9] text-xs mt-2">
                                     {receivingMode === 'on_demand'
-                                        ? 'Colaborador inicia o recebimento manualmente quando a mercadoria chega.'
-                                        : 'O sistema cria expectativas de recebimento com base na recorrência configurada abaixo.'}
+                                        ? 'Aparece para a equipe quando alguém iniciar manualmente — útil para entregas avulsas.'
+                                        : 'Na data prevista, o recebimento abre direto no turno da equipe — sem aprovação manual.'}
                                 </p>
                             </div>
-
-                            {receivingMode === 'recurring' && (
-                                <div>
-                                    <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Modo de geração</label>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => setReceivingGeneration('automatic')}
-                                            className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${
-                                                receivingGeneration === 'automatic'
-                                                    ? 'bg-[#13b6ec]/10 border-[#13b6ec]/40 text-[#13b6ec]'
-                                                    : 'bg-[#16262c] border-[#233f48] text-[#92bbc9] hover:border-[#325a67]'
-                                            }`}
-                                        >
-                                            <span className="material-symbols-outlined text-[18px]">bolt</span>
-                                            Automático
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setReceivingGeneration('manager_confirmation')}
-                                            className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${
-                                                receivingGeneration === 'manager_confirmation'
-                                                    ? 'bg-[#13b6ec]/10 border-[#13b6ec]/40 text-[#13b6ec]'
-                                                    : 'bg-[#16262c] border-[#233f48] text-[#92bbc9] hover:border-[#325a67]'
-                                            }`}
-                                        >
-                                            <span className="material-symbols-outlined text-[18px]">verified_user</span>
-                                            Confirmação do gestor
-                                        </button>
-                                    </div>
-                                    <p className="text-[#92bbc9] text-xs mt-2">
-                                        {receivingGeneration === 'automatic'
-                                            ? 'A expectativa já fica disponível para a equipe na data prevista.'
-                                            : 'O gestor precisa confirmar a expectativa antes de aparecer para a equipe.'}
-                                    </p>
-                                </div>
-                            )}
 
                             <div>
                                 <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Fornecedor <span className="text-[#5a8a9a] font-medium">(opcional)</span></label>
