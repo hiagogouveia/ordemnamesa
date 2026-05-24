@@ -240,7 +240,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
         // Sprint 48: se o cliente passou expectation_id (vindo de "Recebimentos"
         // no Meu Turno), liga a expectativa à assumption recém-criada e marca
-        // como confirmed. Falha aqui não invalida a assumption (degrada com log).
+        // como confirmed. CAS: nunca ressuscita expectativas cancelled; se outra
+        // requisição já ligou uma assumption, respeita. Falha aqui não invalida
+        // a assumption (degrada com log).
         if (expectation_id) {
             const { error: linkError } = await adminSupabase
                 .from('receiving_expectations')
@@ -252,7 +254,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
                 })
                 .eq('id', expectation_id)
                 .eq('restaurant_id', restaurant_id)
-                .eq('checklist_id', checklistId);
+                .eq('checklist_id', checklistId)
+                .in('status', ['pending', 'confirmed', 'overdue'])
+                .is('assumption_id', null);
             if (linkError) {
                 console.error('[POST /api/checklists/[id]/assume] Falha ao linkar expectativa:', linkError);
             }

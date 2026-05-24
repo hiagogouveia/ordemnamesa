@@ -79,13 +79,13 @@ supabase/
 
 ### Entidades principais
 - **Restaurant**: Tenant. Todo dado pertence a um restaurante.
-- **Checklist**: Rotina operacional com tarefas. Tem turno (morning/afternoon/evening), status, recorrência, área, e pode ter ordem sequencial obrigatória.
+- **Checklist**: Rotina operacional com tarefas. Tem turno (morning/afternoon/evening), status, recorrência, área, ordem sequencial e `checklist_type` (`regular | opening | closing | receiving`).
 - **ChecklistTask**: Tarefa dentro de um checklist. Pode exigir foto e ser crítica.
-- **ChecklistAssumption**: Registro de execução de um checklist por um colaborador num dia.
+- **ChecklistAssumption**: Registro de execução de um checklist por um colaborador num dia. Engine única — recebimento reusa.
 - **Area**: Agrupamento lógico de checklists (ex: Cozinha, Salão). Tem `priority_mode` (auto/manual).
 - **Shift**: Turno real com horários e dias da semana.
 - **Role**: Cargo (ex: Cozinheiro, Garçom). Tem cor e limite de tarefas simultâneas.
-- **PurchaseList / PurchaseItem**: Listas de compras com itens verificáveis.
+- **ReceivingExpectation** (sprint 48-50): instância esperada de um recebimento, materializada a partir de rotinas `checklist_type='receiving'` com `receiving_mode='recurring'`. Status: `pending | confirmed | overdue | cancelled`. Substitui o sistema legado `PurchaseList`/`PurchaseItem` (removido).
 - **MyActivity**: View agregada de atividades do dia para o colaborador logado.
 
 ### Papéis de usuário
