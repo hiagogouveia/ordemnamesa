@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getBrazilDateKey } from '@/lib/utils/brazil-date';
 import { materializeReceivingForToday } from '@/lib/receiving/materialize';
+import { canExecuteChecklist } from '@/lib/utils/checklist-visibility';
 
 const getAdminSupabase = () =>
     createClient(
@@ -69,17 +70,26 @@ export async function GET(request: Request) {
             }
         }
 
-        // Áreas do usuário (mesmo filtro do Meu Turno)
-        const { data: userAreaRows } = await adminSupabase
-            .from('user_areas')
-            .select('area_id')
-            .eq('restaurant_id', restaurant_id)
-            .eq('user_id', user.id);
-        const areaIds = (userAreaRows ?? []).map((r) => r.area_id);
+        // Contexto operacional: TODOS os usuários (inclusive owner/manager) respeitam
+        // o escopo área + cargo + atribuição individual. Se o gestor quer ver áreas
+        // extras, deve ser vinculado a elas em user_areas. Mesma regra do kanban/my-activities.
+        const [areasRes, rolesRes] = await Promise.all([
+            adminSupabase
+                .from('user_areas')
+                .select('area_id')
+                .eq('restaurant_id', restaurant_id)
+                .eq('user_id', user.id),
+            adminSupabase
+                .from('user_roles')
+                .select('role_id')
+                .eq('restaurant_id', restaurant_id)
+                .eq('user_id', user.id),
+        ]);
+        const areaIds = (areasRes.data ?? []).map((r) => r.area_id);
+        const roleIds = (rolesRes.data ?? []).map((r) => r.role_id);
 
-        // Owner/manager veem tudo do restaurante; staff só de áreas atribuídas.
-        const isOwnerOrManager = membership.role === 'owner' || membership.role === 'manager';
-        if (!isOwnerOrManager && areaIds.length === 0) {
+        // Sem áreas: nada visível (mesma invariante do kanban).
+        if (areaIds.length === 0) {
             return NextResponse.json([]);
         }
 
@@ -96,7 +106,7 @@ export async function GET(request: Request) {
                 assumption_id,
                 confirmed_at,
                 created_at,
-                checklist:checklists(id, name, supplier_name, area_id, area:areas(id, name, color))
+                checklist:checklists(id, name, supplier_name, area_id, assigned_to_user_id, role_id, area:areas(id, name, color))
             `)
             .eq('restaurant_id', restaurant_id)
             .eq('expected_date', date)
@@ -109,15 +119,19 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
-        // Filtro de área para staff (post-query — Supabase REST não filtra por relação aninhada facilmente)
-        const filtered = isOwnerOrManager
-            ? (data ?? [])
-            : (data ?? []).filter((row) => {
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  const cl = (row as any).checklist as { area_id?: string | null } | null;
-                  const aid = cl?.area_id ?? null;
-                  return aid !== null && areaIds.includes(aid);
-              });
+        // Filtro post-query: Supabase REST não suporta .or() em coluna de relação
+        // aninhada de forma confiável. canExecuteChecklist mantém a mesma semântica
+        // das 3 cláusulas OR do kanban (área | cargo | atribuição individual).
+        const filtered = (data ?? []).filter((row) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const cl = (row as any).checklist as {
+                area_id?: string | null;
+                assigned_to_user_id?: string | null;
+                role_id?: string | null;
+            } | null;
+            if (!cl) return false;
+            return canExecuteChecklist(cl, { userId: user.id, areaIds, roleIds });
+        });
 
         return NextResponse.json(filtered);
     } catch (err) {

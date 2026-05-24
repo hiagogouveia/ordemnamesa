@@ -179,20 +179,16 @@ export function ChecklistRow({
                 )}
             </td>
 
-            {/* Responsável / Executando */}
+            {/* Em execução por (assumed_by_name, transitório) | Atribuído a (responsible, permanente) */}
             <td className="px-3 py-3 hidden md:table-cell" onClick={onSelect}>
                 {checklist.assumed_by_name ? (
-                    <span className="flex items-center gap-1.5">
-                        <span className={`material-symbols-outlined text-[14px] shrink-0 ${execStatus !== "done" ? "text-[#13b6ec]" : "text-[#5a8a99]"}`}>person</span>
+                    <span className="flex items-center gap-1.5" title="Quem iniciou esta rotina hoje">
+                        <span className={`material-symbols-outlined text-[14px] shrink-0 ${execStatus !== "done" ? "text-[#13b6ec]" : "text-[#5a8a99]"}`}>play_arrow</span>
+                        <span className="text-[#5a8a99] text-xs shrink-0">Em execução:</span>
                         <span className="text-white text-sm font-medium truncate">{checklist.assumed_by_name}</span>
-                        {execStatus !== "done" && (
-                            <span className="shrink-0 text-[9px] font-bold text-[#13b6ec] bg-[#13b6ec]/10 border border-[#13b6ec]/20 px-1.5 py-0.5 rounded-full uppercase tracking-wide">
-                                Executando
-                            </span>
-                        )}
                     </span>
                 ) : checklist.responsible?.name ? (
-                    <span className="flex items-center gap-1.5">
+                    <span className="flex items-center gap-1.5" title="Colaborador atribuído à rotina">
                         <span className="material-symbols-outlined text-[14px] text-[#5a8a99] shrink-0">person</span>
                         <span className="text-[#92bbc9] text-sm truncate">{checklist.responsible.name}</span>
                     </span>

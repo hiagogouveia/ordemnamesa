@@ -100,6 +100,7 @@ export async function GET(request: Request) {
             .in('restaurant_id', restaurantIds)
             .eq('active', true)
             .eq('status', 'active')
+            .not('checklist_type', 'eq', 'receiving')
             .or(checklistFilterParts.join(','))
             .order('order_index', { ascending: true, nullsFirst: false })
             .order('id', { ascending: true });
