@@ -62,6 +62,7 @@ interface CreateAreaVariables {
     description?: string;
     color?: string;
     max_parallel_tasks?: number | null;
+    allow_manual_receiving?: boolean;
 }
 
 export function useCreateArea() {
@@ -94,6 +95,7 @@ interface UpdateAreaVariables {
     description?: string;
     color?: string;
     max_parallel_tasks?: number | null;
+    allow_manual_receiving?: boolean;
 }
 
 export function useUpdateArea() {

@@ -247,6 +247,8 @@ export interface Area {
     color: string
     priority_mode?: PriorityMode
     max_parallel_tasks?: number | null
+    /** Se true, colaboradores desta área podem iniciar recebimentos manuais. */
+    allow_manual_receiving?: boolean
     created_at: string
 }
 

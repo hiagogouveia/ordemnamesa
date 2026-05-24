@@ -65,6 +65,20 @@ export async function GET(request: Request) {
             return NextResponse.json([]);
         }
 
+        // Sprint 52: só áreas com allow_manual_receiving=true podem lançar
+        // recebimento manual. Buscamos antes para evitar surpresas com
+        // joins aninhados do PostgREST e manter o filtro explícito.
+        const { data: allowedAreas } = await adminSupabase
+            .from('areas')
+            .select('id')
+            .eq('restaurant_id', restaurant_id)
+            .eq('allow_manual_receiving', true)
+            .in('id', areaIds);
+        const allowedAreaIds = (allowedAreas ?? []).map((a) => a.id);
+        if (allowedAreaIds.length === 0) {
+            return NextResponse.json([]);
+        }
+
         const { data, error } = await adminSupabase
             .from('checklists')
             .select('id, name, supplier_name, area_id, assigned_to_user_id, role_id, receiving_mode, area:areas(id, name, color)')
@@ -72,7 +86,7 @@ export async function GET(request: Request) {
             .eq('checklist_type', 'receiving')
             .eq('active', true)
             .eq('status', 'active')
-            .in('area_id', areaIds)
+            .in('area_id', allowedAreaIds)
             .order('name', { ascending: true });
 
         if (error) {
