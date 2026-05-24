@@ -30,7 +30,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     try {
         const { id: checklistId } = await params;
         const body = await request.json();
-        const { restaurant_id } = body;
+        const { restaurant_id, expectation_id } = body as { restaurant_id?: string; expectation_id?: string };
 
         if (!restaurant_id) {
             return NextResponse.json({ error: 'restaurant_id é obrigatório' }, { status: 400 });
@@ -95,7 +95,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             .maybeSingle();
 
         if (existing) {
-            // Já assumida — retornar a assumption existente sem erro
+            // Já assumida — retornar a assumption existente sem erro.
+            // Se veio expectation_id, garantir o link (idempotente).
+            if (expectation_id) {
+                await adminSupabase
+                    .from('receiving_expectations')
+                    .update({
+                        assumption_id: existing.id,
+                        status: 'confirmed',
+                        confirmed_by: existing.user_id ?? user.id,
+                        confirmed_at: existing.created_at ?? new Date().toISOString(),
+                    })
+                    .eq('id', expectation_id)
+                    .eq('restaurant_id', restaurant_id)
+                    .eq('checklist_id', checklistId)
+                    .is('assumption_id', null);
+            }
             return NextResponse.json({ assumption: existing, alreadyAssumed: true });
         }
 
@@ -221,6 +236,26 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
         if (insertError) {
             return NextResponse.json({ error: insertError.message }, { status: 500 });
+        }
+
+        // Sprint 48: se o cliente passou expectation_id (vindo de "Recebimentos"
+        // no Meu Turno), liga a expectativa à assumption recém-criada e marca
+        // como confirmed. Falha aqui não invalida a assumption (degrada com log).
+        if (expectation_id) {
+            const { error: linkError } = await adminSupabase
+                .from('receiving_expectations')
+                .update({
+                    assumption_id: assumption.id,
+                    status: 'confirmed',
+                    confirmed_by: user.id,
+                    confirmed_at: new Date().toISOString(),
+                })
+                .eq('id', expectation_id)
+                .eq('restaurant_id', restaurant_id)
+                .eq('checklist_id', checklistId);
+            if (linkError) {
+                console.error('[POST /api/checklists/[id]/assume] Falha ao linkar expectativa:', linkError);
+            }
         }
 
         return NextResponse.json({ assumption, alreadyAssumed: false });

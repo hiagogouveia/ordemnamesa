@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation';
 import { RoutineCard } from '@/components/checklists/routine-card';
 import { getRoutineState } from '@/lib/utils/routine-state';
 import type { Scope } from '@/lib/types/scope';
+import { useReceivingExpectations, useReceivingTemplates, useStartReceiving } from '@/lib/hooks/use-receiving';
 
 export default function KanbanPage() {
     const session = useSession();
@@ -40,6 +41,16 @@ export default function KanbanPage() {
     const { data: userRolesData = [], isLoading: loadingUserRoles } = useUserRoles(restaurantId || undefined, userId);
     const { data: purchaseLists = [] } = usePurchaseLists(isGlobal ? undefined : restaurantId || undefined, 'open');
     const { data: myAreaAssignments = [] } = useMyAreas(restaurantId || undefined, userId);
+    // Sprint 48 — Recebimentos (não misturam com rotinas obrigatórias do turno)
+    const { data: receivingExpectations = [] } = useReceivingExpectations(
+        isGlobal ? undefined : restaurantId || undefined,
+    );
+    const { data: receivingTemplates = [] } = useReceivingTemplates(
+        isGlobal ? undefined : restaurantId || undefined,
+    );
+    const startReceivingMutation = useStartReceiving();
+    const [showReceivingPicker, setShowReceivingPicker] = useState(false);
+    const [startingReceivingId, setStartingReceivingId] = useState<string | null>(null);
 
     const [timeNow, setTimeNow] = useState<string>('');
 
@@ -313,6 +324,130 @@ export default function KanbanPage() {
                         <Link href={`/recebimento/${activePurchaseList.id}`} className="mt-1 flex items-center justify-center gap-2 w-full py-2.5 bg-[#f59e0b] hover:bg-[#d97706] text-[#111e22] rounded-lg font-bold transition-colors">
                             <span className="material-symbols-outlined text-lg">fact_check</span> Conferir Agora
                         </Link>
+                    </div>
+                )}
+
+                {/* Sprint 48 — Recebimentos. Separado das rotinas obrigatórias do turno.
+                    Aparece se há expectativas confirmadas/overdue OU templates disponíveis para iniciar manualmente. */}
+                {!isGlobal && (receivingExpectations.length > 0 || receivingTemplates.length > 0) && (
+                    <section className="bg-[#1a2c32] border border-[#233f48] rounded-xl p-4 flex flex-col gap-3">
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                                <span className="text-amber-400 text-base">📦</span>
+                                <h2 className="text-white font-bold text-sm">Recebimentos</h2>
+                            </div>
+                            {receivingTemplates.length > 0 && (
+                                <button
+                                    onClick={() => setShowReceivingPicker(true)}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#13b6ec]/10 border border-[#13b6ec]/40 text-[#13b6ec] text-xs font-bold hover:bg-[#13b6ec]/20 transition-colors"
+                                >
+                                    <span className="material-symbols-outlined text-[16px]">add</span>
+                                    Novo recebimento
+                                </button>
+                            )}
+                        </div>
+
+                        {receivingExpectations.length === 0 ? (
+                            <p className="text-[#92bbc9] text-xs">Sem recebimentos previstos para hoje. Use &ldquo;Novo recebimento&rdquo; quando uma mercadoria chegar.</p>
+                        ) : (
+                            <ul className="flex flex-col gap-2">
+                                {receivingExpectations.map((exp) => {
+                                    const cl = exp.checklist;
+                                    const isOverdue = exp.status === 'overdue';
+                                    const isStarting = startingReceivingId === exp.id;
+                                    return (
+                                        <li key={exp.id}>
+                                            <button
+                                                disabled={isStarting}
+                                                onClick={async () => {
+                                                    if (!restaurantId || !cl) return;
+                                                    setStartingReceivingId(exp.id);
+                                                    try {
+                                                        await startReceivingMutation.mutateAsync({
+                                                            checklist_id: cl.id,
+                                                            restaurant_id: restaurantId,
+                                                            expectation_id: exp.id,
+                                                        });
+                                                        router.push(`/turno/atividade/${cl.id}/executar`);
+                                                    } catch (e) {
+                                                        console.error('Erro ao iniciar recebimento:', e);
+                                                        setStartingReceivingId(null);
+                                                    }
+                                                }}
+                                                className={`w-full flex items-center justify-between gap-3 p-3 rounded-lg border text-left transition-colors disabled:opacity-60 ${
+                                                    isOverdue
+                                                        ? 'bg-amber-500/5 border-amber-500/40 hover:bg-amber-500/10'
+                                                        : 'bg-[#101d22] border-[#233f48] hover:border-[#325a67]'
+                                                }`}
+                                            >
+                                                <div className="flex flex-col min-w-0">
+                                                    <span className="text-white text-sm font-semibold truncate">{cl?.name ?? 'Recebimento'}</span>
+                                                    <span className="text-[#92bbc9] text-xs truncate">
+                                                        {cl?.supplier_name || 'Fornecedor não informado'}
+                                                        {exp.expected_window_start && exp.expected_window_end && (
+                                                            <span className="ml-2">• {exp.expected_window_start.slice(0,5)}–{exp.expected_window_end.slice(0,5)}</span>
+                                                        )}
+                                                    </span>
+                                                </div>
+                                                {isOverdue ? (
+                                                    <span className="shrink-0 text-amber-400 text-[10px] font-bold uppercase tracking-wider">Atrasado</span>
+                                                ) : (
+                                                    <span className="material-symbols-outlined text-[#92bbc9] text-[20px]">chevron_right</span>
+                                                )}
+                                            </button>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        )}
+                    </section>
+                )}
+
+                {/* Modal: seletor de modelo para "Novo recebimento" */}
+                {showReceivingPicker && (
+                    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowReceivingPicker(false)}>
+                        <div className="bg-[#1a2c32] border border-[#233f48] rounded-2xl p-5 w-full max-w-[420px] flex flex-col gap-3 shadow-xl" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-white font-bold text-base">Novo recebimento</h3>
+                                <button onClick={() => setShowReceivingPicker(false)} className="text-[#92bbc9] hover:text-white">
+                                    <span className="material-symbols-outlined">close</span>
+                                </button>
+                            </div>
+                            <p className="text-[#92bbc9] text-xs">Selecione o tipo de recebimento que chegou agora.</p>
+                            <ul className="flex flex-col gap-2 max-h-[60vh] overflow-y-auto">
+                                {receivingTemplates.length === 0 ? (
+                                    <li className="text-[#92bbc9] text-xs italic p-3">Nenhum modelo de recebimento configurado para suas áreas.</li>
+                                ) : receivingTemplates.map((t) => (
+                                    <li key={t.id}>
+                                        <button
+                                            disabled={!!startingReceivingId}
+                                            onClick={async () => {
+                                                if (!restaurantId) return;
+                                                setStartingReceivingId(t.id);
+                                                try {
+                                                    await startReceivingMutation.mutateAsync({
+                                                        checklist_id: t.id,
+                                                        restaurant_id: restaurantId,
+                                                    });
+                                                    setShowReceivingPicker(false);
+                                                    router.push(`/turno/atividade/${t.id}/executar`);
+                                                } catch (e) {
+                                                    console.error('Erro ao iniciar recebimento manual:', e);
+                                                    setStartingReceivingId(null);
+                                                }
+                                            }}
+                                            className="w-full flex items-center justify-between gap-3 p-3 rounded-lg bg-[#101d22] border border-[#233f48] hover:border-[#325a67] text-left transition-colors disabled:opacity-60"
+                                        >
+                                            <div className="flex flex-col min-w-0">
+                                                <span className="text-white text-sm font-semibold truncate">{t.name}</span>
+                                                {t.supplier_name && <span className="text-[#92bbc9] text-xs truncate">{t.supplier_name}</span>}
+                                            </div>
+                                            <span className="material-symbols-outlined text-[#13b6ec] text-[20px]">play_arrow</span>
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
                     </div>
                 )}
 
