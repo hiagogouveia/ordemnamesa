@@ -164,33 +164,3 @@ export function useMarkOverdue() {
     });
 }
 
-/**
- * Inicia (ou recupera) a assumption de um recebimento. Reaproveita o endpoint
- * de assume — não há engine paralela de execução. Quando vem de uma expectativa
- * já materializada, passa expectation_id para o backend ligar o registro.
- */
-export function useStartReceiving() {
-    const qc = useQueryClient();
-    return useMutation({
-        mutationFn: async (input: { checklist_id: string; restaurant_id: string; expectation_id?: string }) => {
-            const headers = await getAuthHeaders();
-            const res = await fetch(`/api/checklists/${input.checklist_id}/assume`, {
-                method: "POST",
-                headers,
-                body: JSON.stringify({
-                    restaurant_id: input.restaurant_id,
-                    expectation_id: input.expectation_id,
-                }),
-            });
-            if (!res.ok) {
-                const e = await res.json().catch(() => ({}));
-                throw new Error(e.message || e.error || "Erro ao iniciar recebimento");
-            }
-            return res.json() as Promise<{ assumption: { id: string }; alreadyAssumed: boolean }>;
-        },
-        onSuccess: (_data, vars) => {
-            qc.invalidateQueries({ queryKey: ["receiving-expectations", vars.restaurant_id] });
-            qc.invalidateQueries({ queryKey: ["receiving-counts", vars.restaurant_id] });
-        },
-    });
-}

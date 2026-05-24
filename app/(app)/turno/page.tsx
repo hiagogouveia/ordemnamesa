@@ -12,7 +12,7 @@ import { useRouter } from 'next/navigation';
 import { RoutineCard } from '@/components/checklists/routine-card';
 import { getRoutineState } from '@/lib/utils/routine-state';
 import type { Scope } from '@/lib/types/scope';
-import { useReceivingExpectations, useReceivingTemplates, useStartReceiving } from '@/lib/hooks/use-receiving';
+import { useReceivingExpectations, useReceivingTemplates } from '@/lib/hooks/use-receiving';
 
 export default function KanbanPage() {
     const session = useSession();
@@ -45,9 +45,7 @@ export default function KanbanPage() {
     const { data: receivingTemplates = [] } = useReceivingTemplates(
         isGlobal ? undefined : restaurantId || undefined,
     );
-    const startReceivingMutation = useStartReceiving();
     const [showReceivingPicker, setShowReceivingPicker] = useState(false);
-    const [startingReceivingId, setStartingReceivingId] = useState<string | null>(null);
 
     const [timeNow, setTimeNow] = useState<string>('');
 
@@ -343,25 +341,19 @@ export default function KanbanPage() {
                                 {filteredReceivingExpectations.map((exp) => {
                                     const cl = exp.checklist;
                                     const isOverdue = exp.status === 'overdue';
-                                    const isStarting = startingReceivingId === exp.id;
                                     return (
                                         <li key={exp.id}>
                                             <button
-                                                disabled={isStarting}
-                                                onClick={async () => {
-                                                    if (!restaurantId || !cl) return;
-                                                    setStartingReceivingId(exp.id);
-                                                    try {
-                                                        await startReceivingMutation.mutateAsync({
-                                                            checklist_id: cl.id,
-                                                            restaurant_id: restaurantId,
-                                                            expectation_id: exp.id,
-                                                        });
-                                                        router.push(`/turno/atividade/${cl.id}/executar`);
-                                                    } catch (e) {
-                                                        console.error('Erro ao iniciar recebimento:', e);
-                                                        setStartingReceivingId(null);
-                                                    }
+                                                onClick={() => {
+                                                    if (!cl) return;
+                                                    // Vai para a tela de preview existente. Querystring carrega
+                                                    // contexto da expectação (id liga assumption → expectation no
+                                                    // backend; supplier/from/to são metadata visual).
+                                                    const qs = new URLSearchParams({ expectation_id: exp.id });
+                                                    if (cl.supplier_name) qs.set('supplier', cl.supplier_name);
+                                                    if (exp.expected_window_start) qs.set('from', exp.expected_window_start);
+                                                    if (exp.expected_window_end) qs.set('to', exp.expected_window_end);
+                                                    router.push(`/turno/atividade/${cl.id}?${qs.toString()}`);
                                                 }}
                                                 className={`w-full flex items-center justify-between gap-3 p-3 rounded-lg border text-left transition-colors disabled:opacity-60 ${
                                                     isOverdue
@@ -411,23 +403,16 @@ export default function KanbanPage() {
                                 ) : filteredReceivingTemplates.map((t) => (
                                     <li key={t.id}>
                                         <button
-                                            disabled={!!startingReceivingId}
-                                            onClick={async () => {
-                                                if (!restaurantId) return;
-                                                setStartingReceivingId(t.id);
-                                                try {
-                                                    await startReceivingMutation.mutateAsync({
-                                                        checklist_id: t.id,
-                                                        restaurant_id: restaurantId,
-                                                    });
-                                                    setShowReceivingPicker(false);
-                                                    router.push(`/turno/atividade/${t.id}/executar`);
-                                                } catch (e) {
-                                                    console.error('Erro ao iniciar recebimento manual:', e);
-                                                    setStartingReceivingId(null);
-                                                }
+                                            onClick={() => {
+                                                // Template on-demand: fecha o modal e abre preview sem
+                                                // expectation_id. Fornecedor vai como metadata visual.
+                                                setShowReceivingPicker(false);
+                                                const qs = new URLSearchParams();
+                                                if (t.supplier_name) qs.set('supplier', t.supplier_name);
+                                                const search = qs.toString();
+                                                router.push(`/turno/atividade/${t.id}${search ? `?${search}` : ''}`);
                                             }}
-                                            className="w-full flex items-center justify-between gap-3 p-3 rounded-lg bg-[#101d22] border border-[#233f48] hover:border-[#325a67] text-left transition-colors disabled:opacity-60"
+                                            className="w-full flex items-center justify-between gap-3 p-3 rounded-lg bg-[#101d22] border border-[#233f48] hover:border-[#325a67] text-left transition-colors"
                                         >
                                             <div className="flex flex-col min-w-0">
                                                 <span className="text-white text-sm font-semibold truncate">{t.name}</span>
