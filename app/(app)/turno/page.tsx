@@ -236,6 +236,17 @@ export default function KanbanPage() {
     const filteredBlocked = useMemo(() => getFiltered(blockedActivities), [blockedActivities, activeAreaId, activeUnitId, isGlobal]);
     const filteredDone = useMemo(() => getFiltered(doneActivities), [doneActivities, activeAreaId, activeUnitId, isGlobal]);
 
+    // Recebimentos: aplica o mesmo filtro de aba (activeAreaId) que as rotinas.
+    // area_id vive aninhado em checklist.area_id nas expectations e direto nos templates.
+    const filteredReceivingExpectations = useMemo(
+        () => receivingExpectations.filter((e) => !activeAreaId || e.checklist?.area_id === activeAreaId),
+        [receivingExpectations, activeAreaId],
+    );
+    const filteredReceivingTemplates = useMemo(
+        () => receivingTemplates.filter((t) => !activeAreaId || t.area_id === activeAreaId),
+        [receivingTemplates, activeAreaId],
+    );
+
     // UI Helpers
     const getGreeting = () => {
         const h = new Date().getHours();
@@ -307,14 +318,14 @@ export default function KanbanPage() {
 
                 {/* Sprint 48 — Recebimentos. Separado das rotinas obrigatórias do turno.
                     Aparece se há expectativas confirmadas/overdue OU templates disponíveis para iniciar manualmente. */}
-                {!isGlobal && (receivingExpectations.length > 0 || receivingTemplates.length > 0) && (
+                {!isGlobal && (filteredReceivingExpectations.length > 0 || filteredReceivingTemplates.length > 0) && (
                     <section className="bg-[#1a2c32] border border-[#233f48] rounded-xl p-4 flex flex-col gap-3">
                         <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2">
                                 <span className="text-amber-400 text-base">📦</span>
                                 <h2 className="text-white font-bold text-sm">Recebimentos</h2>
                             </div>
-                            {receivingTemplates.length > 0 && (
+                            {filteredReceivingTemplates.length > 0 && (
                                 <button
                                     onClick={() => setShowReceivingPicker(true)}
                                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#13b6ec]/10 border border-[#13b6ec]/40 text-[#13b6ec] text-xs font-bold hover:bg-[#13b6ec]/20 transition-colors"
@@ -325,11 +336,11 @@ export default function KanbanPage() {
                             )}
                         </div>
 
-                        {receivingExpectations.length === 0 ? (
+                        {filteredReceivingExpectations.length === 0 ? (
                             <p className="text-[#92bbc9] text-xs">Sem recebimentos previstos para hoje. Use &ldquo;Novo recebimento&rdquo; quando uma mercadoria chegar.</p>
                         ) : (
                             <ul className="flex flex-col gap-2">
-                                {receivingExpectations.map((exp) => {
+                                {filteredReceivingExpectations.map((exp) => {
                                     const cl = exp.checklist;
                                     const isOverdue = exp.status === 'overdue';
                                     const isStarting = startingReceivingId === exp.id;
@@ -395,9 +406,9 @@ export default function KanbanPage() {
                             </div>
                             <p className="text-[#92bbc9] text-xs">Selecione o tipo de recebimento que chegou agora.</p>
                             <ul className="flex flex-col gap-2 max-h-[60vh] overflow-y-auto">
-                                {receivingTemplates.length === 0 ? (
+                                {filteredReceivingTemplates.length === 0 ? (
                                     <li className="text-[#92bbc9] text-xs italic p-3">Nenhum modelo de recebimento configurado para suas áreas.</li>
-                                ) : receivingTemplates.map((t) => (
+                                ) : filteredReceivingTemplates.map((t) => (
                                     <li key={t.id}>
                                         <button
                                             disabled={!!startingReceivingId}
