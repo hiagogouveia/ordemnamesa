@@ -71,6 +71,79 @@ export function useReceivingTemplates(restaurantId: string | undefined) {
     });
 }
 
+/** Confirma uma expectativa (gestor) — libera para Meu Turno. */
+export function useConfirmExpectation() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: async (input: { id: string; restaurant_id: string }) => {
+            const headers = await getAuthHeaders();
+            const res = await fetch(`/api/receiving-expectations/${input.id}`, {
+                method: "PATCH",
+                headers,
+                body: JSON.stringify({ restaurant_id: input.restaurant_id, action: "confirm" }),
+            });
+            if (!res.ok) {
+                const e = await res.json().catch(() => ({}));
+                throw new Error(e.error || "Erro ao confirmar recebimento");
+            }
+            return res.json();
+        },
+        onSuccess: (_d, vars) => {
+            qc.invalidateQueries({ queryKey: ["receiving-expectations", vars.restaurant_id] });
+        },
+    });
+}
+
+/** Cancela uma expectativa (gestor). Não cancela se já tem execução em curso. */
+export function useCancelExpectation() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: async (input: { id: string; restaurant_id: string; reason?: string }) => {
+            const headers = await getAuthHeaders();
+            const res = await fetch(`/api/receiving-expectations/${input.id}`, {
+                method: "PATCH",
+                headers,
+                body: JSON.stringify({
+                    restaurant_id: input.restaurant_id,
+                    action: "cancel",
+                    cancelled_reason: input.reason,
+                }),
+            });
+            if (!res.ok) {
+                const e = await res.json().catch(() => ({}));
+                throw new Error(e.error || "Erro ao cancelar recebimento");
+            }
+            return res.json();
+        },
+        onSuccess: (_d, vars) => {
+            qc.invalidateQueries({ queryKey: ["receiving-expectations", vars.restaurant_id] });
+        },
+    });
+}
+
+/** Sweeper de overdue: chamado pelo inbox admin ao abrir. */
+export function useMarkOverdue() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: async (input: { restaurant_id: string }) => {
+            const headers = await getAuthHeaders();
+            const res = await fetch(`/api/receiving-expectations/mark-overdue`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify(input),
+            });
+            if (!res.ok) {
+                const e = await res.json().catch(() => ({}));
+                throw new Error(e.error || "Erro ao recalcular atrasados");
+            }
+            return res.json() as Promise<{ marked: number; notified: number }>;
+        },
+        onSuccess: (_d, vars) => {
+            qc.invalidateQueries({ queryKey: ["receiving-expectations", vars.restaurant_id] });
+        },
+    });
+}
+
 /**
  * Inicia (ou recupera) a assumption de um recebimento. Reaproveita o endpoint
  * de assume — não há engine paralela de execução. Quando vem de uma expectativa

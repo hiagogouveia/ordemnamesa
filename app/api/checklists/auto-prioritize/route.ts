@@ -92,7 +92,9 @@ export async function POST(request: Request) {
             .select("id, start_time, end_time, active")
             .eq("restaurant_id", restaurant_id)
             .eq("area_id", area_id)
-            .eq("active", true);
+            .eq("active", true)
+            // Sprint 49: receiving não entra na priorização automática do operacional.
+            .not("checklist_type", "eq", "receiving");
 
         if (fetchError) {
             return NextResponse.json({ error: fetchError.message }, { status: 500 });

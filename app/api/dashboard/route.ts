@@ -174,7 +174,9 @@ export async function GET(request: Request) {
                 .select('id, name, restaurant_id, shift, area_id, end_time, start_time, recurrence, recurrence_config, assigned_to_user_id, areas(id, name, color), checklist_tasks(id, is_critical)')
                 .in('restaurant_id', restaurantIds)
                 .eq('active', true)
-                .eq('status', 'active'),
+                .eq('status', 'active')
+                // Sprint 49: receiving não impacta dashboard operacional.
+                .not('checklist_type', 'eq', 'receiving'),
 
             adminSupabase
                 .from('checklist_assumptions')
