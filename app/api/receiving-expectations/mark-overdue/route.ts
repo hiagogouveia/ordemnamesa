@@ -95,8 +95,8 @@ async function sweepOverdue(
             const checklistName = checklist?.name || 'Recebimento';
             const title = 'Recebimento esperado não confirmado';
             const description = supplier
-                ? `${checklistName} — ${supplier}: ninguém confirmou a chegada dentro da janela esperada.`
-                : `${checklistName}: ninguém confirmou a chegada dentro da janela esperada.`;
+                ? `${checklistName} — ${supplier}: ainda não foi confirmada a chegada do recebimento previsto.`
+                : `${checklistName}: ainda não foi confirmada a chegada do recebimento previsto.`;
             for (const uid of managerIds) {
                 notificationRows.push({
                     restaurant_id: rId,

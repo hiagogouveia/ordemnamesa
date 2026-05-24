@@ -374,14 +374,14 @@ export default function KanbanPage() {
                                                     <span className="text-[#92bbc9] text-xs truncate">
                                                         {cl?.supplier_name || 'Fornecedor não informado'}
                                                         {exp.expected_window_start && exp.expected_window_end && (
-                                                            <span className="ml-2">• {exp.expected_window_start.slice(0,5)}–{exp.expected_window_end.slice(0,5)}</span>
+                                                            <span className="ml-2">• Previsão: {exp.expected_window_start.slice(0,5)}–{exp.expected_window_end.slice(0,5)}</span>
                                                         )}
                                                     </span>
                                                 </div>
                                                 {isOverdue ? (
-                                                    /* Sprint 51: label evita acusar o staff —
-                                                       "overdue" para o sistema, "aguardando confirmação" para a UI. */
-                                                    <span className="shrink-0 text-amber-400 text-[10px] font-bold uppercase tracking-wider">Aguardando confirmação</span>
+                                                    /* Janela é previsão logística, não SLA. Label suave para o
+                                                       staff; status='overdue' permanece no DB para cron/notif. */
+                                                    <span className="shrink-0 text-amber-400 text-[10px] font-bold uppercase tracking-wider">Previsão passou</span>
                                                 ) : (
                                                     <span className="material-symbols-outlined text-[#92bbc9] text-[20px]">chevron_right</span>
                                                 )}

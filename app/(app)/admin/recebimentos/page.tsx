@@ -15,7 +15,7 @@ type Tab = 'pending' | 'overdue' | 'confirmed' | 'cancelled';
 
 const TAB_META: Record<Tab, { label: string; statusParam: string; emptyHint: string }> = {
     pending:   { label: 'Pendentes',   statusParam: 'pending',   emptyHint: 'Nenhum recebimento aguardando confirmação.' },
-    overdue:   { label: 'Atrasados',   statusParam: 'overdue',   emptyHint: 'Nenhum recebimento atrasado.' },
+    overdue:   { label: 'Previsão passou', statusParam: 'overdue', emptyHint: 'Nenhum recebimento com previsão passada.' },
     confirmed: { label: 'Confirmados', statusParam: 'confirmed', emptyHint: 'Nenhum recebimento confirmado para hoje.' },
     cancelled: { label: 'Cancelados',  statusParam: 'cancelled', emptyHint: 'Nenhum recebimento cancelado hoje.' },
 };
@@ -229,7 +229,7 @@ function StatusBadge({ status }: { status: string }) {
     const map: Record<string, { label: string; cls: string }> = {
         pending:   { label: 'Pendente',   cls: 'bg-[#13b6ec]/10 border-[#13b6ec]/40 text-[#13b6ec]' },
         confirmed: { label: 'Confirmado', cls: 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400' },
-        overdue:   { label: 'Atrasado',   cls: 'bg-amber-500/10 border-amber-500/40 text-amber-400' },
+        overdue:   { label: 'Previsão passou', cls: 'bg-amber-500/10 border-amber-500/40 text-amber-400' },
         cancelled: { label: 'Cancelado',  cls: 'bg-[#16262c] border-[#233f48] text-[#92bbc9]' },
     };
     const m = map[status] ?? map.pending;
