@@ -134,6 +134,10 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     const [recurrenceConfig, setRecurrenceConfig] = useState<RecurrenceConfig | RecurrenceV2 | null | undefined>(undefined);
     // Sequence order
     const [enforceSequentialOrder, setEnforceSequentialOrder] = useState(false);
+    // Sprint 48 — Receiving routines (config exclusiva quando checklistType==='receiving')
+    const [receivingMode, setReceivingMode] = useState<'on_demand' | 'recurring'>('on_demand');
+    const [receivingGeneration, setReceivingGeneration] = useState<'automatic' | 'manager_confirmation'>('automatic');
+    const [supplierName, setSupplierName] = useState("");
     const [showRecurrencePicker, setShowRecurrencePicker] = useState(false);
     // PR 4 (UX): qual modal de configuração v2 está aberto. `null` = nenhum.
     const [activeRecurrenceModal, setActiveRecurrenceModal] = useState<
@@ -146,6 +150,10 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         () => deriveDropdownOption(recurrence, recurrenceConfig),
         [recurrence, recurrenceConfig],
     );
+
+    // Sprint 48: receiving = variante de rotina (não módulo separado).
+    // UI muda condicionalmente; backend ignora os campos quando type != 'receiving'.
+    const isReceiving = checklistType === 'receiving';
 
     const taskInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
     const [tasks, setTasks] = useState<(Partial<ChecklistTask> & { tempId: string })[]>([]);
@@ -245,6 +253,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 setHasTimeWindow(parsed.hasTimeWindow ?? false);
                 setRecurrenceConfig(parsed.recurrenceConfig ?? undefined);
                 setEnforceSequentialOrder(parsed.enforceSequentialOrder ?? false);
+                setReceivingMode(parsed.receivingMode ?? 'on_demand');
+                setReceivingGeneration(parsed.receivingGeneration ?? 'automatic');
+                setSupplierName(parsed.supplierName ?? "");
                 setAreaId(parsed.areaId ?? checklist.area_id ?? "");
                 setTasks(parsed.tasks ?? []);
                 setSaveState("saved");
@@ -263,6 +274,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                     hasTimeWindow: parsed.hasTimeWindow ?? false,
                     recurrenceConfig: parsed.recurrenceConfig ?? undefined,
                     enforceSequentialOrder: parsed.enforceSequentialOrder ?? false,
+                    receivingMode: parsed.receivingMode ?? 'on_demand',
+                    receivingGeneration: parsed.receivingGeneration ?? 'automatic',
+                    supplierName: parsed.supplierName ?? "",
                     areaId: parsed.areaId ?? checklist.area_id ?? "",
                     tasks: parsed.tasks ?? [],
                 };
@@ -291,6 +305,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             // Sprint 8: recurrence config
             const loadedRecurrenceConfig = checklist.recurrence_config as RecurrenceConfig | undefined;
             const loadedEnforceSequentialOrder = checklist.enforce_sequential_order ?? false;
+            const loadedReceivingMode = (checklist.receiving_mode as 'on_demand' | 'recurring' | null | undefined) ?? 'on_demand';
+            const loadedReceivingGeneration = (checklist.receiving_generation as 'automatic' | 'manager_confirmation' | null | undefined) ?? 'automatic';
+            const loadedSupplierName = checklist.supplier_name ?? "";
             const loadedAreaId = checklist.area_id || "";
             const loadedTasks = (checklist.tasks || []).map((t) => ({ ...t, tempId: t.id }));
 
@@ -307,6 +324,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             setHasTimeWindow(loadedHasTimeWindow);
             setRecurrenceConfig(loadedRecurrenceConfig);
             setEnforceSequentialOrder(loadedEnforceSequentialOrder);
+            setReceivingMode(loadedReceivingMode);
+            setReceivingGeneration(loadedReceivingGeneration);
+            setSupplierName(loadedSupplierName);
             setAreaId(loadedAreaId);
             setTasks(loadedTasks);
 
@@ -326,6 +346,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 hasTimeWindow: loadedHasTimeWindow,
                 recurrenceConfig: loadedRecurrenceConfig,
                 enforceSequentialOrder: loadedEnforceSequentialOrder,
+                receivingMode: loadedReceivingMode,
+                receivingGeneration: loadedReceivingGeneration,
+                supplierName: loadedSupplierName,
                 areaId: loadedAreaId,
                 tasks: loadedTasks,
             };
@@ -353,6 +376,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             setHasTimeWindow(false);
             setRecurrenceConfig(undefined);
             setEnforceSequentialOrder(false);
+            setReceivingMode('on_demand');
+            setReceivingGeneration('automatic');
+            setSupplierName("");
             setAreaId(initialAreaId ?? "");
             setTasks([]);
             setErrorMsg(null);
@@ -385,6 +411,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         const draftHasTimeWindow = parsed.hasTimeWindow ?? false;
         const draftRecurrenceConfig = parsed.recurrenceConfig ?? undefined;
         const draftEnforceSequentialOrder = parsed.enforceSequentialOrder ?? false;
+        const draftReceivingMode = parsed.receivingMode ?? 'on_demand';
+        const draftReceivingGeneration = parsed.receivingGeneration ?? 'automatic';
+        const draftSupplierName = parsed.supplierName ?? "";
         const draftAreaId = parsed.areaId ?? "";
         const draftTasks = parsed.tasks ?? [];
 
@@ -401,6 +430,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         setHasTimeWindow(draftHasTimeWindow);
         setRecurrenceConfig(draftRecurrenceConfig);
         setEnforceSequentialOrder(draftEnforceSequentialOrder);
+        setReceivingMode(draftReceivingMode);
+        setReceivingGeneration(draftReceivingGeneration);
+        setSupplierName(draftSupplierName);
         setAreaId(draftAreaId);
         setTasks(draftTasks);
         setSaveState("saved");
@@ -411,8 +443,10 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             isIndividualMode: draftIsIndividualMode, isRequired: draftIsRequired,
             recurrence: draftRecurrence, startTime: draftStartTime, endTime: draftEndTime,
             hasTimeWindow: draftHasTimeWindow, recurrenceConfig: draftRecurrenceConfig,
-            enforceSequentialOrder: draftEnforceSequentialOrder, areaId: draftAreaId,
-            tasks: draftTasks,
+            enforceSequentialOrder: draftEnforceSequentialOrder,
+            receivingMode: draftReceivingMode, receivingGeneration: draftReceivingGeneration,
+            supplierName: draftSupplierName,
+            areaId: draftAreaId, tasks: draftTasks,
         };
         setPendingDraftRestore(null);
     }, [pendingDraftRestore]);
@@ -426,7 +460,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         const formState = {
             name, description, shift, checklistType, assignedToUserId, isIndividualMode,
             isRequired, recurrence, startTime, endTime, hasTimeWindow,
-            recurrenceConfig, enforceSequentialOrder, areaId, tasks
+            recurrenceConfig, enforceSequentialOrder,
+            receivingMode, receivingGeneration, supplierName,
+            areaId, tasks
         };
 
         // GUARD 1: Primeira execução — apenas capturar snapshot se init não o fez
@@ -492,6 +528,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                         // - v2: objeto com version=2 → backend valida e persiste estruturado
                         recurrence_config: recurrenceConfig ?? null,
                         enforce_sequential_order: enforceSequentialOrder,
+                        receiving_mode: checklistType === 'receiving' ? receivingMode : null,
+                        receiving_generation: checklistType === 'receiving' ? receivingGeneration : null,
+                        supplier_name: checklistType === 'receiving' ? (supplierName.trim() || null) : null,
                         area_id: areaId || null,
                         target_role: checklist.target_role || 'all',
                         assignment_type: (isIndividualMode && assignedToUserId) ? 'user' : (areaId ? 'area' : 'all'),
@@ -536,7 +575,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         }, 1500);
 
         return () => clearTimeout(handler);
-    }, [name, description, shift, checklistType, assignedToUserId, isIndividualMode, isRequired, recurrence, startTime, endTime, hasTimeWindow, recurrenceConfig, enforceSequentialOrder, areaId, tasks, checklist, restaurantId, updateMutation, blockedByBilling]);
+    }, [name, description, shift, checklistType, assignedToUserId, isIndividualMode, isRequired, recurrence, startTime, endTime, hasTimeWindow, recurrenceConfig, enforceSequentialOrder, receivingMode, receivingGeneration, supplierName, areaId, tasks, checklist, restaurantId, updateMutation, blockedByBilling]);
 
     const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 8 } });
     const keyboardSensor = useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates });
@@ -651,6 +690,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             // PR 3: igual ao auto-save — envia config como está no estado.
             recurrence_config: recurrenceConfig ?? null,
             enforce_sequential_order: enforceSequentialOrder,
+            receiving_mode: checklistType === 'receiving' ? receivingMode : null,
+            receiving_generation: checklistType === 'receiving' ? receivingGeneration : null,
+            supplier_name: checklistType === 'receiving' ? (supplierName.trim() || null) : null,
             area_id: areaId || null,
             assignment_type: (isIndividualMode && assignedToUserId) ? 'user' : (areaId ? 'area' : 'all'),
             // Em update, preserva status original (active/archived). Em criação, sempre active.
@@ -684,15 +726,13 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 onSaved();
             } else {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const res = await createMutation.mutateAsync(payload as any);
+                await createMutation.mutateAsync(payload as any);
                 await new Promise(resolve => setTimeout(resolve, 300));
                 removeDraft(null, restaurantId);
                 setSaveState("idle");
-                if (checklistType === 'receiving') {
-                    window.location.href = `/compras?new=true&checklist_id=${res.id}`; // Simple redirect
-                } else {
-                    onSaved();
-                }
+                // Sprint 48: receiving agora é uma variante de checklist normal.
+                // Não redireciona mais para /compras (bridge legada removida).
+                onSaved();
             }
         } catch (e) {
             console.error(e);
@@ -1054,46 +1094,149 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                             )}
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                            <div className="flex items-center gap-3 p-3 bg-[#16262c] border border-[#233f48] rounded-xl">
-                                <label className="relative inline-flex items-center cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={isRequired}
-                                        onChange={(e) => setIsRequired(e.target.checked)}
-                                        className="sr-only peer"
-                                    />
-                                    <div className="w-11 h-6 bg-[#233f48] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#13b6ec]"></div>
-                                </label>
-                                <div>
-                                    <h4 className="text-white text-sm font-bold">Obrigatório</h4>
-                                    <p className="text-[#92bbc9] text-xs">Exigir conclusão no painel de turno</p>
+                        {/* Sprint 48: "Obrigatório" e "Ordem Sequencial" não fazem sentido
+                            para recebimento (não é pendência operacional automática). */}
+                        {!isReceiving && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                <div className="flex items-center gap-3 p-3 bg-[#16262c] border border-[#233f48] rounded-xl">
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={isRequired}
+                                            onChange={(e) => setIsRequired(e.target.checked)}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-11 h-6 bg-[#233f48] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#13b6ec]"></div>
+                                    </label>
+                                    <div>
+                                        <h4 className="text-white text-sm font-bold">Obrigatório</h4>
+                                        <p className="text-[#92bbc9] text-xs">Exigir conclusão no painel de turno</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3 p-3 bg-[#16262c] border border-[#233f48] rounded-xl">
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={enforceSequentialOrder}
+                                            onChange={(e) => setEnforceSequentialOrder(e.target.checked)}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-11 h-6 bg-[#233f48] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#13b6ec]"></div>
+                                    </label>
+                                    <div>
+                                        <h4 className="text-white text-sm font-bold">Ordem Sequencial</h4>
+                                        <p className="text-[#92bbc9] text-xs">Concluir uma a uma nesta ordem</p>
+                                    </div>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-3 p-3 bg-[#16262c] border border-[#233f48] rounded-xl">
-                                <label className="relative inline-flex items-center cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={enforceSequentialOrder}
-                                        onChange={(e) => setEnforceSequentialOrder(e.target.checked)}
-                                        className="sr-only peer"
-                                    />
-                                    <div className="w-11 h-6 bg-[#233f48] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#13b6ec]"></div>
-                                </label>
-                                <div>
-                                    <h4 className="text-white text-sm font-bold">Ordem Sequencial</h4>
-                                    <p className="text-[#92bbc9] text-xs">Concluir uma a uma nesta ordem</p>
-                                </div>
-                            </div>
-                        </div>
+                        )}
                     </div>
 
-                    {/* Seção: Janela de Horário */}
+                    {/* Sprint 48: Configuração específica de Recebimento (variante de rotina) */}
+                    {isReceiving && (
+                        <div className="bg-[#101d22] border border-[#233f48] rounded-2xl p-6 space-y-5">
+                            <div>
+                                <h3 className="text-white font-bold text-sm flex items-center gap-2">
+                                    <span className="text-base">📦</span>
+                                    Configuração de Recebimento
+                                </h3>
+                                <p className="text-[#92bbc9] text-xs mt-0.5">
+                                    Recebimento não gera pendência diária. Ele aparece quando uma mercadoria chega ou está prevista.
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Modo de recebimento</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setReceivingMode('on_demand')}
+                                        className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${
+                                            receivingMode === 'on_demand'
+                                                ? 'bg-[#13b6ec]/10 border-[#13b6ec]/40 text-[#13b6ec]'
+                                                : 'bg-[#16262c] border-[#233f48] text-[#92bbc9] hover:border-[#325a67]'
+                                        }`}
+                                    >
+                                        <span className="material-symbols-outlined text-[18px]">touch_app</span>
+                                        Sob demanda
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setReceivingMode('recurring')}
+                                        className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${
+                                            receivingMode === 'recurring'
+                                                ? 'bg-[#13b6ec]/10 border-[#13b6ec]/40 text-[#13b6ec]'
+                                                : 'bg-[#16262c] border-[#233f48] text-[#92bbc9] hover:border-[#325a67]'
+                                        }`}
+                                    >
+                                        <span className="material-symbols-outlined text-[18px]">event_repeat</span>
+                                        Recorrente
+                                    </button>
+                                </div>
+                                <p className="text-[#92bbc9] text-xs mt-2">
+                                    {receivingMode === 'on_demand'
+                                        ? 'Colaborador inicia o recebimento manualmente quando a mercadoria chega.'
+                                        : 'O sistema cria expectativas de recebimento com base na recorrência configurada abaixo.'}
+                                </p>
+                            </div>
+
+                            {receivingMode === 'recurring' && (
+                                <div>
+                                    <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Modo de geração</label>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setReceivingGeneration('automatic')}
+                                            className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${
+                                                receivingGeneration === 'automatic'
+                                                    ? 'bg-[#13b6ec]/10 border-[#13b6ec]/40 text-[#13b6ec]'
+                                                    : 'bg-[#16262c] border-[#233f48] text-[#92bbc9] hover:border-[#325a67]'
+                                            }`}
+                                        >
+                                            <span className="material-symbols-outlined text-[18px]">bolt</span>
+                                            Automático
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setReceivingGeneration('manager_confirmation')}
+                                            className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${
+                                                receivingGeneration === 'manager_confirmation'
+                                                    ? 'bg-[#13b6ec]/10 border-[#13b6ec]/40 text-[#13b6ec]'
+                                                    : 'bg-[#16262c] border-[#233f48] text-[#92bbc9] hover:border-[#325a67]'
+                                            }`}
+                                        >
+                                            <span className="material-symbols-outlined text-[18px]">verified_user</span>
+                                            Confirmação do gestor
+                                        </button>
+                                    </div>
+                                    <p className="text-[#92bbc9] text-xs mt-2">
+                                        {receivingGeneration === 'automatic'
+                                            ? 'A expectativa já fica disponível para a equipe na data prevista.'
+                                            : 'O gestor precisa confirmar a expectativa antes de aparecer para a equipe.'}
+                                    </p>
+                                </div>
+                            )}
+
+                            <div>
+                                <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Fornecedor <span className="text-[#5a8a9a] font-medium">(opcional)</span></label>
+                                <input
+                                    type="text"
+                                    value={supplierName}
+                                    onChange={(e) => setSupplierName(e.target.value)}
+                                    placeholder="Ex: Hortifruti CEASA"
+                                    maxLength={120}
+                                    className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all"
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Seção: Janela de Horário (em receiving, vira "Janela esperada de chegada") */}
                     <div className="bg-[#101d22] border border-[#233f48] rounded-2xl p-6 space-y-4">
                         <div className="flex items-center justify-between">
                             <div>
-                                <h3 className="text-white font-bold text-sm">Janela de Horário</h3>
-                                <p className="text-[#92bbc9] text-xs mt-0.5">Define quando a atividade fica disponível</p>
+                                <h3 className="text-white font-bold text-sm">{isReceiving ? 'Janela esperada de chegada' : 'Janela de Horário'}</h3>
+                                <p className="text-[#92bbc9] text-xs mt-0.5">{isReceiving ? 'Horário em que o recebimento normalmente acontece' : 'Define quando a atividade fica disponível'}</p>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer">
                                 <input
