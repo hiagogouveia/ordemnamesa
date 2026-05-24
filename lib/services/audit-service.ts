@@ -305,6 +305,8 @@ export async function fetchAuditList(
     const to = from + filters.limit - 1;
 
     // Apenas execuções FINALIZADAS — rotinas em curso (in_progress/blocked) não entram no histórico.
+    // Sprint 51: receiving NÃO entra em relatório de produtividade — histórico de
+    // recebimento tem painel próprio em /admin/recebimentos.
     let query = admin
         .from('checklist_assumptions')
         .select(`
@@ -314,6 +316,7 @@ export async function fetchAuditList(
         `, { count: 'exact' })
         .in('restaurant_id', restaurantIds)
         .eq('execution_status', 'done')
+        .not('checklists.checklist_type', 'eq', 'receiving')
         .order('assumed_at', { ascending: false });
 
     if (filters.start_date) query = query.gte('date_key', filters.start_date);

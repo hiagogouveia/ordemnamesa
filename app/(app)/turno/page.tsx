@@ -8,7 +8,6 @@ import { useUserRoles } from '@/lib/hooks/use-user-roles-shifts';
 import { useShifts } from '@/lib/hooks/use-shifts';
 import { useMyAreas } from '@/lib/hooks/use-user-areas';
 import { getCurrentShift } from '@/lib/utils';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { RoutineCard } from '@/components/checklists/routine-card';
 import { getRoutineState } from '@/lib/utils/routine-state';
@@ -60,7 +59,6 @@ export default function KanbanPage() {
 
     // Derived states
     const currentShift = useMemo(() => getCurrentShift(shifts, timeNow), [shifts, timeNow]);
-    const userRoleIds = useMemo(() => userRolesData.map(ur => ur.role_id), [userRolesData]);
     const hasNoRoles = !userLoading && user !== null && !loadingKanban && (kanbanData?.checklists?.length ?? 0) === 0 && !loadingUserRoles && userRolesData.length === 0;
 
     const currentMinutes = useMemo(() => {
@@ -370,7 +368,9 @@ export default function KanbanPage() {
                                                     </span>
                                                 </div>
                                                 {isOverdue ? (
-                                                    <span className="shrink-0 text-amber-400 text-[10px] font-bold uppercase tracking-wider">Atrasado</span>
+                                                    /* Sprint 51: label evita acusar o staff —
+                                                       "overdue" para o sistema, "aguardando confirmação" para a UI. */
+                                                    <span className="shrink-0 text-amber-400 text-[10px] font-bold uppercase tracking-wider">Aguardando confirmação</span>
                                                 ) : (
                                                     <span className="material-symbols-outlined text-[#92bbc9] text-[20px]">chevron_right</span>
                                                 )}

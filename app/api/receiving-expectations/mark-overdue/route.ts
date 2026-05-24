@@ -22,10 +22,28 @@ type MarkedRow = {
 async function sweepOverdue(
     adminSupabase: ReturnType<typeof getAdminSupabase>,
     restaurantId?: string,
-): Promise<{ marked: number; notified: number }> {
+): Promise<{ marked: number; notified: number; aged: number }> {
     const brazil = getBrazilNow();
     const todayKey = getBrazilDateKey();
     const nowHHMMSS = brazil.timeHHMM + ':00';
+
+    // Sprint 51 — Aging: pending com expected_date < hoje - 2 dias vira cancelled
+    // ("Expirado automaticamente"). Preserva auditoria (não deleta). Idempotente.
+    const agingCutoff = new Date(brazil.dateKey + 'T00:00:00');
+    agingCutoff.setDate(agingCutoff.getDate() - 2);
+    const cutoffKey = agingCutoff.toISOString().slice(0, 10);
+    let ageQuery = adminSupabase
+        .from('receiving_expectations')
+        .update({ status: 'cancelled', cancelled_reason: 'Expirado automaticamente' })
+        .eq('status', 'pending')
+        .lt('expected_date', cutoffKey)
+        .is('assumption_id', null);
+    if (restaurantId) ageQuery = ageQuery.eq('restaurant_id', restaurantId);
+    const { data: aged, error: ageError } = await ageQuery.select('id');
+    if (ageError) {
+        console.error('[sweepOverdue] aging error:', ageError);
+    }
+    const agedCount = aged?.length ?? 0;
 
     let updateQuery = adminSupabase
         .from('receiving_expectations')
@@ -42,7 +60,7 @@ async function sweepOverdue(
 
     if (markError) throw markError;
     const markedRows = (marked ?? []) as unknown as MarkedRow[];
-    if (markedRows.length === 0) return { marked: 0, notified: 0 };
+    if (markedRows.length === 0) return { marked: 0, notified: 0, aged: agedCount };
 
     // Agrupa por restaurante para evitar N+1 ao buscar managers.
     const byRestaurant = new Map<string, MarkedRow[]>();
@@ -100,7 +118,7 @@ async function sweepOverdue(
         if (notifError) console.error('[mark-overdue] notifications insert error:', notifError);
     }
 
-    return { marked: markedRows.length, notified: notificationRows.length };
+    return { marked: markedRows.length, notified: notificationRows.length, aged: agedCount };
 }
 
 /**
