@@ -220,7 +220,7 @@ export function AreasTab({ overrideRestaurantId }: { overrideRestaurantId?: stri
                                 {area.description && (
                                     <p className="text-[#92bbc9] text-xs truncate mt-0.5">{area.description}</p>
                                 )}
-                                <div className="flex items-center gap-2 mt-0.5">
+                                <div className="flex items-center gap-x-2 gap-y-0.5 mt-0.5 flex-wrap">
                                     <span className="text-[#325a67] text-xs">
                                         {members.length} membro{members.length !== 1 ? "s" : ""}
                                     </span>
@@ -230,6 +230,18 @@ export function AreasTab({ overrideRestaurantId }: { overrideRestaurantId?: stri
                                             ? `Até ${area.max_parallel_tasks} atividade${area.max_parallel_tasks > 1 ? "s" : ""}/pessoa`
                                             : "Ilimitado"}
                                     </span>
+                                    {area.allow_manual_receiving && (
+                                        <>
+                                            <span className="text-[#325a67] text-xs">·</span>
+                                            <span
+                                                className="inline-flex items-center gap-1 text-amber-400/90 text-xs"
+                                                title="Colaboradores desta área podem usar 'Novo recebimento' no Meu Turno"
+                                            >
+                                                <span aria-hidden>📦</span>
+                                                <span>Recebimento manual</span>
+                                            </span>
+                                        </>
+                                    )}
                                 </div>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">

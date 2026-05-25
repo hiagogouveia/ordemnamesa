@@ -175,13 +175,13 @@ export default function KanbanPage() {
     const userAreas = useMemo(() => {
         if (!myAreaAssignments.length) return [];
         const seen = new Set<string>();
-        const result: Array<{ id: string; name: string }> = [];
+        const result: Array<{ id: string; name: string; allowManualReceiving: boolean }> = [];
         for (const a of myAreaAssignments) {
             const id = a.area?.id;
             const name = a.area?.name;
             if (!id || !name || seen.has(id)) continue;
             seen.add(id);
-            result.push({ id, name });
+            result.push({ id, name, allowManualReceiving: a.area?.allow_manual_receiving === true });
         }
         return result.sort((a, b) => a.name.localeCompare(b.name));
     }, [myAreaAssignments]);
@@ -193,6 +193,13 @@ export default function KanbanPage() {
             setActiveAreaId(userAreas[0].id);
         }
     }, [userAreas, activeAreaId, isGlobal]);
+
+    // Flag da área ativa: controla a visibilidade do botão "Novo recebimento".
+    // Gate por flag, NÃO por presença de templates — modal interno trata lista vazia.
+    const activeAreaAllowsManualReceiving = useMemo(
+        () => userAreas.find((a) => a.id === activeAreaId)?.allowManualReceiving === true,
+        [userAreas, activeAreaId],
+    );
 
     // Em global: áreas derivadas dos checklists retornados (não do user_areas)
     const globalAreas = useMemo(() => {
@@ -316,14 +323,14 @@ export default function KanbanPage() {
 
                 {/* Sprint 48 — Recebimentos. Separado das rotinas obrigatórias do turno.
                     Aparece se há expectativas confirmadas/overdue OU templates disponíveis para iniciar manualmente. */}
-                {!isGlobal && (filteredReceivingExpectations.length > 0 || filteredReceivingTemplates.length > 0) && (
+                {!isGlobal && (filteredReceivingExpectations.length > 0 || activeAreaAllowsManualReceiving) && (
                     <section className="bg-[#1a2c32] border border-[#233f48] rounded-xl p-4 flex flex-col gap-3">
                         <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2">
                                 <span className="text-amber-400 text-base">📦</span>
                                 <h2 className="text-white font-bold text-sm">Recebimentos</h2>
                             </div>
-                            {filteredReceivingTemplates.length > 0 && (
+                            {activeAreaAllowsManualReceiving && (
                                 <button
                                     onClick={() => setShowReceivingPicker(true)}
                                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#13b6ec]/10 border border-[#13b6ec]/40 text-[#13b6ec] text-xs font-bold hover:bg-[#13b6ec]/20 transition-colors"
