@@ -23,6 +23,10 @@ export async function GET(request: Request) {
         const account_id = searchParams.get('account_id');
         const mode = searchParams.get('mode');
         const isGlobal = mode === 'global';
+        // Sprint 53: por padrão escondemos instâncias one-shot (recebimentos
+        // rápidos) das listagens administrativas. Cliente pode opt-in via
+        // ?include_one_shot=true para visões de histórico futuras.
+        const includeOneShot = searchParams.get('include_one_shot') === 'true';
 
         if (!isGlobal && !restaurant_id) {
             return NextResponse.json({ error: 'restaurant_id é obrigatório' }, { status: 400 });
@@ -80,18 +84,21 @@ export async function GET(request: Request) {
 
         const todayKey = getBrazilDateKey();
 
-        const [checklistsResult, assumptionsResult, blockedTasksResult] = await Promise.all([
-            adminSupabase
-                .from('checklists')
-                .select(`
+        const checklistsQuery = adminSupabase
+            .from('checklists')
+            .select(`
                     *,
                     roles ( id, name, color ),
                     area:areas!area_id ( id, name, color ),
                     responsible:users!assigned_to_user_id ( id, name ),
                     tasks:checklist_tasks (*)
                 `)
-                .in('restaurant_id', restaurantIds)
-                .order('order_index', { ascending: true }),
+            .in('restaurant_id', restaurantIds)
+            .order('order_index', { ascending: true });
+        if (!includeOneShot) checklistsQuery.eq('is_one_shot', false);
+
+        const [checklistsResult, assumptionsResult, blockedTasksResult] = await Promise.all([
+            checklistsQuery,
             adminSupabase
                 .from('checklist_assumptions')
                 .select('id, checklist_id, user_id, user_name, execution_status, completed_at, blocked_reason')
@@ -105,12 +112,13 @@ export async function GET(request: Request) {
                 .gte('executed_at', new Date(todayKey).toISOString()),
         ]);
 
-        let { data: checklists, error } = checklistsResult;
+        let checklists = checklistsResult.data;
+        const error = checklistsResult.error;
 
         if (error) {
             // Fallback se order_index não existir
             if (error.code === '42703' || error.message.includes('order_index')) {
-                const fallbackFetch = await adminSupabase
+                const fallbackQuery = adminSupabase
                     .from('checklists')
                     .select(`
                         *,
@@ -121,6 +129,8 @@ export async function GET(request: Request) {
                     `)
                     .in('restaurant_id', restaurantIds)
                     .order('created_at', { ascending: false });
+                if (!includeOneShot) fallbackQuery.eq('is_one_shot', false);
+                const fallbackFetch = await fallbackQuery;
 
                 if (fallbackFetch.error) {
                     console.error('[GET /api/checklists] Falha Fetch Fallback Checklists:', fallbackFetch.error);

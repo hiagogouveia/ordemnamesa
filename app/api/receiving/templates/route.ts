@@ -79,6 +79,8 @@ export async function GET(request: Request) {
             return NextResponse.json([]);
         }
 
+        // Sprint 53: templates excluem instâncias one-shot (recebimentos rápidos
+        // descartáveis). Listagem é para escolha de modelo reutilizável.
         const { data, error } = await adminSupabase
             .from('checklists')
             .select('id, name, supplier_name, area_id, assigned_to_user_id, role_id, receiving_mode, area:areas(id, name, color)')
@@ -86,6 +88,7 @@ export async function GET(request: Request) {
             .eq('checklist_type', 'receiving')
             .eq('active', true)
             .eq('status', 'active')
+            .eq('is_one_shot', false)
             .in('area_id', allowedAreaIds)
             .order('name', { ascending: true });
 

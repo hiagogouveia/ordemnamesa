@@ -127,6 +127,10 @@ export interface Checklist {
     receiving_mode?: 'on_demand' | 'recurring' | null
     receiving_generation?: 'automatic' | 'manager_confirmation' | null
     supplier_name?: string | null
+    // Sprint 53 — instância descartável criada ad-hoc, executada uma vez e
+    // auto-arquivada. Atualmente usada por "Recebimento rápido"; nome genérico
+    // para reuso futuro em tarefas emergenciais / contingências.
+    is_one_shot?: boolean
 }
 
 // Sprint 48 — Receiving Routines

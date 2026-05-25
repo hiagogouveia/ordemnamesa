@@ -164,3 +164,38 @@ export function useMarkOverdue() {
     });
 }
 
+/**
+ * Cria um recebimento rápido (one-shot) — usado pelo modal "Novo recebimento"
+ * quando o colaborador precisa registrar uma entrega sem template configurado.
+ * O endpoint /api/receiving/quick cria checklist + tasks + assumption em
+ * transação compensada (rollback explícito se algum passo falhar).
+ */
+export function useCreateQuickReceiving() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: async (input: {
+            restaurant_id: string;
+            area_id: string;
+            supplier_name?: string;
+            tasks: Array<{ title: string }>;
+        }) => {
+            const headers = await getAuthHeaders();
+            const res = await fetch("/api/receiving/quick", {
+                method: "POST",
+                headers,
+                body: JSON.stringify(input),
+            });
+            if (!res.ok) {
+                const e = await res.json().catch(() => ({}));
+                throw new Error(e.error || "Erro ao criar recebimento rápido");
+            }
+            return res.json() as Promise<{ checklist_id: string; assumption_id: string; name: string }>;
+        },
+        onSuccess: (_data, vars) => {
+            qc.invalidateQueries({ queryKey: ["kanban", vars.restaurant_id] });
+            qc.invalidateQueries({ queryKey: ["my-activities", vars.restaurant_id] });
+            qc.invalidateQueries({ queryKey: ["receiving-expectations", vars.restaurant_id] });
+        },
+    });
+}
+
