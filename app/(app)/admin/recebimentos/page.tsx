@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useRestaurantStore } from '@/lib/store/restaurant-store';
 import {
     useReceivingExpectations,
@@ -8,27 +9,42 @@ import {
     useConfirmExpectation,
     useCancelExpectation,
     useMarkOverdue,
+    useQuickReceivingHistory,
     type ReceivingExpectationWithChecklist,
+    type QuickReceivingStatusFilter,
 } from '@/lib/hooks/use-receiving';
 
-type Tab = 'pending' | 'overdue' | 'confirmed' | 'cancelled';
+type Tab = 'pending' | 'overdue' | 'confirmed' | 'cancelled' | 'quick';
 
 const TAB_META: Record<Tab, { label: string; statusParam: string; emptyHint: string }> = {
     pending:   { label: 'Pendentes',   statusParam: 'pending',   emptyHint: 'Nenhum recebimento aguardando confirmação.' },
     overdue:   { label: 'Previsão passou', statusParam: 'overdue', emptyHint: 'Nenhum recebimento com previsão passada.' },
     confirmed: { label: 'Confirmados', statusParam: 'confirmed', emptyHint: 'Nenhum recebimento confirmado para hoje.' },
     cancelled: { label: 'Cancelados',  statusParam: 'cancelled', emptyHint: 'Nenhum recebimento cancelado hoje.' },
+    quick:     { label: 'Rápidos',     statusParam: '',          emptyHint: 'Nenhum recebimento rápido nos últimos 30 dias.' },
 };
 
+function formatDateTime(iso: string | null): string {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
 export default function AdminRecebimentosPage() {
+    const router = useRouter();
     const restaurantId = useRestaurantStore((s) => s.restaurantId);
     const [tab, setTab] = useState<Tab>('pending');
     const [cancelTarget, setCancelTarget] = useState<ReceivingExpectationWithChecklist | null>(null);
     const [cancelReason, setCancelReason] = useState('');
+    const [quickStatus, setQuickStatus] = useState<QuickReceivingStatusFilter>('all');
 
+    // Expectations alimentam as 4 abas legacy. A aba 'quick' tem fonte própria.
     const { data: list = [], isLoading } = useReceivingExpectations(
         restaurantId || undefined,
-        { status: TAB_META[tab].statusParam },
+        { status: TAB_META[tab].statusParam || 'pending' },
+    );
+    const { data: quickList = [], isLoading: isLoadingQuick } = useQuickReceivingHistory(
+        tab === 'quick' ? restaurantId || undefined : undefined,
+        { days: 30, status: quickStatus },
     );
     const { data: counts } = useReceivingCounts(restaurantId || undefined);
 
@@ -116,7 +132,98 @@ export default function AdminRecebimentosPage() {
             </header>
 
             <main className="max-w-3xl mx-auto px-4 py-5 flex flex-col gap-3">
-                {isLoading ? (
+                {tab === 'quick' && (
+                    <div className="flex items-center gap-1 flex-wrap">
+                        <span className="text-[#92bbc9] text-xs mr-1">Filtrar:</span>
+                        {(['all', 'in_progress', 'completed'] as QuickReceivingStatusFilter[]).map((s) => {
+                            const label = s === 'all' ? 'Todos' : s === 'in_progress' ? 'Em execução' : 'Concluídos';
+                            const isActive = quickStatus === s;
+                            return (
+                                <button
+                                    key={s}
+                                    onClick={() => setQuickStatus(s)}
+                                    className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition-colors ${
+                                        isActive
+                                            ? 'bg-[#13b6ec]/15 border border-[#13b6ec]/40 text-[#13b6ec]'
+                                            : 'bg-[#182a32] text-[#92bbc9] border border-[#233f48] hover:bg-[#233f48]'
+                                    }`}
+                                >
+                                    {label}
+                                </button>
+                            );
+                        })}
+                        <span className="ml-auto text-[#5a8a99] text-[11px]">Últimos 30 dias</span>
+                    </div>
+                )}
+
+                {tab === 'quick' ? (
+                    isLoadingQuick ? (
+                        <div className="text-[#92bbc9] text-sm">Carregando…</div>
+                    ) : quickList.length === 0 ? (
+                        <div className="bg-[#1a2c32] border border-dashed border-[#233f48] rounded-xl p-6 text-center text-[#92bbc9] text-sm">
+                            {TAB_META[tab].emptyHint}
+                        </div>
+                    ) : (
+                        quickList.map((q) => {
+                            const isCompleted = q.completed_at !== null;
+                            return (
+                                <article
+                                    key={q.checklist_id}
+                                    className="bg-[#1a2c32] border border-[#233f48] rounded-xl p-4 flex flex-col gap-3"
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <h3 className="text-white font-bold text-sm truncate">{q.name}</h3>
+                                                <span
+                                                    className="inline-flex items-center gap-1 bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider"
+                                                    title="Recebimento criado ad-hoc"
+                                                >
+                                                    <span className="material-symbols-outlined text-[12px]">bolt</span>
+                                                    Rápido
+                                                </span>
+                                            </div>
+                                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#92bbc9] mt-1">
+                                                <span>{q.supplier_name || 'Fornecedor não informado'}</span>
+                                                {q.area && (
+                                                    <span className="flex items-center gap-1">
+                                                        • <span className="size-2 rounded-full" style={{ background: q.area.color }} />
+                                                        {q.area.name}
+                                                    </span>
+                                                )}
+                                                {q.assumed_by_user_name && (
+                                                    <span>• Executado por {q.assumed_by_user_name}</span>
+                                                )}
+                                            </div>
+                                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#5a8a99] mt-1">
+                                                <span>Criado: {formatDateTime(q.created_at)}</span>
+                                                {q.assumed_at && <span>• Iniciado: {formatDateTime(q.assumed_at)}</span>}
+                                                {q.completed_at && <span>• Concluído: {formatDateTime(q.completed_at)}</span>}
+                                                <span>• {q.tasks_completed}/{q.tasks_total} tarefas</span>
+                                            </div>
+                                        </div>
+                                        <span className={`shrink-0 px-2 py-1 rounded-full border text-[10px] font-bold uppercase tracking-wider ${
+                                            isCompleted
+                                                ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400'
+                                                : 'bg-[#13b6ec]/10 border-[#13b6ec]/40 text-[#13b6ec]'
+                                        }`}>
+                                            {isCompleted ? 'Concluído' : 'Em execução'}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <button
+                                            onClick={() => router.push(`/turno/atividade/${q.checklist_id}`)}
+                                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#16262c] border border-[#233f48] text-[#92bbc9] text-xs font-bold hover:bg-[#233f48] hover:text-white transition-colors"
+                                        >
+                                            <span className="material-symbols-outlined text-[16px]">visibility</span>
+                                            Ver detalhes
+                                        </button>
+                                    </div>
+                                </article>
+                            );
+                        })
+                    )
+                ) : isLoading ? (
                     <div className="text-[#92bbc9] text-sm">Carregando…</div>
                 ) : list.length === 0 ? (
                     <div className="bg-[#1a2c32] border border-dashed border-[#233f48] rounded-xl p-6 text-center text-[#92bbc9] text-sm">

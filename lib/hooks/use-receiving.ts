@@ -164,6 +164,53 @@ export function useMarkOverdue() {
     });
 }
 
+export type QuickReceivingHistoryItem = {
+    checklist_id: string;
+    name: string;
+    supplier_name: string | null;
+    area_id: string | null;
+    area: { id: string; name: string; color: string } | null;
+    active: boolean;
+    is_one_shot: boolean;
+    created_at: string;
+    assumed_at: string | null;
+    completed_at: string | null;
+    assumed_by_user_id: string | null;
+    assumed_by_user_name: string | null;
+    tasks_total: number;
+    tasks_completed: number;
+};
+
+export type QuickReceivingStatusFilter = 'all' | 'in_progress' | 'completed';
+
+/**
+ * Histórico administrativo de recebimentos rápidos. Reusado pela aba
+ * "Rápidos" em /admin/recebimentos. Owner/manager apenas.
+ */
+export function useQuickReceivingHistory(
+    restaurantId: string | undefined,
+    opts?: { days?: number; status?: QuickReceivingStatusFilter },
+) {
+    return useQuery({
+        queryKey: ["receiving-quick-history", restaurantId, opts?.days, opts?.status],
+        queryFn: async (): Promise<QuickReceivingHistoryItem[]> => {
+            if (!restaurantId) return [];
+            const params = new URLSearchParams({ restaurant_id: restaurantId });
+            if (opts?.days) params.set('days', String(opts.days));
+            if (opts?.status) params.set('status', opts.status);
+            const headers = await getAuthHeaders();
+            const res = await fetch(`/api/receiving/quick/history?${params.toString()}`, { headers });
+            if (!res.ok) {
+                const e = await res.json().catch(() => ({}));
+                throw new Error(e.error || "Erro ao buscar histórico");
+            }
+            return res.json();
+        },
+        enabled: !!restaurantId,
+        staleTime: 60 * 1000,
+    });
+}
+
 /**
  * Cria um recebimento rápido (one-shot) — usado pelo modal "Novo recebimento"
  * quando o colaborador precisa registrar uma entrega sem template configurado.
