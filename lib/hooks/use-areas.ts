@@ -84,6 +84,8 @@ export function useCreateArea() {
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ["areas", variables.restaurant_id] });
             queryClient.invalidateQueries({ queryKey: ["areas-all", variables.restaurant_id] });
+            // my-areas hidrata o gate de allow_manual_receiving no Meu Turno
+            queryClient.invalidateQueries({ queryKey: ["my-areas"] });
         },
     });
 }
@@ -118,6 +120,8 @@ export function useUpdateArea() {
             queryClient.invalidateQueries({ queryKey: ["areas", variables.restaurant_id] });
             queryClient.invalidateQueries({ queryKey: ["areas-all", variables.restaurant_id] });
             queryClient.invalidateQueries({ queryKey: ["my-activities", variables.restaurant_id] });
+            // my-areas hidrata o gate de allow_manual_receiving no Meu Turno
+            queryClient.invalidateQueries({ queryKey: ["my-areas"] });
         },
     });
 }
@@ -145,6 +149,7 @@ export function useDeleteArea() {
             queryClient.invalidateQueries({ queryKey: ["areas", variables.restaurant_id] });
             queryClient.invalidateQueries({ queryKey: ["areas-all", variables.restaurant_id] });
             queryClient.invalidateQueries({ queryKey: ["my-activities", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["my-areas"] });
         },
     });
 }
