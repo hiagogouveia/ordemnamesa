@@ -2,6 +2,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { uploadEvidencePhoto, getPhotoSignedUrl } from '@/lib/supabase/storage';
+import { bc } from '@/lib/photo-trace';
 
 interface PhotoUploadProps {
     restaurantId: string;
@@ -22,24 +23,44 @@ export function PhotoUpload({ restaurantId, onUpload, existingFilePath, disabled
         getPhotoSignedUrl(existingFilePath).then((url) => setPreviewUrl(url));
     }, [existingFilePath]);
 
+    useEffect(() => {
+        bc('mount');
+        return () => { bc('unmount'); };
+    }, []);
+
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
         setError(null);
         setUploading(true);
+        bc('chg', { size: file.size, type: file.type });
+
+        let ok = false;
+        let errName = '';
+        let errMsg = '';
+        const startedAt = performance.now();
 
         try {
             const uploadId = crypto.randomUUID();
+            bc('up:s', { size: file.size, type: file.type });
             const filePath = await uploadEvidencePhoto(file, restaurantId, uploadId);
             const signedUrl = await getPhotoSignedUrl(filePath);
             setPreviewUrl(signedUrl);
             onUpload(filePath, signedUrl ?? '');
+            ok = true;
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Erro ao enviar foto.');
+            if (err instanceof Error) { errName = err.name; errMsg = err.message; }
+            else { errName = 'Unknown'; errMsg = String(err); }
         } finally {
             setUploading(false);
             if (inputRef.current) inputRef.current.value = '';
+            bc('up:end', {
+                ok,
+                durationMs: Math.round(performance.now() - startedAt),
+                ...(errName ? { errName, errMsg } : {}),
+            });
         }
     };
 
