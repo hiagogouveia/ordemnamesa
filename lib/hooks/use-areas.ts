@@ -86,6 +86,10 @@ export function useCreateArea() {
             queryClient.invalidateQueries({ queryKey: ["areas-all", variables.restaurant_id] });
             // my-areas hidrata o gate de allow_manual_receiving no Meu Turno
             queryClient.invalidateQueries({ queryKey: ["my-areas"] });
+            // Templates e expectations do Meu Turno dependem de allow_manual_receiving
+            // e da composição de áreas — sem invalidar, o frontend segura snapshot vazio.
+            queryClient.invalidateQueries({ queryKey: ["receiving-templates", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["receiving-expectations", variables.restaurant_id] });
         },
     });
 }
@@ -122,6 +126,10 @@ export function useUpdateArea() {
             queryClient.invalidateQueries({ queryKey: ["my-activities", variables.restaurant_id] });
             // my-areas hidrata o gate de allow_manual_receiving no Meu Turno
             queryClient.invalidateQueries({ queryKey: ["my-areas"] });
+            // Templates e expectations do Meu Turno dependem de allow_manual_receiving
+            // e da composição de áreas — sem invalidar, o frontend segura snapshot vazio.
+            queryClient.invalidateQueries({ queryKey: ["receiving-templates", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["receiving-expectations", variables.restaurant_id] });
         },
     });
 }
@@ -150,6 +158,10 @@ export function useDeleteArea() {
             queryClient.invalidateQueries({ queryKey: ["areas-all", variables.restaurant_id] });
             queryClient.invalidateQueries({ queryKey: ["my-activities", variables.restaurant_id] });
             queryClient.invalidateQueries({ queryKey: ["my-areas"] });
+            // Templates e expectations do Meu Turno dependem de allow_manual_receiving
+            // e da composição de áreas — sem invalidar, o frontend segura snapshot vazio.
+            queryClient.invalidateQueries({ queryKey: ["receiving-templates", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["receiving-expectations", variables.restaurant_id] });
         },
     });
 }

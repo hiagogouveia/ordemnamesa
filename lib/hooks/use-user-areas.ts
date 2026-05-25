@@ -83,6 +83,8 @@ export function useAssignUserArea() {
             queryClient.invalidateQueries({ queryKey: ["user-areas", variables.restaurant_id] });
             queryClient.invalidateQueries({ queryKey: ["my-areas"] });
             queryClient.invalidateQueries({ queryKey: ["equipe", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["receiving-templates", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["receiving-expectations", variables.restaurant_id] });
         },
     });
 }
@@ -110,6 +112,8 @@ export function useRemoveUserArea() {
             queryClient.invalidateQueries({ queryKey: ["user-areas", variables.restaurant_id] });
             queryClient.invalidateQueries({ queryKey: ["my-areas"] });
             queryClient.invalidateQueries({ queryKey: ["equipe", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["receiving-templates", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["receiving-expectations", variables.restaurant_id] });
         },
     });
 }
