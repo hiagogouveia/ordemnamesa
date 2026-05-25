@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import QueryProvider from "@/components/providers/query-provider";
+import { PhotoTraceProvider } from "@/components/photo-trace-provider";
 import { siteConfig } from "@/lib/seo";
 
 const inter = Inter({
@@ -105,6 +106,7 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <QueryProvider>{children}</QueryProvider>
+        <PhotoTraceProvider />
       </body>
     </html>
   );
