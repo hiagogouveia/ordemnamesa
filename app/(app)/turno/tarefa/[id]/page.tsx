@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useChecklists } from '@/lib/hooks/use-checklists';
 import { useRestaurantStore } from '@/lib/store/restaurant-store';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -27,6 +27,12 @@ export default function TarefaDetailsPage({ params }: { params: Promise<{ id: st
     const [file, setFile] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        return () => {
+            if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+        };
+    }, [previewUrl]);
 
     // Report Issue states
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
