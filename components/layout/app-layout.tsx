@@ -69,7 +69,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
     return (
         <BillingProvider>
-        <div className="flex h-screen overflow-hidden bg-[#101d22] font-sans">
+        <div className="flex h-dvh overflow-hidden bg-[#101d22] font-sans">
             {/* Overlay para Mobile */}
             {isMobileMenuOpen && (
                 <div

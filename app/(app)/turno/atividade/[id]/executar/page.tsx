@@ -223,7 +223,7 @@ export default function ActivityExecutionPage() {
         : null;
 
     return (
-        <div className="min-h-[100dvh] bg-[#101d22] font-sans flex flex-col">
+        <div className="min-h-full bg-[#101d22] font-sans flex flex-col">
             {/* Toast transitório de ocorrência (Sprint 46) */}
             {issueFlash && (
                 <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[60] max-w-[440px] w-[calc(100%-1.5rem)] bg-amber-500 text-[#0c1518] rounded-xl shadow-2xl px-4 py-3 flex items-start gap-2.5 animate-in fade-in slide-in-from-top-4 duration-300">
