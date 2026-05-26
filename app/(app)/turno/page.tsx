@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { useSession } from '@/lib/providers/use-session';
 import { useAccountSessionStore } from '@/lib/store/account-session-store';
 import { useKanbanTasks, KanbanChecklist } from '@/lib/hooks/use-tasks';
@@ -13,6 +13,17 @@ import { RoutineCard } from '@/components/checklists/routine-card';
 import { getRoutineState } from '@/lib/utils/routine-state';
 import type { Scope } from '@/lib/types/scope';
 import { useReceivingExpectations, useReceivingTemplates, useCreateQuickReceiving } from '@/lib/hooks/use-receiving';
+
+const ACTIVE_AREA_STORAGE_PREFIX = 'turno:active-area:';
+const readStoredArea = (scopeKey: string): string => {
+    if (typeof window === 'undefined') return '';
+    try { return window.localStorage.getItem(ACTIVE_AREA_STORAGE_PREFIX + scopeKey) ?? ''; }
+    catch { return ''; }
+};
+const writeStoredArea = (scopeKey: string, areaId: string): void => {
+    if (typeof window === 'undefined') return;
+    try { window.localStorage.setItem(ACTIVE_AREA_STORAGE_PREFIX + scopeKey, areaId); } catch {}
+};
 
 export default function KanbanPage() {
     const session = useSession();
@@ -225,13 +236,12 @@ export default function KanbanPage() {
         return result.sort((a, b) => a.name.localeCompare(b.name));
     }, [myAreaAssignments]);
 
-    const [activeAreaId, setActiveAreaId] = useState<string>('');
-
-    useEffect(() => {
-        if (!isGlobal && userAreas.length > 0 && !userAreas.some(a => a.id === activeAreaId)) {
-            setActiveAreaId(userAreas[0].id);
-        }
-    }, [userAreas, activeAreaId, isGlobal]);
+    const [activeAreaId, setActiveAreaIdState] = useState<string>('');
+    const scopeKey = isGlobal ? 'global' : (restaurantId ?? 'none');
+    const setActiveAreaId = useCallback((id: string) => {
+        setActiveAreaIdState(id);
+        writeStoredArea(scopeKey, id);
+    }, [scopeKey]);
 
     // Flag da área ativa: controla a visibilidade do botão "Novo recebimento".
     // Gate por flag, NÃO por presença de templates — modal interno trata lista vazia.
@@ -255,11 +265,15 @@ export default function KanbanPage() {
         return Array.from(seen.values()).sort((a, b) => a.name.localeCompare(b.name));
     }, [isGlobal, kanbanData]);
 
+    // Restauração da área ativa: usa valor salvo em localStorage se ainda válido; senão, default ao 1º.
     useEffect(() => {
-        if (isGlobal && globalAreas.length > 0 && !globalAreas.some(a => a.id === activeAreaId)) {
-            setActiveAreaId(globalAreas[0].id);
-        }
-    }, [isGlobal, globalAreas, activeAreaId]);
+        const areas = isGlobal ? globalAreas : userAreas;
+        if (areas.length === 0) return;
+        if (areas.some(a => a.id === activeAreaId)) return;
+        const saved = readStoredArea(scopeKey);
+        const next = areas.some(a => a.id === saved) ? saved : areas[0].id;
+        setActiveAreaIdState(next);
+    }, [isGlobal, userAreas, globalAreas, scopeKey, activeAreaId]);
 
     // Filtro por área + unidade
     const getFiltered = <T extends { area_id?: string; restaurant_id?: string }>(activities: T[]): T[] => {
@@ -304,7 +318,7 @@ export default function KanbanPage() {
     // Guard: aguardar dados essenciais antes de renderizar
     if (!scope || userLoading) {
         return (
-            <div className="min-h-full bg-[#101d22] font-sans pb-20">
+            <div className="min-h-full bg-[#101d22] font-sans pb-4">
                 <header className="sticky top-0 z-30 bg-[#101d22]/95 backdrop-blur border-b border-[#233f48] px-4 py-4 md:px-8">
                     <div className="max-w-[480px] mx-auto w-full animate-pulse">
                         <div className="h-7 w-48 rounded bg-[#233f48] mb-2" />
@@ -321,7 +335,7 @@ export default function KanbanPage() {
     }
 
     return (
-        <div className="min-h-full bg-[#101d22] font-sans pb-20">
+        <div className="min-h-full bg-[#101d22] font-sans pb-4">
             <header className="sticky top-0 z-30 bg-[#101d22]/95 backdrop-blur border-b border-[#233f48] px-4 py-4 md:px-8">
                 <div className="max-w-[480px] mx-auto w-full flex flex-col gap-2">
                     <h1 className="text-white text-xl md:text-2xl font-black">
