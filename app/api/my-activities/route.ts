@@ -120,6 +120,9 @@ export async function GET(request: Request) {
             .eq('restaurant_id', restaurant_id)
             .eq('active', true)
             .eq('status', 'active')
+            // Sprint 49: receiving tem fluxo próprio em /turno (seção "Recebimentos"),
+            // não deve aparecer como atividade obrigatória do turno.
+            .not('checklist_type', 'eq', 'receiving')
             .or(checklistFilterParts.join(','))
             .order('order_index', { ascending: true, nullsFirst: false });
 

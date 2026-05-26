@@ -2,7 +2,9 @@
 
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
 import { UnitBadge } from "@/components/ui/unit-badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { IssueBadge } from "@/components/checklists/issues/IssueBadge";
+import { ChecklistTypeBadge } from "@/components/checklists/management/ChecklistTypeBadge";
 
 const SHIFT_LABELS: Record<string, string> = {
     morning: "Manhã",
@@ -33,8 +35,11 @@ export function ChecklistBoardCard({
     openIssuesCount = 0,
 }: ChecklistBoardCardProps) {
     const taskCount = checklist.tasks?.length ?? 0;
-    const isExecuting = Boolean(checklist.assumed_by_name) && checklist.execution_status !== "done";
-    const responsibleName = checklist.assumed_by_name || checklist.responsible?.name;
+    // Separa "quem está executando agora" (assumed_by_name) de "quem foi atribuído"
+    // (responsible.name vindo de assigned_to_user_id). Confusão entre os dois é
+    // a fonte do bug "apareceu mac teste como responsável".
+    const executorName = checklist.assumed_by_name || null;
+    const assignedName = !executorName ? checklist.responsible?.name ?? null : null;
     const hasOpenIssues = openIssuesCount > 0;
 
     return (
@@ -57,11 +62,10 @@ export function ChecklistBoardCard({
                         onCheckChange?.(!checked);
                     }}
                 >
-                    <input
-                        type="checkbox"
+                    <Checkbox
                         checked={checked ?? false}
                         readOnly
-                        className="size-4 accent-[#13b6ec] cursor-pointer"
+                        aria-label={`Selecionar ${checklist.name}`}
                     />
                 </div>
             )}
@@ -81,10 +85,11 @@ export function ChecklistBoardCard({
                 </span>
             </div>
 
-            {/* Unit badge — global mode only */}
-            {isGlobal && checklist.unit?.name && (
-                <div className="mt-1">
-                    <UnitBadge name={checklist.unit.name} />
+            {/* Type + Unit badges */}
+            {(checklist.checklist_type === "receiving" || (isGlobal && checklist.unit?.name)) && (
+                <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                    <ChecklistTypeBadge type={checklist.checklist_type} />
+                    {isGlobal && checklist.unit?.name && <UnitBadge name={checklist.unit.name} />}
                 </div>
             )}
 
@@ -106,16 +111,20 @@ export function ChecklistBoardCard({
                 )}
             </div>
 
-            {/* Responsável / Executando */}
-            {responsibleName && (
-                <div className="flex items-center gap-1.5 mt-2">
-                    <span className={`material-symbols-outlined text-[14px] shrink-0 ${isExecuting ? 'text-[#13b6ec]' : 'text-[#5a8a99]'}`}>person</span>
-                    <span className="text-[#92bbc9] text-sm truncate">{responsibleName}</span>
-                    {isExecuting && (
-                        <span className="shrink-0 text-[9px] font-bold text-[#13b6ec] bg-[#13b6ec]/10 border border-[#13b6ec]/20 px-1.5 py-0.5 rounded-full uppercase tracking-wide">
-                            Executando
-                        </span>
-                    )}
+            {/* Em execução por (assumed_by_name) — estado transitório do dia */}
+            {executorName && (
+                <div className="flex items-center gap-1.5 mt-2" title="Quem iniciou esta rotina hoje">
+                    <span className="material-symbols-outlined text-[14px] shrink-0 text-[#13b6ec]">play_arrow</span>
+                    <span className="text-[#92bbc9] text-xs shrink-0">Em execução por</span>
+                    <span className="text-white text-sm truncate font-medium">{executorName}</span>
+                </div>
+            )}
+            {/* Atribuído a (responsible) — configuração permanente da rotina */}
+            {assignedName && (
+                <div className="flex items-center gap-1.5 mt-2" title="Colaborador atribuído à rotina">
+                    <span className="material-symbols-outlined text-[14px] shrink-0 text-[#5a8a99]">person</span>
+                    <span className="text-[#92bbc9] text-xs shrink-0">Atribuído a</span>
+                    <span className="text-[#92bbc9] text-sm truncate">{assignedName}</span>
                 </div>
             )}
 

@@ -1,5 +1,26 @@
 import { createClient } from './client';
 
+// Gated por env var. Sem importar lib/photo-trace.ts (mantém boundary
+// limpa entre storage e instrumentação). Build-time inlined → quando OFF,
+// minifier elimina os blocos abaixo.
+const PHOTO_TRACE_ENABLED = process.env.NEXT_PUBLIC_PHOTO_TRACE === 'on';
+
+function inflightSet(file: File): void {
+    if (!PHOTO_TRACE_ENABLED) return;
+    try {
+        localStorage.setItem('photo_trace:inflight', JSON.stringify({
+            t: Date.now(),
+            size: file.size,
+            type: file.type,
+        }));
+    } catch { /* quota, modo privado, SSR */ }
+}
+
+function inflightClear(): void {
+    if (!PHOTO_TRACE_ENABLED) return;
+    try { localStorage.removeItem('photo_trace:inflight'); } catch { /* idem */ }
+}
+
 /**
  * @deprecated Bucket 'photos' é privado — usar getPhotoSignedUrl() em vez disso.
  */
@@ -45,12 +66,19 @@ export async function uploadEvidencePhoto(
     const filename = `${timestamp}.${extension}`;
     const filePath = `${restaurantId}/${executionId}/${filename}`;
 
-    const { error: uploadError } = await supabase.storage
-        .from('photos')
-        .upload(filePath, file, {
-            cacheControl: '3600',
-            upsert: false
-        });
+    inflightSet(file);
+    let uploadResult;
+    try {
+        uploadResult = await supabase.storage
+            .from('photos')
+            .upload(filePath, file, {
+                cacheControl: '3600',
+                upsert: false
+            });
+    } finally {
+        inflightClear();
+    }
+    const { error: uploadError } = uploadResult;
 
     if (uploadError) {
         console.error('[Storage Upload Error]', uploadError);

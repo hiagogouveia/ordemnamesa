@@ -123,6 +123,32 @@ export interface Checklist {
     assumed_by_name?: string | null
     assumed_by_user_id?: string | null
     unit?: { id: string; name: string } | null
+    // Sprint 48 — Receiving Routines (fase 1: campos estruturais)
+    receiving_mode?: 'on_demand' | 'recurring' | null
+    receiving_generation?: 'automatic' | 'manager_confirmation' | null
+    supplier_name?: string | null
+    // Sprint 53 — instância descartável criada ad-hoc, executada uma vez e
+    // auto-arquivada. Atualmente usada por "Recebimento rápido"; nome genérico
+    // para reuso futuro em tarefas emergenciais / contingências.
+    is_one_shot?: boolean
+}
+
+// Sprint 48 — Receiving Routines
+export type ReceivingExpectationStatus = 'pending' | 'confirmed' | 'overdue' | 'cancelled'
+
+export interface ReceivingExpectation {
+    id: string
+    restaurant_id: string
+    checklist_id: string
+    expected_date: string             // ISO date (YYYY-MM-DD)
+    expected_window_start?: string | null  // HH:mm
+    expected_window_end?: string | null    // HH:mm
+    status: ReceivingExpectationStatus
+    assumption_id?: string | null
+    confirmed_by?: string | null
+    confirmed_at?: string | null
+    cancelled_reason?: string | null
+    created_at: string
 }
 
 // Sprint 35 — Tipos de resposta estruturados
@@ -196,17 +222,8 @@ export interface UserShiftAssignment {
     shifts?: Shift
 }
 
-export interface PurchaseList {
-    id: string
-    restaurant_id: string
-    title: string
-    status: 'open' | 'closed'
-    target_role_ids: string[]
-    created_by: string
-    closed_at?: string
-    created_at: string
-    updated_at: string
-}
+// Sprint 50: PurchaseList / PurchaseItem removidos (sistema legado de Compras).
+// Substituídos por receiving_expectations + ReceivingExpectation acima.
 
 // ============================================================
 // Sprint 14 — Checklist Management Board
@@ -234,6 +251,8 @@ export interface Area {
     color: string
     priority_mode?: PriorityMode
     max_parallel_tasks?: number | null
+    /** Se true, colaboradores desta área podem iniciar recebimentos manuais. */
+    allow_manual_receiving?: boolean
     created_at: string
 }
 
@@ -332,20 +351,3 @@ export interface TaskIssueEvent {
     created_at: string
 }
 
-export interface PurchaseItem {
-    id: string
-    restaurant_id: string
-    purchase_list_id: string
-    name: string
-    quantity: number
-    unit: string
-    brand?: string
-    notes?: string
-    checked: boolean
-    checked_by?: string
-    checked_at?: string
-    has_problem: boolean
-    problem_notes?: string
-    created_at: string
-    updated_at: string
-}

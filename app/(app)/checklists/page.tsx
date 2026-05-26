@@ -12,10 +12,12 @@ import { shouldChecklistAppearToday } from "@/lib/utils/should-checklist-appear-
 import { getBrazilNow, getBrazilDateKey } from "@/lib/utils/brazil-date";
 import { BulkActionBar } from "@/components/checklists/management/BulkActionBar";
 import { CopyChecklistModal } from "@/components/checklists/management/CopyChecklistModal";
+import { ExecucoesView } from "@/components/checklists/management/ExecucoesView";
 import { useChecklistOrders, useUpdateChecklistOrders } from "@/lib/hooks/use-checklist-orders";
 import { createClient } from "@/lib/supabase/client";
 import { useAllAreas } from "@/lib/hooks/use-areas";
 import { useEquipe } from "@/lib/hooks/use-equipe";
+import { useUnits } from "@/lib/hooks/use-units";
 import { useAccountAccess } from "@/lib/hooks/use-account-access";
 import { useBilling } from "@/lib/hooks/use-billing";
 import { ChecklistHeader } from "@/components/checklists/management/ChecklistHeader";
@@ -80,9 +82,17 @@ function ChecklistsContent() {
     const rawAvailability = searchParams.get("availability") ?? "active";
     const selectedAvailability = rawAvailability === "draft" ? "active" : rawAvailability;
     const selectedExecStatus = searchParams.get("exec_status") ?? "";
+    const rawType = searchParams.get("type") ?? "all";
+    const selectedType: "all" | "operational" | "receiving" =
+        rawType === "operational" || rawType === "receiving" ? rawType : "all";
     const selectedCollaboratorId = searchParams.get("collaborator_id") ?? "";
+    const selectedUnitId = searchParams.get("unit_id") ?? "";
     const sortField = (searchParams.get("sort") as SortField | null) ?? null;
     const sortOrder = (searchParams.get("order") as SortOrder | null) ?? "asc";
+    // Sub-fase 1: separação semântica entre Modelos (templates) e Execuções (instâncias).
+    // Default: modelos — preserva comportamento atual sem regressão.
+    const rawView = searchParams.get("view");
+    const activeView: "modelos" | "execucoes" = rawView === "execucoes" ? "execucoes" : "modelos";
 
     const queryClient = useQueryClient();
 
@@ -110,6 +120,7 @@ function ChecklistsContent() {
             : (restaurantId ?? null)
     );
     const { data: issueCounts = {} } = useIssueCountsByChecklist(restaurantId ?? undefined, getBrazilDateKey());
+    const { data: units = [] } = useUnits(isGlobal ? accountId : null);
 
     // Mutations
     const { mutate: toggleStatus } = useToggleChecklistStatus();
@@ -142,8 +153,11 @@ function ChecklistsContent() {
 
         const result = collaboratorFiltered.filter((c) => {
             if (q && !c.name.toLowerCase().includes(q)) return false;
+            if (isGlobal && selectedUnitId && c.restaurant_id !== selectedUnitId) return false;
             if (selectedShift && c.shift !== selectedShift && c.shift !== "any") return false;
             if (selectedAreaId && c.area_id !== selectedAreaId) return false;
+            if (selectedType === "receiving" && c.checklist_type !== "receiving") return false;
+            if (selectedType === "operational" && c.checklist_type === "receiving") return false;
             if (selectedAvailability === "active" && !c.active) return false;
             if (selectedAvailability === "inactive" && c.active) return false;
             if (selectedAvailability === "today" && brazilNow) {
@@ -202,7 +216,7 @@ function ChecklistsContent() {
         });
         
         return sortedResult;
-    }, [checklists, searchQuery, selectedShift, selectedAreaId, selectedAvailability, selectedExecStatus, selectedCollaboratorId, equipeData, shifts, currentMinutes, sortField, sortOrder]);
+    }, [checklists, searchQuery, selectedShift, selectedAreaId, selectedAvailability, selectedExecStatus, selectedType, selectedCollaboratorId, selectedUnitId, isGlobal, equipeData, shifts, currentMinutes, sortField, sortOrder]);
 
     // ─── BULK SELECTION (visão global) ─────────────────────────────────────────
 
@@ -223,7 +237,7 @@ function ChecklistsContent() {
     // Limpar seleção quando filtros mudam
     useEffect(() => {
         setSelectedIds(new Set());
-    }, [selectedShift, selectedAreaId, selectedAvailability, selectedExecStatus, selectedCollaboratorId, searchQuery]);
+    }, [selectedShift, selectedAreaId, selectedAvailability, selectedExecStatus, selectedType, selectedCollaboratorId, selectedUnitId, searchQuery]);
 
     const handleSelectionChange = (id: string, checked: boolean) => {
         setSelectedIds((prev) => {
@@ -273,10 +287,31 @@ function ChecklistsContent() {
         router.replace(`/checklists?${params.toString()}`);
     };
 
+    const setTypeFilter = (value: "all" | "operational" | "receiving") => {
+        const params = new URLSearchParams(searchParams.toString());
+        if (value && value !== "all") params.set("type", value);
+        else params.delete("type");
+        router.replace(`/checklists?${params.toString()}`);
+    };
+
+    const setActiveView = (value: "modelos" | "execucoes") => {
+        const params = new URLSearchParams(searchParams.toString());
+        if (value === "execucoes") params.set("view", "execucoes");
+        else params.delete("view");
+        router.replace(`/checklists?${params.toString()}`);
+    };
+
     const setCollaboratorFilter = (value: string) => {
         const params = new URLSearchParams(searchParams.toString());
         if (value) params.set("collaborator_id", value);
         else params.delete("collaborator_id");
+        router.replace(`/checklists?${params.toString()}`);
+    };
+
+    const setUnitFilter = (value: string) => {
+        const params = new URLSearchParams(searchParams.toString());
+        if (value) params.set("unit_id", value);
+        else params.delete("unit_id");
         router.replace(`/checklists?${params.toString()}`);
     };
 
@@ -470,6 +505,50 @@ function ChecklistsContent() {
 
     return (
         <div className="flex flex-col h-[calc(100vh-72px)] overflow-hidden bg-[#0a1215]">
+            {/* Sub-fase 1: tabs Modelos (configuração) vs Execuções (instâncias).
+                Toolbar e filtros abaixo só renderizam em Modelos — semânticas
+                distintas, sem mistura de filtros. */}
+            <div
+                role="tablist"
+                aria-label="Visão"
+                className="shrink-0 px-4 pt-3 pb-0 border-b border-[#233f48] bg-[#0a1215] flex items-center gap-1 overflow-x-auto"
+            >
+                {(["modelos", "execucoes"] as const).map((v) => {
+                    const isActive = activeView === v;
+                    const label = v === "modelos" ? "Modelos" : "Execuções";
+                    return (
+                        <button
+                            key={v}
+                            role="tab"
+                            type="button"
+                            aria-selected={isActive}
+                            tabIndex={isActive ? 0 : -1}
+                            onClick={() => setActiveView(v)}
+                            onKeyDown={(e) => {
+                                if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+                                    e.preventDefault();
+                                    setActiveView(v === "modelos" ? "execucoes" : "modelos");
+                                }
+                            }}
+                            className={`relative px-4 py-2 text-sm font-bold transition-colors whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-[#13b6ec]/50 rounded-t-md ${
+                                isActive ? "text-[#13b6ec]" : "text-[#92bbc9] hover:text-white"
+                            }`}
+                        >
+                            {label}
+                            {isActive && (
+                                <span className="absolute left-0 right-0 bottom-[-1px] h-[2px] bg-[#13b6ec]" />
+                            )}
+                        </button>
+                    );
+                })}
+            </div>
+
+            {activeView === "execucoes" ? (
+                <div className="flex-1 overflow-auto">
+                    <ExecucoesView restaurantId={restaurantId ?? undefined} />
+                </div>
+            ) : (
+                <>
             <ChecklistHeader
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
@@ -490,10 +569,41 @@ function ChecklistsContent() {
                 onAvailabilityChange={setAvailabilityFilter}
                 selectedExecStatus={selectedExecStatus}
                 onExecStatusChange={setExecStatusFilter}
+                selectedType={selectedType}
+                onTypeChange={setTypeFilter}
                 collaborators={equipeData?.equipe ?? []}
                 selectedCollaboratorId={selectedCollaboratorId}
                 onCollaboratorChange={setCollaboratorFilter}
+                showUnitFilter={isGlobal}
+                units={units}
+                selectedUnitId={selectedUnitId}
+                onUnitChange={setUnitFilter}
             />
+
+            {isGlobal && selectedUnitId && (() => {
+                const unit = units.find((u) => u.id === selectedUnitId);
+                if (!unit) return null;
+                return (
+                    <div className="shrink-0 px-4 py-2 border-b border-[#233f48] bg-[#0a1215] flex items-center gap-2 flex-wrap text-xs">
+                        <span className="text-[#92bbc9]">Visualizando:</span>
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#13b6ec]/10 text-[#13b6ec] border border-[#13b6ec]/30 font-medium">
+                            <span className="material-symbols-outlined text-[14px]">storefront</span>
+                            {unit.name}
+                        </span>
+                        <span className="text-[#92bbc9]">
+                            {filtered.length} {filtered.length === 1 ? "rotina" : "rotinas"}
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => setUnitFilter("")}
+                            className="ml-auto text-[#92bbc9] hover:text-white transition-colors inline-flex items-center gap-1"
+                        >
+                            <span className="material-symbols-outlined text-[14px]">close</span>
+                            Limpar
+                        </button>
+                    </div>
+                );
+            })()}
 
             <div className="flex flex-1 overflow-hidden">
                 {/* Painel esquerdo: lista/board */}
@@ -501,6 +611,11 @@ function ChecklistsContent() {
                     className={`${
                         showSidePanel ? "hidden md:flex md:flex-col md:min-w-0 md:flex-1" : "flex-1"
                     } overflow-auto p-4`}
+                    style={
+                        canBulkAction && selectedIds.size > 0
+                            ? { paddingBottom: "calc(var(--bulk-action-bar-h, 0px) + 1rem)" }
+                            : undefined
+                    }
                 >
                     {view === "preview" ? (
                         <ChecklistPreviewView
@@ -566,6 +681,8 @@ function ChecklistsContent() {
                     </div>
                 )}
             </div>
+                </>
+            )}
 
             {/* Modal de edição/criação */}
             {mounted && (

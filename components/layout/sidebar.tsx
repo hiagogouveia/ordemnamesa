@@ -9,6 +9,7 @@ import { useAccountAccess } from "@/lib/hooks/use-account-access";
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useMyActivitiesBadge } from "@/lib/hooks/use-my-activities";
+import { useReceivingCounts } from "@/lib/hooks/use-receiving";
 import { useAuthUser } from "@/lib/hooks/use-auth-user";
 
 interface NavItem {
@@ -24,7 +25,8 @@ const managerNavigation: NavItem[] = [
     { name: "Meu Turno", href: "/turno", icon: "assignment_ind", badge: true, globalSupported: true },
     { name: "Checklists", href: "/checklists", icon: "checklist", globalSupported: true },
     { name: "Equipe", href: "/equipe", icon: "group", globalSupported: true },
-    { name: "Compras", href: "/compras", icon: "shopping_cart", globalSupported: true },
+    // Sprint 50: substitui "Compras" (legado) por inbox operacional de recebimentos.
+    { name: "Recebimentos", href: "/admin/recebimentos", icon: "inventory_2" },
     { name: "Relatórios", href: "/relatorios", icon: "bar_chart", globalSupported: true },
     { name: "Configurações", href: "/configuracoes", icon: "settings", globalSupported: true },
 ];
@@ -36,7 +38,7 @@ const staffNavigation: NavItem[] = [
 
 const GLOBAL_SUPPORTED_ROUTES = [
     "/dashboard", "/turno", "/checklists", "/equipe",
-    "/compras", "/relatorios", "/configuracoes",
+    "/relatorios", "/configuracoes",
 ];
 
 type SidebarProps = {
@@ -66,12 +68,21 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggle }: Sideba
     const accountRole = accountAccess?.role ?? null;
     const [userEmail, setUserEmail] = useState("");
     const [isLoggingOut, setIsLoggingOut] = useState(false);
-    const [canLaunchPurchases, setCanLaunchPurchases] = useState(false);
+    // Sprint 50: Compras legado removido — gating de "can_launch_purchases" não é mais usado no menu.
+    // O staff acessa recebimentos pelo Meu Turno (seção dedicada). Coluna no banco mantida
+    // como flag dormente em roles para evitar refactor cross-tela.
     const [switcherOpen, setSwitcherOpen] = useState(false);
     const switcherRef = useRef<HTMLDivElement>(null);
     const { data: authUser } = useAuthUser();
     const { data: badgeData } = useMyActivitiesBadge(restaurantId || undefined, authUser?.id);
     const pendingCount = badgeData?.pending ?? 0;
+    // Sprint 51 — badge no menu Recebimentos: overdue tem prioridade visual sobre pending.
+    const isManager = userRole === 'owner' || userRole === 'manager';
+    const { data: receivingCounts } = useReceivingCounts(isManager ? (restaurantId || undefined) : undefined);
+    const receivingOverdue = receivingCounts?.overdue ?? 0;
+    const receivingPending = receivingCounts?.pending ?? 0;
+    const receivingBadgeCount = receivingOverdue + receivingPending;
+    const receivingBadgeUrgent = receivingOverdue > 0;
 
     useEffect(() => {
         if (!switcherOpen) return;
@@ -157,17 +168,6 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggle }: Sideba
             const { data } = await supabase.auth.getUser();
             if (data?.user) {
                 setUserEmail(data.user.email || "");
-
-                if (userRole === 'staff' && restaurantId) {
-                    const { data: userRoles } = await supabase
-                        .from('user_roles')
-                        .select('role:roles(can_launch_purchases)')
-                        .eq('restaurant_id', restaurantId)
-                        .eq('user_id', data.user.id);
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const can = userRoles?.some((ur: any) => ur.role?.can_launch_purchases);
-                    setCanLaunchPurchases(!!can);
-                }
             }
         }
         getUser();
@@ -293,9 +293,7 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggle }: Sideba
             <nav className="flex-1 overflow-y-auto px-3 py-6 flex flex-col gap-1.5">
                 <span className={`text-[11px] font-bold text-[#325a67] uppercase tracking-wider mb-2 px-3 ${collapsed ? 'lg:hidden' : ''}`}>Menu Principal</span>
                 {(userRole === 'staff'
-                    ? canLaunchPurchases
-                        ? [...staffNavigation, { name: "Compras", href: "/compras", icon: "shopping_cart" }]
-                        : staffNavigation
+                    ? staffNavigation
                     : isGlobal
                         ? managerNavigation.filter((n) => n.globalSupported)
                         : managerNavigation
@@ -318,6 +316,18 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggle }: Sideba
                             {'badge' in item && item.badge && pendingCount > 0 && (
                                 <span className={`ml-auto bg-[#13b6ec] text-[#0a1215] text-[10px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-tight ${collapsed ? 'lg:hidden' : ''}`}>
                                     {pendingCount > 99 ? "99+" : pendingCount}
+                                </span>
+                            )}
+                            {item.href === '/admin/recebimentos' && receivingBadgeCount > 0 && (
+                                <span
+                                    title={receivingBadgeUrgent ? `${receivingOverdue} atrasado(s), ${receivingPending} pendente(s)` : `${receivingPending} aguardando confirmação`}
+                                    className={`ml-auto text-[10px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-tight ${
+                                        receivingBadgeUrgent
+                                            ? 'bg-amber-500 text-[#0a1215]'
+                                            : 'bg-[#13b6ec] text-[#0a1215]'
+                                    } ${collapsed ? 'lg:hidden' : ''}`}
+                                >
+                                    {receivingBadgeCount > 99 ? "99+" : receivingBadgeCount}
                                 </span>
                             )}
                         </Link>

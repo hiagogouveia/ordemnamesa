@@ -169,12 +169,12 @@ export interface AssumeChecklistError {
 export const useAssumeChecklist = () => {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: async ({ restaurantId, checklistId }: { restaurantId: string; checklistId: string }) => {
+        mutationFn: async ({ restaurantId, checklistId, expectationId }: { restaurantId: string; checklistId: string; expectationId?: string }) => {
             const token = await getAuthToken();
             const response = await fetch(`/api/checklists/${checklistId}/assume`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ restaurant_id: restaurantId }),
+                body: JSON.stringify({ restaurant_id: restaurantId, expectation_id: expectationId }),
             });
             if (!response.ok) {
                 const errorData: AssumeChecklistError = await response.json().catch(() => ({ error: 'Erro ao assumir atividade' }));
@@ -190,6 +190,7 @@ export const useAssumeChecklist = () => {
             queryClient.invalidateQueries({ queryKey: ['my-activities', variables.restaurantId] });
             queryClient.invalidateQueries({ queryKey: ['my-activities-badge', variables.restaurantId] });
             queryClient.invalidateQueries({ queryKey: ['checklists', variables.restaurantId] });
+            queryClient.invalidateQueries({ queryKey: ['receiving-expectations', variables.restaurantId] });
         },
     });
 };

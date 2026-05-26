@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useSession } from '@/lib/providers/use-session';
 import { useActivityData } from '@/lib/hooks/use-activity-execution';
 import { useChecklistAssumption, useAssumeChecklist } from '@/lib/hooks/use-tasks';
@@ -21,7 +21,16 @@ function getTimeWindowStatus(
 export default function ActivityDetailsPage() {
     const router = useRouter();
     const params = useParams();
+    const searchParams = useSearchParams();
     const checklistId = params.id as string;
+    // Contexto de recebimento vindo do Meu Turno (card de expectation).
+    // expectation_id: liga a assumption à expectativa materializada (UPDATE em
+    // receiving_expectations.status=confirmed). Demais params são metadata
+    // visual para o preview — fallback usa checklist.* quando ausentes.
+    const expectationId = searchParams.get('expectation_id') || undefined;
+    const supplierFromQuery = searchParams.get('supplier') || null;
+    const windowFromQuery = searchParams.get('from') || null;
+    const windowToQuery = searchParams.get('to') || null;
     const session = useSession();
     const restaurantId = session.restaurantId;
     const sessionLoading = session.status === 'loading';
@@ -65,7 +74,7 @@ export default function ActivityDetailsPage() {
         setAssuming(true);
         setLimitError(null);
         try {
-            await assumeMutation.mutateAsync({ restaurantId, checklistId });
+            await assumeMutation.mutateAsync({ restaurantId, checklistId, expectationId });
             router.push(`/turno/atividade/${checklistId}/executar`);
         } catch (e) {
             const err = e as Error & { code?: string };
@@ -112,6 +121,13 @@ export default function ActivityDetailsPage() {
     const isAssumedByMe = assumption?.user_id === user?.id;
     const isAssumedByOther = !!assumption && !isAssumedByMe;
     const isCompleted = Boolean(assumption?.completed_at);
+    const isReceiving = checklist.checklist_type === 'receiving';
+    // Em recebimento, janela é apenas previsão — fornecedor e horários
+    // mostrados de forma informativa, sem banners bloqueantes nem
+    // botão desabilitado por horário.
+    const receivingSupplier = supplierFromQuery || (checklist as { supplier_name?: string | null }).supplier_name || null;
+    const receivingFrom = windowFromQuery || (checklist.start_time as string | undefined) || null;
+    const receivingTo = windowToQuery || (checklist.end_time as string | undefined) || null;
 
     // Shift type labels
     const shiftLabels: Record<string, string> = {
@@ -151,8 +167,8 @@ export default function ActivityDetailsPage() {
             <main className="flex-1 overflow-y-auto px-4 py-6 pb-32">
                 <div className="max-w-[480px] mx-auto w-full flex flex-col gap-4">
 
-                    {/* Inactive time window banner */}
-                    {timeWindowStatus === 'before' && checklist.start_time && (
+                    {/* Inactive time window banner — não aplica a recebimentos (janela é só previsão) */}
+                    {!isReceiving && timeWindowStatus === 'before' && checklist.start_time && (
                         <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex items-center gap-3">
                             <span className="material-symbols-outlined text-amber-400 shrink-0">schedule</span>
                             <div>
@@ -166,7 +182,7 @@ export default function ActivityDetailsPage() {
                         </div>
                     )}
 
-                    {timeWindowStatus === 'after' && checklist.end_time && !isCompleted && (
+                    {!isReceiving && timeWindowStatus === 'after' && checklist.end_time && !isCompleted && (
                         <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-center gap-3">
                             <span className="material-symbols-outlined text-red-400 shrink-0">warning</span>
                             <div>
@@ -225,7 +241,18 @@ export default function ActivityDetailsPage() {
                         {/* Name & description */}
                         <div className="p-5 border-b border-[#233f48]">
                             <div className="flex items-start justify-between gap-3 mb-3">
-                                <h2 className="text-white text-xl font-black leading-snug">{checklist.name}</h2>
+                                <div className="flex-1 min-w-0">
+                                    <h2 className="text-white text-xl font-black leading-snug">{checklist.name}</h2>
+                                    {(checklist as { is_one_shot?: boolean }).is_one_shot && (
+                                        <span
+                                            className="mt-2 inline-flex items-center gap-1 bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider"
+                                            title="Recebimento criado ad-hoc para registro único"
+                                        >
+                                            <span className="material-symbols-outlined text-[12px]">bolt</span>
+                                            Recebimento rápido
+                                        </span>
+                                    )}
+                                </div>
                                 {checklist.is_required && (
                                     <span className="bg-[#13b6ec]/10 text-[#13b6ec] text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1 shrink-0">
                                         <span className="material-symbols-outlined text-[12px]">bolt</span>
@@ -271,19 +298,36 @@ export default function ActivityDetailsPage() {
                                 <span className="text-white font-bold text-sm">{shiftLabels[checklist.shift as string] || String(checklist.shift)}</span>
                             </div>
 
-                            {/* Time window */}
-                            {(checklist.start_time || checklist.end_time) && (
+                            {/* Fornecedor (receiving only) */}
+                            {isReceiving && receivingSupplier && (
+                                <div className="px-5 py-3.5 flex items-center justify-between">
+                                    <div className="flex items-center gap-2 text-[#92bbc9] text-sm">
+                                        <span className="material-symbols-outlined text-[18px]">local_shipping</span>
+                                        Fornecedor
+                                    </div>
+                                    <span className="text-white font-bold text-sm truncate ml-3">{receivingSupplier}</span>
+                                </div>
+                            )}
+
+                            {/* Time window — em receiving vira "Previsão de chegada" e nunca usa cor de alerta */}
+                            {((isReceiving && (receivingFrom || receivingTo)) || (!isReceiving && (checklist.start_time || checklist.end_time))) && (
                                 <div className="px-5 py-3.5 flex items-center justify-between">
                                     <div className="flex items-center gap-2 text-[#92bbc9] text-sm">
                                         <span className="material-symbols-outlined text-[18px]">schedule</span>
-                                        Janela de horário
+                                        {isReceiving ? 'Previsão de chegada' : 'Janela de horário'}
                                     </div>
-                                    <span className={`font-bold text-sm ${timeWindowStatus === 'active' || timeWindowStatus === 'always' ? 'text-emerald-400' : 'text-amber-400'}`}>
-                                        {checklist.start_time && checklist.end_time
-                                            ? `${checklist.start_time} – ${checklist.end_time}`
-                                            : checklist.start_time
-                                                ? `A partir de ${checklist.start_time}`
-                                                : `Até ${checklist.end_time}`}
+                                    <span className={`font-bold text-sm ${isReceiving ? 'text-white' : timeWindowStatus === 'active' || timeWindowStatus === 'always' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                        {isReceiving
+                                            ? receivingFrom && receivingTo
+                                                ? `${receivingFrom.slice(0,5)} – ${receivingTo.slice(0,5)}`
+                                                : receivingFrom
+                                                    ? `A partir de ${receivingFrom.slice(0,5)}`
+                                                    : `Até ${(receivingTo as string).slice(0,5)}`
+                                            : checklist.start_time && checklist.end_time
+                                                ? `${checklist.start_time} – ${checklist.end_time}`
+                                                : checklist.start_time
+                                                    ? `A partir de ${checklist.start_time}`
+                                                    : `Até ${checklist.end_time}`}
                                     </span>
                                 </div>
                             )}
@@ -366,7 +410,7 @@ export default function ActivityDetailsPage() {
                             <span className="material-symbols-outlined text-[20px]">task_alt</span>
                             Ver atividade concluída
                         </button>
-                    ) : timeWindowStatus === 'before' ? (
+                    ) : !isReceiving && timeWindowStatus === 'before' ? (
                         <button
                             disabled
                             className="w-full bg-[#1a2c32] text-[#325a67] font-bold text-base py-4 rounded-xl border border-[#233f48] cursor-not-allowed flex items-center justify-center gap-2"
@@ -406,7 +450,7 @@ export default function ActivityDetailsPage() {
                             ) : (
                                 <>
                                     <span className="material-symbols-outlined text-[20px]">check_circle</span>
-                                    Assumir atividade
+                                    {isReceiving ? 'Assumir recebimento' : 'Assumir atividade'}
                                 </>
                             )}
                         </button>

@@ -16,7 +16,7 @@ export interface UserAreaAssignment {
     user_id: string;
     area_id: string;
     created_at: string;
-    area?: { id: string; name: string; color: string; priority_mode?: string } | null;
+    area?: { id: string; name: string; color: string; priority_mode?: string; allow_manual_receiving?: boolean } | null;
 }
 
 // Fetch all area assignments for a restaurant (for admin views)
@@ -83,6 +83,8 @@ export function useAssignUserArea() {
             queryClient.invalidateQueries({ queryKey: ["user-areas", variables.restaurant_id] });
             queryClient.invalidateQueries({ queryKey: ["my-areas"] });
             queryClient.invalidateQueries({ queryKey: ["equipe", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["receiving-templates", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["receiving-expectations", variables.restaurant_id] });
         },
     });
 }
@@ -110,6 +112,8 @@ export function useRemoveUserArea() {
             queryClient.invalidateQueries({ queryKey: ["user-areas", variables.restaurant_id] });
             queryClient.invalidateQueries({ queryKey: ["my-areas"] });
             queryClient.invalidateQueries({ queryKey: ["equipe", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["receiving-templates", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["receiving-expectations", variables.restaurant_id] });
         },
     });
 }

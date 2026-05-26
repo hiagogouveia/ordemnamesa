@@ -7,7 +7,9 @@ import type { ExecutionStatus } from "@/lib/types";
 import { getOperationalStatus } from "@/lib/utils/get-operational-status";
 import { describeRecurrence } from "@/lib/utils/recurrence/describe";
 import { UnitBadge } from "@/components/ui/unit-badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { IssueBadge } from "@/components/checklists/issues/IssueBadge";
+import { ChecklistTypeBadge } from "@/components/checklists/management/ChecklistTypeBadge";
 
 const SHIFT_LABELS: Record<string, string> = {
     morning: "Manhã",
@@ -129,19 +131,19 @@ export function ChecklistRow({
             {/* Checkbox de seleção (visão global) */}
             {selectable && (
                 <td className="pl-3 pr-1 py-3 w-10" onClick={(e) => e.stopPropagation()}>
-                    <input
-                        type="checkbox"
+                    <Checkbox
                         checked={checked ?? false}
                         onChange={(e) => onCheckChange?.(e.target.checked)}
-                        className="size-4 accent-[#13b6ec] cursor-pointer"
+                        aria-label={`Selecionar ${checklist.name}`}
                     />
                 </td>
             )}
 
             {/* Título */}
             <td className="px-3 py-3" onClick={onSelect}>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-white text-sm">{checklist.name}</span>
+                    <ChecklistTypeBadge type={checklist.checklist_type} />
                     <IssueBadge count={openIssuesCount} compact />
                 </div>
                 {checklist.description && (
@@ -177,20 +179,16 @@ export function ChecklistRow({
                 )}
             </td>
 
-            {/* Responsável / Executando */}
+            {/* Em execução por (assumed_by_name, transitório) | Atribuído a (responsible, permanente) */}
             <td className="px-3 py-3 hidden md:table-cell" onClick={onSelect}>
                 {checklist.assumed_by_name ? (
-                    <span className="flex items-center gap-1.5">
-                        <span className={`material-symbols-outlined text-[14px] shrink-0 ${execStatus !== "done" ? "text-[#13b6ec]" : "text-[#5a8a99]"}`}>person</span>
+                    <span className="flex items-center gap-1.5" title="Quem iniciou esta rotina hoje">
+                        <span className={`material-symbols-outlined text-[14px] shrink-0 ${execStatus !== "done" ? "text-[#13b6ec]" : "text-[#5a8a99]"}`}>play_arrow</span>
+                        <span className="text-[#5a8a99] text-xs shrink-0">Em execução:</span>
                         <span className="text-white text-sm font-medium truncate">{checklist.assumed_by_name}</span>
-                        {execStatus !== "done" && (
-                            <span className="shrink-0 text-[9px] font-bold text-[#13b6ec] bg-[#13b6ec]/10 border border-[#13b6ec]/20 px-1.5 py-0.5 rounded-full uppercase tracking-wide">
-                                Executando
-                            </span>
-                        )}
                     </span>
                 ) : checklist.responsible?.name ? (
-                    <span className="flex items-center gap-1.5">
+                    <span className="flex items-center gap-1.5" title="Colaborador atribuído à rotina">
                         <span className="material-symbols-outlined text-[14px] text-[#5a8a99] shrink-0">person</span>
                         <span className="text-[#92bbc9] text-sm truncate">{checklist.responsible.name}</span>
                     </span>

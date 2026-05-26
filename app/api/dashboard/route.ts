@@ -174,7 +174,9 @@ export async function GET(request: Request) {
                 .select('id, name, restaurant_id, shift, area_id, end_time, start_time, recurrence, recurrence_config, assigned_to_user_id, areas(id, name, color), checklist_tasks(id, is_critical)')
                 .in('restaurant_id', restaurantIds)
                 .eq('active', true)
-                .eq('status', 'active'),
+                .eq('status', 'active')
+                // Sprint 49: receiving não impacta dashboard operacional.
+                .not('checklist_type', 'eq', 'receiving'),
 
             adminSupabase
                 .from('checklist_assumptions')
@@ -210,9 +212,15 @@ export async function GET(request: Request) {
         const checklistsMap = new Map<string, ChecklistRow>();
         checklists.forEach(cl => checklistsMap.set(cl.id, cl));
 
-        // Separar assumptions por data
-        const todayAssumptions = allAssumptions.filter(a => a.date_key === todayKey);
-        const yesterdayAssumptions = allAssumptions.filter(a => a.date_key === yesterdayKey);
+        // Sprint 51: assumptions de receiving NÃO entram em métricas operacionais.
+        // allChecklists já está filtrado por .not('checklist_type','eq','receiving')
+        // no SQL acima — usamos esse set para isolar as assumptions relevantes.
+        const operationalChecklistIds = new Set(allChecklists.map(c => c.id));
+        const operationalAssumptions = allAssumptions.filter(a => operationalChecklistIds.has(a.checklist_id));
+
+        // Separar assumptions por data (já sem receiving)
+        const todayAssumptions = operationalAssumptions.filter(a => a.date_key === todayKey);
+        const yesterdayAssumptions = operationalAssumptions.filter(a => a.date_key === yesterdayKey);
 
         // Sets de tasks concluídas hoje + assumptions com tasks bloqueadas
         const doneTaskIds = new Set<string>();

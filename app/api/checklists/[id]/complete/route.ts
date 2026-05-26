@@ -124,6 +124,32 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             },
         });
 
+        // Sprint 53 — auto-archive de one-shot: agora que a assumption foi
+        // marcada com completed_at, instâncias descartáveis (ex.: recebimento
+        // rápido) saem das queries active=true. Histórico fica preservado pela
+        // assumption. Só dispara quando o checklist é is_one_shot=true; rotinas
+        // recorrentes não são afetadas. Idempotente (set active=false várias
+        // vezes é no-op). Falha aqui apenas loga — não invalida a conclusão.
+        try {
+            const { data: clMeta } = await adminSupabase
+                .from('checklists')
+                .select('is_one_shot, active')
+                .eq('id', checklistId)
+                .maybeSingle();
+            if (clMeta?.is_one_shot && clMeta.active) {
+                const { error: archiveError } = await adminSupabase
+                    .from('checklists')
+                    .update({ active: false })
+                    .eq('id', checklistId)
+                    .eq('is_one_shot', true);
+                if (archiveError) {
+                    console.error('[POST /api/checklists/[id]/complete] auto-archive falhou:', archiveError, { checklist_id: checklistId });
+                }
+            }
+        } catch (archiveErr) {
+            console.error('[POST /api/checklists/[id]/complete] auto-archive exception:', archiveErr, { checklist_id: checklistId });
+        }
+
         // Gerar notificações para managers/owners se houver observação
         if (observation && observation.trim()) {
             try {
