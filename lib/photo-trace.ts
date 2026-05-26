@@ -71,12 +71,23 @@ export type Breadcrumb = {
     m?: Record<string, string | number | boolean>;
 };
 
-// ---------- Estado de módulo ----------
+// ---------- Estado singleton compartilhado entre chunks ----------
+// O App Router do Next.js pode duplicar este módulo em chunks diferentes
+// (root layout vs route segment). Estado em `let` module-level fica
+// segregado por instância — boot() roda em uma e bc() em outra ficaria
+// no-op pelo guard `started`. Singleton via globalThis garante uma
+// única instância por janela do browser, sobrevivendo a duplicação.
 
-let started = false;
-let sessionId = '';
-let seq = 0;
-const buffer: Breadcrumb[] = [];
+type PtState = {
+    started: boolean;
+    sessionId: string;
+    seq: number;
+    buffer: Breadcrumb[];
+};
+
+const G = globalThis as typeof globalThis & { __photoTraceState?: PtState };
+G.__photoTraceState ??= { started: false, sessionId: '', seq: 0, buffer: [] };
+const state: PtState = G.__photoTraceState;
 
 // ---------- Helpers ----------
 
@@ -116,7 +127,7 @@ function safeMeta(event: string, meta?: object): Breadcrumb['m'] | undefined {
 }
 
 function flushBufferToLS(): void {
-    try { lsSet(LS.CUR, JSON.stringify(buffer)); } catch { /* nunca crashar */ }
+    try { lsSet(LS.CUR, JSON.stringify(state.buffer)); } catch { /* nunca crashar */ }
 }
 
 // ---------- API pública ----------
@@ -133,22 +144,22 @@ function flushBufferToLS(): void {
  * setInterval / sem wake-up de timer.
  */
 export function bc(event: string, meta?: object): void {
-    if (!IS_ENABLED || !started) return;
+    if (!IS_ENABLED || !state.started) return;
     try {
         const m = safeMeta(event, meta);
         const entry: Breadcrumb = {
-            s: sessionId,
-            n: seq++,
+            s: state.sessionId,
+            n: state.seq++,
             t: Math.round(performance.now() * 10) / 10,
             w: Date.now(),
             e: event,
             ...(m ? { m } : {}),
         };
-        buffer.push(entry);
-        if (buffer.length > BUFFER_MAX) buffer.shift();
+        state.buffer.push(entry);
+        if (state.buffer.length > BUFFER_MAX) state.buffer.shift();
 
         // Heartbeat: última timestamp viva desta sessão. Sempre escreve.
-        lsSet(LS.HB, `${sessionId}|${Date.now()}`);
+        lsSet(LS.HB, `${state.sessionId}|${Date.now()}`);
 
         if (CRITICAL.has(event)) flushBufferToLS();
     } catch {
@@ -167,12 +178,12 @@ export function bc(event: string, meta?: object): void {
  */
 export function boot(): void {
     if (!IS_ENABLED) return;
-    if (started) return;
-    started = true;
+    if (state.started) return;
+    state.started = true;
 
     try {
-        sessionId = genSessionId();
-        seq = 0;
+        state.sessionId = genSessionId();
+        state.seq = 0;
 
         // 1. Lê estado da sessão anterior ANTES de qualquer write nova.
         const prevRaw = lsGet(LS.CUR);
@@ -295,10 +306,10 @@ function onWindowError(e: ErrorEvent): void {
 function sendCurrent(reason: string): void {
     try {
         const payload = JSON.stringify({
-            s: sessionId,
+            s: state.sessionId,
             ua: (navigator.userAgent ?? '').slice(0, UA_TRUNC),
             reason,
-            bcs: buffer,
+            bcs: state.buffer,
         });
         if (typeof navigator.sendBeacon === 'function') {
             navigator.sendBeacon(ENDPOINT, new Blob([payload], { type: 'application/json' }));
