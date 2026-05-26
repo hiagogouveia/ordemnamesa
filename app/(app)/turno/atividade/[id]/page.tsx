@@ -145,7 +145,7 @@ export default function ActivityDetailsPage() {
     };
 
     return (
-        <div className="min-h-[100dvh] bg-[#101d22] font-sans flex flex-col">
+        <div className="min-h-full bg-[#101d22] font-sans flex flex-col">
             {/* Header Sticky */}
             <header className="sticky top-0 z-30 bg-[#101d22]/95 backdrop-blur-md border-b border-[#233f48] px-4 py-4">
                 <div className="max-w-[480px] mx-auto w-full flex items-center gap-3">
@@ -164,7 +164,7 @@ export default function ActivityDetailsPage() {
                 </div>
             </header>
 
-            <main className="flex-1 overflow-y-auto px-4 py-6 pb-32">
+            <main className="flex-1 px-4 py-6">
                 <div className="max-w-[480px] mx-auto w-full flex flex-col gap-4">
 
                     {/* Inactive time window banner — não aplica a recebimentos (janela é só previsão) */}
@@ -400,7 +400,7 @@ export default function ActivityDetailsPage() {
             </main>
 
             {/* Bottom Action */}
-            <div className="fixed bottom-0 left-0 lg:left-64 right-0 px-4 pt-4 pb-20 lg:pb-4 bg-gradient-to-t from-[#0a1215] via-[#0a1215]/95 to-transparent z-40">
+            <div className="sticky bottom-0 px-4 py-4 bg-[#101d22] border-t border-[#233f48]/60 z-20">
                 <div className="max-w-[480px] mx-auto flex flex-col gap-2">
                     {isCompleted ? (
                         <button
