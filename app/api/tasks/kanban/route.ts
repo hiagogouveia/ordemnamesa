@@ -96,11 +96,10 @@ export async function GET(request: Request) {
 
         const { data: activeChecklists } = await adminSupabase
             .from('checklists')
-            .select('id, name, description, shift, is_required, recurrence, recurrence_config, last_reset_at, assigned_to_user_id, role_id, area_id, order_index, restaurant_id, roles(id, name, color), areas(id, name, color), checklist_type, start_time, end_time')
+            .select('id, name, description, shift, is_required, recurrence, recurrence_config, last_reset_at, assigned_to_user_id, role_id, area_id, order_index, restaurant_id, roles(id, name, color), areas(id, name, color), checklist_type, start_time, end_time, receiving_mode, is_one_shot, supplier_name')
             .in('restaurant_id', restaurantIds)
             .eq('active', true)
             .eq('status', 'active')
-            .not('checklist_type', 'eq', 'receiving')
             .or(checklistFilterParts.join(','))
             .order('order_index', { ascending: true, nullsFirst: false })
             .order('id', { ascending: true });

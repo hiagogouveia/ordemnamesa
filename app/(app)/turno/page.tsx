@@ -234,6 +234,13 @@ export default function KanbanPage() {
         return true;
     }, [isGlobal, activeUnitId, activeAreaId]);
 
+    // Dedupe: receivings recorrentes vêm via ReceivingExpectation (carrega janela esperada + status overdue).
+    // Pulamos do kanban as rotinas que JÁ têm expectativa materializada, evitando renderizar duas vezes.
+    const checklistIdsCoveredByExpectations = useMemo(
+        () => new Set(receivingExpectations.map((e) => e.checklist_id)),
+        [receivingExpectations],
+    );
+
     // Construção da lista unificada (rotinas + recebimentos).
     const operations: OperationItem[] = useMemo(() => {
         if (!kanbanData) return [];
@@ -241,6 +248,8 @@ export default function KanbanPage() {
 
         for (const cl of enrichedChecklists) {
             if (!matchesFilters(cl)) continue;
+            if (checklistIdsCoveredByExpectations.has(cl.id)) continue;
+
             const assumption = kanbanData.assumptions?.find(a => a.checklist_id === cl.id);
             const isAssignedToOther = Boolean(cl.assigned_to_user_id && cl.assigned_to_user_id !== user?.id);
             const isAssignedToMe = assumption?.user_id === user?.id;
@@ -256,8 +265,10 @@ export default function KanbanPage() {
                 });
 
             const isReceiving = cl.checklist_type === 'receiving';
-            // Heurística: receiving com is_one_shot é "rápido" (criado ad-hoc, sem template recorrente).
-            const isQuick = isReceiving && (cl as KanbanChecklist).is_one_shot === true;
+            // "Rápido" = receiving ad-hoc, sem template recorrente. Em paralelo, on_demand
+            // tambem nao tem expectativa materializada; usamos is_one_shot como marca canonica
+            // (criado pelo fluxo /api/receiving/quick).
+            const isQuick = isReceiving && cl.is_one_shot === true;
 
             out.push({
                 id: `cl:${cl.id}`,
@@ -277,7 +288,7 @@ export default function KanbanPage() {
                     isAssignedToMe,
                     isAssignedToOther,
                     unitName: getUnitName(cl),
-                    supplier: (cl as KanbanChecklist).supplier_name ?? null,
+                    supplier: cl.supplier_name ?? null,
                     isQuick,
                 },
                 onClick: () => router.push(`/turno/atividade/${cl.id}`),
@@ -340,7 +351,7 @@ export default function KanbanPage() {
         }
 
         return out;
-    }, [enrichedChecklists, kanbanData, receivingExpectations, isGlobal, activeAreaId, matchesFilters, currentMinutes, user?.id, router, getUnitName]);
+    }, [enrichedChecklists, kanbanData, receivingExpectations, checklistIdsCoveredByExpectations, isGlobal, activeAreaId, matchesFilters, currentMinutes, user?.id, router, getUnitName]);
 
     const groups = useMemo(() => groupOperations(operations), [operations]);
     const pendingCount = useMemo(
