@@ -97,6 +97,9 @@ export default function KanbanPage() {
     }, [isGlobal, kanbanData?.units_by_id]);
 
     const [activeUnitId, setActiveUnitId] = useState<string>('all');
+    // Filtro por tipo de operacao. "Rapido" nao e tab propria — recebimento ad-hoc
+    // entra como subtipo dentro de "Recebimentos" (badge no TaskRow).
+    const [activeTypeFilter, setActiveTypeFilter] = useState<'all' | 'routine' | 'receiving'>('all');
 
     const getUnitName = useCallback((cl: KanbanChecklist): string | undefined => {
         if (!isGlobal || !kanbanData?.units_by_id || !cl.restaurant_id) return undefined;
@@ -365,11 +368,37 @@ export default function KanbanPage() {
         return out;
     }, [enrichedChecklists, kanbanData, receivingExpectations, checklistIdsCoveredByExpectations, isGlobal, activeAreaId, matchesFilters, currentMinutes, user?.id, router, getUnitName]);
 
-    const groups = useMemo(() => groupOperations(operations), [operations]);
-    const pendingCount = useMemo(
-        () => operations.filter((o) => !o.done).length,
+    // Contagens por tipo (apenas pendentes — concluidas ficam no colapsavel).
+    const typeCounts = useMemo(() => {
+        let all = 0, routine = 0, receiving = 0;
+        for (const o of operations) {
+            if (o.done) continue;
+            all++;
+            if (o.kind === 'routine') routine++;
+            else if (o.kind === 'receiving') receiving++;
+        }
+        return { all, routine, receiving };
+    }, [operations]);
+
+    const filteredOperations = useMemo(() => {
+        if (activeTypeFilter === 'all') return operations;
+        return operations.filter((o) => {
+            // Concluidas ficam sempre visiveis no colapsavel, independente do filtro.
+            if (o.done) return true;
+            if (activeTypeFilter === 'routine') return o.kind === 'routine';
+            if (activeTypeFilter === 'receiving') return o.kind === 'receiving';
+            return true;
+        });
+    }, [operations, activeTypeFilter]);
+
+    const groups = useMemo(() => groupOperations(filteredOperations), [filteredOperations]);
+    const pendingCount = typeCounts.all;
+    const doneCount = useMemo(
+        () => operations.filter((o) => o.done).length,
         [operations],
     );
+    const totalCount = operations.length;
+    const progressPct = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
 
     const filteredReceivingTemplates = useMemo(
         () => receivingTemplates.filter((t) => !activeAreaId || t.area_id === activeAreaId),
@@ -427,24 +456,36 @@ export default function KanbanPage() {
 
     return (
         <div className="min-h-full bg-[#101d22] pb-6">
-            {/* Header compacto — saudação + status do turno + contador */}
+            {/* Header — saudação + meta do turno + anel de progresso */}
             <header className="sticky top-0 z-30 bg-[#101d22]/95 backdrop-blur border-b border-[#233f48]">
-                <div className="max-w-[640px] mx-auto w-full px-4 py-2.5 flex items-center justify-between gap-3">
-                    <div className="min-w-0 flex items-baseline gap-2 flex-wrap">
-                        <h1 className="text-white text-base sm:text-lg font-bold truncate">
+                <div className="max-w-[640px] mx-auto w-full px-4 pt-4 pb-3 flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                        <h1 className="text-white text-xl sm:text-2xl font-bold leading-tight tracking-tight truncate">
                             {isGlobal
                                 ? 'Meu Turno · Global'
-                                : `${getGreeting()}, ${user?.name.split(' ')[0] || '...'}`}
+                                : `${getGreeting()}, ${user?.name.split(' ')[0] || '...'}.`}
                         </h1>
-                        <span className="text-[11px] text-[#92bbc9]">
-                            {isGlobal
-                                ? `${unitsList.length} unidades`
-                                : currentShift ? `Turno: ${currentShift.name}` : 'Fora do turno'}
-                        </span>
+                        <div className="mt-1 flex items-center gap-1.5 text-[10px] sm:text-[11px] text-[#92bbc9] font-medium uppercase tracking-wider flex-wrap">
+                            {isGlobal ? (
+                                <span className="text-[#13b6ec]">{unitsList.length} unidades</span>
+                            ) : currentShift ? (
+                                <>
+                                    <span className="text-[#13b6ec]">Turno {currentShift.name}</span>
+                                    {currentShift.start_time && currentShift.end_time && (
+                                        <>
+                                            <span className="text-[#325a67]">·</span>
+                                            <span className="tabular-nums">{currentShift.start_time.slice(0,5)} – {currentShift.end_time.slice(0,5)}</span>
+                                        </>
+                                    )}
+                                </>
+                            ) : (
+                                <span>Fora do turno</span>
+                            )}
+                        </div>
                     </div>
-                    <span className="shrink-0 text-[11px] font-semibold text-[#92bbc9] bg-[#1a2c32] border border-[#233f48] px-2 py-1 rounded tabular-nums">
-                        {pendingCount} pendente{pendingCount === 1 ? '' : 's'}
-                    </span>
+                    {totalCount > 0 && (
+                        <ProgressRing pct={progressPct} done={doneCount} total={totalCount} />
+                    )}
                 </div>
             </header>
 
@@ -465,6 +506,20 @@ export default function KanbanPage() {
                         </div>
                     </div>
                 )}
+
+                {/* Tabs de tipo: Todas / Rotinas / Recebimentos. "Rapido" e subtipo
+                    de Recebimento (badge no TaskRow), nao tab propria. */}
+                <div className="flex overflow-x-auto gap-1.5 -mx-1 px-1 pb-1 scrollbar-hide snap-x">
+                    <TypeChip active={activeTypeFilter === 'all'} onClick={() => setActiveTypeFilter('all')} count={typeCounts.all}>
+                        Todas
+                    </TypeChip>
+                    <TypeChip active={activeTypeFilter === 'routine'} onClick={() => setActiveTypeFilter('routine')} count={typeCounts.routine} icon="checklist">
+                        Rotinas
+                    </TypeChip>
+                    <TypeChip active={activeTypeFilter === 'receiving'} onClick={() => setActiveTypeFilter('receiving')} count={typeCounts.receiving} icon="local_shipping">
+                        Recebimentos
+                    </TypeChip>
+                </div>
 
                 {/* Filtros: unidade (global) + área */}
                 {(isGlobal && unitsList.length > 0) || effectiveAreas.length > 1 ? (
@@ -756,6 +811,65 @@ export default function KanbanPage() {
 }
 
 // ----------------------- Sub-componentes locais -----------------------
+
+function TypeChip({ active, onClick, count, icon, children }: {
+    active: boolean;
+    onClick: () => void;
+    count: number;
+    icon?: string;
+    children: React.ReactNode;
+}) {
+    return (
+        <button
+            onClick={onClick}
+            className={`snap-start whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                active
+                    ? 'bg-[#1a2c32] text-[#13b6ec] border border-[#325a67]'
+                    : 'bg-transparent text-[#92bbc9] border border-transparent hover:text-white'
+            }`}
+        >
+            {icon && <span className="material-symbols-outlined text-[14px]">{icon}</span>}
+            {children}
+            <span className={`text-[10px] font-bold tabular-nums px-1.5 py-px rounded-full ${
+                active ? 'bg-[#13b6ec]/20 text-[#13b6ec]' : 'bg-[#1a2c32] text-[#92bbc9]'
+            }`}>
+                {count}
+            </span>
+        </button>
+    );
+}
+
+function ProgressRing({ pct, done, total }: { pct: number; done: number; total: number }) {
+    const r = 16;
+    const circumference = 2 * Math.PI * r;
+    const offset = circumference * (1 - pct / 100);
+    return (
+        <div className="shrink-0 flex items-center gap-2.5 bg-[#1a2c32] border border-[#233f48] rounded-xl px-3 py-2">
+            <div className="relative w-10 h-10 flex items-center justify-center">
+                <svg width="40" height="40" className="-rotate-90">
+                    <circle cx="20" cy="20" r={r} fill="none" stroke="#233f48" strokeWidth="3.5" />
+                    <circle
+                        cx="20" cy="20" r={r}
+                        fill="none"
+                        stroke="#13b6ec"
+                        strokeWidth="3.5"
+                        strokeDasharray={circumference}
+                        strokeDashoffset={offset}
+                        strokeLinecap="round"
+                        className="transition-[stroke-dashoffset] duration-500"
+                    />
+                </svg>
+                <span className="absolute text-[9px] font-bold text-[#13b6ec] tabular-nums">{pct}%</span>
+            </div>
+            <div className="leading-tight">
+                <div className="text-white font-bold text-base tabular-nums">
+                    {done}<span className="text-[#5a8a99] text-xs">/{total}</span>
+                </div>
+                <div className="text-[9px] text-[#92bbc9] uppercase tracking-wider font-semibold">Concluídas</div>
+            </div>
+        </div>
+    );
+}
 
 function FilterPill({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
     return (
