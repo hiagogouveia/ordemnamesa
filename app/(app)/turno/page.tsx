@@ -296,6 +296,11 @@ export default function KanbanPage() {
         }
 
         // Recebimentos (ReceivingExpectations) — não disponíveis em modo global ainda.
+        // REGRA DE NEGOCIO: o "status" da expectation indica o ciclo de materializacao
+        // ('pending'/'confirmed' = esperado para hoje; 'overdue' = janela passou sem
+        // execucao; 'cancelled' = nao acontecera). NAO indica "executado". O receiving
+        // so e considerado executado/done quando existe uma checklist_assumption com
+        // completed_at — mesmo criterio das rotinas comuns.
         if (!isGlobal) {
             for (const exp of receivingExpectations) {
                 const cl = exp.checklist;
@@ -303,21 +308,26 @@ export default function KanbanPage() {
                 if (activeAreaId && cl.area_id !== activeAreaId) continue;
                 if (exp.status === 'cancelled') continue;
 
-                const isDone = exp.status === 'confirmed';
+                const expAssumption = kanbanData.assumptions?.find((a) => a.checklist_id === cl.id);
+                const isDone = Boolean(expAssumption?.completed_at);
                 const isOverdue = exp.status === 'overdue';
+                const isInProgress = Boolean(expAssumption && !expAssumption.completed_at);
+                const isAssignedToMe = expAssumption?.user_id === user?.id;
 
                 let state: RoutineStateInfo;
                 if (isDone) {
                     state = { kind: 'available', inProgress: false };
                 } else if (isOverdue) {
-                    state = { kind: 'late', inProgress: false };
+                    state = { kind: 'late', inProgress: isInProgress };
                 } else {
+                    // 'pending' ou 'confirmed' (materializado para hoje): classifica
+                    // pela janela esperada como qualquer rotina aguardando execucao.
                     state = getRoutineState({
                         start_time: exp.expected_window_start ?? null,
                         end_time: exp.expected_window_end ?? null,
                         currentMinutes,
                         hasBlockedTask: false,
-                        hasInProgressExecution: false,
+                        hasInProgressExecution: isInProgress,
                     });
                 }
 
@@ -335,6 +345,8 @@ export default function KanbanPage() {
                         supplier: cl.supplier_name ?? null,
                         isQuick: false,
                         isReceivingOverdue: isOverdue,
+                        assumptionName: expAssumption?.user_name,
+                        isAssignedToMe,
                         timeLabelOverride: exp.expected_window_start && exp.expected_window_end
                             ? `Prev. ${exp.expected_window_start.slice(0, 5)}–${exp.expected_window_end.slice(0, 5)}`
                             : null,
