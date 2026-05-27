@@ -10,16 +10,23 @@ export const config: LeadControlHubConfig = {
 
     customFields: [
         {
-            name: 'tipo_restaurante',
-            label: 'Tipo de restaurante',
+            name: 'categoria_restaurante',
+            label: 'Qual categoria melhor descreve o restaurante?',
             type: 'select',
             required: true,
             options: [
-                { value: 'fine_dining', label: 'Fine Dining' },
-                { value: 'casual', label: 'Casual / Bistrô' },
-                { value: 'fast_food', label: 'Fast Food' },
-                { value: 'bar', label: 'Bar / Pub' },
                 { value: 'cafeteria', label: 'Cafeteria' },
+                { value: 'hamburgueria', label: 'Hamburgueria' },
+                { value: 'pizzaria', label: 'Pizzaria' },
+                { value: 'churrascaria', label: 'Churrascaria' },
+                { value: 'restaurante_luxo', label: 'Restaurante de luxo' },
+                { value: 'restaurante_casual', label: 'Restaurante casual' },
+                { value: 'fast_food', label: 'Fast food' },
+                { value: 'bistro', label: 'Bistrô' },
+                { value: 'tematico', label: 'Temático' },
+                { value: 'food_truck', label: 'Food Truck' },
+                { value: 'gastrobar', label: 'Gastrobar' },
+                { value: 'outros', label: 'Outros' },
             ],
         },
         {
@@ -71,18 +78,24 @@ export const config: LeadControlHubConfig = {
 
     leadScoring: {
         hot: (lead) => {
-            const tipo = String(lead.custom_fields?.tipo_restaurante ?? '')
+            const categoria = String(lead.custom_fields?.categoria_restaurante ?? '')
             const func = String(lead.custom_fields?.numero_funcionarios ?? '')
             const unidades = String(lead.custom_fields?.numero_unidades ?? '')
             const isMultiUnit = ['2-3', '4-5', '6+'].includes(unidades)
-            const isTargetType = ['fine_dining', 'casual'].includes(tipo)
             const hasScale = ['16-50', '50+'].includes(func)
-            return isTargetType && (hasScale || isMultiUnit)
+            const isTargetCategory = ['restaurante_luxo', 'restaurante_casual', 'bistro', 'gastrobar', 'churrascaria'].includes(categoria)
+            return isTargetCategory && (hasScale || isMultiUnit)
         },
-        cold: (lead) =>
-            lead.custom_fields?.tipo_restaurante === 'fast_food' &&
-            lead.custom_fields?.numero_funcionarios === '1-5' &&
-            (lead.custom_fields?.numero_unidades === '1' ||
-                lead.custom_fields?.numero_unidades === undefined),
+        cold: (lead) => {
+            const categoria = String(lead.custom_fields?.categoria_restaurante ?? '')
+            const func = String(lead.custom_fields?.numero_funcionarios ?? '')
+            const unidades = lead.custom_fields?.numero_unidades
+            const isSmallFastFood = categoria === 'fast_food' || categoria === 'food_truck'
+            return (
+                isSmallFastFood &&
+                func === '1-5' &&
+                (unidades === '1' || unidades === undefined)
+            )
+        },
     },
 }

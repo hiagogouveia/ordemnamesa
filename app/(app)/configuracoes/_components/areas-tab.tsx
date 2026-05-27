@@ -76,7 +76,12 @@ export function AreasTab({ overrideRestaurantId }: { overrideRestaurantId?: stri
     };
 
     const handleSaveArea = async () => {
-        if (!restaurantId || !formName.trim()) return;
+        if (!formName.trim()) return;
+        if (!restaurantId) {
+            console.warn('[AreasTab] handleSaveArea sem restaurantId — store ainda não hidratou.');
+            setErrorMsg('Sessão do restaurante ainda carregando. Recarregue a página em alguns segundos.');
+            return;
+        }
         setErrorMsg(null);
 
         const maxParallelTasks = formMaxTasks.trim() === "" ? null : parseInt(formMaxTasks, 10);
@@ -423,8 +428,9 @@ export function AreasTab({ overrideRestaurantId }: { overrideRestaurantId?: stri
                             </button>
                             <button
                                 onClick={handleSaveArea}
-                                disabled={isSaving || !formName.trim()}
+                                disabled={isSaving || !formName.trim() || !restaurantId}
                                 className="flex-1 px-4 py-2.5 rounded-xl bg-[#13b6ec] text-[#111e22] font-bold text-sm hover:bg-[#10a0d0] disabled:opacity-50 transition-colors"
+                                title={!restaurantId ? 'Sessão do restaurante ainda carregando…' : undefined}
                             >
                                 {isSaving ? "Salvando..." : "Salvar"}
                             </button>

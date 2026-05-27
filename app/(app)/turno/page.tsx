@@ -4,7 +4,6 @@ import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { useSession } from '@/lib/providers/use-session';
 import { useAccountSessionStore } from '@/lib/store/account-session-store';
 import { useKanbanTasks, KanbanChecklist } from '@/lib/hooks/use-tasks';
-import { useUserRoles } from '@/lib/hooks/use-user-roles-shifts';
 import { useShifts } from '@/lib/hooks/use-shifts';
 import { useMyAreas } from '@/lib/hooks/use-user-areas';
 import { getCurrentShift } from '@/lib/utils';
@@ -48,8 +47,7 @@ export default function KanbanPage() {
 
     const { data: kanbanData, isLoading: loadingKanban } = useKanbanTasks(scope, userId);
     const { data: shifts = [] } = useShifts(restaurantId || undefined);
-    const { data: userRolesData = [], isLoading: loadingUserRoles } = useUserRoles(restaurantId || undefined, userId);
-    const { data: myAreaAssignments = [] } = useMyAreas(restaurantId || undefined, userId);
+    const { data: myAreaAssignments = [], isLoading: loadingMyAreas } = useMyAreas(restaurantId || undefined, userId);
     const { data: receivingExpectations = [] } = useReceivingExpectations(
         isGlobal ? undefined : restaurantId || undefined,
     );
@@ -83,7 +81,7 @@ export default function KanbanPage() {
     }, []);
 
     const currentShift = useMemo(() => getCurrentShift(shifts, timeNow), [shifts, timeNow]);
-    const hasNoRoles = !userLoading && user !== null && !loadingKanban && (kanbanData?.checklists?.length ?? 0) === 0 && !loadingUserRoles && userRolesData.length === 0;
+    const hasNoAreaAssigned = !userLoading && user !== null && !isGlobal && !loadingMyAreas && myAreaAssignments.length === 0;
 
     const currentMinutes = useMemo(() => {
         if (!timeNow) return 0;
@@ -497,7 +495,7 @@ export default function KanbanPage() {
                     </div>
                 )}
 
-                {!isGlobal && hasNoRoles && (
+                {hasNoAreaAssigned && (
                     <div className="bg-[#1a2c32] border border-amber-500/40 rounded-lg px-3 py-2.5 flex items-start gap-2">
                         <span className="material-symbols-outlined text-amber-400 text-base shrink-0 mt-0.5">warning</span>
                         <div>
