@@ -1,19 +1,20 @@
-import { sendEmail } from '@/lib/email/send-email'
 import { renderActionEmail } from '@/lib/email/templates'
 
-export async function sendSetupEmail(args: {
-    to: string
+export interface RenderSetupEmailArgs {
     setupLink: string
     entityName: string
     leadName: string
     trialDays?: number
-}): Promise<void> {
-    const { to, setupLink, entityName, leadName, trialDays } = args
+}
+
+export function renderSetupEmail(args: RenderSetupEmailArgs): { subject: string; html: string } {
+    const { setupLink, entityName, leadName, trialDays } = args
     const firstName = leadName.split(/\s+/)[0] || leadName
     const trialBlock = trialDays && trialDays > 0
         ? `<p>Seu período de teste de <strong>${trialDays} ${trialDays === 1 ? 'dia' : 'dias'}</strong> começa agora.</p>`
         : ''
 
+    const subject = `Bem-vindo ao Ordem na Mesa — ${entityName}`
     const html = renderActionEmail({
         title: `Bem-vindo ao Ordem na Mesa — ${entityName}`,
         greeting: `Olá, <strong>${firstName}</strong>!`,
@@ -26,13 +27,5 @@ export async function sendSetupEmail(args: {
         ctaUrl: setupLink,
         footerNote: 'O link expira em 24 horas. Se não foi você, ignore este email.',
     })
-
-    const result = await sendEmail({
-        to,
-        subject: `Bem-vindo ao Ordem na Mesa — ${entityName}`,
-        html,
-    })
-    if (!result.ok) {
-        throw new Error(`Falha ao enviar email de setup: ${result.error ?? 'desconhecido'}`)
-    }
+    return { subject, html }
 }

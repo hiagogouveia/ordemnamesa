@@ -11,6 +11,8 @@ export interface Lead {
     approved_entity_id: string | null
     approved_user_id: string | null
     notes: string | null
+    setup_email_sent_at: string | null
+    setup_email_last_error: string | null
     created_at: string
     updated_at: string
 }

@@ -15,6 +15,7 @@ import { checkLeadDuplicates } from '@/lib/admin-leads-control-hub/duplicate-che
 import { getTrialConfig } from '@/lib/admin-leads-control-hub/trial-config'
 import type { Lead } from '@/lib/admin-leads-control-hub/types'
 import { LeadActions } from './lead-actions'
+import { SetupEmailStatus } from '../setup-email-status'
 
 export const dynamic = 'force-dynamic'
 
@@ -213,6 +214,16 @@ export default async function LeadDetailPage({
                     )}
                 </Card>
             </div>
+
+            {/* Setup email status (apenas para leads aprovados) */}
+            {lead.status === 'approved' && (
+                <SetupEmailStatus
+                    leadId={lead.id}
+                    setupEmailSentAt={lead.setup_email_sent_at}
+                    setupEmailLastError={lead.setup_email_last_error}
+                    variant="full"
+                />
+            )}
 
             {/* Actions */}
             <div className="rounded-2xl border border-border-dark bg-surface-dark p-6">
