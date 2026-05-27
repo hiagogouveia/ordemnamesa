@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { supabaseAdmin } from '@/lib/admin-leads-control-hub/supabase-admin'
 import { requireStaff, requireSuperAdmin } from '@/lib/admin-leads-control-hub/staff'
 import { logAdminAction } from '@/lib/admin-leads-control-hub/log-admin-action'
-import { sendEmail } from '@/lib/email/send-email'
+import { sendRecoveryEmail } from '@/lib/email/send-recovery-email'
 import { renderActionEmail } from '@/lib/email/templates'
 import { config } from '@/lead-control-hub.config'
 import { trackAdminEvent } from '@/lib/analytics/track-event'
@@ -63,39 +63,33 @@ export async function resetOwnerPasswordAction(
         .maybeSingle<{ id: string; email: string; name: string | null }>()
     if (!owner?.email) return { error: 'Owner do restaurante não encontrado.' }
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || ''
-    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-        type: 'recovery',
-        email: owner.email,
-        options: { redirectTo: `${siteUrl}/reset-password` },
-    })
-    if (linkError || !linkData?.properties?.action_link) {
-        console.error('[resetOwnerPasswordAction] generateLink', linkError)
-        return { error: 'Falha ao gerar link de recuperação.' }
-    }
-
-    const setupLink = linkData.properties.action_link
     const firstName = owner.name?.split(/\s+/)[0] ?? owner.name ?? 'olá'
-    const html = renderActionEmail({
-        title: `Redefinição de senha — ${config.appName}`,
-        greeting: `Olá, <strong>${firstName}</strong>!`,
-        bodyHtml: `
-          <p>A equipe administrativa do <strong>${config.appName}</strong> gerou um novo link para você redefinir a senha de acesso ao restaurante <strong>${restaurant.name}</strong>.</p>
-          <p>Clique no botão abaixo para definir uma nova senha.</p>
-        `,
-        ctaLabel: 'Redefinir senha',
-        ctaUrl: setupLink,
-        footerNote: 'O link expira em 24 horas. Se não foi você quem solicitou, ignore este email.',
-    })
-
-    const sent = await sendEmail({
-        to: owner.email,
-        subject: `Redefinição de senha — ${config.appName}`,
-        html,
+    const sent = await sendRecoveryEmail({
+        email: owner.email,
+        renderHtml: (actionLink) => ({
+            subject: `Redefinição de senha — ${config.appName}`,
+            html: renderActionEmail({
+                title: `Redefinição de senha — ${config.appName}`,
+                greeting: `Olá, <strong>${firstName}</strong>!`,
+                bodyHtml: `
+                  <p>A equipe administrativa do <strong>${config.appName}</strong> gerou um novo link para você redefinir a senha de acesso ao restaurante <strong>${restaurant.name}</strong>.</p>
+                  <p>Clique no botão abaixo para definir uma nova senha.</p>
+                `,
+                ctaLabel: 'Redefinir senha',
+                ctaUrl: actionLink,
+                footerNote: 'O link expira em 24 horas. Se não foi você quem solicitou, ignore este email.',
+            }),
+        }),
+        logContext: {
+            source: 'resetOwnerPasswordAction',
+            restaurantId: restaurant.id,
+            ownerId: owner.id,
+            email: owner.email,
+            triggeredBy: adminEmail,
+        },
     })
     if (!sent.ok) {
-        console.error('[resetOwnerPasswordAction] sendEmail', sent.error)
-        return { error: 'Link gerado, mas falhou ao enviar o email. Verifique os logs.' }
+        return { error: `Falha ao enviar e-mail de recuperação (${sent.reason}).` }
     }
 
     await logAdminAction({

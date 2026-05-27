@@ -47,6 +47,11 @@ export async function middleware(request: NextRequest) {
         return supabaseResponse
     }
 
+    // ===== /demo é público (walkthrough isolado, sem auth, sem queries reais) =====
+    if (request.nextUrl.pathname === '/demo' || request.nextUrl.pathname.startsWith('/demo/')) {
+        return supabaseResponse
+    }
+
     const publicRoutes = ['/', '/login', '/cadastro', '/signup', '/forgot-password', '/reset-password']
     const isPublicRoute =
         publicRoutes.includes(request.nextUrl.pathname) ||

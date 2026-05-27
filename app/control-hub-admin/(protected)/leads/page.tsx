@@ -10,6 +10,7 @@ import { buildLeadOutboundWhatsappLink } from '@/lib/admin-leads-control-hub/wha
 import { config } from '@/lead-control-hub.config'
 import type { Lead } from '@/lib/admin-leads-control-hub/types'
 import { LeadQuickActions } from './lead-quick-actions'
+import { SetupEmailStatus } from './setup-email-status'
 
 export const dynamic = 'force-dynamic'
 
@@ -146,6 +147,16 @@ function LeadRow({ lead, temperature }: { lead: Lead; temperature: LeadTemperatu
                     />
                 </div>
             </div>
+            {lead.status === 'approved' && (
+                <div className="mt-3 border-t border-border-dark pt-3" onClick={(e) => e.stopPropagation()}>
+                    <SetupEmailStatus
+                        leadId={lead.id}
+                        setupEmailSentAt={lead.setup_email_sent_at}
+                        setupEmailLastError={lead.setup_email_last_error}
+                        variant="compact"
+                    />
+                </div>
+            )}
         </div>
     )
 }

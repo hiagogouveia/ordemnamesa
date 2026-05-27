@@ -13,6 +13,8 @@ export default function ResetPasswordPage() {
     const [status, setStatus] = useState<Status>('checking')
     const [password, setPassword] = useState('')
     const [confirm, setConfirm] = useState('')
+    const [showPassword, setShowPassword] = useState(false)
+    const [showConfirm, setShowConfirm] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
@@ -162,31 +164,45 @@ export default function ResetPasswordPage() {
                                 <label htmlFor="password" className="text-slate-700 dark:text-white text-sm font-semibold">
                                     Nova senha
                                 </label>
-                                <input
-                                    id="password"
-                                    type="password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    required
-                                    minLength={8}
-                                    autoFocus
-                                    className="rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-surface-dark h-12 px-4 text-base text-slate-900 dark:text-white focus:border-primary focus:outline-none"
-                                />
+                                <div className="relative">
+                                    <input
+                                        id="password"
+                                        type={showPassword ? 'text' : 'password'}
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        required
+                                        minLength={8}
+                                        autoFocus
+                                        className="w-full rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-surface-dark h-12 pl-4 pr-12 text-base text-slate-900 dark:text-white focus:border-primary focus:outline-none"
+                                    />
+                                    <PasswordToggle
+                                        visible={showPassword}
+                                        onToggle={() => setShowPassword((v) => !v)}
+                                        targetId="password"
+                                    />
+                                </div>
                             </div>
 
                             <div className="flex flex-col gap-2">
                                 <label htmlFor="confirm" className="text-slate-700 dark:text-white text-sm font-semibold">
                                     Confirmar senha
                                 </label>
-                                <input
-                                    id="confirm"
-                                    type="password"
-                                    value={confirm}
-                                    onChange={(e) => setConfirm(e.target.value)}
-                                    required
-                                    minLength={8}
-                                    className="rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-surface-dark h-12 px-4 text-base text-slate-900 dark:text-white focus:border-primary focus:outline-none"
-                                />
+                                <div className="relative">
+                                    <input
+                                        id="confirm"
+                                        type={showConfirm ? 'text' : 'password'}
+                                        value={confirm}
+                                        onChange={(e) => setConfirm(e.target.value)}
+                                        required
+                                        minLength={8}
+                                        className="w-full rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-surface-dark h-12 pl-4 pr-12 text-base text-slate-900 dark:text-white focus:border-primary focus:outline-none"
+                                    />
+                                    <PasswordToggle
+                                        visible={showConfirm}
+                                        onToggle={() => setShowConfirm((v) => !v)}
+                                        targetId="confirm"
+                                    />
+                                </div>
                             </div>
 
                             {error && <p className="text-red-500 text-sm">{error}</p>}
@@ -203,5 +219,39 @@ export default function ResetPasswordPage() {
                 )}
             </div>
         </div>
+    )
+}
+
+function PasswordToggle({
+    visible,
+    onToggle,
+    targetId,
+}: {
+    visible: boolean
+    onToggle: () => void
+    targetId: string
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onToggle}
+            aria-label={visible ? 'Ocultar senha' : 'Mostrar senha'}
+            aria-pressed={visible}
+            aria-controls={targetId}
+            className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:text-slate-700 dark:text-[#93adc8] dark:hover:text-white focus:outline-none focus:ring-2 focus:ring-primary/40"
+            tabIndex={0}
+        >
+            {visible ? (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                </svg>
+            ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                </svg>
+            )}
+        </button>
     )
 }

@@ -23,6 +23,18 @@ export const config: LeadControlHubConfig = {
             ],
         },
         {
+            name: 'numero_unidades',
+            label: 'Quantidade de unidades',
+            type: 'select',
+            required: true,
+            options: [
+                { value: '1', label: '1 unidade' },
+                { value: '2-3', label: '2 a 3 unidades' },
+                { value: '4-5', label: '4 a 5 unidades' },
+                { value: '6+', label: '6 ou mais unidades' },
+            ],
+        },
+        {
             name: 'numero_funcionarios',
             label: 'Nº de funcionários',
             type: 'select',
@@ -61,10 +73,16 @@ export const config: LeadControlHubConfig = {
         hot: (lead) => {
             const tipo = String(lead.custom_fields?.tipo_restaurante ?? '')
             const func = String(lead.custom_fields?.numero_funcionarios ?? '')
-            return ['fine_dining', 'casual'].includes(tipo) && ['16-50', '50+'].includes(func)
+            const unidades = String(lead.custom_fields?.numero_unidades ?? '')
+            const isMultiUnit = ['2-3', '4-5', '6+'].includes(unidades)
+            const isTargetType = ['fine_dining', 'casual'].includes(tipo)
+            const hasScale = ['16-50', '50+'].includes(func)
+            return isTargetType && (hasScale || isMultiUnit)
         },
         cold: (lead) =>
             lead.custom_fields?.tipo_restaurante === 'fast_food' &&
-            lead.custom_fields?.numero_funcionarios === '1-5',
+            lead.custom_fields?.numero_funcionarios === '1-5' &&
+            (lead.custom_fields?.numero_unidades === '1' ||
+                lead.custom_fields?.numero_unidades === undefined),
     },
 }

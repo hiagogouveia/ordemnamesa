@@ -469,11 +469,11 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onEd
     }
 
     return (
-        <div className="w-full flex flex-col rounded-2xl border text-left bg-[#16262c] border-[#233f48] shadow-sm overflow-hidden">
-            <div className="flex items-start gap-4 p-4 min-h-[64px]">
+        <div className="w-full flex flex-col rounded-2xl border text-left bg-[#16262c] border-[#233f48]/80 shadow-sm overflow-hidden">
+            <div className="flex items-start gap-3.5 px-4 pt-4 pb-3">
                 <div className="shrink-0 flex items-center justify-center pt-0.5">
-                    <div className="w-7 h-7 rounded-full border-[2px] border-[#325a67] bg-transparent flex items-center justify-center">
-                        <span className="material-symbols-outlined text-[14px] text-[#13b6ec]">
+                    <div className="w-7 h-7 rounded-full border border-[#325a67]/80 bg-[#13b6ec]/5 flex items-center justify-center">
+                        <span className="material-symbols-outlined text-[15px] text-[#13b6ec]">
                             {taskType === 'date' ? 'event' :
                                 taskType === 'number' ? 'tag' :
                                 taskType === 'rating' ? 'star' : 'check_circle'}
@@ -493,10 +493,19 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onEd
                                     Crítica
                                 </span>
                             )}
+                            {!myEditableIssue && !isBlockedSequential && (
+                                <button
+                                    onClick={() => onReportProblem(task.id)}
+                                    aria-label="Mais opções da tarefa"
+                                    className="shrink-0 -my-2 -mr-2 w-10 h-10 flex items-center justify-center rounded-full text-[#92bbc9]/60 hover:text-[#92bbc9] hover:bg-white/5 active:scale-95 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#13b6ec]/40"
+                                >
+                                    <span className="material-symbols-outlined text-[20px]">more_horiz</span>
+                                </button>
+                            )}
                         </div>
                     </div>
                     {task.description && (
-                        <p className="text-sm mt-1 text-[#92bbc9]">{task.description}</p>
+                        <p className="text-[13px] leading-relaxed mt-1 text-[#92bbc9]/85">{task.description}</p>
                     )}
                     {isBlockedSequential && (
                         <div className="flex items-center gap-1 mt-2 text-[#92bbc9]/70 text-xs font-semibold">
@@ -508,25 +517,25 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onEd
             </div>
 
             {!isBlockedSequential && (
-                <div className="px-4 pb-4 flex flex-col gap-3">
+                <div className="px-4 pb-4 flex flex-col gap-3.5">
                     {/* Input específico do tipo */}
                     {taskType === 'date' && (
                         <div>
-                            <label className="block text-[10px] font-bold text-[#92bbc9] uppercase tracking-wider mb-1">
+                            <label className="block text-[11px] font-semibold text-[#92bbc9]/80 uppercase tracking-wide mb-1.5">
                                 Data
                             </label>
                             <input
                                 type="date"
                                 value={pendingDate}
                                 onChange={(e) => setPendingDate(e.target.value)}
-                                className="w-full bg-[#101d22] border border-[#233f48] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13b6ec]"
+                                className="w-full min-h-[48px] bg-[#101d22] border border-[#233f48] rounded-xl px-4 py-3 text-white outline-none transition-colors focus:border-[#13b6ec] focus:ring-2 focus:ring-[#13b6ec]/20"
                             />
                         </div>
                     )}
 
                     {taskType === 'number' && (
                         <div>
-                            <label className="block text-[10px] font-bold text-[#92bbc9] uppercase tracking-wider mb-1">
+                            <label className="block text-[11px] font-semibold text-[#92bbc9]/80 uppercase tracking-wide mb-1.5">
                                 Valor
                             </label>
                             <input
@@ -535,10 +544,10 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onEd
                                 value={pendingNumber}
                                 onChange={(e) => setPendingNumber(e.target.value)}
                                 placeholder="Digite o valor"
-                                className="w-full bg-[#101d22] border border-[#233f48] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13b6ec]"
+                                className="w-full min-h-[48px] bg-[#101d22] border border-[#233f48] rounded-xl px-4 py-3 text-white outline-none transition-colors focus:border-[#13b6ec] focus:ring-2 focus:ring-[#13b6ec]/20"
                             />
                             {(task.task_config?.min_value !== undefined || task.task_config?.max_value !== undefined) && (
-                                <p className="text-[10px] text-[#92bbc9] mt-1">
+                                <p className="text-[11px] text-[#92bbc9]/70 mt-1.5">
                                     Faixa esperada:
                                     {task.task_config?.min_value !== undefined && ` mín ${task.task_config.min_value}`}
                                     {task.task_config?.max_value !== undefined && ` máx ${task.task_config.max_value}`}
@@ -549,7 +558,7 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onEd
 
                     {taskType === 'rating' && (
                         <div>
-                            <label className="block text-[10px] font-bold text-[#92bbc9] uppercase tracking-wider mb-2">
+                            <label className="block text-[11px] font-semibold text-[#92bbc9]/80 uppercase tracking-wide mb-2">
                                 Avaliação
                             </label>
                             <div className="flex items-center gap-2">
@@ -573,10 +582,10 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onEd
                     {/* Multi-foto */}
                     {requiresPhoto && (
                         <div className="flex flex-col gap-2">
-                            <label className="block text-[10px] font-bold text-[#92bbc9] uppercase tracking-wider">
+                            <label className="block text-[11px] font-semibold text-[#92bbc9]/80 uppercase tracking-wide">
                                 Fotos
                                 {maxPhotos !== null && (
-                                    <span className="text-[#92bbc9]/60"> ({pendingPhotos.length}/{maxPhotos})</span>
+                                    <span className="text-[#92bbc9]/50 normal-case tracking-normal font-medium"> ({pendingPhotos.length}/{maxPhotos})</span>
                                 )}
                             </label>
                             {pendingPhotos.length > 0 && (
@@ -617,15 +626,15 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onEd
                     {/* Observação */}
                     {(requiresObservation || taskType !== 'boolean') && (
                         <div>
-                            <label className="block text-[10px] font-bold text-[#92bbc9] uppercase tracking-wider mb-1">
-                                Observação {requiresObservation ? <span className="text-red-400">*</span> : <span className="text-[#92bbc9]/60">(opcional)</span>}
+                            <label className="block text-[11px] font-semibold text-[#92bbc9]/80 uppercase tracking-wide mb-1.5">
+                                Observação {requiresObservation ? <span className="text-[#13b6ec] normal-case tracking-normal">obrigatória</span> : <span className="text-[#92bbc9]/50 normal-case tracking-normal font-medium">(opcional)</span>}
                             </label>
                             <textarea
                                 value={pendingObservation}
                                 onChange={(e) => setPendingObservation(e.target.value)}
-                                placeholder={requiresObservation ? 'Obrigatório...' : 'Adicione uma observação (opcional)'}
+                                placeholder={requiresObservation ? 'Descreva o que foi feito…' : 'Adicione uma observação (opcional)'}
                                 rows={2}
-                                className="w-full bg-[#101d22] border border-[#233f48] rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-[#13b6ec] resize-none"
+                                className="w-full bg-[#101d22] border border-[#233f48] rounded-xl px-4 py-3 text-sm text-white placeholder:text-[#92bbc9]/40 outline-none transition-colors focus:border-[#13b6ec] focus:ring-2 focus:ring-[#13b6ec]/20 resize-none leading-relaxed"
                             />
                         </div>
                     )}
@@ -646,7 +655,7 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onEd
 
                     <button
                         onClick={handleConclude}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 active:scale-[0.98] bg-[#13b6ec] text-[#0a1215] shadow-[0_4px_12px_rgba(19,182,236,0.25)]"
+                        className="w-full min-h-[48px] flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-150 active:scale-[0.98] bg-[#13b6ec] text-[#0a1215] shadow-[0_2px_8px_rgba(19,182,236,0.18)] hover:bg-[#0fa3d4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#13b6ec]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#16262c]"
                     >
                         <span className="material-symbols-outlined text-[18px]">check_circle</span>
                         Concluir tarefa
@@ -657,10 +666,11 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onEd
                     {!myEditableIssue && (
                         <button
                             onClick={() => onReportProblem(task.id)}
-                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15 transition-colors active:scale-[0.98]"
+                            aria-label="Registrar ocorrência: não consegui concluir esta tarefa"
+                            className="w-full min-h-[44px] -mt-1 flex items-center justify-center gap-1 text-[13px] text-[#92bbc9]/65 hover:text-[#92bbc9] active:scale-[0.98] transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#13b6ec]/40 rounded-lg"
                         >
-                            <span className="material-symbols-outlined text-[16px]">warning</span>
-                            Registrar ocorrência
+                            <span>Não consegui concluir?</span>
+                            <span className="material-symbols-outlined text-[16px] opacity-60">chevron_right</span>
                         </button>
                     )}
                 </div>
