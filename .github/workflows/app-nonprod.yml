@@ -11,6 +11,7 @@ on:
       - "public/**"
       - "middleware.ts"
       - "next.config.ts"
+      - "lead-control-hub.config.ts"
       - "package.json"
       - "package-lock.json"
       - "infra/docker/**"
