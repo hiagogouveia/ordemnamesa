@@ -12,8 +12,8 @@ import { useAccountSessionStore } from "@/lib/store/account-session-store";
 import { useAccountUnits } from "@/lib/hooks/use-account-units";
 import { useAccountAccess } from "@/lib/hooks/use-account-access";
 
-type TabId = "unidades" | "turnos" | "funcoes" | "conta" | "plano" | "geral";
-const VALID_TABS: TabId[] = ["unidades", "turnos", "funcoes", "conta", "plano", "geral"];
+type TabId = "unidades" | "turnos" | "funcoes" | "conta" | "plano";
+const VALID_TABS: TabId[] = ["unidades", "turnos", "funcoes", "conta", "plano"];
 
 export default function ConfiguracoesPage() {
     // Persistência da aba via querystring (?tab=...). Init lê da URL; troca usa
@@ -40,8 +40,11 @@ export default function ConfiguracoesPage() {
     // Aba "Conta" continua liberada para gestor global (AU). Aba "Plano" é
     // exclusiva do owner — fonte de verdade é o AU role do endpoint /access.
     const { data: accountAccess } = useAccountAccess(accountId);
-    const isAccountOwner = accountAccess?.role === 'owner';
     const isOwner = userRole === "owner" || isGlobal;
+    // Plano: owner do restaurante já é owner da account (signup garante).
+    // Em global, account_users.role decide. Aceitar ambos evita o tab sumir
+    // enquanto useAccountAccess ainda não resolveu.
+    const canSeePlano = isOwner || accountAccess?.role === 'owner';
 
     // Em global, buscar unidades da conta para o seletor
     const { data: accountUnits = [] } = useAccountUnits(isGlobal ? accountId : undefined);
@@ -101,7 +104,7 @@ export default function ConfiguracoesPage() {
                             Conta
                         </button>
                     )}
-                    {isAccountOwner && (
+                    {canSeePlano && (
                         <button
                             onClick={() => setActiveTab("plano")}
                             className={`pb-4 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeTab === "plano" ? "border-[#13b6ec] text-[#13b6ec]" : "border-transparent text-[#92bbc9] hover:text-white"}`}
@@ -109,12 +112,6 @@ export default function ConfiguracoesPage() {
                             Plano
                         </button>
                     )}
-                    <button
-                        onClick={() => setActiveTab("geral")}
-                        className={`pb-4 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeTab === "geral" ? "border-[#13b6ec] text-[#13b6ec]" : "border-transparent text-[#92bbc9] hover:text-white"}`}
-                    >
-                        Geral
-                    </button>
                 </div>
             </div>
 
@@ -168,19 +165,6 @@ export default function ConfiguracoesPage() {
                 )}
                 {activeTab === "conta" && <ContaTab />}
                 {activeTab === "plano" && <PlanoTab />}
-                {activeTab === "geral" && (
-                    <div className="flex items-center justify-center h-full min-h-[400px]">
-                        <div className="flex flex-col items-center justify-center max-w-sm text-center">
-                            <div className="w-16 h-16 rounded-full bg-[#1a2c32] flex items-center justify-center mb-6">
-                                <span className="material-symbols-outlined text-[#325a67] text-3xl">construction</span>
-                            </div>
-                            <h2 className="text-xl font-bold text-white mb-2">Em breve</h2>
-                            <p className="text-sm text-[#92bbc9]">
-                                Opções gerais do restaurante estarão disponíveis em breve nesta seção.
-                            </p>
-                        </div>
-                    </div>
-                )}
             </div>
         </div>
     );
