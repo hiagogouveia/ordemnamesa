@@ -493,6 +493,15 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onEd
                                     Crítica
                                 </span>
                             )}
+                            {!myEditableIssue && !isBlockedSequential && (
+                                <button
+                                    onClick={() => onReportProblem(task.id)}
+                                    aria-label="Mais opções da tarefa"
+                                    className="shrink-0 -my-2 -mr-2 w-10 h-10 flex items-center justify-center rounded-full text-[#92bbc9]/60 hover:text-[#92bbc9] hover:bg-white/5 active:scale-95 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#13b6ec]/40"
+                                >
+                                    <span className="material-symbols-outlined text-[20px]">more_horiz</span>
+                                </button>
+                            )}
                         </div>
                     </div>
                     {task.description && (
@@ -657,10 +666,11 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onEd
                     {!myEditableIssue && (
                         <button
                             onClick={() => onReportProblem(task.id)}
-                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15 transition-colors active:scale-[0.98]"
+                            aria-label="Registrar ocorrência: não consegui concluir esta tarefa"
+                            className="w-full min-h-[44px] flex items-center justify-center gap-1 text-sm text-[#92bbc9]/70 hover:text-[#92bbc9] active:scale-[0.98] transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#13b6ec]/40 rounded-lg"
                         >
-                            <span className="material-symbols-outlined text-[16px]">warning</span>
-                            Registrar ocorrência
+                            <span>Não consegui concluir?</span>
+                            <span className="material-symbols-outlined text-[16px] opacity-60">chevron_right</span>
                         </button>
                     )}
                 </div>
