@@ -81,7 +81,7 @@ export function Navbar() {
                          hover:bg-success/90 transition-colors duration-200
                          shadow-lg shadow-success/20"
             >
-              Faça seu cadastro agora
+              Agendar demonstração
             </Link>
 
             <button
@@ -115,7 +115,7 @@ export function Navbar() {
               onClick={() => setOpen(false)}
               className="mt-2 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-success text-white font-semibold text-base shadow-lg shadow-success/20"
             >
-              Faça seu cadastro agora
+              Agendar demonstração
             </Link>
           </div>
         </div>

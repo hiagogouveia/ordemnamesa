@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { Camera, Check, Instagram, WhatsApp } from "./icons";
@@ -163,6 +164,39 @@ const INJECTED_STYLES = `
   .cin-root .btn-cin-secondary:active {
     transform: translateY(1px);
     background: #101d22;
+  }
+
+  /*
+    Estilo inspirado no botão "Entrar" do Navbar — outline + cor primary
+    + hover suave. Mantém as dimensões dos CTAs do hero (px-7 py-4
+    rounded-2xl) para harmonia visual com WhatsApp/Instagram, mas com
+    presença visual discreta (Linear/Vercel/Stripe style).
+
+    Diferencial sutil: micro glow externo cyan + leve shimmer interno —
+    nada de gaming/neon.
+  */
+  .cin-root .btn-cin-demo {
+    background: transparent;
+    color: rgba(19,182,236,0.95);
+    border: 1px solid rgba(19,182,236,0.30);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.03),
+      0 1px 2px rgba(0,0,0,0.25),
+      0 0 24px -12px rgba(19,182,236,0.35);
+    transition: color 0.25s ease, background-color 0.25s ease,
+                border-color 0.25s ease, box-shadow 0.35s ease;
+  }
+  .cin-root .btn-cin-demo:hover {
+    color: #FFFFFF;
+    background-color: rgba(19,182,236,0.08);
+    border-color: rgba(19,182,236,0.55);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.05),
+      0 1px 2px rgba(0,0,0,0.25),
+      0 0 32px -10px rgba(19,182,236,0.45);
+  }
+  .cin-root .btn-cin-demo:active {
+    background-color: rgba(19,182,236,0.12);
   }
 
   .cin-root .progress-ring {
@@ -429,6 +463,25 @@ export function CinematicHero({
               <div className="text-lg font-bold leading-none tracking-tight">WhatsApp</div>
             </div>
           </a>
+          <Link
+            href="/qualificacao"
+            aria-label="Agendar demonstração"
+            className="btn-cin-demo inline-flex items-center justify-center gap-2.5 px-7 py-4 rounded-2xl group focus:outline-none focus:ring-2 focus:ring-primary/40 focus:ring-offset-2 focus:ring-offset-surface-deep"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              aria-hidden="true"
+              className="opacity-80 group-hover:opacity-100 transition-opacity"
+            >
+              <path d="M8 5v14l11-7z" />
+            </svg>
+            <span className="text-lg font-bold leading-none tracking-tight">
+              Agendar demonstração
+            </span>
+          </Link>
           <a
             href={INSTAGRAM_URL}
             target="_blank"
