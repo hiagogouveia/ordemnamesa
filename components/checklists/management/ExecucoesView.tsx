@@ -41,9 +41,11 @@ export function ExecucoesView({ restaurantId }: ExecucoesViewProps) {
     const router = useRouter();
     const [statusFilter, setStatusFilter] = useState<QuickReceivingStatusFilter>("all");
 
+    // Sprint 54: na gestão de checklists, quick receiving é "execução operacional do dia"
+    // e só permanece visível enquanto ocorre HOJE. Histórico admin 30d continua em /admin/recebimentos.
     const { data: items = [], isLoading, isError } = useQuickReceivingHistory(
         restaurantId,
-        { days: 30, status: statusFilter },
+        { days: 1, status: statusFilter },
     );
 
     return (

@@ -242,6 +242,7 @@ export function useCreateQuickReceiving() {
             qc.invalidateQueries({ queryKey: ["kanban", vars.restaurant_id] });
             qc.invalidateQueries({ queryKey: ["my-activities", vars.restaurant_id] });
             qc.invalidateQueries({ queryKey: ["receiving-expectations", vars.restaurant_id] });
+            qc.invalidateQueries({ queryKey: ["receiving-quick-history", vars.restaurant_id] });
         },
     });
 }

@@ -367,13 +367,16 @@ export default function KanbanPage() {
     }, [enrichedChecklists, kanbanData, receivingExpectations, checklistIdsCoveredByExpectations, isGlobal, activeAreaId, matchesFilters, currentMinutes, user?.id, router, getUnitName]);
 
     // Contagens por tipo (apenas pendentes — concluidas ficam no colapsavel).
+    // Sprint 54: quick receiving conta como rotina (execução operacional avulsa do dia)
+    // E mantém visibilidade na aba Recebimentos. Badge "Rápido" preserva diferenciação visual.
     const typeCounts = useMemo(() => {
         let all = 0, routine = 0, receiving = 0;
         for (const o of operations) {
             if (o.done) continue;
             all++;
-            if (o.kind === 'routine') routine++;
-            else if (o.kind === 'receiving') receiving++;
+            const isQuick = o.meta?.isQuick === true;
+            if (o.kind === 'routine' || isQuick) routine++;
+            if (o.kind === 'receiving') receiving++;
         }
         return { all, routine, receiving };
     }, [operations]);
@@ -383,7 +386,8 @@ export default function KanbanPage() {
         return operations.filter((o) => {
             // Concluidas ficam sempre visiveis no colapsavel, independente do filtro.
             if (o.done) return true;
-            if (activeTypeFilter === 'routine') return o.kind === 'routine';
+            const isQuick = o.meta?.isQuick === true;
+            if (activeTypeFilter === 'routine') return o.kind === 'routine' || isQuick;
             if (activeTypeFilter === 'receiving') return o.kind === 'receiving';
             return true;
         });
