@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { MyActivity, MyActivityStatus, TargetRole } from '@/lib/types';
 import { getBrazilNow, getBrazilStartAndEndOfDay } from '@/lib/utils/brazil-date';
 import { filterChecklistsByRecurrence } from '@/lib/utils/should-checklist-appear-today';
+import { OPERATIONAL_PREDICATE, fetchArchivedQuickIdsForToday } from '@/lib/utils/operational-activity';
 
 const getAdminSupabase = () =>
     createClient(
@@ -95,9 +96,7 @@ export async function GET(request: Request) {
         }
 
         // Checklists cuja area_id ou role_id está entre as áreas efetivas do usuário, ou atribuídos diretamente
-        const { data: checklists, error: checklistsError } = await adminSupabase
-            .from('checklists')
-            .select(`
+        const checklistSelect = `
                 id,
                 restaurant_id,
                 name,
@@ -113,16 +112,20 @@ export async function GET(request: Request) {
                 order_index,
                 recurrence,
                 recurrence_config,
+                is_one_shot,
                 area:areas(id, name, color, priority_mode),
                 role:roles(id, name, color),
                 task_count:checklist_tasks(count)
-            `)
+            `;
+        const { data: checklistsData, error: checklistsError } = await adminSupabase
+            .from('checklists')
+            .select(checklistSelect)
             .eq('restaurant_id', restaurant_id)
             .eq('active', true)
             .eq('status', 'active')
-            // Sprint 49: receiving tem fluxo próprio em /turno (seção "Recebimentos"),
-            // não deve aparecer como atividade obrigatória do turno.
-            .not('checklist_type', 'eq', 'receiving')
+            // Sprint 54: receivings recurring têm fluxo próprio em /admin/recebimentos;
+            // quick receivings (is_one_shot=true) entram como atividade operacional do dia.
+            .or(OPERATIONAL_PREDICATE)
             .or(checklistFilterParts.join(','))
             .order('order_index', { ascending: true, nullsFirst: false });
 
@@ -131,7 +134,26 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: checklistsError.message }, { status: 500 });
         }
 
-        if (!checklists || checklists.length === 0) {
+        // Reincorpora quick receivings arquivados hoje (active=false após conclusão s53)
+        // para que permaneçam visíveis em Meu Turno até a virada do dia.
+        const archivedQuickIds = await fetchArchivedQuickIdsForToday(adminSupabase, [restaurant_id]);
+        let checklists = checklistsData || [];
+        if (archivedQuickIds.size > 0) {
+            const knownIds = new Set(checklists.map((c: { id: string }) => c.id));
+            const idsToFetch = Array.from(archivedQuickIds).filter((id) => !knownIds.has(id));
+            if (idsToFetch.length > 0) {
+                const { data: archivedQuicks } = await adminSupabase
+                    .from('checklists')
+                    .select(checklistSelect)
+                    .in('id', idsToFetch)
+                    .or(checklistFilterParts.join(','));
+                if (archivedQuicks && archivedQuicks.length > 0) {
+                    checklists = [...checklists, ...archivedQuicks];
+                }
+            }
+        }
+
+        if (checklists.length === 0) {
             return NextResponse.json([]);
         }
 

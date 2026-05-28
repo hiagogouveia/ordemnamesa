@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { getBrazilNow, getBrazilStartAndEndOfDay } from '@/lib/utils/brazil-date';
 import { filterChecklistsByRecurrence } from '@/lib/utils/should-checklist-appear-today';
 import { resolveGlobalScope, isGlobalScopeResult } from '@/lib/api/global-scope';
+import { fetchArchivedQuickIdsForToday } from '@/lib/utils/operational-activity';
 
 const getAdminSupabase = () => {
     return createClient(
@@ -94,9 +95,11 @@ export async function GET(request: Request) {
             });
         }
 
-        const { data: activeChecklists } = await adminSupabase
+        const checklistSelect = 'id, name, description, shift, is_required, recurrence, recurrence_config, last_reset_at, assigned_to_user_id, role_id, area_id, order_index, restaurant_id, roles(id, name, color), areas(id, name, color), checklist_type, start_time, end_time, receiving_mode, is_one_shot, supplier_name';
+
+        const { data: activeChecklistsData } = await adminSupabase
             .from('checklists')
-            .select('id, name, description, shift, is_required, recurrence, recurrence_config, last_reset_at, assigned_to_user_id, role_id, area_id, order_index, restaurant_id, roles(id, name, color), areas(id, name, color), checklist_type, start_time, end_time, receiving_mode, is_one_shot, supplier_name')
+            .select(checklistSelect)
             .in('restaurant_id', restaurantIds)
             .eq('active', true)
             .eq('status', 'active')
@@ -107,6 +110,26 @@ export async function GET(request: Request) {
         // Timezone Brasil para todas as operações de data
         const brazil = getBrazilNow();
         const { start: brazilDayStart, end: brazilDayEnd } = getBrazilStartAndEndOfDay();
+
+        // Sprint 54: quick receivings concluídos hoje ficam arquivados (active=false).
+        // Reincorporamos via segunda query para que permaneçam visíveis em Meu Turno
+        // até a virada do dia.
+        const archivedQuickIds = await fetchArchivedQuickIdsForToday(adminSupabase, restaurantIds, brazil.dateKey);
+        let activeChecklists = activeChecklistsData || [];
+        if (archivedQuickIds.size > 0) {
+            const knownIds = new Set(activeChecklists.map((c: { id: string }) => c.id));
+            const idsToFetch = Array.from(archivedQuickIds).filter((id) => !knownIds.has(id));
+            if (idsToFetch.length > 0) {
+                const { data: archivedQuicks } = await adminSupabase
+                    .from('checklists')
+                    .select(checklistSelect)
+                    .in('id', idsToFetch)
+                    .or(checklistFilterParts.join(','));
+                if (archivedQuicks && archivedQuicks.length > 0) {
+                    activeChecklists = [...activeChecklists, ...archivedQuicks];
+                }
+            }
+        }
 
         // Buscar shifts para resolver recurrence='shift_days'
         const { data: shifts } = await adminSupabase

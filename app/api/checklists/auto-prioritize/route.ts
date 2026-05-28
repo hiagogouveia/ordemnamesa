@@ -93,7 +93,9 @@ export async function POST(request: Request) {
             .eq("restaurant_id", restaurant_id)
             .eq("area_id", area_id)
             .eq("active", true)
-            // Sprint 49: receiving não entra na priorização automática do operacional.
+            // Sprint 54: receivings (recurring + quick) NÃO entram na priorização
+            // automática — recurring tem fluxo próprio, quicks são one-shot sem
+            // start_time e não fazem sentido em order_index persistente.
             .not("checklist_type", "eq", "receiving");
 
         if (fetchError) {

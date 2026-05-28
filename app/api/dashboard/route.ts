@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { getBrazilNow, getBrazilStartAndEndOfDay, getBrazilDateKey } from '@/lib/utils/brazil-date';
 import { filterChecklistsByRecurrence } from '@/lib/utils/should-checklist-appear-today';
 import { resolveGlobalScope, isGlobalScopeResult } from '@/lib/api/global-scope';
+import { OPERATIONAL_PREDICATE, fetchArchivedQuickIdsForToday } from '@/lib/utils/operational-activity';
 import type { RecurrenceConfig } from '@/lib/types';
 
 // ─── Constantes operacionais ─────────────────────────────────────────────────
@@ -167,16 +168,27 @@ export async function GET(request: Request) {
         sevenDaysAgoDate.setDate(sevenDaysAgoDate.getDate() - 6);
         const sevenDaysAgoKey = getBrazilDateKey(sevenDaysAgoDate);
 
+        const archivedQuickIds = await fetchArchivedQuickIdsForToday(adminSupabase, restaurantIds, todayKey);
+
         // ── Round 1: Queries paralelas ─────────────────────────────────────
-        const [checklistsRes, assumptionsRes, taskExecsRes, shiftsRes] = await Promise.all([
+        const checklistSelect = 'id, name, restaurant_id, shift, area_id, end_time, start_time, recurrence, recurrence_config, assigned_to_user_id, areas(id, name, color), checklist_tasks(id, is_critical)';
+        const [checklistsRes, archivedQuicksRes, assumptionsRes, taskExecsRes, shiftsRes] = await Promise.all([
             adminSupabase
                 .from('checklists')
-                .select('id, name, restaurant_id, shift, area_id, end_time, start_time, recurrence, recurrence_config, assigned_to_user_id, areas(id, name, color), checklist_tasks(id, is_critical)')
+                .select(checklistSelect)
                 .in('restaurant_id', restaurantIds)
                 .eq('active', true)
                 .eq('status', 'active')
-                // Sprint 49: receiving não impacta dashboard operacional.
-                .not('checklist_type', 'eq', 'receiving'),
+                // Sprint 54: inclui rotinas + quick receivings (is_one_shot=true);
+                // exclui apenas receivings recurring (painel próprio em /admin/recebimentos).
+                .or(OPERATIONAL_PREDICATE),
+
+            archivedQuickIds.size > 0
+                ? adminSupabase
+                    .from('checklists')
+                    .select(checklistSelect)
+                    .in('id', Array.from(archivedQuickIds))
+                : Promise.resolve({ data: [] as unknown[], error: null }),
 
             adminSupabase
                 .from('checklist_assumptions')
@@ -200,7 +212,15 @@ export async function GET(request: Request) {
         ]);
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const allChecklists = (checklistsRes.data || []) as any as ChecklistRow[];
+        const activeChecklists = (checklistsRes.data || []) as any as ChecklistRow[];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const archivedQuicksToday = (archivedQuicksRes.data || []) as any as ChecklistRow[];
+        // Dedup defensivo: main query (active=true) e 2ª query (active=false) são
+        // disjuntas em condições normais, mas garantimos via Map por id.
+        const allChecklistsMap = new Map<string, ChecklistRow>();
+        for (const c of activeChecklists) allChecklistsMap.set(c.id, c);
+        for (const c of archivedQuicksToday) if (!allChecklistsMap.has(c.id)) allChecklistsMap.set(c.id, c);
+        const allChecklists: ChecklistRow[] = Array.from(allChecklistsMap.values());
         const allAssumptions: AssumptionRow[] = (assumptionsRes.data || []) as AssumptionRow[];
         const taskExecs: TaskExecRow[] = taskExecsRes.data || [];
         const shifts = shiftsRes.data;
@@ -212,9 +232,9 @@ export async function GET(request: Request) {
         const checklistsMap = new Map<string, ChecklistRow>();
         checklists.forEach(cl => checklistsMap.set(cl.id, cl));
 
-        // Sprint 51: assumptions de receiving NÃO entram em métricas operacionais.
-        // allChecklists já está filtrado por .not('checklist_type','eq','receiving')
-        // no SQL acima — usamos esse set para isolar as assumptions relevantes.
+        // Sprint 54: receivings recurring NÃO entram em métricas operacionais, mas
+        // quick receivings (is_one_shot=true) entram. Quicks concluídos hoje ficam
+        // arquivados (active=false) e são reincorporados via archivedQuicksToday.
         const operationalChecklistIds = new Set(allChecklists.map(c => c.id));
         const operationalAssumptions = allAssumptions.filter(a => operationalChecklistIds.has(a.checklist_id));
 

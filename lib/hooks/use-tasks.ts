@@ -217,6 +217,8 @@ export const useCompleteChecklist = () => {
             queryClient.invalidateQueries({ queryKey: ["admin_checklists_status", variables.restaurantId] });
             queryClient.invalidateQueries({ queryKey: ["my-activities", variables.restaurantId] });
             queryClient.invalidateQueries({ queryKey: ["my-activities-badge", variables.restaurantId] });
+            // Sprint 54: quick receiving concluído precisa atualizar aba Execuções de /checklists.
+            queryClient.invalidateQueries({ queryKey: ["receiving-quick-history", variables.restaurantId] });
         },
     });
 };
