@@ -363,6 +363,9 @@ export default function ActivityExecutionPage() {
                                 }
                             }
 
+                            const isSkipPending = skipTask.isPending && skipTask.variables?.taskId === task.id;
+                            const isTogglePending = toggleTask.isPending && toggleTask.variables?.taskId === task.id;
+
                             return (
                                 <ExecutionItem
                                     key={task.id}
@@ -378,6 +381,8 @@ export default function ActivityExecutionPage() {
                                     restaurantId={restaurantId ?? ''}
                                     hasOpenIssue={openIssuesByTaskId.has(task.id)}
                                     myOpenIssue={myOpenIssueByTaskId.get(task.id) ?? null}
+                                    skipPending={isSkipPending}
+                                    togglePending={isTogglePending}
                                 />
                             );
                         })}

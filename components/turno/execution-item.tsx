@@ -4,6 +4,7 @@ import { PhotoUpload } from '@/components/tasks/photo-upload';
 import { useSignedUrl } from '@/lib/hooks/use-signed-url';
 import { resolveTaskType, computeTaskAlert } from '@/lib/utils/task-alert';
 import { formatDateBR } from '@/lib/utils/brazil-date';
+import { AsyncButton } from '@/components/ui/async-button';
 import type { TaskIssue } from '@/lib/types';
 
 export interface ExecutionToggleInput {
@@ -36,9 +37,13 @@ interface ExecutionItemProps {
     hasOpenIssue?: boolean;
     /** Sprint 46: ocorrência do usuário atual nesta task, quando existe e é dele. */
     myOpenIssue?: TaskIssue | null;
+    /** Mutation desta task está pendente — desabilita botão de skip e mostra spinner. */
+    skipPending?: boolean;
+    /** Mutation de toggle (concluir/desfazer) desta task está pendente. */
+    togglePending?: boolean;
 }
 
-export function ExecutionItem({ task, execution, onToggle, onReportProblem, onEditIssue, onSkipTask, onUnskipTask, locked = false, isBlockedSequential = false, restaurantId, hasOpenIssue = false, myOpenIssue = null }: ExecutionItemProps) {
+export function ExecutionItem({ task, execution, onToggle, onReportProblem, onEditIssue, onSkipTask, onUnskipTask, locked = false, isBlockedSequential = false, restaurantId, hasOpenIssue = false, myOpenIssue = null, skipPending = false, togglePending = false }: ExecutionItemProps) {
     const isDone = Boolean(execution && execution.status === 'done');
     const isSkipped = Boolean(execution && execution.status === 'skipped');
     const [isAnimating, setIsAnimating] = useState(false);
@@ -230,13 +235,16 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onEd
                 )}
             </div>
             {onSkipTask && !locked && !isDone && !isSkipped && (
-                <button
+                <AsyncButton
                     onClick={() => onSkipTask(task.id, myEditableIssue.id)}
+                    isPending={skipPending}
+                    loadingLabel="Registrando…"
+                    icon="block"
+                    iconClassName="text-[14px]"
                     className="self-stretch flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/15 transition-colors"
                 >
-                    <span className="material-symbols-outlined text-[14px]">block</span>
                     Não foi possível concluir
-                </button>
+                </AsyncButton>
             )}
         </div>
     ) : null;
@@ -391,7 +399,8 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onEd
             <div className="w-full flex flex-col gap-0">
                 <button
                     onClick={handleSimpleToggle}
-                    disabled={locked}
+                    disabled={locked || togglePending}
+                    aria-busy={togglePending || undefined}
                     className={`
                         w-full flex items-center gap-4 p-4 min-h-[64px] rounded-2xl border text-left
                         transition-all duration-200 ease-out relative overflow-hidden group
@@ -653,13 +662,16 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onEd
                         </p>
                     )}
 
-                    <button
+                    <AsyncButton
                         onClick={handleConclude}
+                        isPending={togglePending}
+                        loadingLabel="Concluindo…"
+                        icon="check_circle"
+                        iconClassName="text-[18px]"
                         className="w-full min-h-[48px] flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-150 active:scale-[0.98] bg-[#13b6ec] text-[#0a1215] shadow-[0_2px_8px_rgba(19,182,236,0.18)] hover:bg-[#0fa3d4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#13b6ec]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#16262c]"
                     >
-                        <span className="material-symbols-outlined text-[18px]">check_circle</span>
                         Concluir tarefa
-                    </button>
+                    </AsyncButton>
 
                     {inlineIssueCard}
 

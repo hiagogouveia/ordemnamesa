@@ -397,6 +397,46 @@ export const useSkipTask = () => {
 
             return { executionId };
         },
+        onMutate: async (variables) => {
+            const queryKey = ['activity', variables.restaurantId, variables.checklistId];
+            await queryClient.cancelQueries({ queryKey });
+
+            const previousData = queryClient.getQueryData<ActivityData>(queryKey);
+
+            if (previousData) {
+                queryClient.setQueryData<ActivityData>(queryKey, (old) => {
+                    if (!old) return old;
+                    const now = new Date().toISOString();
+                    const existingIdx = old.executions.findIndex(e => e.task_id === variables.taskId);
+                    let newExecs = [...old.executions];
+
+                    if (existingIdx >= 0) {
+                        newExecs[existingIdx] = {
+                            ...newExecs[existingIdx],
+                            status: 'skipped',
+                            executed_at: now,
+                        };
+                    } else {
+                        newExecs.push({
+                            id: `optimistic-skip-${Date.now()}`,
+                            task_id: variables.taskId,
+                            status: 'skipped',
+                            executed_at: now,
+                            photo_url: null,
+                        } as KanbanExecution);
+                    }
+
+                    return { ...old, executions: newExecs };
+                });
+            }
+
+            return { previousData, queryKey };
+        },
+        onError: (_err, _variables, context) => {
+            if (context?.previousData) {
+                queryClient.setQueryData(context.queryKey, context.previousData);
+            }
+        },
         onSettled: (_data, _error, variables) => {
             queryClient.invalidateQueries({ queryKey: ['activity', variables.restaurantId, variables.checklistId] });
         }
@@ -432,6 +472,29 @@ export const useUnskipTask = () => {
                 return { deleted: true };
             }
             return { deleted: false };
+        },
+        onMutate: async (variables) => {
+            const queryKey = ['activity', variables.restaurantId, variables.checklistId];
+            await queryClient.cancelQueries({ queryKey });
+
+            const previousData = queryClient.getQueryData<ActivityData>(queryKey);
+
+            if (previousData) {
+                queryClient.setQueryData<ActivityData>(queryKey, (old) => {
+                    if (!old) return old;
+                    return {
+                        ...old,
+                        executions: old.executions.filter(e => !(e.task_id === variables.taskId && e.status === 'skipped')),
+                    };
+                });
+            }
+
+            return { previousData, queryKey };
+        },
+        onError: (_err, _variables, context) => {
+            if (context?.previousData) {
+                queryClient.setQueryData(context.queryKey, context.previousData);
+            }
         },
         onSettled: (_data, _error, variables) => {
             queryClient.invalidateQueries({ queryKey: ['activity', variables.restaurantId, variables.checklistId] });
