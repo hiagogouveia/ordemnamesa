@@ -176,6 +176,15 @@ export function TaskRow({
                                 Recebimento
                             </span>
                         ) : null}
+                        {kind === "receiving" && supplier && (
+                            <span
+                                className="inline-flex items-center gap-1 font-bold text-[#13b6ec] bg-[#13b6ec]/10 border border-[#13b6ec]/30 px-1.5 py-px rounded truncate max-w-[60vw] sm:max-w-[240px]"
+                                title={supplier}
+                            >
+                                <span className="material-symbols-outlined text-[12px]">local_shipping</span>
+                                <span className="truncate">{supplier}</span>
+                            </span>
+                        )}
                         {area && (
                             <span className="inline-flex items-center gap-1 truncate max-w-[140px]">
                                 <span className="material-symbols-outlined text-[12px] opacity-70">place</span>
@@ -188,7 +197,7 @@ export function TaskRow({
                                 <span className="tabular-nums">{itemsCount} {itemsCount === 1 ? "item" : "itens"}</span>
                             </>
                         )}
-                        {supplier && (
+                        {kind !== "receiving" && supplier && (
                             <>
                                 <span className="text-[#325a67]">·</span>
                                 <span className="truncate max-w-[180px]">{supplier}</span>

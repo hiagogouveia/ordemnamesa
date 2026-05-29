@@ -10,7 +10,7 @@ import { getCurrentShift } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { getRoutineState, type RoutineStateInfo } from '@/lib/utils/routine-state';
 import type { Scope } from '@/lib/types/scope';
-import { useReceivingTemplatesAvailable } from '@/lib/hooks/use-receiving-templates';
+import { useReceivingTemplatesAvailableMeta } from '@/lib/hooks/use-receiving-templates';
 import { useInstantiateReceiving } from '@/lib/hooks/use-receiving-instantiate';
 import { useSuppliers } from '@/lib/hooks/use-suppliers';
 import { TaskRow } from '@/components/turno/task-row';
@@ -50,9 +50,11 @@ export default function KanbanPage() {
     const { data: kanbanData, isLoading: loadingKanban } = useKanbanTasks(scope, userId);
     const { data: shifts = [] } = useShifts(restaurantId || undefined);
     const { data: myAreaAssignments = [], isLoading: loadingMyAreas } = useMyAreas(restaurantId || undefined, userId);
-    const { data: availableTemplates = [] } = useReceivingTemplatesAvailable(
+    const { data: availableMeta } = useReceivingTemplatesAvailableMeta(
         isGlobal ? undefined : restaurantId || undefined,
     );
+    const availableTemplates = availableMeta?.available ?? [];
+    const totalTemplatesInScope = availableMeta?.total_in_scope ?? 0;
     const { data: suppliers = [] } = useSuppliers(
         isGlobal ? undefined : restaurantId || undefined,
     );
@@ -250,6 +252,13 @@ export default function KanbanPage() {
         return true;
     }, [isGlobal, activeUnitId, activeAreaId]);
 
+    // Lookup de fornecedor por id — usado para enriquecer cards de recebimento.
+    const supplierById = useMemo(() => {
+        const map = new Map<string, string>();
+        for (const s of suppliers) map.set(s.id, s.name);
+        return map;
+    }, [suppliers]);
+
     // Construção da lista unificada de operações.
     // Etapa 3 do refator: receivings deixam de vir de ReceivingExpectation —
     // execuções (instantiate) entram naturalmente pelo kanban como qualquer
@@ -297,7 +306,7 @@ export default function KanbanPage() {
                     isAssignedToMe,
                     isAssignedToOther,
                     unitName: getUnitName(cl),
-                    supplier: null,
+                    supplier: cl.supplier_id ? (supplierById.get(cl.supplier_id) ?? null) : null,
                     isQuick,
                     hasInProgressExecution: cl.hasInProgressExecution,
                 },
@@ -306,7 +315,7 @@ export default function KanbanPage() {
         }
 
         return out;
-    }, [enrichedChecklists, kanbanData, matchesFilters, currentMinutes, user?.id, router, getUnitName]);
+    }, [enrichedChecklists, kanbanData, matchesFilters, currentMinutes, user?.id, router, getUnitName, supplierById]);
 
     // Separação: "Executando" (in_progress, não concluído) vs lista principal vs done.
     const isInProgress = (o: OperationItem): boolean => {
@@ -365,7 +374,21 @@ export default function KanbanPage() {
         () => availableTemplates.filter((t) => !activeAreaId || t.area_id === activeAreaId),
         [availableTemplates, activeAreaId],
     );
-    const showNewReceivingButton = !isGlobal && visibleTemplates.length > 0;
+    // s60: 3 estados do botão "Novo recebimento"
+    //   C) há template disponível agora → botão habilitado
+    //   B) há template cadastrado no escopo mas nenhum previsto hoje → botão desabilitado + msg
+    //   A) zero templates cadastrados no escopo do user → botão desabilitado + msg distinta
+    // Em modo global (multi-restaurante) o botão segue oculto.
+    type NewReceivingState =
+        | { mode: 'hidden' }
+        | { mode: 'enabled' }
+        | { mode: 'disabled'; reason: 'none-today' | 'none-registered' };
+    const newReceivingState: NewReceivingState = useMemo(() => {
+        if (isGlobal) return { mode: 'hidden' };
+        if (visibleTemplates.length > 0) return { mode: 'enabled' };
+        if (totalTemplatesInScope > 0) return { mode: 'disabled', reason: 'none-today' };
+        return { mode: 'disabled', reason: 'none-registered' };
+    }, [isGlobal, visibleTemplates.length, totalTemplatesInScope]);
 
     const handleInstantiate = async () => {
         if (!restaurantId || !selectedTemplateId || !idempotencyKey) return;
@@ -532,9 +555,12 @@ export default function KanbanPage() {
                     </div>
                 ) : null}
 
-                {/* Action bar: novo recebimento (Etapa 3 — alimentado por
-                    receiving_templates disponíveis hoje no escopo do usuário). */}
-                {showNewReceivingButton && (
+                {/* Action bar: novo recebimento — 3 estados (s60).
+                    - enabled: botão funcional
+                    - disabled none-today: templates cadastrados mas nenhum previsto hoje
+                    - disabled none-registered: nenhum modelo cadastrado na área
+                    Em ambos casos disabled o botão permanece visível com mensagem curta. */}
+                {newReceivingState.mode === 'enabled' && (
                     <button
                         onClick={() => setShowReceivingPicker(true)}
                         className="self-start inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#13b6ec]/10 border border-[#13b6ec]/40 text-[#13b6ec] text-xs font-semibold hover:bg-[#13b6ec]/20 transition-colors"
@@ -542,6 +568,23 @@ export default function KanbanPage() {
                         <span className="material-symbols-outlined text-[15px]">add</span>
                         Novo recebimento
                     </button>
+                )}
+                {newReceivingState.mode === 'disabled' && (
+                    <div
+                        className="self-start inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-[#16262c] border border-[#233f48] text-[#557682] text-xs font-semibold cursor-not-allowed"
+                        title={
+                            newReceivingState.reason === 'none-registered'
+                                ? 'Nenhum modelo de recebimento cadastrado para esta área. Peça ao gestor para criar um modelo em Recebimentos.'
+                                : 'Nenhum recebimento previsto para hoje neste turno. Verifique a recorrência dos modelos.'
+                        }
+                    >
+                        <span className="material-symbols-outlined text-[15px] opacity-60">local_shipping</span>
+                        <span className="truncate max-w-[60vw]">
+                            {newReceivingState.reason === 'none-registered'
+                                ? 'Nenhum modelo de recebimento cadastrado'
+                                : 'Nenhum recebimento previsto para hoje'}
+                        </span>
+                    </div>
                 )}
 
                 {/* Bloco "Executando" — colapsável, prioridade visual no topo.

@@ -80,6 +80,39 @@ export function useReceivingTemplatesAvailable(
     });
 }
 
+/**
+ * Variante com metadados: além dos templates disponíveis hoje, retorna
+ * o total de templates ativos no escopo do user (qualquer dia). Permite
+ * diferenciar "nenhum modelo cadastrado" de "nenhum previsto hoje".
+ */
+export interface ReceivingTemplatesAvailableMeta {
+    available: ReceivingTemplateAvailable[];
+    total_in_scope: number;
+}
+
+export function useReceivingTemplatesAvailableMeta(
+    restaurantId: string | undefined,
+    areaId?: string,
+) {
+    return useQuery({
+        queryKey: ["receiving-templates-available-meta", restaurantId, areaId ?? null],
+        queryFn: async (): Promise<ReceivingTemplatesAvailableMeta> => {
+            if (!restaurantId) return { available: [], total_in_scope: 0 };
+            const headers = await getAuthHeaders();
+            const base = `/api/receiving-templates/available?restaurant_id=${restaurantId}&with_meta=1`;
+            const url = areaId ? `${base}&area_id=${areaId}` : base;
+            const res = await fetch(url, { headers, cache: "no-store" });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || "Erro ao buscar modelos disponíveis.");
+            }
+            return res.json();
+        },
+        enabled: !!restaurantId,
+        staleTime: 30 * 1000,
+    });
+}
+
 interface CreateTemplateVars {
     restaurant_id: string;
     name: string;
