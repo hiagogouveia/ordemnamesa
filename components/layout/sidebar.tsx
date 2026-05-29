@@ -23,6 +23,7 @@ const managerNavigation: NavItem[] = [
     { name: "Dashboard", href: "/dashboard", icon: "dashboard", globalSupported: true },
     { name: "Meu Turno", href: "/turno", icon: "assignment_ind", badge: true, globalSupported: true },
     { name: "Checklists", href: "/checklists", icon: "checklist", globalSupported: true },
+    { name: "Recebimentos", href: "/recebimentos", icon: "local_shipping" },
     { name: "Equipe", href: "/equipe", icon: "group", globalSupported: true },
     { name: "Relatórios", href: "/relatorios", icon: "bar_chart", globalSupported: true },
     { name: "Configurações", href: "/configuracoes", icon: "settings", globalSupported: true },

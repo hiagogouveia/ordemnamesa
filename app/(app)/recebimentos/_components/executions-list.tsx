@@ -7,7 +7,7 @@ import {
     type ReceivingExecutionStatusFilter,
 } from "@/lib/hooks/use-receiving-executions";
 
-interface ExecucoesViewProps {
+interface ExecutionsListProps {
     restaurantId: string | undefined;
 }
 
@@ -15,6 +15,12 @@ const STATUS_OPTIONS: Array<{ value: ReceivingExecutionStatusFilter; label: stri
     { value: "all", label: "Todos" },
     { value: "in_progress", label: "Em execução" },
     { value: "completed", label: "Concluídos" },
+];
+
+const DAYS_OPTIONS: Array<{ value: number; label: string }> = [
+    { value: 1, label: "Hoje" },
+    { value: 7, label: "7 dias" },
+    { value: 30, label: "30 dias" },
 ];
 
 function formatDateTime(iso: string | null): string {
@@ -29,27 +35,23 @@ function formatDateTime(iso: string | null): string {
 }
 
 /**
- * Aba "Execuções" em /checklists — execuções operacionais de recebimento.
- * Inclui execuções instanciadas via templates (Etapa 2+) e instâncias
- * one-shot legacy.
- *
- * Etapa 4: consome /api/receiving/executions (rename do antigo
- * /api/receiving/quick/history).
+ * Lista admin das execuções de recebimento (one-shots criadas via
+ * instantiate ou legacy). Movido de /checklists para /recebimentos.
  */
-export function ExecucoesView({ restaurantId }: ExecucoesViewProps) {
+export function ExecutionsList({ restaurantId }: ExecutionsListProps) {
     const router = useRouter();
     const [statusFilter, setStatusFilter] = useState<ReceivingExecutionStatusFilter>("all");
+    const [daysFilter, setDaysFilter] = useState<number>(30);
 
     const { data: items = [], isLoading, isError } = useReceivingExecutions(
         restaurantId,
-        { days: 1, status: statusFilter },
+        { days: daysFilter, status: statusFilter },
     );
 
     return (
         <div className="flex flex-col gap-3 px-4 py-4">
-            {/* Sub-filtros */}
             <div className="flex items-center gap-1 flex-wrap">
-                <span className="text-[#92bbc9] text-xs mr-1">Filtrar:</span>
+                <span className="text-[#92bbc9] text-xs mr-1">Status:</span>
                 {STATUS_OPTIONS.map((s) => {
                     const isActive = statusFilter === s.value;
                     return (
@@ -67,10 +69,26 @@ export function ExecucoesView({ restaurantId }: ExecucoesViewProps) {
                         </button>
                     );
                 })}
-                <span className="ml-auto text-[#5a8a99] text-[11px]">Últimos 30 dias</span>
+                <span className="text-[#92bbc9] text-xs ml-3 mr-1">Período:</span>
+                {DAYS_OPTIONS.map((d) => {
+                    const isActive = daysFilter === d.value;
+                    return (
+                        <button
+                            key={d.value}
+                            type="button"
+                            onClick={() => setDaysFilter(d.value)}
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition-colors ${
+                                isActive
+                                    ? "bg-[#13b6ec]/15 border border-[#13b6ec]/40 text-[#13b6ec]"
+                                    : "bg-[#182a32] text-[#92bbc9] border border-[#233f48] hover:bg-[#233f48]"
+                            }`}
+                        >
+                            {d.label}
+                        </button>
+                    );
+                })}
             </div>
 
-            {/* Estados: loading / error / empty / lista */}
             {isLoading ? (
                 <div className="text-[#92bbc9] text-sm py-2">Carregando…</div>
             ) : isError ? (
@@ -79,7 +97,7 @@ export function ExecucoesView({ restaurantId }: ExecucoesViewProps) {
                 </div>
             ) : items.length === 0 ? (
                 <div className="bg-[#1a2c32] border border-dashed border-[#233f48] rounded-xl p-6 text-center text-[#92bbc9] text-sm">
-                    Nenhuma execução nos últimos 30 dias.
+                    Nenhuma execução nesse período.
                 </div>
             ) : (
                 <ul className="flex flex-col gap-3">

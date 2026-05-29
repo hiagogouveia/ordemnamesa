@@ -105,7 +105,7 @@ export async function middleware(request: NextRequest) {
 
     // Proteção de rotas por role
     // Rotas exclusivas de admin (owner/manager) — staff é bloqueado
-    const adminRoutes = ['/dashboard', '/equipe', '/checklists', '/configuracoes', '/relatorios', '/admin']
+    const adminRoutes = ['/dashboard', '/equipe', '/checklists', '/recebimentos', '/configuracoes', '/relatorios', '/admin']
     const pathname = request.nextUrl.pathname
     const isAdminRoute = adminRoutes.some(route => pathname === route || pathname.startsWith(route + '/'))
 
