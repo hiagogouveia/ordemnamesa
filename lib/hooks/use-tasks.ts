@@ -190,7 +190,6 @@ export const useAssumeChecklist = () => {
             queryClient.invalidateQueries({ queryKey: ['my-activities', variables.restaurantId] });
             queryClient.invalidateQueries({ queryKey: ['my-activities-badge', variables.restaurantId] });
             queryClient.invalidateQueries({ queryKey: ['checklists', variables.restaurantId] });
-            queryClient.invalidateQueries({ queryKey: ['receiving-expectations', variables.restaurantId] });
         },
     });
 };
