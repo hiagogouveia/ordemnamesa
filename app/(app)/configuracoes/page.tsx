@@ -7,13 +7,14 @@ import { AreasTab } from "./_components/areas-tab";
 import { UnidadesTab } from "./_components/unidades-tab";
 import { ContaTab } from "./_components/conta-tab";
 import { PlanoTab } from "./_components/plano-tab";
+import { FornecedoresTab } from "./_components/fornecedores-tab";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useAccountSessionStore } from "@/lib/store/account-session-store";
 import { useAccountUnits } from "@/lib/hooks/use-account-units";
 import { useAccountAccess } from "@/lib/hooks/use-account-access";
 
-type TabId = "unidades" | "turnos" | "funcoes" | "conta" | "plano";
-const VALID_TABS: TabId[] = ["unidades", "turnos", "funcoes", "conta", "plano"];
+type TabId = "unidades" | "turnos" | "funcoes" | "fornecedores" | "conta" | "plano";
+const VALID_TABS: TabId[] = ["unidades", "turnos", "funcoes", "fornecedores", "conta", "plano"];
 
 export default function ConfiguracoesPage() {
     // Persistência da aba via querystring (?tab=...). Init lê da URL; troca usa
@@ -58,7 +59,7 @@ export default function ConfiguracoesPage() {
     }, [isGlobal, accountUnits, selectedUnitId]);
 
     // Tabs que precisam de unidade selecionada em modo global
-    const needsUnitSelection = isGlobal && (activeTab === 'turnos' || activeTab === 'funcoes');
+    const needsUnitSelection = isGlobal && (activeTab === 'turnos' || activeTab === 'funcoes' || activeTab === 'fornecedores');
     const effectiveRestaurantId = isGlobal ? selectedUnit?.id : undefined;
 
     return (
@@ -95,6 +96,12 @@ export default function ConfiguracoesPage() {
                         className={`pb-4 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeTab === "funcoes" ? "border-[#13b6ec] text-[#13b6ec]" : "border-transparent text-[#92bbc9] hover:text-white"}`}
                     >
                         Áreas
+                    </button>
+                    <button
+                        onClick={() => setActiveTab("fornecedores")}
+                        className={`pb-4 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeTab === "fornecedores" ? "border-[#13b6ec] text-[#13b6ec]" : "border-transparent text-[#92bbc9] hover:text-white"}`}
+                    >
+                        Fornecedores
                     </button>
                     {isOwner && (
                         <button
@@ -161,6 +168,15 @@ export default function ConfiguracoesPage() {
                         </div>
                     ) : (
                         <AreasTab overrideRestaurantId={effectiveRestaurantId} />
+                    )
+                )}
+                {activeTab === "fornecedores" && (
+                    needsUnitSelection && !effectiveRestaurantId ? (
+                        <div className="flex items-center justify-center min-h-[200px] text-[#92bbc9] text-sm">
+                            Selecione uma unidade acima para ver os fornecedores.
+                        </div>
+                    ) : (
+                        <FornecedoresTab overrideRestaurantId={effectiveRestaurantId} />
                     )
                 )}
                 {activeTab === "conta" && <ContaTab />}
