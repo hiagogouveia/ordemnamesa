@@ -550,8 +550,8 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                             </div>
 
                             {/* Coluna direita — Tarefas (DnD + TaskItem) */}
-                            <div className="px-6 py-5 space-y-3 bg-[#101d22]/30 md:bg-transparent">
-                                <div className="flex items-center justify-between">
+                            <div className="px-6 pb-5 space-y-3 bg-[#101d22]/30 md:bg-transparent">
+                                <div className="sticky top-0 z-10 -mx-6 px-6 py-3 bg-[#16262c] border-b border-[#233f48] flex items-center justify-between">
                                     <h4 className="text-xs font-bold text-[#13b6ec] uppercase tracking-wider">
                                         Tarefas ({tasks.length})
                                     </h4>
