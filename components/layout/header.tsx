@@ -11,6 +11,7 @@ import { NotificationDropdown } from "./notification-dropdown";
 const TITLES: Record<string, string> = {
     "/dashboard": "Dashboard Geral",
     "/checklists": "Gestão de Checklists",
+    "/recebimentos": "Recebimentos",
     "/equipe": "Gestão da Equipe",
     "/relatorios": "Relatórios e Análises",
     "/configuracoes": "Configurações do Sistema",

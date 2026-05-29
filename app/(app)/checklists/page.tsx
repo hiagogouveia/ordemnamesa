@@ -12,7 +12,6 @@ import { shouldChecklistAppearToday } from "@/lib/utils/should-checklist-appear-
 import { getBrazilNow, getBrazilDateKey } from "@/lib/utils/brazil-date";
 import { BulkActionBar } from "@/components/checklists/management/BulkActionBar";
 import { CopyChecklistModal } from "@/components/checklists/management/CopyChecklistModal";
-import { ExecucoesView } from "@/components/checklists/management/ExecucoesView";
 import { useChecklistOrders, useUpdateChecklistOrders } from "@/lib/hooks/use-checklist-orders";
 import { createClient } from "@/lib/supabase/client";
 import { useAllAreas } from "@/lib/hooks/use-areas";
@@ -89,11 +88,6 @@ function ChecklistsContent() {
     const selectedUnitId = searchParams.get("unit_id") ?? "";
     const sortField = (searchParams.get("sort") as SortField | null) ?? null;
     const sortOrder = (searchParams.get("order") as SortOrder | null) ?? "asc";
-    // Sub-fase 1: separação semântica entre Modelos (templates) e Execuções (instâncias).
-    // Default: modelos — preserva comportamento atual sem regressão.
-    const rawView = searchParams.get("view");
-    const activeView: "modelos" | "execucoes" = rawView === "execucoes" ? "execucoes" : "modelos";
-
     const queryClient = useQueryClient();
 
     // Store
@@ -291,13 +285,6 @@ function ChecklistsContent() {
         const params = new URLSearchParams(searchParams.toString());
         if (value && value !== "all") params.set("type", value);
         else params.delete("type");
-        router.replace(`/checklists?${params.toString()}`);
-    };
-
-    const setActiveView = (value: "modelos" | "execucoes") => {
-        const params = new URLSearchParams(searchParams.toString());
-        if (value === "execucoes") params.set("view", "execucoes");
-        else params.delete("view");
         router.replace(`/checklists?${params.toString()}`);
     };
 
@@ -505,50 +492,6 @@ function ChecklistsContent() {
 
     return (
         <div className="flex flex-col h-[calc(100vh-72px)] overflow-hidden bg-[#0a1215]">
-            {/* Sub-fase 1: tabs Modelos (configuração) vs Execuções (instâncias).
-                Toolbar e filtros abaixo só renderizam em Modelos — semânticas
-                distintas, sem mistura de filtros. */}
-            <div
-                role="tablist"
-                aria-label="Visão"
-                className="shrink-0 px-4 pt-3 pb-0 border-b border-[#233f48] bg-[#0a1215] flex items-center gap-1 overflow-x-auto"
-            >
-                {(["modelos", "execucoes"] as const).map((v) => {
-                    const isActive = activeView === v;
-                    const label = v === "modelos" ? "Modelos" : "Execuções";
-                    return (
-                        <button
-                            key={v}
-                            role="tab"
-                            type="button"
-                            aria-selected={isActive}
-                            tabIndex={isActive ? 0 : -1}
-                            onClick={() => setActiveView(v)}
-                            onKeyDown={(e) => {
-                                if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
-                                    e.preventDefault();
-                                    setActiveView(v === "modelos" ? "execucoes" : "modelos");
-                                }
-                            }}
-                            className={`relative px-4 py-2 text-sm font-bold transition-colors whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-[#13b6ec]/50 rounded-t-md ${
-                                isActive ? "text-[#13b6ec]" : "text-[#92bbc9] hover:text-white"
-                            }`}
-                        >
-                            {label}
-                            {isActive && (
-                                <span className="absolute left-0 right-0 bottom-[-1px] h-[2px] bg-[#13b6ec]" />
-                            )}
-                        </button>
-                    );
-                })}
-            </div>
-
-            {activeView === "execucoes" ? (
-                <div className="flex-1 overflow-auto">
-                    <ExecucoesView restaurantId={restaurantId ?? undefined} />
-                </div>
-            ) : (
-                <>
             <ChecklistHeader
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
@@ -681,8 +624,6 @@ function ChecklistsContent() {
                     </div>
                 )}
             </div>
-                </>
-            )}
 
             {/* Modal de edição/criação */}
             {mounted && (
