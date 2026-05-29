@@ -305,11 +305,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             // Sprint 8: recurrence config
             const loadedRecurrenceConfig = checklist.recurrence_config as RecurrenceConfig | undefined;
             const loadedEnforceSequentialOrder = checklist.enforce_sequential_order ?? false;
-            const loadedReceivingMode = (checklist.receiving_mode as 'on_demand' | 'recurring' | null | undefined) ?? 'on_demand';
-            // V1 simplificada: o conceito 'manager_confirmation' foi removido da UX.
-            // Legacy é normalizado para 'automatic' ao reabrir e será re-salvo assim.
+            const loadedReceivingMode = 'on_demand' as const;
             const loadedReceivingGeneration = 'automatic' as const;
-            const loadedSupplierName = checklist.supplier_name ?? "";
+            const loadedSupplierName = "";
             const loadedAreaId = checklist.area_id || "";
             const loadedTasks = (checklist.tasks || []).map((t) => ({ ...t, tempId: t.id }));
 
@@ -530,9 +528,6 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                         // - v2: objeto com version=2 → backend valida e persiste estruturado
                         recurrence_config: recurrenceConfig ?? null,
                         enforce_sequential_order: enforceSequentialOrder,
-                        receiving_mode: checklistType === 'receiving' ? receivingMode : null,
-                        receiving_generation: checklistType === 'receiving' ? receivingGeneration : null,
-                        supplier_name: checklistType === 'receiving' ? (supplierName.trim() || null) : null,
                         area_id: areaId || null,
                         target_role: checklist.target_role || 'all',
                         assignment_type: (isIndividualMode && assignedToUserId) ? 'user' : (areaId ? 'area' : 'all'),
@@ -692,9 +687,6 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             // PR 3: igual ao auto-save — envia config como está no estado.
             recurrence_config: recurrenceConfig ?? null,
             enforce_sequential_order: enforceSequentialOrder,
-            receiving_mode: checklistType === 'receiving' ? receivingMode : null,
-            receiving_generation: checklistType === 'receiving' ? receivingGeneration : null,
-            supplier_name: checklistType === 'receiving' ? (supplierName.trim() || null) : null,
             area_id: areaId || null,
             assignment_type: (isIndividualMode && assignedToUserId) ? 'user' : (areaId ? 'area' : 'all'),
             // Em update, preserva status original (active/archived). Em criação, sempre active.

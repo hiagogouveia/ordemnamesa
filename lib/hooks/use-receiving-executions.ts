@@ -15,8 +15,6 @@ export interface ReceivingExecutionRow {
     checklist_id: string;
     name: string;
     supplier: { id: string; name: string } | null;
-    /** @deprecated supplier livre (legacy). Use supplier.name. */
-    supplier_name: string | null;
     source_template_id: string | null;
     area_id: string | null;
     area: { id: string; name: string; color: string } | null;

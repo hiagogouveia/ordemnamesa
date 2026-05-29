@@ -122,7 +122,7 @@ export default function ActivityDetailsPage() {
     // Em recebimento, janela é apenas previsão — fornecedor e horários
     // mostrados de forma informativa, sem banners bloqueantes nem
     // botão desabilitado por horário.
-    const receivingSupplier = supplierFromQuery || (checklist as { supplier_name?: string | null }).supplier_name || null;
+    const receivingSupplier = supplierFromQuery;
     const receivingFrom = windowFromQuery || (checklist.start_time as string | undefined) || null;
     const receivingTo = windowToQuery || (checklist.end_time as string | undefined) || null;
 

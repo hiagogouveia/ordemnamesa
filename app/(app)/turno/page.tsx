@@ -202,13 +202,13 @@ export default function KanbanPage() {
     const userAreas = useMemo(() => {
         if (!myAreaAssignments.length) return [];
         const seen = new Set<string>();
-        const result: Array<{ id: string; name: string; allowManualReceiving: boolean }> = [];
+        const result: Array<{ id: string; name: string }> = [];
         for (const a of myAreaAssignments) {
             const id = a.area?.id;
             const name = a.area?.name;
             if (!id || !name || seen.has(id)) continue;
             seen.add(id);
-            result.push({ id, name, allowManualReceiving: a.area?.allow_manual_receiving === true });
+            result.push({ id, name });
         }
         return result.sort((a, b) => a.name.localeCompare(b.name));
     }, [myAreaAssignments]);
@@ -297,7 +297,7 @@ export default function KanbanPage() {
                     isAssignedToMe,
                     isAssignedToOther,
                     unitName: getUnitName(cl),
-                    supplier: cl.supplier_name ?? null,
+                    supplier: null,
                     isQuick,
                     hasInProgressExecution: cl.hasInProgressExecution,
                 },

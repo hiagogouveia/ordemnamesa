@@ -16,7 +16,7 @@ export interface UserAreaAssignment {
     user_id: string;
     area_id: string;
     created_at: string;
-    area?: { id: string; name: string; color: string; priority_mode?: string; allow_manual_receiving?: boolean } | null;
+    area?: { id: string; name: string; color: string; priority_mode?: string } | null;
 }
 
 // Fetch all area assignments for a restaurant (for admin views)
