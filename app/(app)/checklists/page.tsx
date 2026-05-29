@@ -82,8 +82,11 @@ function ChecklistsContent() {
     const selectedAvailability = rawAvailability === "draft" ? "active" : rawAvailability;
     const selectedExecStatus = searchParams.get("exec_status") ?? "";
     const rawType = searchParams.get("type") ?? "all";
-    const selectedType: "all" | "operational" | "receiving" =
-        rawType === "operational" || rawType === "receiving" ? rawType : "all";
+    // s61: filtro agora reflete tipos operacionais explícitos. URLs antigas
+    // (?type=operational | ?type=receiving) caem em "all" graciosamente.
+    const selectedType: "all" | "regular" | "opening" | "closing" =
+        rawType === "regular" || rawType === "opening" || rawType === "closing"
+            ? rawType : "all";
     const selectedCollaboratorId = searchParams.get("collaborator_id") ?? "";
     const selectedUnitId = searchParams.get("unit_id") ?? "";
     const sortField = (searchParams.get("sort") as SortField | null) ?? null;
@@ -150,8 +153,15 @@ function ChecklistsContent() {
             if (isGlobal && selectedUnitId && c.restaurant_id !== selectedUnitId) return false;
             if (selectedShift && c.shift !== selectedShift && c.shift !== "any") return false;
             if (selectedAreaId && c.area_id !== selectedAreaId) return false;
-            if (selectedType === "receiving" && c.checklist_type !== "receiving") return false;
-            if (selectedType === "operational" && c.checklist_type === "receiving") return false;
+            // s61: filtro Tipo passou a refletir tipos operacionais explícitos
+            // (regular/opening/closing). "all" mostra tudo, incluindo eventuais
+            // legados com type=receiving que ainda existam — visibilidade
+            // preservada por design (sem perda de histórico).
+            // Para 'regular', registros sem checklist_type definido (legados anteriores
+            // à coluna existir) contam como regulares.
+            if (selectedType === "regular" && c.checklist_type && c.checklist_type !== "regular") return false;
+            if (selectedType === "opening" && c.checklist_type !== "opening") return false;
+            if (selectedType === "closing" && c.checklist_type !== "closing") return false;
             if (selectedAvailability === "active" && !c.active) return false;
             if (selectedAvailability === "inactive" && c.active) return false;
             if (selectedAvailability === "today" && brazilNow) {
@@ -281,7 +291,7 @@ function ChecklistsContent() {
         router.replace(`/checklists?${params.toString()}`);
     };
 
-    const setTypeFilter = (value: "all" | "operational" | "receiving") => {
+    const setTypeFilter = (value: "all" | "regular" | "opening" | "closing") => {
         const params = new URLSearchParams(searchParams.toString());
         if (value && value !== "all") params.set("type", value);
         else params.delete("type");
