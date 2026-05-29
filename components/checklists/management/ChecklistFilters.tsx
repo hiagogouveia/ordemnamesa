@@ -19,10 +19,14 @@ const AVAILABILITY_OPTIONS = [
     { value: "all", label: "Todas" },
 ];
 
+// s61: removido "Recebimentos" (módulo dedicado em /recebimentos).
+// Tipos operacionais explicitados (regular/opening/closing) — mais útil que a
+// pílula genérica "Operacionais" anterior.
 const TYPE_OPTIONS = [
-    { value: "all",         label: "Todos os tipos" },
-    { value: "operational", label: "Operacionais" },
-    { value: "receiving",   label: "Recebimentos" },
+    { value: "all",      label: "Todos os tipos" },
+    { value: "regular",  label: "Regular" },
+    { value: "opening",  label: "Abertura" },
+    { value: "closing",  label: "Fechamento" },
 ];
 
 const EXEC_STATUS_OPTIONS = [
@@ -46,8 +50,8 @@ interface ChecklistFiltersProps {
     onAvailabilityChange: (value: string) => void;
     selectedExecStatus: string;
     onExecStatusChange: (value: string) => void;
-    selectedType: "all" | "operational" | "receiving";
-    onTypeChange: (value: "all" | "operational" | "receiving") => void;
+    selectedType: "all" | "regular" | "opening" | "closing";
+    onTypeChange: (value: "all" | "regular" | "opening" | "closing") => void;
     collaborators: EquipeMember[];
     selectedCollaboratorId: string;
     onCollaboratorChange: (userId: string) => void;
@@ -104,7 +108,7 @@ export function ChecklistFilters({
                 label="Tipo"
                 options={TYPE_OPTIONS}
                 value={selectedType}
-                onChange={(v) => onTypeChange(v as "all" | "operational" | "receiving")}
+                onChange={(v) => onTypeChange(v as "all" | "regular" | "opening" | "closing")}
             />
             <FilterDropdown
                 label="Disponibilidade"

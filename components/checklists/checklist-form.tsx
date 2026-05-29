@@ -95,12 +95,16 @@ function deriveDropdownOption(
     if (recurrence === 'custom') return 'custom';
     return 'todos_os_dias'; // default seguro
 }
-const CHECKLIST_TYPES = [
+// s61: 'receiving' deixou de ser tipo selecionável em Rotinas — agora vive no
+// módulo dedicado /recebimentos (templates + execuções). A opção permanece
+// disponível APENAS em edição de rotinas legadas que já tenham esse tipo,
+// para preservar o registro no save.
+const CHECKLIST_TYPES_BASE = [
     { value: 'regular', label: 'Regular' },
     { value: 'opening', label: 'Abertura' },
     { value: 'closing', label: 'Fechamento' },
-    { value: 'receiving', label: 'Recebimento' }
 ];
+const CHECKLIST_TYPE_LEGACY_RECEIVING = { value: 'receiving', label: 'Recebimento (legado)' };
 
 /**
  * Avalia se um draft local de rotina nova vale a pena restaurar — evita
@@ -995,7 +999,10 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                     onChange={(e) => setChecklistType(e.target.value)}
                                     className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
                                 >
-                                    {CHECKLIST_TYPES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                                    {(checklist?.checklist_type === 'receiving'
+                                        ? [...CHECKLIST_TYPES_BASE, CHECKLIST_TYPE_LEGACY_RECEIVING]
+                                        : CHECKLIST_TYPES_BASE
+                                    ).map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                                 </select>
                             </div>
                         </div>
