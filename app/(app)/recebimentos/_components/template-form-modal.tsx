@@ -1,15 +1,43 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+} from "@dnd-kit/core";
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import {
     useReceivingTemplate,
     useCreateReceivingTemplate,
     useUpdateReceivingTemplate,
 } from "@/lib/hooks/use-receiving-templates";
 import { useAllAreas } from "@/lib/hooks/use-areas";
+import { useShifts } from "@/lib/hooks/use-shifts";
+import { useEquipe } from "@/lib/hooks/use-equipe";
 import { RecurrencePicker } from "@/components/checklists/recurrence-picker-modal";
-import type { ReceivingTemplate, ReceivingTemplateTask, RecurrenceConfig, RecurrenceV2 } from "@/lib/types";
+import { DailyConfig } from "@/components/checklists/recurrence/daily-config";
+import { WeeklyConfig } from "@/components/checklists/recurrence/weekly-config";
+import { MonthlyConfig } from "@/components/checklists/recurrence/monthly-config";
+import { YearlyConfig } from "@/components/checklists/recurrence/yearly-config";
+import { TaskItem } from "@/components/checklists/task-item";
+import { describeRecurrence } from "@/lib/utils/recurrence/describe";
 import { SHIFT_OPTIONS, type ShiftValue } from "@/lib/utils/shift-labels";
+import type {
+    ChecklistTask,
+    ReceivingTemplate,
+    ReceivingTemplateTask,
+    RecurrenceConfig,
+    RecurrenceV2,
+} from "@/lib/types";
 
 interface TemplateFormModalProps {
     restaurantId: string;
@@ -17,68 +45,87 @@ interface TemplateFormModalProps {
     onClose: () => void;
 }
 
-type RecurrenceType = ReceivingTemplate["recurrence"];
+/** Opções de dropdown — mesmo conjunto e ordem usados em Rotinas (checklist-form). */
+type RecurrenceDropdownOption =
+    | "shift_days"
+    | "todos_os_dias"
+    | "daily"
+    | "weekly"
+    | "monthly"
+    | "yearly"
+    | "custom";
 
-/** Opções "diretas" do dropdown — custom abre modal dedicado. */
-const RECURRENCE_OPTIONS: Array<{ value: RecurrenceType; label: string }> = [
-    { value: "daily", label: "Diária" },
-    { value: "weekdays", label: "Dias úteis (seg–sex)" },
+const RECURRENCE_DROPDOWN_OPTIONS: { value: RecurrenceDropdownOption; label: string }[] = [
+    { value: "shift_days", label: "Dias do turno" },
+    { value: "todos_os_dias", label: "Todos os dias" },
+    { value: "daily", label: "Diário (exceto)" },
     { value: "weekly", label: "Semanal" },
     { value: "monthly", label: "Mensal" },
     { value: "yearly", label: "Anual" },
-    { value: "custom", label: "Personalizada…" },
+    { value: "custom", label: "Personalizar" },
 ];
 
-type TaskDraft = {
-    id?: string;
-    title: string;
-    requires_photo: boolean;
-    is_critical: boolean;
-    requires_observation: boolean;
-};
+/** Mesma lógica de mapeamento usada em checklist-form. */
+function recurrenceToDropdownValue(
+    recurrence: string | null | undefined,
+    config: RecurrenceConfig | RecurrenceV2 | null | undefined,
+): RecurrenceDropdownOption {
+    const isV2 =
+        typeof config === "object" &&
+        config !== null &&
+        (config as { version?: unknown }).version === 2;
 
-function templateToDraftTasks(t: ReceivingTemplate | null): TaskDraft[] {
-    if (!t?.tasks || t.tasks.length === 0) {
-        return [{ title: "", requires_photo: false, is_critical: false, requires_observation: false }];
+    if (isV2) {
+        const v2 = config as RecurrenceV2;
+        if (v2.type === "shift_days") return "shift_days";
+        if (v2.type === "daily") return "todos_os_dias";
+        if (v2.type === "weekly") {
+            const weekly = v2 as RecurrenceV2 & { type: "weekly"; weekdays?: number[] };
+            if (Array.isArray(weekly.weekdays) && weekly.weekdays.length > 0) {
+                return weekly.weekdays.length < 7 ? "daily" : "weekly";
+            }
+            return "weekly";
+        }
+        if (v2.type === "monthly") return "monthly";
+        if (v2.type === "yearly") return "yearly";
+        if (v2.type === "custom") return "custom";
     }
-    return t.tasks
-        .slice()
-        .sort((a, b) => a.order - b.order)
-        .map((task) => ({
-            id: task.id,
-            title: task.title,
-            requires_photo: task.requires_photo,
-            is_critical: task.is_critical,
-            requires_observation: task.requires_observation,
-        }));
+    if (recurrence === "daily") return "todos_os_dias";
+    if (recurrence === "weekdays") return "weekly"; // legado
+    if (recurrence === "shift_days") return "shift_days";
+    if (recurrence === "weekly") return "weekly";
+    if (recurrence === "monthly") return "monthly";
+    if (recurrence === "yearly") return "yearly";
+    if (recurrence === "custom") return "custom";
+    return "todos_os_dias";
 }
 
-/** Resumo curto para descrever recurrence_config v1/v2 ao usuário. */
-function describeRecurrence(
-    recurrence: RecurrenceType,
-    config: RecurrenceConfig | RecurrenceV2 | null | undefined,
-): string {
-    if (recurrence !== "custom") {
-        const opt = RECURRENCE_OPTIONS.find((o) => o.value === recurrence);
-        return opt?.label ?? recurrence;
-    }
-    if (!config) return "Personalizada (configurar…)";
-    // v2 rrule
-    if (typeof config === "object" && "type" in config && config.type === "custom") {
-        const v2 = config as RecurrenceV2;
-        if ("rrule" in v2) {
-            const r = (v2 as { rrule?: string }).rrule;
-            if (typeof r === "string") {
-                return `Personalizada (${r.replace(/^RRULE:/, "").slice(0, 50)}…)`;
-            }
-        }
-    }
-    // v1 legado
-    const v1 = config as RecurrenceConfig;
-    const days = Array.isArray(v1.days_of_week) ? v1.days_of_week : [];
-    const dayLabels = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-    const daysStr = days.map((d) => dayLabels[d]).filter(Boolean).join(", ");
-    return daysStr ? `Personalizada (${daysStr})` : "Personalizada";
+type TaskDraft = Partial<ChecklistTask> & { tempId: string };
+
+function templateTaskToDraft(t: ReceivingTemplateTask): TaskDraft {
+    return {
+        tempId: t.id,
+        title: t.title,
+        description: t.description ?? undefined,
+        requires_photo: t.requires_photo,
+        is_critical: t.is_critical,
+        requires_observation: t.requires_observation,
+        order: t.order,
+        type: t.type ?? null,
+        max_photos: t.max_photos ?? null,
+        task_config: t.task_config ?? null,
+    };
+}
+
+function newEmptyTask(order: number): TaskDraft {
+    return {
+        tempId: `new-${order}-${Math.random().toString(36).slice(2)}`,
+        title: "",
+        requires_photo: false,
+        is_critical: false,
+        requires_observation: false,
+        order,
+    };
 }
 
 export function TemplateFormModal({ restaurantId, template, onClose }: TemplateFormModalProps) {
@@ -90,31 +137,60 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
     const effectiveTemplate = fullTemplate ?? template;
 
     const { data: areas = [] } = useAllAreas(restaurantId);
+    const { data: shiftsData = [] } = useShifts(restaurantId);
+    const { data: equipeData } = useEquipe(restaurantId);
+    const equipe = equipeData?.equipe ?? [];
     const createTemplate = useCreateReceivingTemplate();
     const updateTemplate = useUpdateReceivingTemplate();
 
+    // --- Form state ---
     const [name, setName] = useState(effectiveTemplate?.name ?? "");
     const [description, setDescription] = useState(effectiveTemplate?.description ?? "");
     const [areaId, setAreaId] = useState(effectiveTemplate?.area_id ?? "");
     const [shift, setShift] = useState<ShiftValue>(
         (effectiveTemplate?.shift as ShiftValue) ?? "any",
     );
-    const [recurrence, setRecurrence] = useState<RecurrenceType>(
-        effectiveTemplate?.recurrence ?? "daily",
+    const [isIndividualMode, setIsIndividualMode] = useState(
+        !!effectiveTemplate?.assigned_to_user_id,
     );
+    const [assignedToUserId, setAssignedToUserId] = useState(
+        effectiveTemplate?.assigned_to_user_id ?? "",
+    );
+
+    // Recurrence — mesmo padrão de checklist-form
+    const [recurrence, setRecurrence] = useState<string>(effectiveTemplate?.recurrence ?? "daily");
     const [recurrenceConfig, setRecurrenceConfig] = useState<
         RecurrenceConfig | RecurrenceV2 | null
     >(effectiveTemplate?.recurrence_config ?? null);
     const [showRecurrencePicker, setShowRecurrencePicker] = useState(false);
-    const [tasks, setTasks] = useState<TaskDraft[]>(() => templateToDraftTasks(effectiveTemplate));
+    const [activeRecurrenceModal, setActiveRecurrenceModal] = useState<
+        "daily" | "weekly" | "monthly" | "yearly" | null
+    >(null);
+
+    // Tasks (DnD)
+    const [tasks, setTasks] = useState<TaskDraft[]>(() => {
+        const src = effectiveTemplate?.tasks;
+        if (!src || src.length === 0) return [newEmptyTask(0)];
+        return src.slice().sort((a, b) => a.order - b.order).map(templateTaskToDraft);
+    });
+
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-    // Quando o detalhe completo carregar, sincroniza tasks.
+    // Quando detalhe completo chega, sincroniza estado.
     useEffect(() => {
-        if (fullTemplate && fullTemplate.tasks) {
-            setTasks(templateToDraftTasks(fullTemplate));
-            setRecurrenceConfig(fullTemplate.recurrence_config ?? null);
-            setShift((fullTemplate.shift as ShiftValue) ?? "any");
+        if (!fullTemplate) return;
+        setShift((fullTemplate.shift as ShiftValue) ?? "any");
+        setRecurrence(fullTemplate.recurrence ?? "daily");
+        setRecurrenceConfig(fullTemplate.recurrence_config ?? null);
+        setAssignedToUserId(fullTemplate.assigned_to_user_id ?? "");
+        setIsIndividualMode(!!fullTemplate.assigned_to_user_id);
+        if (fullTemplate.tasks && fullTemplate.tasks.length > 0) {
+            setTasks(
+                fullTemplate.tasks
+                    .slice()
+                    .sort((a, b) => a.order - b.order)
+                    .map(templateTaskToDraft),
+            );
         }
     }, [fullTemplate]);
 
@@ -123,38 +199,87 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
         [areas],
     );
 
-    const handleRecurrenceChange = (next: RecurrenceType) => {
-        setRecurrence(next);
-        if (next === "custom") {
-            // Só abre o picker quando muda PARA custom; se já era custom mantém config.
-            if (recurrence !== "custom") {
-                setShowRecurrencePicker(true);
+    // Membros da área selecionada (mesma regra do checklist-form: filtra equipe por área).
+    const areaMembers = useMemo(() => {
+        if (!areaId) return [];
+        return equipe.filter((m) => m.areas?.some((a) => a.id === areaId));
+    }, [equipe, areaId]);
+
+    // Recurrence handlers — mesmo padrão de checklist-form
+    const dropdownValue = recurrenceToDropdownValue(recurrence, recurrenceConfig);
+    const handleRecurrenceChange = useCallback(
+        (value: RecurrenceDropdownOption) => {
+            if (value === "shift_days") {
+                setRecurrence("shift_days");
+                setRecurrenceConfig({ version: 2, type: "shift_days" });
+                return;
             }
-        } else {
-            // Limpa config para tipos simples (sem config necessária).
-            setRecurrenceConfig(null);
-        }
-    };
+            if (value === "todos_os_dias") {
+                setRecurrence("daily");
+                setRecurrenceConfig({ version: 2, type: "daily" });
+                return;
+            }
+            if (value === "custom") {
+                setShowRecurrencePicker(true);
+                return;
+            }
+            setActiveRecurrenceModal(value);
+        },
+        [],
+    );
 
-    const handleRecurrenceConfirm = (config: RecurrenceV2) => {
+    const handleModalConfirm = useCallback((config: RecurrenceV2) => {
         setRecurrenceConfig(config);
-        setShowRecurrencePicker(false);
-    };
+        setRecurrence(config.type);
+        setActiveRecurrenceModal(null);
+    }, []);
 
-    const updateTask = (index: number, patch: Partial<TaskDraft>) => {
-        setTasks((prev) => prev.map((t, i) => (i === index ? { ...t, ...patch } : t)));
-    };
+    const recurrenceLabel = useMemo(() => {
+        return describeRecurrence({
+            recurrence,
+            recurrence_config: recurrenceConfig,
+        });
+    }, [recurrence, recurrenceConfig]);
 
-    const addTask = () => {
-        setTasks((prev) => [
-            ...prev,
-            { title: "", requires_photo: false, is_critical: false, requires_observation: false },
-        ]);
-    };
+    // Tasks helpers
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    );
 
-    const removeTask = (index: number) => {
-        setTasks((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)));
-    };
+    const updateTask = useCallback(
+        (id: string, updates: Partial<ChecklistTask>) => {
+            setTasks((prev) =>
+                prev.map((t) => (t.tempId === id ? { ...t, ...updates } : t)),
+            );
+        },
+        [],
+    );
+
+    const removeTask = useCallback((id: string) => {
+        setTasks((prev) => prev.filter((t) => t.tempId !== id));
+    }, []);
+
+    const addTask = useCallback(() => {
+        setTasks((prev) => [...prev, newEmptyTask(prev.length)]);
+    }, []);
+
+    const handleDragEnd = useCallback(
+        (event: { active: { id: string | number }; over: { id: string | number } | null }) => {
+            const { active, over } = event;
+            if (!over || active.id === over.id) return;
+            setTasks((prev) => {
+                const oldIndex = prev.findIndex((t) => t.tempId === active.id);
+                const newIndex = prev.findIndex((t) => t.tempId === over.id);
+                if (oldIndex < 0 || newIndex < 0) return prev;
+                return arrayMove(prev, oldIndex, newIndex).map((t, i) => ({
+                    ...t,
+                    order: i,
+                }));
+            });
+        },
+        [],
+    );
 
     const handleSave = async () => {
         setErrorMsg(null);
@@ -169,28 +294,29 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
             return;
         }
         const cleanTasks = tasks
-            .map((t) => ({ ...t, title: t.title.trim() }))
+            .map((t) => ({ ...t, title: (t.title ?? "").trim() }))
             .filter((t) => t.title.length > 0);
         if (cleanTasks.length === 0) {
             setErrorMsg("Adicione ao menos uma tarefa.");
             return;
         }
-        if (recurrence === "custom" && !recurrenceConfig) {
-            setErrorMsg("Configure os dias da recorrência personalizada.");
-            return;
-        }
 
         const shiftPayload = shift === "any" ? null : shift;
+        const assignedPayload =
+            isIndividualMode && assignedToUserId ? assignedToUserId : null;
 
-        const tasksPayload: Array<Partial<ReceivingTemplateTask> & { title: string }> = cleanTasks.map(
-            (t, idx) => ({
-                title: t.title,
+        const tasksPayload: Array<Partial<ReceivingTemplateTask> & { title: string }> =
+            cleanTasks.map((t, idx) => ({
+                title: t.title!,
+                description: t.description ?? null,
                 order: idx,
-                requires_photo: t.requires_photo,
-                is_critical: t.is_critical,
-                requires_observation: t.requires_observation,
-            }),
-        );
+                requires_photo: !!t.requires_photo,
+                is_critical: !!t.is_critical,
+                requires_observation: !!t.requires_observation,
+                type: t.type ?? null,
+                max_photos: t.max_photos ?? null,
+                task_config: t.task_config ?? null,
+            }));
 
         try {
             if (isEditing && template) {
@@ -200,8 +326,9 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                     name: cleanName,
                     description: description?.trim() || null,
                     area_id: areaId,
+                    assigned_to_user_id: assignedPayload,
                     shift: shiftPayload,
-                    recurrence,
+                    recurrence: recurrence as ReceivingTemplate["recurrence"],
                     recurrence_config: recurrenceConfig,
                     tasks: tasksPayload,
                 });
@@ -211,8 +338,9 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                     name: cleanName,
                     description: description?.trim() || undefined,
                     area_id: areaId,
+                    assigned_to_user_id: assignedPayload ?? undefined,
                     shift: shiftPayload,
-                    recurrence,
+                    recurrence: recurrence as ReceivingTemplate["recurrence"],
                     recurrence_config: recurrenceConfig ?? undefined,
                     tasks: tasksPayload,
                 });
@@ -232,10 +360,9 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                 onClick={onClose}
             >
                 <div
-                    className="bg-[#16262c] border border-[#233f48] rounded-t-2xl md:rounded-2xl w-full md:max-w-[920px] max-h-[95vh] md:max-h-[90vh] flex flex-col"
+                    className="bg-[#16262c] border border-[#233f48] rounded-t-2xl md:rounded-2xl w-full md:max-w-[1080px] max-h-[95vh] md:max-h-[90vh] flex flex-col"
                     onClick={(e) => e.stopPropagation()}
                 >
-                    {/* Header */}
                     <div className="flex items-center justify-between px-6 py-4 border-b border-[#233f48] shrink-0">
                         <h3 className="text-white font-bold text-base">
                             {isEditing ? "Editar modelo de recebimento" : "Novo modelo de recebimento"}
@@ -245,10 +372,9 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                         </button>
                     </div>
 
-                    {/* Conteúdo grid 2 colunas em md+; empilhado em sm */}
                     <div className="flex-1 overflow-y-auto">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-0 md:divide-x md:divide-[#233f48]">
-                            {/* Coluna esquerda — Dados do modelo */}
+                            {/* Coluna esquerda — Dados */}
                             <div className="px-6 py-5 space-y-5">
                                 <div>
                                     <h4 className="text-xs font-bold text-[#13b6ec] uppercase tracking-wider mb-3">
@@ -289,7 +415,19 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                                     </label>
                                     <select
                                         value={areaId}
-                                        onChange={(e) => setAreaId(e.target.value)}
+                                        onChange={(e) => {
+                                            const next = e.target.value;
+                                            setAreaId(next);
+                                            // Se o user atribuído não pertence à nova área, limpa.
+                                            if (assignedToUserId && next) {
+                                                const stillBelongs = equipe.some(
+                                                    (m) =>
+                                                        m.user_id === assignedToUserId &&
+                                                        m.areas?.some((a) => a.id === next),
+                                                );
+                                                if (!stillBelongs) setAssignedToUserId("");
+                                            }
+                                        }}
                                         className="w-full bg-[#101d22] border border-[#233f48] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#13b6ec]"
                                     >
                                         <option value="">— Selecione —</option>
@@ -299,6 +437,55 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                                             </option>
                                         ))}
                                     </select>
+                                </div>
+
+                                {/* Responsável — mesmo padrão das rotinas */}
+                                <div>
+                                    <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-1.5">
+                                        Responsável
+                                    </label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setIsIndividualMode(false);
+                                                setAssignedToUserId("");
+                                            }}
+                                            className={`px-3 py-2 rounded-lg border text-xs font-semibold transition-colors ${
+                                                !isIndividualMode
+                                                    ? "bg-[#13b6ec]/10 border-[#13b6ec]/40 text-[#13b6ec]"
+                                                    : "bg-[#101d22] border-[#233f48] text-[#92bbc9] hover:border-[#325a67]"
+                                            }`}
+                                        >
+                                            Toda a equipe da área
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsIndividualMode(true)}
+                                            className={`px-3 py-2 rounded-lg border text-xs font-semibold transition-colors ${
+                                                isIndividualMode
+                                                    ? "bg-[#13b6ec]/10 border-[#13b6ec]/40 text-[#13b6ec]"
+                                                    : "bg-[#101d22] border-[#233f48] text-[#92bbc9] hover:border-[#325a67]"
+                                            }`}
+                                        >
+                                            Usuário específico
+                                        </button>
+                                    </div>
+                                    {isIndividualMode && (
+                                        <select
+                                            value={assignedToUserId}
+                                            onChange={(e) => setAssignedToUserId(e.target.value)}
+                                            disabled={!areaId}
+                                            className="mt-2 w-full bg-[#101d22] border border-[#233f48] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#13b6ec] disabled:opacity-50"
+                                        >
+                                            <option value="">— Selecione o colaborador —</option>
+                                            {areaMembers.map((m) => (
+                                                <option key={m.user_id} value={m.user_id}>
+                                                    {m.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    )}
                                 </div>
 
                                 <div>
@@ -318,35 +505,51 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                                     </select>
                                 </div>
 
+                                {/* Recorrência — exatamente o mesmo conjunto/handler das rotinas */}
                                 <div>
                                     <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-1.5">
                                         Recorrência
                                     </label>
                                     <select
-                                        value={recurrence}
-                                        onChange={(e) => handleRecurrenceChange(e.target.value as RecurrenceType)}
+                                        value={dropdownValue}
+                                        onChange={(e) =>
+                                            handleRecurrenceChange(e.target.value as RecurrenceDropdownOption)
+                                        }
                                         className="w-full bg-[#101d22] border border-[#233f48] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#13b6ec]"
                                     >
-                                        {RECURRENCE_OPTIONS.map((r) => (
+                                        {RECURRENCE_DROPDOWN_OPTIONS.map((r) => (
                                             <option key={r.value} value={r.value}>
                                                 {r.label}
                                             </option>
                                         ))}
                                     </select>
-                                    {recurrence === "custom" && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowRecurrencePicker(true)}
-                                            className="mt-2 w-full bg-[#101d22] border border-[#233f48] rounded-lg px-3 py-2 text-left text-xs text-[#92bbc9] hover:border-[#13b6ec] transition-colors flex items-center justify-between"
-                                        >
-                                            <span>{describeRecurrence(recurrence, recurrenceConfig)}</span>
-                                            <span className="material-symbols-outlined text-[16px] text-[#13b6ec]">tune</span>
-                                        </button>
-                                    )}
+                                    <div className="mt-2 flex items-center justify-between text-xs">
+                                        <span className="text-[#92bbc9]">{recurrenceLabel}</span>
+                                        {(dropdownValue === "daily" ||
+                                            dropdownValue === "weekly" ||
+                                            dropdownValue === "monthly" ||
+                                            dropdownValue === "yearly" ||
+                                            dropdownValue === "custom") && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (dropdownValue === "custom") {
+                                                        setShowRecurrencePicker(true);
+                                                    } else {
+                                                        setActiveRecurrenceModal(dropdownValue);
+                                                    }
+                                                }}
+                                                className="text-[#13b6ec] font-semibold hover:underline inline-flex items-center gap-1"
+                                            >
+                                                <span className="material-symbols-outlined text-[14px]">tune</span>
+                                                Configurar
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* Coluna direita — Tarefas */}
+                            {/* Coluna direita — Tarefas (DnD + TaskItem) */}
                             <div className="px-6 py-5 space-y-3 bg-[#101d22]/30 md:bg-transparent">
                                 <div className="flex items-center justify-between">
                                     <h4 className="text-xs font-bold text-[#13b6ec] uppercase tracking-wider">
@@ -361,66 +564,36 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                                         Nova tarefa
                                     </button>
                                 </div>
-                                <ul className="flex flex-col gap-2">
-                                    {tasks.map((t, idx) => (
-                                        <li
-                                            key={idx}
-                                            className="bg-[#101d22] border border-[#233f48] rounded-lg p-3 flex flex-col gap-2"
-                                        >
-                                            <div className="flex items-start gap-2">
-                                                <span className="text-[#557682] text-xs font-bold pt-2.5 w-5 text-center tabular-nums">
-                                                    {idx + 1}
-                                                </span>
-                                                <input
-                                                    type="text"
-                                                    value={t.title}
-                                                    onChange={(e) => updateTask(idx, { title: e.target.value })}
-                                                    placeholder={`Tarefa ${idx + 1}`}
-                                                    className="flex-1 bg-[#16262c] border border-[#233f48] rounded-md px-3 py-2 text-sm text-white placeholder:text-[#557682] focus:outline-none focus:border-[#13b6ec]"
+
+                                <DndContext
+                                    sensors={sensors}
+                                    collisionDetection={closestCenter}
+                                    onDragEnd={handleDragEnd}
+                                    onDragCancel={() => {}}
+                                >
+                                    <SortableContext
+                                        items={tasks.map((t) => t.tempId)}
+                                        strategy={verticalListSortingStrategy}
+                                    >
+                                        <div className="space-y-2">
+                                            {tasks.map((task) => (
+                                                <TaskItem
+                                                    key={task.tempId}
+                                                    task={task}
+                                                    equipe={[]}
+                                                    onUpdate={updateTask}
+                                                    onRemove={removeTask}
                                                 />
-                                                {tasks.length > 1 && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => removeTask(idx)}
-                                                        className="shrink-0 p-2 text-[#557682] hover:text-red-400 transition-colors"
-                                                        title="Remover tarefa"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[18px]">delete</span>
-                                                    </button>
-                                                )}
-                                            </div>
-                                            <div className="flex flex-wrap gap-3 text-xs text-[#92bbc9] pl-7">
-                                                <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={t.requires_photo}
-                                                        onChange={(e) => updateTask(idx, { requires_photo: e.target.checked })}
-                                                        className="accent-[#13b6ec]"
-                                                    />
-                                                    Foto obrigatória
-                                                </label>
-                                                <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={t.is_critical}
-                                                        onChange={(e) => updateTask(idx, { is_critical: e.target.checked })}
-                                                        className="accent-[#13b6ec]"
-                                                    />
-                                                    Crítica
-                                                </label>
-                                                <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={t.requires_observation}
-                                                        onChange={(e) => updateTask(idx, { requires_observation: e.target.checked })}
-                                                        className="accent-[#13b6ec]"
-                                                    />
-                                                    Requer observação
-                                                </label>
-                                            </div>
-                                        </li>
-                                    ))}
-                                </ul>
+                                            ))}
+                                        </div>
+                                    </SortableContext>
+                                </DndContext>
+
+                                {tasks.length === 0 && (
+                                    <div className="text-center p-6 border border-dashed border-[#325a67] rounded-xl text-[#92bbc9] text-xs">
+                                        Nenhuma tarefa. Clique em &ldquo;Nova tarefa&rdquo; para começar.
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -452,17 +625,100 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                 </div>
             </div>
 
+            {/* Modais reutilizados de Rotinas */}
+            {activeRecurrenceModal === "daily" && (
+                <DailyConfig
+                    initialExcluded={
+                        recurrenceConfig &&
+                        typeof recurrenceConfig === "object" &&
+                        (recurrenceConfig as { version?: unknown }).version === 2 &&
+                        (recurrenceConfig as RecurrenceV2).type === "weekly"
+                            ? // Para daily-config, "initialExcluded" é a inversa dos dias permitidos
+                              [0, 1, 2, 3, 4, 5, 6].filter(
+                                  (d) =>
+                                      !(
+                                          (recurrenceConfig as RecurrenceV2 & {
+                                              type: "weekly";
+                                              weekdays?: number[];
+                                          }).weekdays ?? []
+                                      ).includes(d),
+                              )
+                            : undefined
+                    }
+                    onConfirm={handleModalConfirm}
+                    onCancel={() => setActiveRecurrenceModal(null)}
+                    shifts={shiftsData}
+                    shiftLabel={shift === "any" ? null : shift}
+                />
+            )}
+            {activeRecurrenceModal === "weekly" && (
+                <WeeklyConfig
+                    initialWeekdays={
+                        recurrenceConfig &&
+                        typeof recurrenceConfig === "object" &&
+                        (recurrenceConfig as { version?: unknown }).version === 2 &&
+                        (recurrenceConfig as RecurrenceV2).type === "weekly"
+                            ? ((recurrenceConfig as RecurrenceV2 & {
+                                  type: "weekly";
+                                  weekdays?: number[];
+                              }).weekdays ?? undefined)
+                            : undefined
+                    }
+                    onConfirm={handleModalConfirm}
+                    onCancel={() => setActiveRecurrenceModal(null)}
+                    shifts={shiftsData}
+                    shiftLabel={shift === "any" ? null : shift}
+                />
+            )}
+            {activeRecurrenceModal === "monthly" && (
+                <MonthlyConfig
+                    initial={
+                        recurrenceConfig &&
+                        typeof recurrenceConfig === "object" &&
+                        (recurrenceConfig as { version?: unknown }).version === 2 &&
+                        (recurrenceConfig as RecurrenceV2).type === "monthly"
+                            ? (recurrenceConfig as RecurrenceV2 & { type: "monthly" })
+                            : undefined
+                    }
+                    onConfirm={handleModalConfirm}
+                    onCancel={() => setActiveRecurrenceModal(null)}
+                    shifts={shiftsData}
+                    shiftLabel={shift === "any" ? null : shift}
+                />
+            )}
+            {activeRecurrenceModal === "yearly" && (
+                <YearlyConfig
+                    initial={
+                        recurrenceConfig &&
+                        typeof recurrenceConfig === "object" &&
+                        (recurrenceConfig as { version?: unknown }).version === 2 &&
+                        (recurrenceConfig as RecurrenceV2).type === "yearly"
+                            ? (recurrenceConfig as RecurrenceV2 & { type: "yearly" })
+                            : undefined
+                    }
+                    onConfirm={handleModalConfirm}
+                    onCancel={() => setActiveRecurrenceModal(null)}
+                    shifts={shiftsData}
+                    shiftLabel={shift === "any" ? null : shift}
+                />
+            )}
             {showRecurrencePicker && (
                 <RecurrencePicker
                     initial={
-                        recurrenceConfig && typeof recurrenceConfig === "object" && !("type" in recurrenceConfig)
+                        recurrenceConfig &&
+                        typeof recurrenceConfig === "object" &&
+                        !("version" in (recurrenceConfig as object))
                             ? (recurrenceConfig as RecurrenceConfig)
                             : undefined
                     }
-                    onConfirm={handleRecurrenceConfirm}
+                    onConfirm={(config) => {
+                        handleModalConfirm(config);
+                        setShowRecurrencePicker(false);
+                    }}
                     onCancel={() => setShowRecurrencePicker(false)}
                 />
             )}
+
         </>
     );
 }
