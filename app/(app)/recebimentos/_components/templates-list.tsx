@@ -6,6 +6,7 @@ import {
     useArchiveReceivingTemplate,
     useUpdateReceivingTemplate,
 } from "@/lib/hooks/use-receiving-templates";
+import { shiftLabel } from "@/lib/utils/shift-labels";
 import type { ReceivingTemplate } from "@/lib/types";
 import { TemplateFormModal } from "./template-form-modal";
 
@@ -127,6 +128,7 @@ export function TemplatesList({ restaurantId }: TemplatesListProps) {
                             <tr>
                                 <th className="text-left px-4 py-3 font-medium">Nome</th>
                                 <th className="text-left px-4 py-3 font-medium">Área</th>
+                                <th className="text-left px-4 py-3 font-medium">Turno</th>
                                 <th className="text-left px-4 py-3 font-medium">Recorrência</th>
                                 <th className="text-left px-4 py-3 font-medium">Tarefas</th>
                                 <th className="text-left px-4 py-3 font-medium">Status</th>
@@ -149,6 +151,7 @@ export function TemplatesList({ restaurantId }: TemplatesListProps) {
                                                 <span className="text-[#557682]">—</span>
                                             )}
                                         </td>
+                                        <td className="px-4 py-3 text-[#92bbc9]">{shiftLabel(t.shift)}</td>
                                         <td className="px-4 py-3 text-[#92bbc9]">
                                             {RECURRENCE_LABEL[t.recurrence] ?? t.recurrence}
                                         </td>

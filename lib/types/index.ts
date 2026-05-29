@@ -154,7 +154,7 @@ export interface ReceivingTemplate {
     assigned_to_user_id?: string | null
     shift?: 'morning' | 'afternoon' | 'evening' | null
     recurrence: 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekdays' | 'custom' | 'shift_days'
-    recurrence_config?: RecurrenceConfig | null
+    recurrence_config?: RecurrenceConfig | RecurrenceV2 | null
     enforce_sequential_order: boolean
     active: boolean
     created_at: string

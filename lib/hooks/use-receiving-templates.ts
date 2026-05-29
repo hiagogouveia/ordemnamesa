@@ -87,6 +87,7 @@ interface CreateTemplateVars {
     area_id: string;
     role_id?: string | null;
     assigned_to_user_id?: string | null;
+    shift?: "morning" | "afternoon" | "evening" | null;
     recurrence: ReceivingTemplate["recurrence"];
     recurrence_config?: ReceivingTemplate["recurrence_config"];
     enforce_sequential_order?: boolean;
@@ -122,6 +123,7 @@ interface UpdateTemplateVars {
     area_id?: string;
     role_id?: string | null;
     assigned_to_user_id?: string | null;
+    shift?: "morning" | "afternoon" | "evening" | null;
     recurrence?: ReceivingTemplate["recurrence"];
     recurrence_config?: ReceivingTemplate["recurrence_config"];
     enforce_sequential_order?: boolean;
