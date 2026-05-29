@@ -131,6 +131,56 @@ export interface Checklist {
     // auto-arquivada. Atualmente usada por "Recebimento rápido"; nome genérico
     // para reuso futuro em tarefas emergenciais / contingências.
     is_one_shot?: boolean
+    // Sprint 56 — execução instanciada a partir de modelo de recebimento
+    source_template_id?: string | null
+    supplier_id?: string | null
+    supplier?: Supplier | null
+}
+
+// Sprint 56 — Receiving Templates + Suppliers
+export interface Supplier {
+    id: string
+    restaurant_id: string
+    name: string
+    cnpj?: string | null
+    active: boolean
+    created_at: string
+    created_by?: string | null
+}
+
+export interface ReceivingTemplate {
+    id: string
+    restaurant_id: string
+    name: string
+    description?: string | null
+    area_id: string
+    role_id?: string | null
+    assigned_to_user_id?: string | null
+    shift?: 'morning' | 'afternoon' | 'evening' | null
+    recurrence: 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekdays' | 'custom' | 'shift_days'
+    recurrence_config?: RecurrenceConfig | null
+    enforce_sequential_order: boolean
+    active: boolean
+    created_at: string
+    created_by?: string | null
+    updated_at: string
+    tasks?: ReceivingTemplateTask[]
+    area?: Area | null
+}
+
+export interface ReceivingTemplateTask {
+    id: string
+    template_id: string
+    restaurant_id: string
+    title: string
+    description?: string | null
+    order: number
+    requires_photo: boolean
+    is_critical: boolean
+    requires_observation: boolean
+    type?: TaskType | null
+    max_photos?: number | null
+    task_config?: TaskConfig | null
 }
 
 // Sprint 48 — Receiving Routines
