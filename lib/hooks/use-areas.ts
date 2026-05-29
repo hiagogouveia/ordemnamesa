@@ -150,10 +150,9 @@ export function useDeleteArea() {
             queryClient.invalidateQueries({ queryKey: ["areas-all", variables.restaurant_id] });
             queryClient.invalidateQueries({ queryKey: ["my-activities", variables.restaurant_id] });
             queryClient.invalidateQueries({ queryKey: ["my-areas"] });
-            // Templates e expectations do Meu Turno dependem de allow_manual_receiving
-            // e da composição de áreas — sem invalidar, o frontend segura snapshot vazio.
+            // Composição de áreas afeta o picker de Recebimentos no Meu Turno.
             queryClient.invalidateQueries({ queryKey: ["receiving-templates", variables.restaurant_id] });
-            queryClient.invalidateQueries({ queryKey: ["receiving-expectations", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["receiving-templates-available", variables.restaurant_id] });
         },
     });
 }
