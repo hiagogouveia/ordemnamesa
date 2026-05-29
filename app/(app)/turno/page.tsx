@@ -624,7 +624,6 @@ export default function KanbanPage() {
                                                     area={m.area}
                                                     itemsCount={m.itemsCount}
                                                     supplier={m.supplier}
-                                                    isQuick={m.isQuick}
                                                     isReceivingOverdue={m.isReceivingOverdue}
                                                     progress={m.progress}
                                                     flaggedCount={m.flaggedCount}
@@ -924,7 +923,6 @@ function ExecutandoBlock({ items }: { items: OperationItem[] }) {
                             area={m.area}
                             itemsCount={m.itemsCount}
                             supplier={m.supplier}
-                            isQuick={m.isQuick}
                             isReceivingOverdue={m.isReceivingOverdue}
                             progress={m.progress}
                             flaggedCount={m.flaggedCount}
