@@ -1,10 +1,11 @@
 'use client';
 
 import { useMemo } from 'react';
-import type { AuditFilters, AuditStatus, PeriodPreset, Shift } from '@/lib/types/audit';
+import type { AuditFilters, AuditKind, AuditStatus, PeriodPreset, Shift } from '@/lib/types/audit';
 import { AUDIT_STATUS_LABEL, AUDIT_STATUS_OFFICIAL, SHIFT_LABEL } from '@/lib/types/audit';
 import { useAllAreas } from '@/lib/hooks/use-areas';
 import { useEquipe } from '@/lib/hooks/use-equipe';
+import { useSuppliers } from '@/lib/hooks/use-suppliers';
 import { MultiSelectPopover } from './multi-select-popover';
 import type { Scope } from '@/lib/types/scope';
 
@@ -28,6 +29,12 @@ const SHIFT_OPTIONS: { value: Shift; label: string }[] = (
 const STATUS_OPTIONS: { value: AuditStatus; label: string }[] =
     AUDIT_STATUS_OFFICIAL.map(s => ({ value: s, label: AUDIT_STATUS_LABEL[s] }));
 
+const KIND_OPTIONS: { value: AuditKind; label: string; icon: string }[] = [
+    { value: 'all', label: 'Todos', icon: 'list' },
+    { value: 'routine', label: 'Rotinas', icon: 'checklist' },
+    { value: 'receiving', label: 'Recebimentos', icon: 'local_shipping' },
+];
+
 export function AuditFiltersBar({ scope, filters, onChange }: Props) {
     const restaurantIdForLookups = scope.mode === 'single' ? scope.restaurantId : null;
 
@@ -36,6 +43,8 @@ export function AuditFiltersBar({ scope, filters, onChange }: Props) {
         ? { restaurantId: null, accountId: scope.accountId, mode: 'global' as const }
         : { restaurantId: scope.restaurantId, mode: 'single' as const };
     const { data: equipeData } = useEquipe(equipeArg);
+    // Fornecedores só fazem sentido em escopo single (kind=receiving filtra por supplier_id).
+    const { data: suppliers = [] } = useSuppliers(restaurantIdForLookups ?? undefined);
 
     const areaOptions = useMemo(
         () => areas.map(a => ({ value: a.id, label: a.name })),
@@ -45,9 +54,18 @@ export function AuditFiltersBar({ scope, filters, onChange }: Props) {
         () => (equipeData?.equipe ?? []).map(m => ({ value: m.user_id, label: m.name })),
         [equipeData],
     );
+    const supplierOptions = useMemo(
+        () => suppliers.map(s => ({ value: s.id, label: s.name })),
+        [suppliers],
+    );
 
     function patch(p: Partial<AuditFilters>) {
         onChange({ ...filters, ...p, page: 0 });
+    }
+
+    function setKind(kind: AuditKind) {
+        // Trocar de tipo limpa supplier_ids (faz parte do contexto de receiving).
+        patch({ kind, supplier_ids: kind === 'receiving' ? filters.supplier_ids : [] });
     }
 
     function setPreset(preset: PeriodPreset) {
@@ -99,6 +117,43 @@ export function AuditFiltersBar({ scope, filters, onChange }: Props) {
                             onChange={e => patch({ end_date: e.target.value || null })}
                             className="bg-[#101d22] text-white border border-[#325a67] rounded-lg px-2.5 py-1.5 text-sm focus:ring-1 focus:ring-[#13b6ec] focus:border-[#13b6ec] outline-none [color-scheme:dark]"
                             aria-label="Data final"
+                        />
+                    </div>
+                )}
+            </div>
+
+            {/* ── Linha 1.5: tipo de execução (Rotinas vs Recebimentos) ── */}
+            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                <span className="text-xs uppercase tracking-wider text-[#557682] font-bold shrink-0">
+                    Tipo
+                </span>
+                <div className="flex flex-wrap gap-2">
+                    {KIND_OPTIONS.map(k => (
+                        <button
+                            key={k.value}
+                            type="button"
+                            onClick={() => setKind(k.value)}
+                            className={[
+                                'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border',
+                                filters.kind === k.value
+                                    ? 'bg-[#13b6ec] border-[#13b6ec] text-white shadow-[0_0_15px_rgba(19,182,236,0.3)]'
+                                    : 'bg-[#101d22] border-[#325a67] text-[#92bbc9] hover:text-white hover:border-[#13b6ec]/40',
+                            ].join(' ')}
+                        >
+                            <span className="material-symbols-outlined text-[16px]">{k.icon}</span>
+                            {k.label}
+                        </button>
+                    ))}
+                </div>
+                {filters.kind === 'receiving' && (
+                    <div className="sm:ml-2">
+                        <MultiSelectPopover
+                            label="Fornecedor"
+                            icon="local_shipping"
+                            options={supplierOptions}
+                            value={filters.supplier_ids}
+                            onChange={v => patch({ supplier_ids: v })}
+                            disabled={supplierOptions.length === 0}
                         />
                     </div>
                 )}

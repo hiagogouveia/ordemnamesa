@@ -30,6 +30,7 @@ export async function GET(request: Request) {
         const { searchParams } = new URL(request.url);
         const restaurant_id = searchParams.get('restaurant_id');
         const filterAreaId = searchParams.get('area_id');
+        const withMeta = searchParams.get('with_meta') === '1';
 
         if (!restaurant_id) {
             return NextResponse.json({ error: 'restaurant_id é obrigatório.' }, { status: 400 });
@@ -63,7 +64,7 @@ export async function GET(request: Request) {
         const userRoleIds = (userRoles ?? []).map((r) => r.role_id);
 
         if (userAreaIds.length === 0) {
-            return NextResponse.json([]);
+            return NextResponse.json(withMeta ? { available: [], total_in_scope: 0 } : []);
         }
 
         // Filtro OR no escopo (assignment_type implícito)
@@ -112,6 +113,17 @@ export async function GET(request: Request) {
             return { ...t, tasks_count: count };
         });
 
+        if (withMeta) {
+            // total_in_scope = templates ativos no escopo do user (área/role/usuário),
+            // independente da recorrência do dia. Permite distinguir:
+            //   A) zero templates cadastrados na área → "Nenhum modelo cadastrado"
+            //   B) templates existem mas nenhum previsto hoje → "Nada previsto hoje"
+            //   C) templates disponíveis → fluxo normal
+            return NextResponse.json({
+                available: normalized,
+                total_in_scope: templates.length,
+            });
+        }
         return NextResponse.json(normalized);
     } catch (error: unknown) {
         console.error('[GET /api/receiving-templates/available] inesperado:', error);

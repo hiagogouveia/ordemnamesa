@@ -105,7 +105,15 @@ export function AuditExecutionList({ entries, isLoading, onSelect, isGlobal }: P
                                         </div>
                                     </td>
                                     <td className="px-4 py-3.5">
-                                        <span className="text-white font-medium">{e.checklist.name}</span>
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="text-white font-medium">{e.checklist.name}</span>
+                                            {e.supplier && (
+                                                <span className="inline-flex items-center gap-1 text-[11px] text-[#13b6ec] font-semibold">
+                                                    <span className="material-symbols-outlined text-[13px]">local_shipping</span>
+                                                    {e.supplier.name}
+                                                </span>
+                                            )}
+                                        </div>
                                     </td>
                                     <td className="px-4 py-3.5 whitespace-nowrap">
                                         {e.area ? (
@@ -187,6 +195,12 @@ export function AuditExecutionList({ entries, isLoading, onSelect, isGlobal }: P
                         <div className="flex items-start justify-between gap-3 mb-2">
                             <div className="min-w-0 flex-1">
                                 <p className="text-white font-bold truncate">{e.checklist.name}</p>
+                                {e.supplier && (
+                                    <p className="inline-flex items-center gap-1 text-[#13b6ec] text-xs font-bold mt-0.5">
+                                        <span className="material-symbols-outlined text-[13px]">local_shipping</span>
+                                        {e.supplier.name}
+                                    </p>
+                                )}
                                 <p className="text-[#557682] text-xs mt-0.5">
                                     {formatDate(e.assumed_at)} · {formatTime(e.assumed_at)} · {formatShift(e.checklist.shift)}
                                 </p>

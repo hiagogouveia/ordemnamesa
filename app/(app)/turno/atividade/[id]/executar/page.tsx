@@ -6,6 +6,7 @@ import { useSession } from '@/lib/providers/use-session';
 import { useActivityData, useToggleActivityTask, useSkipTask, useUnskipTask } from '@/lib/hooks/use-activity-execution';
 import { useChecklistAssumption, useCompleteChecklist } from '@/lib/hooks/use-tasks';
 import { useTaskIssues } from '@/lib/hooks/use-task-issues';
+import { useSuppliers } from '@/lib/hooks/use-suppliers';
 import { ExecutionItem, type ExecutionToggleInput } from '@/components/turno/execution-item';
 import { IssueReportModal } from '@/components/checklists/issues/IssueReportModal';
 import type { TaskIssue } from '@/lib/types';
@@ -30,6 +31,7 @@ export default function ActivityExecutionPage() {
 
     const { data: activityData, isLoading, isError, isFetched } = useActivityData(restaurantId || undefined, checklistId);
     const { data: assumption } = useChecklistAssumption(restaurantId || undefined, checklistId);
+    const { data: suppliers = [] } = useSuppliers(restaurantId || undefined);
     const toggleTask = useToggleActivityTask();
     const skipTask = useSkipTask();
     const unskipTask = useUnskipTask();
@@ -254,6 +256,20 @@ export default function ActivityExecutionPage() {
                         <h1 className="text-white text-lg font-bold truncate leading-tight">
                             {checklist.name}
                         </h1>
+                        {(() => {
+                            const isReceiving = (checklist as { checklist_type?: string }).checklist_type === 'receiving';
+                            const supplierId = (checklist as { supplier_id?: string | null }).supplier_id ?? null;
+                            const supplierName = supplierId
+                                ? (suppliers.find((s) => s.id === supplierId)?.name ?? null)
+                                : null;
+                            if (!isReceiving || !supplierName) return null;
+                            return (
+                                <p className="mt-0.5 text-[#13b6ec] text-xs font-bold truncate flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-[13px]">local_shipping</span>
+                                    {supplierName}
+                                </p>
+                            );
+                        })()}
                         {assumption && (
                             <p className="text-[#13b6ec] text-xs font-medium truncate flex items-center gap-1">
                                 <span className="material-symbols-outlined text-[12px]">person</span>
