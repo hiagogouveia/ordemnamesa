@@ -9,7 +9,6 @@ import { useAccountAccess } from "@/lib/hooks/use-account-access";
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useMyActivitiesBadge } from "@/lib/hooks/use-my-activities";
-import { useReceivingCounts } from "@/lib/hooks/use-receiving";
 import { useAuthUser } from "@/lib/hooks/use-auth-user";
 
 interface NavItem {
@@ -25,8 +24,6 @@ const managerNavigation: NavItem[] = [
     { name: "Meu Turno", href: "/turno", icon: "assignment_ind", badge: true, globalSupported: true },
     { name: "Checklists", href: "/checklists", icon: "checklist", globalSupported: true },
     { name: "Equipe", href: "/equipe", icon: "group", globalSupported: true },
-    // Sprint 50: substitui "Compras" (legado) por inbox operacional de recebimentos.
-    { name: "Recebimentos", href: "/admin/recebimentos", icon: "inventory_2" },
     { name: "Relatórios", href: "/relatorios", icon: "bar_chart", globalSupported: true },
     { name: "Configurações", href: "/configuracoes", icon: "settings", globalSupported: true },
 ];
@@ -76,13 +73,6 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggle }: Sideba
     const { data: authUser } = useAuthUser();
     const { data: badgeData } = useMyActivitiesBadge(restaurantId || undefined, authUser?.id);
     const pendingCount = badgeData?.pending ?? 0;
-    // Sprint 51 — badge no menu Recebimentos: overdue tem prioridade visual sobre pending.
-    const isManager = userRole === 'owner' || userRole === 'manager';
-    const { data: receivingCounts } = useReceivingCounts(isManager ? (restaurantId || undefined) : undefined);
-    const receivingOverdue = receivingCounts?.overdue ?? 0;
-    const receivingPending = receivingCounts?.pending ?? 0;
-    const receivingBadgeCount = receivingOverdue + receivingPending;
-    const receivingBadgeUrgent = receivingOverdue > 0;
 
     useEffect(() => {
         if (!switcherOpen) return;
@@ -316,18 +306,6 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggle }: Sideba
                             {'badge' in item && item.badge && pendingCount > 0 && (
                                 <span className={`ml-auto bg-[#13b6ec] text-[#0a1215] text-[10px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-tight ${collapsed ? 'lg:hidden' : ''}`}>
                                     {pendingCount > 99 ? "99+" : pendingCount}
-                                </span>
-                            )}
-                            {item.href === '/admin/recebimentos' && receivingBadgeCount > 0 && (
-                                <span
-                                    title={receivingBadgeUrgent ? `${receivingOverdue} atrasado(s), ${receivingPending} pendente(s)` : `${receivingPending} aguardando confirmação`}
-                                    className={`ml-auto text-[10px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-tight ${
-                                        receivingBadgeUrgent
-                                            ? 'bg-amber-500 text-[#0a1215]'
-                                            : 'bg-[#13b6ec] text-[#0a1215]'
-                                    } ${collapsed ? 'lg:hidden' : ''}`}
-                                >
-                                    {receivingBadgeCount > 99 ? "99+" : receivingBadgeCount}
                                 </span>
                             )}
                         </Link>

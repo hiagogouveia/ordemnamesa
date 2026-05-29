@@ -169,12 +169,12 @@ export interface AssumeChecklistError {
 export const useAssumeChecklist = () => {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: async ({ restaurantId, checklistId, expectationId }: { restaurantId: string; checklistId: string; expectationId?: string }) => {
+        mutationFn: async ({ restaurantId, checklistId }: { restaurantId: string; checklistId: string }) => {
             const token = await getAuthToken();
             const response = await fetch(`/api/checklists/${checklistId}/assume`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ restaurant_id: restaurantId, expectation_id: expectationId }),
+                body: JSON.stringify({ restaurant_id: restaurantId }),
             });
             if (!response.ok) {
                 const errorData: AssumeChecklistError = await response.json().catch(() => ({ error: 'Erro ao assumir atividade' }));
