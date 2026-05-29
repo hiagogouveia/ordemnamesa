@@ -153,6 +153,32 @@ export async function GET(request: Request) {
             }
         }
 
+        // Defesa em profundidade: reincorpora checklists com assumptions
+        // in_progress mesmo quando active=false. Cobre cenários onde um
+        // checklist foi arquivado durante uma execução em andamento
+        // (migrações, decisão de gestor). Sem isso, o trabalho fica órfão.
+        const { data: inProgressOrphans } = await adminSupabase
+            .from('checklist_assumptions')
+            .select('checklist_id')
+            .eq('restaurant_id', restaurant_id)
+            .eq('execution_status', 'in_progress');
+        if (inProgressOrphans && inProgressOrphans.length > 0) {
+            const knownIds = new Set(checklists.map((c: { id: string }) => c.id));
+            const orphanIds = Array.from(new Set(
+                inProgressOrphans.map((a: { checklist_id: string }) => a.checklist_id)
+            )).filter((id) => !knownIds.has(id));
+            if (orphanIds.length > 0) {
+                const { data: orphanChecklists } = await adminSupabase
+                    .from('checklists')
+                    .select(checklistSelect)
+                    .in('id', orphanIds)
+                    .or(checklistFilterParts.join(','));
+                if (orphanChecklists && orphanChecklists.length > 0) {
+                    checklists = [...checklists, ...orphanChecklists];
+                }
+            }
+        }
+
         if (checklists.length === 0) {
             return NextResponse.json([]);
         }
