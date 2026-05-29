@@ -869,16 +869,19 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 </div>
             </div>
 
-            {/* Formulário Content */}
-            <div className="flex-1 overflow-y-auto px-6 py-8">
-                <div className="max-w-3xl mx-auto space-y-8">
-
-                    {errorMsg && (
+            {/* Formulário Content — 2 colunas em desktop, empilhado em mobile */}
+            <div className="flex-1 overflow-y-auto">
+                {errorMsg && (
+                    <div className="px-6 pt-6">
                         <div className="bg-red-500/10 border border-red-500/20 text-red-500 px-4 py-3 rounded-xl flex items-center gap-3">
                             <span className="material-symbols-outlined shrink-0 text-xl">error</span>
                             <p className="text-sm font-medium">{errorMsg}</p>
                         </div>
-                    )}
+                    </div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 md:divide-x md:divide-[#233f48]">
+                    {/* Coluna esquerda — Dados da rotina */}
+                    <div className="px-6 py-6 space-y-6">
 
                     {/* Card Detalhes Básico */}
                     <div className="bg-[#101d22] border border-[#233f48] rounded-2xl p-6 space-y-5">
@@ -1140,10 +1143,12 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                         )}
                     </div>
 
-                    {/* Seção das Tarefas */}
-                    <div>
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-bold text-white">Tarefas da Rotina</h3>
+                    </div>{/* /Coluna esquerda */}
+
+                    {/* Coluna direita — Tarefas (sticky header + DnD) */}
+                    <div className="px-6 pb-6 space-y-3 bg-[#101d22]/30 md:bg-transparent">
+                        <div className="sticky top-0 z-10 -mx-6 px-6 py-4 bg-[#101d22] border-b border-[#233f48] flex items-center justify-between">
+                            <h3 className="text-lg font-bold text-white">Tarefas da Rotina ({tasks.length})</h3>
                             <div className="flex items-center gap-2">
                                 {!disableReorder && isMobile && tasks.length > 1 && (
                                     <button
@@ -1170,7 +1175,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                             </div>
                         </div>
 
-                        <div className="space-y-3">
+                        <div className="space-y-3 pt-3">
                             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd} onDragCancel={() => {}}>
                                 <SortableContext items={tasks.map(t => t.tempId)} strategy={verticalListSortingStrategy}>
                                     {tasks.map((task, index) => (

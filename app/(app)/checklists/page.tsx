@@ -627,7 +627,7 @@ function ChecklistsContent() {
 
             {/* Modal de edição/criação */}
             {mounted && (
-                <Modal isOpen={showEditModal} onClose={() => setEditorState(null)}>
+                <Modal isOpen={showEditModal} onClose={() => setEditorState(null)} maxWidthClass="max-w-[1080px]">
                     <ChecklistForm
                         checklist={editorState?.checklist ?? null}
                         onSaved={handleEditorSaved}
