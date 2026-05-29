@@ -8,23 +8,21 @@ const getAdminSupabase = () =>
     );
 
 /**
- * GET /api/receiving/quick/history
+ * GET /api/receiving/executions
  *
- * Superfície administrativa de "Recebimentos rápidos" (is_one_shot=true).
- * Lê checklists tipo receiving criados ad-hoc, junto com a assumption mais
- * recente do checklist (one-shot tem 1:1 com assumption, mas defensivamente
- * pegamos a mais recente). Fonte separada das expectations — quicks não
- * passam por materialização nem cron.
+ * Histórico admin das execuções de recebimento (is_one_shot=true). Cobre
+ * tanto execuções instanciadas via templates (source_template_id != NULL)
+ * quanto registros legados (source_template_id = NULL, supplier_name texto).
  *
- * Owner/manager bypassam filtro de área (admin context, alinhado com as
- * outras abas de /admin/recebimentos). Staff não acessa esta superfície.
+ * Substitui o antigo /api/receiving/quick/history. A query é a mesma
+ * estrutura — `is_one_shot=true` cobre ambos os fluxos.
+ *
+ * Owner/manager apenas. Staff acompanha o que está executando no Meu Turno.
  *
  * Query params:
  *   restaurant_id (obrigatório)
- *   days          (opcional, default 30, máximo 180) — janela temporal
- *   status        (opcional: 'all' | 'in_progress' | 'completed', default 'all')
- *
- * Retorna: lista ordenada por created_at desc.
+ *   days          (opcional, 1..180, default 30)
+ *   status        ('all' | 'in_progress' | 'completed', default 'all')
  */
 export async function GET(request: Request) {
     try {
@@ -36,7 +34,6 @@ export async function GET(request: Request) {
 
         const daysRaw = Number(searchParams.get('days') ?? '30');
         const days = Number.isFinite(daysRaw) ? Math.min(Math.max(Math.floor(daysRaw), 1), 180) : 30;
-
         const statusFilter = (searchParams.get('status') ?? 'all') as 'all' | 'in_progress' | 'completed';
 
         const authHeader = request.headers.get('Authorization');
@@ -47,8 +44,6 @@ export async function GET(request: Request) {
         const { data: { user }, error: userError } = await adminSupabase.auth.getUser(token);
         if (userError || !user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
-        // Acesso admin: owner/manager apenas. Staff não vê histórico de quicks
-        // (acompanha apenas o que está executando no Meu Turno).
         const { data: membership } = await adminSupabase
             .from('restaurant_users')
             .select('role')
@@ -65,20 +60,21 @@ export async function GET(request: Request) {
 
         const sinceISO = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
-        // Lista os quicks da janela. Inclui active=false (já arquivados após
-        // conclusão) — esta superfície existe justamente para enxergar
-        // o que sumiu das listagens operacionais.
+        // Inclui active=false (one-shots ficam arquivados após conclusão).
         const { data: checklists, error: clError } = await adminSupabase
             .from('checklists')
             .select(`
                 id,
                 name,
                 supplier_name,
+                source_template_id,
+                supplier_id,
                 area_id,
                 active,
                 is_one_shot,
                 created_at,
                 area:areas(id, name, color),
+                supplier:suppliers(id, name),
                 tasks:checklist_tasks(id)
             `)
             .eq('restaurant_id', restaurant_id)
@@ -88,7 +84,7 @@ export async function GET(request: Request) {
             .order('created_at', { ascending: false });
 
         if (clError) {
-            console.error('[GET /api/receiving/quick/history] erro ao listar checklists:', clError);
+            console.error('[GET /api/receiving/executions] erro ao listar:', clError);
             return NextResponse.json({ error: clError.message }, { status: 500 });
         }
 
@@ -97,9 +93,6 @@ export async function GET(request: Request) {
             return NextResponse.json([]);
         }
 
-        // Busca assumption associada (one-shot = 1 assumption no caminho feliz).
-        // Carrega ordenado por assumed_at desc para pegar a mais recente em caso
-        // de borda. Tambem busca task_executions para contar concluídas.
         const [assumptionsRes, executionsRes] = await Promise.all([
             adminSupabase
                 .from('checklist_assumptions')
@@ -114,7 +107,6 @@ export async function GET(request: Request) {
                 .in('checklist_id', checklistIds),
         ]);
 
-        // Mapa checklist_id → assumption (1ª = mais recente).
         type AssumptionRow = {
             id: string; checklist_id: string; user_id: string; user_name: string | null;
             assumed_at: string | null; completed_at: string | null; execution_status: string | null;
@@ -126,7 +118,6 @@ export async function GET(request: Request) {
             }
         }
 
-        // Contagem de tarefas concluídas por checklist.
         const completedByChecklist = new Map<string, number>();
         for (const e of (executionsRes.data ?? []) as Array<{ checklist_id: string; status: string }>) {
             if (e.status === 'done') {
@@ -141,7 +132,10 @@ export async function GET(request: Request) {
             return {
                 checklist_id: cl.id as string,
                 name: cl.name as string,
+                // supplier moderno (FK) tem prioridade; supplier_name (texto livre legado) é fallback
+                supplier: cl.supplier ? { id: cl.supplier.id as string, name: cl.supplier.name as string } : null,
                 supplier_name: (cl.supplier_name as string | null) ?? null,
+                source_template_id: (cl.source_template_id as string | null) ?? null,
                 area_id: (cl.area_id as string | null) ?? null,
                 area: cl.area ? {
                     id: cl.area.id as string,
@@ -160,7 +154,6 @@ export async function GET(request: Request) {
             };
         });
 
-        // Filtro de status post-query (lista é curta — janela de até 180 dias).
         const filtered = rows.filter((r) => {
             if (statusFilter === 'in_progress') return r.completed_at === null;
             if (statusFilter === 'completed') return r.completed_at !== null;
@@ -169,7 +162,7 @@ export async function GET(request: Request) {
 
         return NextResponse.json(filtered);
     } catch (err) {
-        console.error('[GET /api/receiving/quick/history] erro:', err);
+        console.error('[GET /api/receiving/executions] erro:', err);
         return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
     }
 }

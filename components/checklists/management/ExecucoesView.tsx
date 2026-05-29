@@ -3,15 +3,15 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-    useQuickReceivingHistory,
-    type QuickReceivingStatusFilter,
-} from "@/lib/hooks/use-receiving";
+    useReceivingExecutions,
+    type ReceivingExecutionStatusFilter,
+} from "@/lib/hooks/use-receiving-executions";
 
 interface ExecucoesViewProps {
     restaurantId: string | undefined;
 }
 
-const STATUS_OPTIONS: Array<{ value: QuickReceivingStatusFilter; label: string }> = [
+const STATUS_OPTIONS: Array<{ value: ReceivingExecutionStatusFilter; label: string }> = [
     { value: "all", label: "Todos" },
     { value: "in_progress", label: "Em execução" },
     { value: "completed", label: "Concluídos" },
@@ -29,21 +29,18 @@ function formatDateTime(iso: string | null): string {
 }
 
 /**
- * Aba "Execuções" em /checklists — instâncias operacionais (hoje: apenas
- * quick receiving). Estado local intencionalmente NÃO sincronizado com a
- * URL: filtros desta aba não persistem ao alternar com "Modelos". É a
- * separação semântica desejada na sub-fase 1.
+ * Aba "Execuções" em /checklists — execuções operacionais de recebimento.
+ * Inclui execuções instanciadas via templates (Etapa 2+) e instâncias
+ * one-shot legacy.
  *
- * Reusa /api/receiving/quick/history e useQuickReceivingHistory — não
- * duplica fonte de verdade com /admin/recebimentos > Rápidos.
+ * Etapa 4: consome /api/receiving/executions (rename do antigo
+ * /api/receiving/quick/history).
  */
 export function ExecucoesView({ restaurantId }: ExecucoesViewProps) {
     const router = useRouter();
-    const [statusFilter, setStatusFilter] = useState<QuickReceivingStatusFilter>("all");
+    const [statusFilter, setStatusFilter] = useState<ReceivingExecutionStatusFilter>("all");
 
-    // Sprint 54: na gestão de checklists, quick receiving é "execução operacional do dia"
-    // e só permanece visível enquanto ocorre HOJE. Histórico admin 30d continua em /admin/recebimentos.
-    const { data: items = [], isLoading, isError } = useQuickReceivingHistory(
+    const { data: items = [], isLoading, isError } = useReceivingExecutions(
         restaurantId,
         { days: 1, status: statusFilter },
     );
@@ -97,16 +94,18 @@ export function ExecucoesView({ restaurantId }: ExecucoesViewProps) {
                                     <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <h3 className="text-white font-bold text-sm truncate">{q.name}</h3>
-                                            <span
-                                                className="inline-flex items-center gap-1 bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider"
-                                                title="Recebimento criado ad-hoc"
-                                            >
-                                                <span className="material-symbols-outlined text-[12px]">bolt</span>
-                                                Rápido
-                                            </span>
+                                            {!q.source_template_id && (
+                                                <span
+                                                    className="inline-flex items-center gap-1 bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider"
+                                                    title="Recebimento legado (sem modelo)"
+                                                >
+                                                    <span className="material-symbols-outlined text-[12px]">bolt</span>
+                                                    Legado
+                                                </span>
+                                            )}
                                         </div>
                                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#92bbc9] mt-1">
-                                            <span>{q.supplier_name || "Fornecedor não informado"}</span>
+                                            <span>{q.supplier?.name || q.supplier_name || "Fornecedor não informado"}</span>
                                             {q.area && (
                                                 <span className="flex items-center gap-1">
                                                     • <span className="size-2 rounded-full" style={{ background: q.area.color }} />

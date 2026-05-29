@@ -183,23 +183,9 @@ export interface ReceivingTemplateTask {
     task_config?: TaskConfig | null
 }
 
-// Sprint 48 — Receiving Routines
-export type ReceivingExpectationStatus = 'pending' | 'confirmed' | 'overdue' | 'cancelled'
-
-export interface ReceivingExpectation {
-    id: string
-    restaurant_id: string
-    checklist_id: string
-    expected_date: string             // ISO date (YYYY-MM-DD)
-    expected_window_start?: string | null  // HH:mm
-    expected_window_end?: string | null    // HH:mm
-    status: ReceivingExpectationStatus
-    assumption_id?: string | null
-    confirmed_by?: string | null
-    confirmed_at?: string | null
-    cancelled_reason?: string | null
-    created_at: string
-}
+// Sprint 48 (Etapa 4): ReceivingExpectation removida do código TS. A tabela
+// `receiving_expectations` permanece no banco como histórico read-only.
+// Substituída pelo modelo Etapa 2: receiving_templates + checklists one-shot.
 
 // Sprint 35 — Tipos de resposta estruturados
 export type TaskType = 'boolean' | 'date' | 'number' | 'rating'

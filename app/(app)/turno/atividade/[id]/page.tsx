@@ -23,11 +23,8 @@ export default function ActivityDetailsPage() {
     const params = useParams();
     const searchParams = useSearchParams();
     const checklistId = params.id as string;
-    // Contexto de recebimento vindo do Meu Turno (card de expectation).
-    // expectation_id: liga a assumption à expectativa materializada (UPDATE em
-    // receiving_expectations.status=confirmed). Demais params são metadata
-    // visual para o preview — fallback usa checklist.* quando ausentes.
-    const expectationId = searchParams.get('expectation_id') || undefined;
+    // Etapa 4: expectation_id removido (receiving_expectations descontinuada).
+    // supplier/from/to ainda aceitos como metadata visual para o preview.
     const supplierFromQuery = searchParams.get('supplier') || null;
     const windowFromQuery = searchParams.get('from') || null;
     const windowToQuery = searchParams.get('to') || null;
@@ -74,7 +71,7 @@ export default function ActivityDetailsPage() {
         setAssuming(true);
         setLimitError(null);
         try {
-            await assumeMutation.mutateAsync({ restaurantId, checklistId, expectationId });
+            await assumeMutation.mutateAsync({ restaurantId, checklistId });
             router.push(`/turno/atividade/${checklistId}/executar`);
         } catch (e) {
             const err = e as Error & { code?: string };
