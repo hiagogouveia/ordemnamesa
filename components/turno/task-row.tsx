@@ -15,8 +15,6 @@ export interface TaskRowProps {
     itemsCount?: number;
     /** Para recebimentos: fornecedor. */
     supplier?: string | null;
-    /** Marca recebimento "rápido" (criado ad-hoc, sem template). */
-    isQuick?: boolean;
     /** Recebimento marcado como manual/sem rotina recorrente. */
     isReceivingOverdue?: boolean;
 
@@ -115,7 +113,6 @@ export function TaskRow({
     area,
     itemsCount,
     supplier,
-    isQuick,
     isReceivingOverdue,
     start_time,
     end_time,
@@ -176,7 +173,7 @@ export function TaskRow({
                     <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-[#92bbc9] min-w-0 flex-wrap">
                         {kind === "receiving" ? (
                             <span className={`inline-flex items-center gap-1 font-medium px-1.5 py-px rounded border ${isReceivingOverdue ? "text-amber-400 bg-amber-500/10 border-amber-500/30" : "text-amber-300/90 bg-amber-500/5 border-amber-500/20"}`}>
-                                Recebimento{isQuick && <span className="opacity-80">· Rápido</span>}
+                                Recebimento
                             </span>
                         ) : null}
                         {area && (

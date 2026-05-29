@@ -240,15 +240,6 @@ export default function ActivityDetailsPage() {
                             <div className="flex items-start justify-between gap-3 mb-3">
                                 <div className="flex-1 min-w-0">
                                     <h2 className="text-white text-xl font-black leading-snug">{checklist.name}</h2>
-                                    {(checklist as { is_one_shot?: boolean }).is_one_shot && (
-                                        <span
-                                            className="mt-2 inline-flex items-center gap-1 bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider"
-                                            title="Recebimento criado ad-hoc para registro único"
-                                        >
-                                            <span className="material-symbols-outlined text-[12px]">bolt</span>
-                                            Recebimento rápido
-                                        </span>
-                                    )}
                                 </div>
                                 {checklist.is_required && (
                                     <span className="bg-[#13b6ec]/10 text-[#13b6ec] text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1 shrink-0">

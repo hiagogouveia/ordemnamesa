@@ -3,8 +3,8 @@ import { getBrazilDateKey } from './brazil-date'
 
 /**
  * Predicado canônico: "execução operacional visível".
- * Inclui rotinas normais E quick receivings (is_one_shot=true).
- * Exclui receivings recurring — esses têm fluxo próprio em /admin/recebimentos.
+ * Inclui rotinas normais E execuções de recebimento (is_one_shot=true,
+ * instanciadas a partir de receiving_templates ou históricas legacy).
  *
  * Uso sem join:    .or(OPERATIONAL_PREDICATE)
  * Uso com join:    .or(OPERATIONAL_PREDICATE, { foreignTable: 'checklists' })
