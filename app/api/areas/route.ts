@@ -120,7 +120,6 @@ export async function POST(request: Request) {
         const body = await request.json();
         const { restaurant_id, name, description, color } = body as Partial<Area>;
         const rawMaxTasks = body.max_parallel_tasks;
-        const allowManualReceiving = body.allow_manual_receiving === true;
 
         if (!restaurant_id || !name) {
             return NextResponse.json({ error: 'restaurant_id e name são obrigatórios.' }, { status: 400 });
@@ -161,7 +160,6 @@ export async function POST(request: Request) {
                 description: description?.trim() || null,
                 color: color || '#13b6ec',
                 max_parallel_tasks: maxParallelTasks,
-                allow_manual_receiving: allowManualReceiving,
             })
             .select()
             .single();

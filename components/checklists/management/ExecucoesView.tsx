@@ -105,7 +105,7 @@ export function ExecucoesView({ restaurantId }: ExecucoesViewProps) {
                                             )}
                                         </div>
                                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#92bbc9] mt-1">
-                                            <span>{q.supplier?.name || q.supplier_name || "Fornecedor não informado"}</span>
+                                            <span>{q.supplier?.name || "Fornecedor não informado"}</span>
                                             {q.area && (
                                                 <span className="flex items-center gap-1">
                                                     • <span className="size-2 rounded-full" style={{ background: q.area.color }} />

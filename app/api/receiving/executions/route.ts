@@ -66,7 +66,6 @@ export async function GET(request: Request) {
             .select(`
                 id,
                 name,
-                supplier_name,
                 source_template_id,
                 supplier_id,
                 area_id,
@@ -132,9 +131,7 @@ export async function GET(request: Request) {
             return {
                 checklist_id: cl.id as string,
                 name: cl.name as string,
-                // supplier moderno (FK) tem prioridade; supplier_name (texto livre legado) é fallback
                 supplier: cl.supplier ? { id: cl.supplier.id as string, name: cl.supplier.name as string } : null,
-                supplier_name: (cl.supplier_name as string | null) ?? null,
                 source_template_id: (cl.source_template_id as string | null) ?? null,
                 area_id: (cl.area_id as string | null) ?? null,
                 area: cl.area ? {

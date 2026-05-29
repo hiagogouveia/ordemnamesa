@@ -66,10 +66,6 @@ export async function PUT(
             updateData.max_parallel_tasks = maxParallelTasks;
         }
 
-        if (body.allow_manual_receiving !== undefined) {
-            updateData.allow_manual_receiving = body.allow_manual_receiving === true;
-        }
-
         const { data: area, error } = await adminSupabase
             .from('areas')
             .update(updateData)

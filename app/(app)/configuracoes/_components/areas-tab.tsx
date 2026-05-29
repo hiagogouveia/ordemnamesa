@@ -43,7 +43,6 @@ export function AreasTab({ overrideRestaurantId }: { overrideRestaurantId?: stri
     const [formDescription, setFormDescription] = useState("");
     const [formColor, setFormColor] = useState(AREA_COLORS[0]);
     const [formMaxTasks, setFormMaxTasks] = useState("");
-    const [formAllowManualReceiving, setFormAllowManualReceiving] = useState(false);
 
     // User assignment modal
     const [assignModalAreaId, setAssignModalAreaId] = useState<string | null>(null);
@@ -63,14 +62,12 @@ export function AreasTab({ overrideRestaurantId }: { overrideRestaurantId?: stri
             setFormDescription(area.description || "");
             setFormColor(area.color);
             setFormMaxTasks(area.max_parallel_tasks != null ? String(area.max_parallel_tasks) : "");
-            setFormAllowManualReceiving(area.allow_manual_receiving === true);
         } else {
             setEditingArea(null);
             setFormName("");
             setFormDescription("");
             setFormColor(AREA_COLORS[0]);
             setFormMaxTasks("");
-            setFormAllowManualReceiving(false);
         }
         setIsAreaModalOpen(true);
     };
@@ -99,7 +96,6 @@ export function AreasTab({ overrideRestaurantId }: { overrideRestaurantId?: stri
                     description: formDescription.trim() || undefined,
                     color: formColor,
                     max_parallel_tasks: maxParallelTasks,
-                    allow_manual_receiving: formAllowManualReceiving,
                 });
             } else {
                 await createArea.mutateAsync({
@@ -108,7 +104,6 @@ export function AreasTab({ overrideRestaurantId }: { overrideRestaurantId?: stri
                     description: formDescription.trim() || undefined,
                     color: formColor,
                     max_parallel_tasks: maxParallelTasks,
-                    allow_manual_receiving: formAllowManualReceiving,
                 });
             }
             setIsAreaModalOpen(false);
@@ -235,18 +230,6 @@ export function AreasTab({ overrideRestaurantId }: { overrideRestaurantId?: stri
                                             ? `Até ${area.max_parallel_tasks} atividade${area.max_parallel_tasks > 1 ? "s" : ""}/pessoa`
                                             : "Ilimitado"}
                                     </span>
-                                    {area.allow_manual_receiving && (
-                                        <>
-                                            <span className="text-[#325a67] text-xs">·</span>
-                                            <span
-                                                className="inline-flex items-center gap-1 text-amber-400/90 text-xs"
-                                                title="Colaboradores desta área podem usar 'Novo recebimento' no Meu Turno"
-                                            >
-                                                <span aria-hidden>📦</span>
-                                                <span>Recebimento manual</span>
-                                            </span>
-                                        </>
-                                    )}
                                 </div>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
@@ -400,23 +383,6 @@ export function AreasTab({ overrideRestaurantId }: { overrideRestaurantId?: stri
                                 </p>
                             </div>
 
-                            <div className="flex items-center gap-3 p-3 bg-[#101d22] border border-[#233f48] rounded-xl">
-                                <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                                    <input
-                                        type="checkbox"
-                                        checked={formAllowManualReceiving}
-                                        onChange={(e) => setFormAllowManualReceiving(e.target.checked)}
-                                        className="sr-only peer"
-                                    />
-                                    <div className="w-11 h-6 bg-[#233f48] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#13b6ec]"></div>
-                                </label>
-                                <div>
-                                    <h4 className="text-white text-sm font-bold">Pode lançar recebimentos manualmente</h4>
-                                    <p className="text-[#92bbc9] text-xs mt-0.5">
-                                        Permite que colaboradores desta área usem &ldquo;Novo recebimento&rdquo; no Meu Turno. Não afeta recebimentos recorrentes.
-                                    </p>
-                                </div>
-                            </div>
                         </div>
 
                         <div className="flex gap-3 pt-2">

@@ -123,10 +123,6 @@ export interface Checklist {
     assumed_by_name?: string | null
     assumed_by_user_id?: string | null
     unit?: { id: string; name: string } | null
-    // Sprint 48 — Receiving Routines (fase 1: campos estruturais)
-    receiving_mode?: 'on_demand' | 'recurring' | null
-    receiving_generation?: 'automatic' | 'manager_confirmation' | null
-    supplier_name?: string | null
     // Sprint 53 — instância descartável criada ad-hoc, executada uma vez e
     // auto-arquivada. Atualmente usada por "Recebimento rápido"; nome genérico
     // para reuso futuro em tarefas emergenciais / contingências.
@@ -287,8 +283,6 @@ export interface Area {
     color: string
     priority_mode?: PriorityMode
     max_parallel_tasks?: number | null
-    /** Se true, colaboradores desta área podem iniciar recebimentos manuais. */
-    allow_manual_receiving?: boolean
     created_at: string
 }
 
