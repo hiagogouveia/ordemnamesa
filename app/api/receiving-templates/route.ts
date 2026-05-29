@@ -117,7 +117,7 @@ export async function POST(request: Request) {
         const body = await request.json().catch(() => ({}));
         const {
             restaurant_id, name, description, area_id, role_id, assigned_to_user_id,
-            recurrence, recurrence_config, enforce_sequential_order, tasks,
+            recurrence, recurrence_config, enforce_sequential_order, tasks, shift,
         } = body as Record<string, unknown>;
 
         if (!restaurant_id || typeof restaurant_id !== 'string') {
@@ -131,6 +131,9 @@ export async function POST(request: Request) {
 
         const VALID_RECURRENCES = ['daily','weekly','monthly','yearly','weekdays','custom','shift_days'];
         const cleanRecurrence = typeof recurrence === 'string' && VALID_RECURRENCES.includes(recurrence) ? recurrence : 'daily';
+
+        const VALID_SHIFTS = ['morning','afternoon','evening'];
+        const cleanShift = typeof shift === 'string' && VALID_SHIFTS.includes(shift) ? shift : null;
 
         const normalized = normalizeTasks(tasks);
         if (!Array.isArray(normalized)) {
@@ -158,6 +161,7 @@ export async function POST(request: Request) {
                 area_id,
                 role_id: typeof role_id === 'string' && role_id ? role_id : null,
                 assigned_to_user_id: typeof assigned_to_user_id === 'string' && assigned_to_user_id ? assigned_to_user_id : null,
+                shift: cleanShift,
                 recurrence: cleanRecurrence,
                 recurrence_config: recurrence_config ?? null,
                 enforce_sequential_order: !!enforce_sequential_order,

@@ -147,6 +147,16 @@ export async function PATCH(
         }
         if (b.role_id !== undefined) upd.role_id = typeof b.role_id === 'string' && b.role_id ? b.role_id : null;
         if (b.assigned_to_user_id !== undefined) upd.assigned_to_user_id = typeof b.assigned_to_user_id === 'string' && b.assigned_to_user_id ? b.assigned_to_user_id : null;
+        if (b.shift !== undefined) {
+            const VALID_SHIFTS = ['morning','afternoon','evening'];
+            if (b.shift === null || b.shift === '' || b.shift === 'any') {
+                upd.shift = null;
+            } else if (typeof b.shift === 'string' && VALID_SHIFTS.includes(b.shift)) {
+                upd.shift = b.shift;
+            } else {
+                return NextResponse.json({ error: 'shift inválido.' }, { status: 400 });
+            }
+        }
         if (b.recurrence !== undefined) {
             if (typeof b.recurrence !== 'string' || !VALID_RECURRENCES.includes(b.recurrence)) {
                 return NextResponse.json({ error: 'recurrence inválida.' }, { status: 400 });
