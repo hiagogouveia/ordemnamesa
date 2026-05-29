@@ -10,7 +10,9 @@ import { getCurrentShift } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { getRoutineState, type RoutineStateInfo } from '@/lib/utils/routine-state';
 import type { Scope } from '@/lib/types/scope';
-import { useReceivingExpectations, useReceivingTemplates, useCreateQuickReceiving } from '@/lib/hooks/use-receiving';
+import { useReceivingTemplatesAvailableMeta } from '@/lib/hooks/use-receiving-templates';
+import { useInstantiateReceiving } from '@/lib/hooks/use-receiving-instantiate';
+import { useSuppliers } from '@/lib/hooks/use-suppliers';
 import { TaskRow } from '@/components/turno/task-row';
 import { groupOperations, type OperationItem } from '@/lib/utils/operations-grouping';
 
@@ -48,28 +50,48 @@ export default function KanbanPage() {
     const { data: kanbanData, isLoading: loadingKanban } = useKanbanTasks(scope, userId);
     const { data: shifts = [] } = useShifts(restaurantId || undefined);
     const { data: myAreaAssignments = [], isLoading: loadingMyAreas } = useMyAreas(restaurantId || undefined, userId);
-    const { data: receivingExpectations = [] } = useReceivingExpectations(
+    const { data: availableMeta } = useReceivingTemplatesAvailableMeta(
         isGlobal ? undefined : restaurantId || undefined,
     );
-    const { data: receivingTemplates = [] } = useReceivingTemplates(
+    const availableTemplates = availableMeta?.available ?? [];
+    const totalTemplatesInScope = availableMeta?.total_in_scope ?? 0;
+    const { data: suppliers = [] } = useSuppliers(
         isGlobal ? undefined : restaurantId || undefined,
     );
+    const instantiateReceiving = useInstantiateReceiving();
 
-    // Modal de novo recebimento (template ou rápido).
+    // Modal de novo recebimento: 2 etapas — escolher modelo → escolher/cadastrar fornecedor.
     const [showReceivingPicker, setShowReceivingPicker] = useState(false);
-    const [receivingPickerMode, setReceivingPickerMode] = useState<'pick' | 'quick'>('pick');
-    const [quickSupplier, setQuickSupplier] = useState('');
-    const [quickTasks, setQuickTasks] = useState<string[]>(['Conferir mercadoria recebida']);
-    const [quickError, setQuickError] = useState<string | null>(null);
-    const createQuickReceiving = useCreateQuickReceiving();
+    const [pickerStep, setPickerStep] = useState<'template' | 'supplier'>('template');
+    const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+    const [supplierMode, setSupplierMode] = useState<'pick' | 'new'>('pick');
+    const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
+    const [newSupplierName, setNewSupplierName] = useState('');
+    const [newSupplierCnpj, setNewSupplierCnpj] = useState('');
+    const [pickerError, setPickerError] = useState<string | null>(null);
+    // Idempotency key estável durante todo o ciclo do modal — regenerado a cada
+    // nova abertura para evitar dedup acidental entre intenções distintas.
+    const [idempotencyKey, setIdempotencyKey] = useState<string>('');
+
+    useEffect(() => {
+        if (showReceivingPicker && !idempotencyKey) {
+            setIdempotencyKey(typeof crypto !== 'undefined' && crypto.randomUUID
+                ? crypto.randomUUID()
+                : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+        }
+    }, [showReceivingPicker, idempotencyKey]);
 
     const closeReceivingPicker = () => {
         setShowReceivingPicker(false);
         setTimeout(() => {
-            setReceivingPickerMode('pick');
-            setQuickSupplier('');
-            setQuickTasks(['Conferir mercadoria recebida']);
-            setQuickError(null);
+            setPickerStep('template');
+            setSelectedTemplateId(null);
+            setSupplierMode('pick');
+            setSelectedSupplierId('');
+            setNewSupplierName('');
+            setNewSupplierCnpj('');
+            setPickerError(null);
+            setIdempotencyKey('');
         }, 150);
     };
 
@@ -97,7 +119,7 @@ export default function KanbanPage() {
     const [activeUnitId, setActiveUnitId] = useState<string>('all');
     // Filtro por tipo de operacao. "Rapido" nao e tab propria — recebimento ad-hoc
     // entra como subtipo dentro de "Recebimentos" (badge no TaskRow).
-    const [activeTypeFilter, setActiveTypeFilter] = useState<'all' | 'routine' | 'receiving'>('all');
+    const [activeTypeFilter, setActiveTypeFilter] = useState<'all' | 'routine' | 'receiving' | 'done'>('all');
 
     const getUnitName = useCallback((cl: KanbanChecklist): string | undefined => {
         if (!isGlobal || !kanbanData?.units_by_id || !cl.restaurant_id) return undefined;
@@ -182,13 +204,13 @@ export default function KanbanPage() {
     const userAreas = useMemo(() => {
         if (!myAreaAssignments.length) return [];
         const seen = new Set<string>();
-        const result: Array<{ id: string; name: string; allowManualReceiving: boolean }> = [];
+        const result: Array<{ id: string; name: string }> = [];
         for (const a of myAreaAssignments) {
             const id = a.area?.id;
             const name = a.area?.name;
             if (!id || !name || seen.has(id)) continue;
             seen.add(id);
-            result.push({ id, name, allowManualReceiving: a.area?.allow_manual_receiving === true });
+            result.push({ id, name });
         }
         return result.sort((a, b) => a.name.localeCompare(b.name));
     }, [myAreaAssignments]);
@@ -199,11 +221,6 @@ export default function KanbanPage() {
         setActiveAreaIdState(id);
         writeStoredArea(scopeKey, id);
     }, [scopeKey]);
-
-    const activeAreaAllowsManualReceiving = useMemo(
-        () => userAreas.find((a) => a.id === activeAreaId)?.allowManualReceiving === true,
-        [userAreas, activeAreaId],
-    );
 
     const globalAreas = useMemo(() => {
         if (!isGlobal || !kanbanData) return [];
@@ -235,21 +252,24 @@ export default function KanbanPage() {
         return true;
     }, [isGlobal, activeUnitId, activeAreaId]);
 
-    // Dedupe: receivings recorrentes vêm via ReceivingExpectation (carrega janela esperada + status overdue).
-    // Pulamos do kanban as rotinas que JÁ têm expectativa materializada, evitando renderizar duas vezes.
-    const checklistIdsCoveredByExpectations = useMemo(
-        () => new Set(receivingExpectations.map((e) => e.checklist_id)),
-        [receivingExpectations],
-    );
+    // Lookup de fornecedor por id — usado para enriquecer cards de recebimento.
+    const supplierById = useMemo(() => {
+        const map = new Map<string, string>();
+        for (const s of suppliers) map.set(s.id, s.name);
+        return map;
+    }, [suppliers]);
 
-    // Construção da lista unificada (rotinas + recebimentos).
+    // Construção da lista unificada de operações.
+    // Etapa 3 do refator: receivings deixam de vir de ReceivingExpectation —
+    // execuções (instantiate) entram naturalmente pelo kanban como qualquer
+    // checklist normal (is_one_shot=true, checklist_type='receiving',
+    // source_template_id apontando para o modelo).
     const operations: OperationItem[] = useMemo(() => {
         if (!kanbanData) return [];
         const out: OperationItem[] = [];
 
         for (const cl of enrichedChecklists) {
             if (!matchesFilters(cl)) continue;
-            if (checklistIdsCoveredByExpectations.has(cl.id)) continue;
 
             const assumption = kanbanData.assumptions?.find(a => a.checklist_id === cl.id);
             const isAssignedToOther = Boolean(cl.assigned_to_user_id && cl.assigned_to_user_id !== user?.id);
@@ -266,9 +286,6 @@ export default function KanbanPage() {
                 });
 
             const isReceiving = cl.checklist_type === 'receiving';
-            // "Rápido" = receiving ad-hoc, sem template recorrente. Em paralelo, on_demand
-            // tambem nao tem expectativa materializada; usamos is_one_shot como marca canonica
-            // (criado pelo fluxo /api/receiving/quick).
             const isQuick = isReceiving && cl.is_one_shot === true;
 
             out.push({
@@ -289,143 +306,131 @@ export default function KanbanPage() {
                     isAssignedToMe,
                     isAssignedToOther,
                     unitName: getUnitName(cl),
-                    supplier: cl.supplier_name ?? null,
+                    supplier: cl.supplier_id ? (supplierById.get(cl.supplier_id) ?? null) : null,
                     isQuick,
+                    hasInProgressExecution: cl.hasInProgressExecution,
                 },
                 onClick: () => router.push(`/turno/atividade/${cl.id}`),
             });
         }
 
-        // Recebimentos (ReceivingExpectations) — não disponíveis em modo global ainda.
-        // REGRA DE NEGOCIO: o "status" da expectation indica o ciclo de materializacao
-        // ('pending'/'confirmed' = esperado para hoje; 'overdue' = janela passou sem
-        // execucao; 'cancelled' = nao acontecera). NAO indica "executado". O receiving
-        // so e considerado executado/done quando existe uma checklist_assumption com
-        // completed_at — mesmo criterio das rotinas comuns.
-        if (!isGlobal) {
-            for (const exp of receivingExpectations) {
-                const cl = exp.checklist;
-                if (!cl) continue;
-                if (activeAreaId && cl.area_id !== activeAreaId) continue;
-                if (exp.status === 'cancelled') continue;
-
-                const expAssumption = kanbanData.assumptions?.find((a) => a.checklist_id === cl.id);
-                const isDone = Boolean(expAssumption?.completed_at);
-                const isOverdue = exp.status === 'overdue';
-                const isInProgress = Boolean(expAssumption && !expAssumption.completed_at);
-                const isAssignedToMe = expAssumption?.user_id === user?.id;
-
-                let state: RoutineStateInfo;
-                if (isDone) {
-                    state = { kind: 'available', inProgress: false };
-                } else if (isOverdue) {
-                    state = { kind: 'late', inProgress: isInProgress };
-                } else {
-                    // 'pending' ou 'confirmed' (materializado para hoje): classifica
-                    // pela janela esperada como qualquer rotina aguardando execucao.
-                    state = getRoutineState({
-                        start_time: exp.expected_window_start ?? null,
-                        end_time: exp.expected_window_end ?? null,
-                        currentMinutes,
-                        hasBlockedTask: false,
-                        hasInProgressExecution: isInProgress,
-                    });
-                }
-
-                out.push({
-                    id: `exp:${exp.id}`,
-                    kind: 'receiving',
-                    title: cl.name ?? 'Recebimento',
-                    state,
-                    start_time: exp.expected_window_start ?? null,
-                    end_time: exp.expected_window_end ?? null,
-                    done: isDone,
-                    meta: {
-                        area: undefined,
-                        itemsCount: undefined,
-                        supplier: cl.supplier_name ?? null,
-                        isQuick: false,
-                        isReceivingOverdue: isOverdue,
-                        assumptionName: expAssumption?.user_name,
-                        isAssignedToMe,
-                        timeLabelOverride: exp.expected_window_start && exp.expected_window_end
-                            ? `Prev. ${exp.expected_window_start.slice(0, 5)}–${exp.expected_window_end.slice(0, 5)}`
-                            : null,
-                    },
-                    onClick: () => {
-                        const qs = new URLSearchParams({ expectation_id: exp.id });
-                        if (cl.supplier_name) qs.set('supplier', cl.supplier_name);
-                        if (exp.expected_window_start) qs.set('from', exp.expected_window_start);
-                        if (exp.expected_window_end) qs.set('to', exp.expected_window_end);
-                        router.push(`/turno/atividade/${cl.id}?${qs.toString()}`);
-                    },
-                });
-            }
-        }
-
         return out;
-    }, [enrichedChecklists, kanbanData, receivingExpectations, checklistIdsCoveredByExpectations, isGlobal, activeAreaId, matchesFilters, currentMinutes, user?.id, router, getUnitName]);
+    }, [enrichedChecklists, kanbanData, matchesFilters, currentMinutes, user?.id, router, getUnitName, supplierById]);
 
-    // Contagens por tipo (apenas pendentes — concluidas ficam no colapsavel).
-    // Sprint 54: quick receiving conta como rotina (execução operacional avulsa do dia)
-    // E mantém visibilidade na aba Recebimentos. Badge "Rápido" preserva diferenciação visual.
+    // Separação: "Executando" (in_progress, não concluído) vs lista principal vs done.
+    const isInProgress = (o: OperationItem): boolean => {
+        if (o.done) return false;
+        const m = o.meta as { hasInProgressExecution?: boolean; assumptionName?: string };
+        return m.hasInProgressExecution === true || Boolean(m.assumptionName);
+    };
+
+    const inProgressOperations = useMemo(
+        () => operations.filter((o) => isInProgress(o)),
+        [operations],
+    );
+
+    const pendingOperations = useMemo(
+        () => operations.filter((o) => !o.done && !isInProgress(o)),
+        [operations],
+    );
+
+    const doneOperations = useMemo(() => operations.filter((o) => o.done), [operations]);
+
+    // Contagens por tipo — modelos NÃO contam (não estão em `operations`, são
+    // entidade separada em receiving_templates). Apenas execuções contam.
     const typeCounts = useMemo(() => {
         let all = 0, routine = 0, receiving = 0;
-        for (const o of operations) {
-            if (o.done) continue;
+        for (const o of pendingOperations.concat(inProgressOperations)) {
             all++;
             const isQuick = o.meta?.isQuick === true;
             if (o.kind === 'routine' || isQuick) routine++;
             if (o.kind === 'receiving') receiving++;
         }
-        return { all, routine, receiving };
-    }, [operations]);
+        return { all, routine, receiving, done: doneOperations.length };
+    }, [pendingOperations, inProgressOperations, doneOperations]);
 
     const filteredOperations = useMemo(() => {
-        if (activeTypeFilter === 'all') return operations;
-        return operations.filter((o) => {
-            // Concluidas ficam sempre visiveis no colapsavel, independente do filtro.
-            if (o.done) return true;
+        if (activeTypeFilter === 'done') return doneOperations;
+        // Lista principal mostra apenas pendentes (in_progress vão pro bloco "Executando").
+        const base = pendingOperations;
+        if (activeTypeFilter === 'all') return base;
+        return base.filter((o) => {
             const isQuick = o.meta?.isQuick === true;
             if (activeTypeFilter === 'routine') return o.kind === 'routine' || isQuick;
             if (activeTypeFilter === 'receiving') return o.kind === 'receiving';
             return true;
         });
-    }, [operations, activeTypeFilter]);
+    }, [pendingOperations, doneOperations, activeTypeFilter]);
 
     const groups = useMemo(() => groupOperations(filteredOperations), [filteredOperations]);
-    const pendingCount = typeCounts.all;
-    const doneCount = useMemo(
-        () => operations.filter((o) => o.done).length,
-        [operations],
-    );
+    const doneCount = doneOperations.length;
     const totalCount = operations.length;
     const progressPct = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
 
-    const filteredReceivingTemplates = useMemo(
-        () => receivingTemplates.filter((t) => !activeAreaId || t.area_id === activeAreaId),
-        [receivingTemplates, activeAreaId],
+    // Visibilidade do botão "+ Novo Recebimento": só aparece se houver modelos
+    // disponíveis hoje no contexto do usuário (área/role/usuário). Filtra por
+    // área ativa quando aplicável.
+    const visibleTemplates = useMemo(
+        () => availableTemplates.filter((t) => !activeAreaId || t.area_id === activeAreaId),
+        [availableTemplates, activeAreaId],
     );
+    // s60: 3 estados do botão "Novo recebimento"
+    //   C) há template disponível agora → botão habilitado
+    //   B) há template cadastrado no escopo mas nenhum previsto hoje → botão desabilitado + msg
+    //   A) zero templates cadastrados no escopo do user → botão desabilitado + msg distinta
+    // Em modo global (multi-restaurante) o botão segue oculto.
+    type NewReceivingState =
+        | { mode: 'hidden' }
+        | { mode: 'enabled' }
+        | { mode: 'disabled'; reason: 'none-today' | 'none-registered' };
+    const newReceivingState: NewReceivingState = useMemo(() => {
+        if (isGlobal) return { mode: 'hidden' };
+        if (visibleTemplates.length > 0) return { mode: 'enabled' };
+        if (totalTemplatesInScope > 0) return { mode: 'disabled', reason: 'none-today' };
+        return { mode: 'disabled', reason: 'none-registered' };
+    }, [isGlobal, visibleTemplates.length, totalTemplatesInScope]);
 
-    const handleCreateQuickReceiving = async () => {
-        if (!restaurantId || !activeAreaId) return;
-        setQuickError(null);
-        const cleanTasks = quickTasks.map((t) => t.trim()).filter(Boolean);
-        if (cleanTasks.length === 0) {
-            setQuickError('Adicione pelo menos uma tarefa.');
-            return;
-        }
+    const handleInstantiate = async () => {
+        if (!restaurantId || !selectedTemplateId || !idempotencyKey) return;
+        setPickerError(null);
+
         try {
-            const result = await createQuickReceiving.mutateAsync({
+            let supplierPayload: { supplier_id?: string; supplier_new?: { name: string; cnpj?: string } } = {};
+            if (supplierMode === 'pick') {
+                if (!selectedSupplierId) {
+                    setPickerError('Selecione um fornecedor.');
+                    return;
+                }
+                supplierPayload = { supplier_id: selectedSupplierId };
+            } else {
+                const name = newSupplierName.trim();
+                if (!name) {
+                    setPickerError('Informe o nome do fornecedor.');
+                    return;
+                }
+                const cnpj = newSupplierCnpj.trim().replace(/\D/g, '');
+                if (cnpj && cnpj.length !== 14) {
+                    setPickerError('CNPJ deve ter 14 dígitos.');
+                    return;
+                }
+                supplierPayload = { supplier_new: { name, ...(cnpj ? { cnpj } : {}) } };
+            }
+
+            const result = await instantiateReceiving.mutateAsync({
                 restaurant_id: restaurantId,
-                area_id: activeAreaId,
-                supplier_name: quickSupplier.trim() || undefined,
-                tasks: cleanTasks.map((title) => ({ title })),
+                template_id: selectedTemplateId,
+                idempotency_key: idempotencyKey,
+                ...supplierPayload,
             });
             closeReceivingPicker();
             router.push(`/turno/atividade/${result.checklist_id}/executar`);
         } catch (e) {
-            setQuickError(e instanceof Error ? e.message : 'Erro ao criar recebimento.');
+            const err = e as Error & { code?: string };
+            if (err.code === 'TEMPLATE_NOT_AVAILABLE') {
+                setPickerError('Modelo não está mais disponível. Atualize a lista.');
+            } else {
+                setPickerError(err.message || 'Erro ao iniciar recebimento.');
+            }
         }
     };
 
@@ -509,8 +514,7 @@ export default function KanbanPage() {
                     </div>
                 )}
 
-                {/* Tabs de tipo: Todas / Rotinas / Recebimentos. "Rapido" e subtipo
-                    de Recebimento (badge no TaskRow), nao tab propria. */}
+                {/* Tabs de tipo: Todas / Rotinas / Recebimentos / Concluídas. */}
                 <div className="flex overflow-x-auto gap-1.5 -mx-1 px-1 pb-1 scrollbar-hide snap-x">
                     <TypeChip active={activeTypeFilter === 'all'} onClick={() => setActiveTypeFilter('all')} count={typeCounts.all}>
                         Todas
@@ -520,6 +524,9 @@ export default function KanbanPage() {
                     </TypeChip>
                     <TypeChip active={activeTypeFilter === 'receiving'} onClick={() => setActiveTypeFilter('receiving')} count={typeCounts.receiving} icon="local_shipping">
                         Recebimentos
+                    </TypeChip>
+                    <TypeChip active={activeTypeFilter === 'done'} onClick={() => setActiveTypeFilter('done')} count={typeCounts.done} icon="task_alt">
+                        Concluídas
                     </TypeChip>
                 </div>
 
@@ -548,8 +555,12 @@ export default function KanbanPage() {
                     </div>
                 ) : null}
 
-                {/* Action bar: novo recebimento */}
-                {!isGlobal && activeAreaAllowsManualReceiving && (
+                {/* Action bar: novo recebimento — 3 estados (s60).
+                    - enabled: botão funcional
+                    - disabled none-today: templates cadastrados mas nenhum previsto hoje
+                    - disabled none-registered: nenhum modelo cadastrado na área
+                    Em ambos casos disabled o botão permanece visível com mensagem curta. */}
+                {newReceivingState.mode === 'enabled' && (
                     <button
                         onClick={() => setShowReceivingPicker(true)}
                         className="self-start inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#13b6ec]/10 border border-[#13b6ec]/40 text-[#13b6ec] text-xs font-semibold hover:bg-[#13b6ec]/20 transition-colors"
@@ -557,6 +568,30 @@ export default function KanbanPage() {
                         <span className="material-symbols-outlined text-[15px]">add</span>
                         Novo recebimento
                     </button>
+                )}
+                {newReceivingState.mode === 'disabled' && (
+                    <div
+                        className="self-start inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-[#16262c] border border-[#233f48] text-[#557682] text-xs font-semibold cursor-not-allowed"
+                        title={
+                            newReceivingState.reason === 'none-registered'
+                                ? 'Nenhum modelo de recebimento cadastrado para esta área. Peça ao gestor para criar um modelo em Recebimentos.'
+                                : 'Nenhum recebimento previsto para hoje neste turno. Verifique a recorrência dos modelos.'
+                        }
+                    >
+                        <span className="material-symbols-outlined text-[15px] opacity-60">local_shipping</span>
+                        <span className="truncate max-w-[60vw]">
+                            {newReceivingState.reason === 'none-registered'
+                                ? 'Nenhum modelo de recebimento cadastrado'
+                                : 'Nenhum recebimento previsto para hoje'}
+                        </span>
+                    </div>
+                )}
+
+                {/* Bloco "Executando" — colapsável, prioridade visual no topo.
+                    Mostra rotinas + recebimentos em andamento (assumption
+                    in_progress, sem completed_at). */}
+                {inProgressOperations.length > 0 && (
+                    <ExecutandoBlock items={inProgressOperations} />
                 )}
 
                 {/* Lista operacional unificada */}
@@ -575,10 +610,10 @@ export default function KanbanPage() {
                 ) : (
                     <div className="flex flex-col gap-4">
                         {groups.map((group) => {
-                            // Grupo "done" fica recolhível.
+                            // Grupo "done" fica recolhível — aberto quando a tab "Concluídas" está ativa.
                             if (group.key === 'done') {
                                 return (
-                                    <details key={group.key} className="group">
+                                    <details key={group.key} open={activeTypeFilter === 'done'} className="group">
                                         <summary className="flex items-center justify-between cursor-pointer px-3 py-2 bg-[#1a2c32] rounded-md border border-[#233f48] select-none list-none [&::-webkit-details-marker]:hidden">
                                             <div className="flex items-center gap-2 text-emerald-400">
                                                 <span className="material-symbols-outlined text-[16px]">task_alt</span>
@@ -632,7 +667,6 @@ export default function KanbanPage() {
                                                     area={m.area}
                                                     itemsCount={m.itemsCount}
                                                     supplier={m.supplier}
-                                                    isQuick={m.isQuick}
                                                     isReceivingOverdue={m.isReceivingOverdue}
                                                     progress={m.progress}
                                                     flaggedCount={m.flaggedCount}
@@ -653,152 +687,143 @@ export default function KanbanPage() {
                 )}
             </main>
 
-            {/* Modal: seletor de modelo + criação de recebimento rápido */}
+            {/* Modal: step 1 escolher modelo → step 2 escolher/cadastrar fornecedor → instantiate */}
             {showReceivingPicker && (
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={closeReceivingPicker}>
                     <div className="bg-[#1a2c32] border border-[#233f48] rounded-2xl p-5 w-full max-w-[440px] flex flex-col gap-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-between">
                             <h3 className="text-white font-bold text-base">
-                                {receivingPickerMode === 'pick' ? 'Novo recebimento' : 'Recebimento rápido'}
+                                {pickerStep === 'template' ? 'Novo recebimento' : 'Fornecedor'}
                             </h3>
                             <button onClick={closeReceivingPicker} className="text-[#92bbc9] hover:text-white">
                                 <span className="material-symbols-outlined">close</span>
                             </button>
                         </div>
 
-                        {receivingPickerMode === 'pick' ? (
+                        {pickerStep === 'template' ? (
                             <>
-                                {filteredReceivingTemplates.length > 0 ? (
-                                    <>
-                                        <p className="text-[#92bbc9] text-xs">Selecione um modelo existente:</p>
-                                        <ul className="flex flex-col gap-2 max-h-[40vh] overflow-y-auto">
-                                            {filteredReceivingTemplates.map((t) => (
-                                                <li key={t.id}>
-                                                    <button
-                                                        onClick={() => {
-                                                            closeReceivingPicker();
-                                                            const qs = new URLSearchParams();
-                                                            if (t.supplier_name) qs.set('supplier', t.supplier_name);
-                                                            const search = qs.toString();
-                                                            router.push(`/turno/atividade/${t.id}${search ? `?${search}` : ''}`);
-                                                        }}
-                                                        className="w-full flex items-center justify-between gap-3 p-3 rounded-lg bg-[#101d22] border border-[#233f48] hover:border-[#325a67] text-left transition-colors"
-                                                    >
-                                                        <div className="flex flex-col min-w-0">
-                                                            <span className="text-white text-sm font-semibold truncate">{t.name}</span>
-                                                            {t.supplier_name && <span className="text-[#92bbc9] text-xs truncate">{t.supplier_name}</span>}
-                                                        </div>
-                                                        <span className="material-symbols-outlined text-[#13b6ec] text-[20px]">play_arrow</span>
-                                                    </button>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                        <div className="flex items-center gap-3">
-                                            <span className="flex-1 h-px bg-[#233f48]" />
-                                            <span className="text-[#5a8a99] text-[10px] uppercase tracking-wider">ou</span>
-                                            <span className="flex-1 h-px bg-[#233f48]" />
-                                        </div>
-                                    </>
-                                ) : (
-                                    <div className="flex flex-col gap-2 py-2">
-                                        <p className="text-white text-sm font-medium">Nenhum modelo disponível para sua área.</p>
-                                        <p className="text-[#92bbc9] text-xs">Você ainda pode lançar um recebimento manual agora.</p>
-                                    </div>
-                                )}
-                                <button
-                                    onClick={() => setReceivingPickerMode('quick')}
-                                    className="w-full flex items-center justify-between gap-3 p-3 rounded-lg bg-[#13b6ec]/10 border border-[#13b6ec]/40 hover:bg-[#13b6ec]/20 text-left transition-colors"
-                                >
-                                    <div className="flex flex-col min-w-0">
-                                        <span className="text-[#13b6ec] text-sm font-bold flex items-center gap-1.5">
-                                            <span className="material-symbols-outlined text-[18px]">add</span>
-                                            Criar recebimento rápido
-                                        </span>
-                                        <span className="text-[#92bbc9] text-xs">Fornecedor não cadastrado? Lance agora.</span>
-                                    </div>
-                                    <span className="material-symbols-outlined text-[#13b6ec] text-[20px]">chevron_right</span>
-                                </button>
+                                <p className="text-[#92bbc9] text-xs">Qual modelo de recebimento chegou agora?</p>
+                                <ul className="flex flex-col gap-2 max-h-[50vh] overflow-y-auto">
+                                    {visibleTemplates.map((t) => (
+                                        <li key={t.id}>
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedTemplateId(t.id);
+                                                    setPickerStep('supplier');
+                                                }}
+                                                className="w-full flex items-center justify-between gap-3 p-3 rounded-lg bg-[#101d22] border border-[#233f48] hover:border-[#325a67] text-left transition-colors"
+                                            >
+                                                <div className="flex flex-col min-w-0">
+                                                    <span className="text-white text-sm font-semibold truncate">{t.name}</span>
+                                                    <span className="text-[#92bbc9] text-xs">
+                                                        {t.tasks_count} {t.tasks_count === 1 ? 'tarefa' : 'tarefas'}
+                                                        {t.area && ` · ${t.area.name}`}
+                                                    </span>
+                                                </div>
+                                                <span className="material-symbols-outlined text-[#13b6ec] text-[20px]">chevron_right</span>
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
                             </>
                         ) : (
                             <>
-                                <p className="text-[#92bbc9] text-xs">Registre uma entrega que chegou agora, mesmo sem modelo cadastrado.</p>
-                                {quickError && (
-                                    <p className="text-red-400 text-xs bg-red-500/10 border border-red-500/30 rounded-lg p-2">{quickError}</p>
+                                {pickerError && (
+                                    <p className="text-red-400 text-xs bg-red-500/10 border border-red-500/30 rounded-lg p-2">{pickerError}</p>
                                 )}
-                                <div>
-                                    <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-1.5">Fornecedor (opcional)</label>
-                                    <input
-                                        type="text"
-                                        value={quickSupplier}
-                                        onChange={(e) => setQuickSupplier(e.target.value)}
-                                        placeholder="Ex: Hortifruti CEASA"
-                                        maxLength={120}
-                                        className="w-full bg-[#101d22] border border-[#233f48] rounded-lg px-3 py-2.5 text-white placeholder-[#325a67] focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all text-sm"
-                                    />
+
+                                <div className="flex gap-1.5">
+                                    <button
+                                        onClick={() => setSupplierMode('pick')}
+                                        className={`flex-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                                            supplierMode === 'pick'
+                                                ? 'bg-[#13b6ec] text-[#0a1215]'
+                                                : 'bg-[#101d22] border border-[#233f48] text-[#92bbc9]'
+                                        }`}
+                                    >
+                                        Escolher existente
+                                    </button>
+                                    <button
+                                        onClick={() => setSupplierMode('new')}
+                                        className={`flex-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                                            supplierMode === 'new'
+                                                ? 'bg-[#13b6ec] text-[#0a1215]'
+                                                : 'bg-[#101d22] border border-[#233f48] text-[#92bbc9]'
+                                        }`}
+                                    >
+                                        Cadastrar novo
+                                    </button>
                                 </div>
-                                <div>
-                                    <div className="flex items-center justify-between mb-1.5">
-                                        <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider">Tarefas ({quickTasks.length}/5)</label>
-                                        {quickTasks.length < 5 && (
-                                            <button
-                                                onClick={() => setQuickTasks([...quickTasks, ''])}
-                                                className="text-[#13b6ec] hover:text-[#10a0d0] text-xs font-bold flex items-center gap-1"
+
+                                {supplierMode === 'pick' ? (
+                                    suppliers.length > 0 ? (
+                                        <div>
+                                            <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-1.5">Fornecedor</label>
+                                            <select
+                                                value={selectedSupplierId}
+                                                onChange={(e) => setSelectedSupplierId(e.target.value)}
+                                                className="w-full bg-[#101d22] border border-[#233f48] rounded-lg px-3 py-2.5 text-white text-sm focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none"
                                             >
-                                                <span className="material-symbols-outlined text-[14px]">add</span>
-                                                Adicionar
-                                            </button>
-                                        )}
+                                                <option value="">— Selecione —</option>
+                                                {suppliers.map((s) => (
+                                                    <option key={s.id} value={s.id}>{s.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    ) : (
+                                        <p className="text-[#92bbc9] text-xs py-2">
+                                            Nenhum fornecedor cadastrado. Use &ldquo;Cadastrar novo&rdquo; acima.
+                                        </p>
+                                    )
+                                ) : (
+                                    <div className="flex flex-col gap-3">
+                                        <div>
+                                            <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-1.5">Nome</label>
+                                            <input
+                                                type="text"
+                                                value={newSupplierName}
+                                                onChange={(e) => setNewSupplierName(e.target.value)}
+                                                placeholder="Ex: Hortifruti CEASA"
+                                                maxLength={120}
+                                                className="w-full bg-[#101d22] border border-[#233f48] rounded-lg px-3 py-2.5 text-white placeholder-[#325a67] text-sm focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-1.5">CNPJ <span className="text-[#5a8a99] normal-case font-normal">(opcional)</span></label>
+                                            <input
+                                                type="text"
+                                                value={newSupplierCnpj}
+                                                onChange={(e) => setNewSupplierCnpj(e.target.value)}
+                                                placeholder="00.000.000/0000-00"
+                                                inputMode="numeric"
+                                                className="w-full bg-[#101d22] border border-[#233f48] rounded-lg px-3 py-2.5 text-white placeholder-[#325a67] text-sm focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none"
+                                            />
+                                        </div>
                                     </div>
-                                    <ul className="flex flex-col gap-2 max-h-[30vh] overflow-y-auto">
-                                        {quickTasks.map((task, index) => (
-                                            <li key={index} className="flex items-center gap-2">
-                                                <input
-                                                    type="text"
-                                                    value={task}
-                                                    onChange={(e) => {
-                                                        const next = [...quickTasks];
-                                                        next[index] = e.target.value;
-                                                        setQuickTasks(next);
-                                                    }}
-                                                    placeholder={`Tarefa ${index + 1}`}
-                                                    maxLength={200}
-                                                    className="flex-1 bg-[#101d22] border border-[#233f48] rounded-lg px-3 py-2 text-white placeholder-[#325a67] focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all text-sm"
-                                                />
-                                                {quickTasks.length > 1 && (
-                                                    <button
-                                                        onClick={() => setQuickTasks(quickTasks.filter((_, i) => i !== index))}
-                                                        className="shrink-0 p-1.5 text-[#325a67] hover:text-red-400 transition-colors"
-                                                        title="Remover tarefa"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[18px]">delete</span>
-                                                    </button>
-                                                )}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
+                                )}
+
                                 <div className="flex gap-2 pt-1">
                                     <button
-                                        onClick={() => setReceivingPickerMode('pick')}
-                                        disabled={createQuickReceiving.isPending}
+                                        onClick={() => { setPickerStep('template'); setPickerError(null); }}
+                                        disabled={instantiateReceiving.isPending}
                                         className="flex-1 px-4 py-2.5 rounded-lg border border-[#233f48] text-[#92bbc9] font-bold text-sm hover:border-[#325a67] hover:text-white disabled:opacity-50 transition-colors"
                                     >
                                         Voltar
                                     </button>
                                     <button
-                                        onClick={handleCreateQuickReceiving}
-                                        disabled={createQuickReceiving.isPending}
+                                        onClick={handleInstantiate}
+                                        disabled={instantiateReceiving.isPending}
                                         className="flex-1 px-4 py-2.5 rounded-lg bg-[#13b6ec] text-[#0a1215] font-bold text-sm hover:bg-[#10a0d0] disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5"
                                     >
-                                        {createQuickReceiving.isPending ? (
+                                        {instantiateReceiving.isPending ? (
                                             <>
                                                 <span className="material-symbols-outlined animate-spin text-[16px]">progress_activity</span>
-                                                Criando...
+                                                Iniciando…
                                             </>
                                         ) : (
                                             <>
                                                 <span className="material-symbols-outlined text-[16px]">play_arrow</span>
-                                                Criar e iniciar
+                                                Iniciar
                                             </>
                                         )}
                                     </button>
@@ -897,6 +922,65 @@ function GroupDot({ keyName }: { keyName: string }) {
         open: 'bg-[#5a8a99]',
     };
     return <span className={`w-1.5 h-1.5 rounded-full ${colorByKey[keyName] ?? 'bg-[#5a8a99]'}`} aria-hidden />;
+}
+
+function ExecutandoBlock({ items }: { items: OperationItem[] }) {
+    // Default aberto até 3 itens; recolhido a partir disso para preservar mobile.
+    const defaultOpen = items.length <= 3;
+    return (
+        <details open={defaultOpen} className="group bg-[#13b6ec]/10 border border-[#13b6ec]/40 rounded-lg">
+            <summary className="flex items-center justify-between cursor-pointer px-3 py-2 select-none list-none [&::-webkit-details-marker]:hidden">
+                <div className="flex items-center gap-2 text-[#13b6ec]">
+                    <span className="material-symbols-outlined text-[16px] animate-pulse">play_circle</span>
+                    <span className="text-[11px] font-bold uppercase tracking-wide">Executando</span>
+                    <span className="text-[10px] font-semibold tabular-nums bg-[#13b6ec]/20 px-1.5 py-px rounded-full">{items.length}</span>
+                </div>
+                <span className="material-symbols-outlined text-[#13b6ec] text-[18px] group-open:rotate-180 transition-transform">expand_more</span>
+            </summary>
+            <div className="flex flex-col gap-1.5 px-2 pb-2">
+                {items.map((item) => {
+                    const m = item.meta as {
+                        area?: string;
+                        itemsCount?: number;
+                        progress?: number;
+                        flaggedCount?: number;
+                        assumptionName?: string;
+                        isAssignedToMe?: boolean;
+                        isAssignedToOther?: boolean;
+                        unitName?: string;
+                        supplier?: string | null;
+                        isQuick?: boolean;
+                        isReceivingOverdue?: boolean;
+                        timeLabelOverride?: string | null;
+                        isRequired?: boolean;
+                    };
+                    return (
+                        <TaskRow
+                            key={item.id}
+                            kind={item.kind}
+                            title={item.title}
+                            state={item.state}
+                            start_time={item.start_time}
+                            end_time={item.end_time}
+                            timeLabelOverride={m.timeLabelOverride}
+                            area={m.area}
+                            itemsCount={m.itemsCount}
+                            supplier={m.supplier}
+                            isReceivingOverdue={m.isReceivingOverdue}
+                            progress={m.progress}
+                            flaggedCount={m.flaggedCount}
+                            isRequired={m.isRequired}
+                            assumptionName={m.assumptionName}
+                            isAssignedToMe={m.isAssignedToMe}
+                            isAssignedToOther={m.isAssignedToOther}
+                            unitName={m.unitName}
+                            onClick={item.onClick}
+                        />
+                    );
+                })}
+            </div>
+        </details>
+    );
 }
 
 function DoneRow({ item }: { item: OperationItem }) {

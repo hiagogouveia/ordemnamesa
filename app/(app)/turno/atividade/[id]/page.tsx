@@ -5,6 +5,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useSession } from '@/lib/providers/use-session';
 import { useActivityData } from '@/lib/hooks/use-activity-execution';
 import { useChecklistAssumption, useAssumeChecklist } from '@/lib/hooks/use-tasks';
+import { useSuppliers } from '@/lib/hooks/use-suppliers';
 import { createClient } from '@/lib/supabase/client';
 
 function getTimeWindowStatus(
@@ -23,11 +24,8 @@ export default function ActivityDetailsPage() {
     const params = useParams();
     const searchParams = useSearchParams();
     const checklistId = params.id as string;
-    // Contexto de recebimento vindo do Meu Turno (card de expectation).
-    // expectation_id: liga a assumption à expectativa materializada (UPDATE em
-    // receiving_expectations.status=confirmed). Demais params são metadata
-    // visual para o preview — fallback usa checklist.* quando ausentes.
-    const expectationId = searchParams.get('expectation_id') || undefined;
+    // Etapa 4: expectation_id removido (receiving_expectations descontinuada).
+    // supplier/from/to ainda aceitos como metadata visual para o preview.
     const supplierFromQuery = searchParams.get('supplier') || null;
     const windowFromQuery = searchParams.get('from') || null;
     const windowToQuery = searchParams.get('to') || null;
@@ -59,6 +57,7 @@ export default function ActivityDetailsPage() {
 
     const { data: activityData, isLoading, isError, isFetched } = useActivityData(restaurantId || undefined, checklistId);
     const { data: assumption } = useChecklistAssumption(restaurantId || undefined, checklistId);
+    const { data: suppliers = [] } = useSuppliers(restaurantId || undefined);
     const assumeMutation = useAssumeChecklist();
 
     const { checklist, tasks, executions } = activityData || {};
@@ -74,7 +73,7 @@ export default function ActivityDetailsPage() {
         setAssuming(true);
         setLimitError(null);
         try {
-            await assumeMutation.mutateAsync({ restaurantId, checklistId, expectationId });
+            await assumeMutation.mutateAsync({ restaurantId, checklistId });
             router.push(`/turno/atividade/${checklistId}/executar`);
         } catch (e) {
             const err = e as Error & { code?: string };
@@ -125,7 +124,11 @@ export default function ActivityDetailsPage() {
     // Em recebimento, janela é apenas previsão — fornecedor e horários
     // mostrados de forma informativa, sem banners bloqueantes nem
     // botão desabilitado por horário.
-    const receivingSupplier = supplierFromQuery || (checklist as { supplier_name?: string | null }).supplier_name || null;
+    const checklistSupplierId = (checklist as { supplier_id?: string | null } | undefined)?.supplier_id ?? null;
+    const checklistSupplierName = checklistSupplierId
+        ? (suppliers.find((s) => s.id === checklistSupplierId)?.name ?? null)
+        : null;
+    const receivingSupplier = checklistSupplierName ?? supplierFromQuery;
     const receivingFrom = windowFromQuery || (checklist.start_time as string | undefined) || null;
     const receivingTo = windowToQuery || (checklist.end_time as string | undefined) || null;
 
@@ -243,14 +246,11 @@ export default function ActivityDetailsPage() {
                             <div className="flex items-start justify-between gap-3 mb-3">
                                 <div className="flex-1 min-w-0">
                                     <h2 className="text-white text-xl font-black leading-snug">{checklist.name}</h2>
-                                    {(checklist as { is_one_shot?: boolean }).is_one_shot && (
-                                        <span
-                                            className="mt-2 inline-flex items-center gap-1 bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider"
-                                            title="Recebimento criado ad-hoc para registro único"
-                                        >
-                                            <span className="material-symbols-outlined text-[12px]">bolt</span>
-                                            Recebimento rápido
-                                        </span>
+                                    {isReceiving && receivingSupplier && (
+                                        <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#13b6ec]/10 border border-[#13b6ec]/30 text-[#13b6ec]">
+                                            <span className="material-symbols-outlined text-[16px]">local_shipping</span>
+                                            <span className="text-sm font-bold truncate max-w-[60vw]">{receivingSupplier}</span>
+                                        </div>
                                     )}
                                 </div>
                                 {checklist.is_required && (

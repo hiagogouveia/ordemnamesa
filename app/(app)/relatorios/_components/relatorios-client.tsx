@@ -174,6 +174,9 @@ function pluralize(n: number, singular: string, plural: string): string {
 
 function buildActiveChips(filters: AuditFilters): string[] {
     const chips: string[] = [];
+    if (filters.kind === 'routine') chips.push('Tipo: Rotinas');
+    else if (filters.kind === 'receiving') chips.push('Tipo: Recebimentos');
+    if (filters.supplier_ids.length) chips.push(`${filters.supplier_ids.length} ${pluralize(filters.supplier_ids.length, 'fornecedor', 'fornecedores')}`);
     if (filters.search.trim()) chips.push(`Busca: "${filters.search.trim()}"`);
     if (filters.area_ids.length) chips.push(`${filters.area_ids.length} ${pluralize(filters.area_ids.length, 'área', 'áreas')}`);
     if (filters.user_ids.length) chips.push(`${filters.user_ids.length} ${pluralize(filters.user_ids.length, 'colaborador', 'colaboradores')}`);

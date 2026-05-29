@@ -58,15 +58,44 @@ export async function GET(request: Request) {
         }
         filterParts.push(`and(assigned_to_user_id.eq.${user.id},area_id.in.(${userAreaIds.join(',')}))`);
 
-        const { data: checklists } = await adminSupabase
+        const checklistSelect = 'id, end_time, task_count:checklist_tasks(count)';
+        const { data: checklistsData } = await adminSupabase
             .from('checklists')
-            .select('id, end_time, task_count:checklist_tasks(count)')
+            .select(checklistSelect)
             .eq('restaurant_id', restaurant_id)
             .eq('active', true)
             .eq('status', 'active')
             .or(filterParts.join(','));
 
-        if (!checklists || checklists.length === 0) return NextResponse.json({ pending: 0 });
+        let checklists = checklistsData || [];
+
+        // Defesa em profundidade: reincorpora checklists com assumptions
+        // in_progress mesmo quando active=false. Mantém coerência com
+        // kanban + my-activities — badge precisa contar trabalho aberto
+        // mesmo que o checklist origem tenha sido arquivado.
+        const { data: inProgressOrphans } = await adminSupabase
+            .from('checklist_assumptions')
+            .select('checklist_id')
+            .eq('restaurant_id', restaurant_id)
+            .eq('execution_status', 'in_progress');
+        if (inProgressOrphans && inProgressOrphans.length > 0) {
+            const knownIds = new Set(checklists.map((c: { id: string }) => c.id));
+            const orphanIds = Array.from(new Set(
+                inProgressOrphans.map((a: { checklist_id: string }) => a.checklist_id)
+            )).filter((id) => !knownIds.has(id));
+            if (orphanIds.length > 0) {
+                const { data: orphanChecklists } = await adminSupabase
+                    .from('checklists')
+                    .select(checklistSelect)
+                    .in('id', orphanIds)
+                    .or(filterParts.join(','));
+                if (orphanChecklists && orphanChecklists.length > 0) {
+                    checklists = [...checklists, ...orphanChecklists];
+                }
+            }
+        }
+
+        if (checklists.length === 0) return NextResponse.json({ pending: 0 });
 
         const checklistIds = checklists.map((c) => c.id);
 

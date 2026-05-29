@@ -95,7 +95,7 @@ export async function GET(request: Request) {
             });
         }
 
-        const checklistSelect = 'id, name, description, shift, is_required, recurrence, recurrence_config, last_reset_at, assigned_to_user_id, role_id, area_id, order_index, restaurant_id, roles(id, name, color), areas(id, name, color), checklist_type, start_time, end_time, receiving_mode, is_one_shot, supplier_name';
+        const checklistSelect = 'id, name, description, shift, is_required, recurrence, recurrence_config, last_reset_at, assigned_to_user_id, role_id, area_id, order_index, restaurant_id, roles(id, name, color), areas(id, name, color), checklist_type, start_time, end_time, is_one_shot, supplier_id, source_template_id';
 
         const { data: activeChecklistsData } = await adminSupabase
             .from('checklists')
@@ -127,6 +127,32 @@ export async function GET(request: Request) {
                     .or(checklistFilterParts.join(','));
                 if (archivedQuicks && archivedQuicks.length > 0) {
                     activeChecklists = [...activeChecklists, ...archivedQuicks];
+                }
+            }
+        }
+
+        // Defesa em profundidade: assumptions in_progress órfãs (checklist
+        // active=false e não é one-shot). Acontece quando um checklist é
+        // arquivado enquanto há trabalho em andamento (migrações, decisão
+        // de gestor). Sem essa reincorporação a execução fica invisível.
+        const { data: inProgressOrphans } = await adminSupabase
+            .from('checklist_assumptions')
+            .select('checklist_id')
+            .in('restaurant_id', restaurantIds)
+            .eq('execution_status', 'in_progress');
+        if (inProgressOrphans && inProgressOrphans.length > 0) {
+            const knownIds = new Set(activeChecklists.map((c: { id: string }) => c.id));
+            const orphanIds = Array.from(new Set(
+                inProgressOrphans.map((a: { checklist_id: string }) => a.checklist_id)
+            )).filter((id) => !knownIds.has(id));
+            if (orphanIds.length > 0) {
+                const { data: orphanChecklists } = await adminSupabase
+                    .from('checklists')
+                    .select(checklistSelect)
+                    .in('id', orphanIds)
+                    .or(checklistFilterParts.join(','));
+                if (orphanChecklists && orphanChecklists.length > 0) {
+                    activeChecklists = [...activeChecklists, ...orphanChecklists];
                 }
             }
         }

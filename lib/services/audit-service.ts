@@ -56,6 +56,8 @@ export const DEFAULT_FILTERS: AuditFilters = {
     user_ids: [],
     shifts: [],
     statuses: [],
+    kind: 'all',
+    supplier_ids: [],
     page: 0,
     limit: PAGE_SIZE_DEFAULT,
 };
@@ -118,6 +120,10 @@ export function parseFiltersFromSearchParams(sp: URLSearchParams): AuditFilters 
     const shifts = parseList(sp, 'shifts').filter((s): s is Shift =>
         VALID_SHIFTS.has(s as Shift));
 
+    const kindRaw = sp.get('kind');
+    const kind: 'all' | 'routine' | 'receiving' =
+        kindRaw === 'routine' || kindRaw === 'receiving' ? kindRaw : 'all';
+
     return {
         start_date,
         end_date,
@@ -127,6 +133,8 @@ export function parseFiltersFromSearchParams(sp: URLSearchParams): AuditFilters 
         user_ids: parseList(sp, 'user_ids'),
         shifts,
         statuses,
+        kind,
+        supplier_ids: kind === 'receiving' ? parseList(sp, 'supplier_ids') : [],
         page: clampInt(sp.get('page'), 0, Number.MAX_SAFE_INTEGER, 0),
         limit: clampInt(sp.get('limit'), 1, PAGE_SIZE_MAX, PAGE_SIZE_DEFAULT),
     };
@@ -142,6 +150,8 @@ export function filtersToSearchParams(filters: AuditFilters): URLSearchParams {
     if (filters.user_ids.length) sp.set('user_ids', filters.user_ids.join(','));
     if (filters.shifts.length) sp.set('shifts', filters.shifts.join(','));
     if (filters.statuses.length) sp.set('statuses', filters.statuses.join(','));
+    if (filters.kind && filters.kind !== 'all') sp.set('kind', filters.kind);
+    if (filters.supplier_ids.length) sp.set('supplier_ids', filters.supplier_ids.join(','));
     sp.set('page', String(filters.page));
     sp.set('limit', String(filters.limit));
     return sp;
@@ -211,6 +221,9 @@ interface RawAssumption {
         recurrence: string | null;
         area_id: string | null;
         description?: string | null;
+        checklist_type?: 'regular' | 'opening' | 'closing' | 'receiving' | null;
+        supplier_id?: string | null;
+        is_one_shot?: boolean | null;
     } | null;
 }
 
@@ -314,7 +327,7 @@ export async function fetchAuditList(
         .select(`
             id, restaurant_id, checklist_id, user_id, user_name,
             date_key, assumed_at, completed_at, execution_status, blocked_reason,
-            checklists!inner(id, name, shift, recurrence, area_id)
+            checklists!inner(id, name, shift, recurrence, area_id, checklist_type, supplier_id, is_one_shot)
         `, { count: 'exact' })
         .in('restaurant_id', restaurantIds)
         .eq('execution_status', 'done')
@@ -332,6 +345,18 @@ export async function fetchAuditList(
     }
     if (filters.shifts.length > 0) {
         query = query.in('checklists.shift', filters.shifts);
+    }
+    // s60: filtro de tipo (Rotinas vs Recebimentos).
+    // - 'routine'   → exclui qualquer execução com checklist_type='receiving'
+    //                 (recebimentos quick também ficam de fora).
+    // - 'receiving' → apenas execuções de recebimento (is_one_shot=true por design).
+    if (filters.kind === 'routine') {
+        query = query.neq('checklists.checklist_type', 'receiving');
+    } else if (filters.kind === 'receiving') {
+        query = query.eq('checklists.checklist_type', 'receiving');
+        if (filters.supplier_ids.length > 0) {
+            query = query.in('checklists.supplier_id', filters.supplier_ids);
+        }
     }
 
     query = query.range(from, to);
@@ -416,6 +441,24 @@ export async function fetchAuditList(
         if (aErr) throw aErr;
         for (const a of (areas ?? []) as Array<{ id: string; name: string; color: string | null }>) {
             areaMap[a.id] = { id: a.id, name: a.name, color: a.color ?? null };
+        }
+    }
+
+    // ── Suppliers (s60) ─────────────────────────────────────────────────────
+    const supplierIds = Array.from(new Set(
+        rawAssumptions
+            .map(a => a.checklists?.supplier_id)
+            .filter((id): id is string => !!id),
+    ));
+    const supplierMap: Record<string, { id: string; name: string }> = {};
+    if (supplierIds.length > 0) {
+        const { data: sups, error: sErr } = await admin
+            .from('suppliers')
+            .select('id, name')
+            .in('id', supplierIds);
+        if (sErr) throw sErr;
+        for (const s of (sups ?? []) as Array<{ id: string; name: string }>) {
+            supplierMap[s.id] = { id: s.id, name: s.name };
         }
     }
 
@@ -514,6 +557,7 @@ export async function fetchAuditList(
                 name: cl?.name ?? '—',
                 shift: cl?.shift ?? null,
                 recurrence: cl?.recurrence ?? null,
+                checklist_type: cl?.checklist_type ?? null,
             },
             area,
             user: {
@@ -521,6 +565,7 @@ export async function fetchAuditList(
                 name: u?.name ?? a.user_name ?? 'Colaborador',
                 avatar_url: u?.avatar_url ?? null,
             },
+            supplier: cl?.supplier_id ? (supplierMap[cl.supplier_id] ?? null) : null,
             task_counts: {
                 total: totalTasks,
                 completed: completedCount,
@@ -808,17 +853,20 @@ function durationMinutes(seconds: number | null): string {
 
 export function buildCsv(list: AuditListResponse, includeUnit: boolean): string {
     const header = [
-        'Data', 'Hora', 'Checklist', 'Área', 'Turno', 'Responsável', 'Status',
+        'Data', 'Hora', 'Tipo', 'Checklist', 'Fornecedor', 'Área', 'Turno', 'Responsável', 'Status',
         'Teve impedimento', 'Duração (min)', 'Tarefas Concluídas',
         'Tarefas com Impedimento', 'Tarefas Não Executadas', 'Evidências',
     ];
     if (includeUnit) header.push('Unidade');
 
     const rows = list.entries.map(e => {
+        const isReceiving = e.checklist?.checklist_type === 'receiving';
         const row: unknown[] = [
             formatDateBR(e.assumed_at),
             formatTimeBR(e.assumed_at),
+            isReceiving ? 'Recebimento' : 'Rotina',
             e.checklist?.name ?? '',
+            e.supplier?.name ?? '',
             e.area?.name ?? '',
             shiftLabel(e.checklist?.shift),
             e.user?.name ?? '',

@@ -48,7 +48,7 @@ export interface KanbanExecution {
     value_rating?: number | null;
     [key: string]: unknown;
 }
-export interface KanbanChecklist { id: string; name: string; description?: string; is_required: boolean; recurrence?: string; last_reset_at?: string; assigned_to_user_id?: string; checklist_type?: string; role_id?: string; area_id?: string; order_index?: number | null; restaurant_id?: string; roles?: { id: string; name: string; color: string }; areas?: { id: string; name: string; color: string }; start_time?: string; end_time?: string; receiving_mode?: 'on_demand' | 'recurring' | null; is_one_shot?: boolean | null; supplier_name?: string | null; [key: string]: unknown; }
+export interface KanbanChecklist { id: string; name: string; description?: string; is_required: boolean; recurrence?: string; last_reset_at?: string; assigned_to_user_id?: string; checklist_type?: string; role_id?: string; area_id?: string; order_index?: number | null; restaurant_id?: string; roles?: { id: string; name: string; color: string }; areas?: { id: string; name: string; color: string }; start_time?: string; end_time?: string; is_one_shot?: boolean | null; source_template_id?: string | null; supplier_id?: string | null; [key: string]: unknown; }
 
 export interface KanbanData {
     checklists: KanbanChecklist[];
@@ -169,12 +169,12 @@ export interface AssumeChecklistError {
 export const useAssumeChecklist = () => {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: async ({ restaurantId, checklistId, expectationId }: { restaurantId: string; checklistId: string; expectationId?: string }) => {
+        mutationFn: async ({ restaurantId, checklistId }: { restaurantId: string; checklistId: string }) => {
             const token = await getAuthToken();
             const response = await fetch(`/api/checklists/${checklistId}/assume`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ restaurant_id: restaurantId, expectation_id: expectationId }),
+                body: JSON.stringify({ restaurant_id: restaurantId }),
             });
             if (!response.ok) {
                 const errorData: AssumeChecklistError = await response.json().catch(() => ({ error: 'Erro ao assumir atividade' }));
@@ -190,7 +190,6 @@ export const useAssumeChecklist = () => {
             queryClient.invalidateQueries({ queryKey: ['my-activities', variables.restaurantId] });
             queryClient.invalidateQueries({ queryKey: ['my-activities-badge', variables.restaurantId] });
             queryClient.invalidateQueries({ queryKey: ['checklists', variables.restaurantId] });
-            queryClient.invalidateQueries({ queryKey: ['receiving-expectations', variables.restaurantId] });
         },
     });
 };
@@ -217,8 +216,8 @@ export const useCompleteChecklist = () => {
             queryClient.invalidateQueries({ queryKey: ["admin_checklists_status", variables.restaurantId] });
             queryClient.invalidateQueries({ queryKey: ["my-activities", variables.restaurantId] });
             queryClient.invalidateQueries({ queryKey: ["my-activities-badge", variables.restaurantId] });
-            // Sprint 54: quick receiving concluído precisa atualizar aba Execuções de /checklists.
-            queryClient.invalidateQueries({ queryKey: ["receiving-quick-history", variables.restaurantId] });
+            // Conclusão de execução de recebimento atualiza aba Execuções de /checklists.
+            queryClient.invalidateQueries({ queryKey: ["receiving-executions", variables.restaurantId] });
         },
     });
 };

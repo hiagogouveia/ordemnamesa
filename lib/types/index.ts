@@ -123,33 +123,65 @@ export interface Checklist {
     assumed_by_name?: string | null
     assumed_by_user_id?: string | null
     unit?: { id: string; name: string } | null
-    // Sprint 48 — Receiving Routines (fase 1: campos estruturais)
-    receiving_mode?: 'on_demand' | 'recurring' | null
-    receiving_generation?: 'automatic' | 'manager_confirmation' | null
-    supplier_name?: string | null
     // Sprint 53 — instância descartável criada ad-hoc, executada uma vez e
     // auto-arquivada. Atualmente usada por "Recebimento rápido"; nome genérico
     // para reuso futuro em tarefas emergenciais / contingências.
     is_one_shot?: boolean
+    // Sprint 56 — execução instanciada a partir de modelo de recebimento
+    source_template_id?: string | null
+    supplier_id?: string | null
+    supplier?: Supplier | null
 }
 
-// Sprint 48 — Receiving Routines
-export type ReceivingExpectationStatus = 'pending' | 'confirmed' | 'overdue' | 'cancelled'
-
-export interface ReceivingExpectation {
+// Sprint 56 — Receiving Templates + Suppliers
+export interface Supplier {
     id: string
     restaurant_id: string
-    checklist_id: string
-    expected_date: string             // ISO date (YYYY-MM-DD)
-    expected_window_start?: string | null  // HH:mm
-    expected_window_end?: string | null    // HH:mm
-    status: ReceivingExpectationStatus
-    assumption_id?: string | null
-    confirmed_by?: string | null
-    confirmed_at?: string | null
-    cancelled_reason?: string | null
+    name: string
+    cnpj?: string | null
+    active: boolean
     created_at: string
+    created_by?: string | null
 }
+
+export interface ReceivingTemplate {
+    id: string
+    restaurant_id: string
+    name: string
+    description?: string | null
+    area_id: string
+    role_id?: string | null
+    assigned_to_user_id?: string | null
+    shift?: 'morning' | 'afternoon' | 'evening' | null
+    recurrence: 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekdays' | 'custom' | 'shift_days'
+    recurrence_config?: RecurrenceConfig | RecurrenceV2 | null
+    enforce_sequential_order: boolean
+    active: boolean
+    created_at: string
+    created_by?: string | null
+    updated_at: string
+    tasks?: ReceivingTemplateTask[]
+    area?: Area | null
+}
+
+export interface ReceivingTemplateTask {
+    id: string
+    template_id: string
+    restaurant_id: string
+    title: string
+    description?: string | null
+    order: number
+    requires_photo: boolean
+    is_critical: boolean
+    requires_observation: boolean
+    type?: TaskType | null
+    max_photos?: number | null
+    task_config?: TaskConfig | null
+}
+
+// Sprint 48 (Etapa 4): ReceivingExpectation removida do código TS. A tabela
+// `receiving_expectations` permanece no banco como histórico read-only.
+// Substituída pelo modelo Etapa 2: receiving_templates + checklists one-shot.
 
 // Sprint 35 — Tipos de resposta estruturados
 export type TaskType = 'boolean' | 'date' | 'number' | 'rating'
@@ -251,8 +283,6 @@ export interface Area {
     color: string
     priority_mode?: PriorityMode
     max_parallel_tasks?: number | null
-    /** Se true, colaboradores desta área podem iniciar recebimentos manuais. */
-    allow_manual_receiving?: boolean
     created_at: string
 }
 

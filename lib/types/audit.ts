@@ -30,6 +30,9 @@ export type Shift = 'morning' | 'afternoon' | 'evening';
 
 export type PeriodPreset = 'today' | '7days' | '30days' | 'custom';
 
+/** Tipo da execução para filtro UI (separa rotinas vs recebimentos). */
+export type AuditKind = 'all' | 'routine' | 'receiving';
+
 export interface AuditFilters {
     start_date: string | null;
     end_date: string | null;
@@ -39,8 +42,17 @@ export interface AuditFilters {
     user_ids: string[];
     shifts: Shift[];
     statuses: AuditStatus[];
+    /** s60: separa Rotinas (regular/opening/closing) de Recebimentos (checklist_type=receiving). */
+    kind: AuditKind;
+    /** s60: filtro por fornecedor — só aplica quando kind='receiving'. */
+    supplier_ids: string[];
     page: number;
     limit: number;
+}
+
+export interface SupplierInfo {
+    id: string;
+    name: string;
 }
 
 export interface UnitInfo {
@@ -90,9 +102,13 @@ export interface AuditExecution {
         name: string;
         shift: Shift | null;
         recurrence: string | null;
+        /** s60: tipo da rotina (receiving distingue recebimento de rotina regular). */
+        checklist_type?: 'regular' | 'opening' | 'closing' | 'receiving' | null;
     };
     area: AreaInfo | null;
     user: UserInfo;
+    /** s60: fornecedor da execução — sempre nulo em rotinas não-recebimento. */
+    supplier: SupplierInfo | null;
     task_counts: TaskCounts;
     evidence_count: number;
     unit?: UnitInfo;
