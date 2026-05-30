@@ -70,7 +70,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
         const { data: checklistOwner } = await adminSupabase
             .from('checklists')
-            .select('id, restaurant_id')
+            .select('id, restaurant_id, shift_id')
             .eq('id', checklistId)
             .maybeSingle();
         if (!checklistOwner || checklistOwner.restaurant_id !== restaurant_id) {
@@ -207,6 +207,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             }
         }
 
+        // Sprint 62 — Auditoria de turno: snapshot do turno da rotina e dos
+        // turnos do colaborador no momento da assunção (req #10).
+        const { data: userShiftRows } = await adminSupabase
+            .from('user_shifts')
+            .select('shift_id')
+            .eq('restaurant_id', restaurant_id)
+            .eq('user_id', user.id);
+        const userShiftIds = (userShiftRows ?? []).map((r) => r.shift_id);
+
         const { data: assumption, error: insertError } = await adminSupabase
             .from('checklist_assumptions')
             .insert({
@@ -215,6 +224,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
                 user_id: user.id,
                 user_name: userName,
                 date_key: dateKey,
+                assumption_shift_id: checklistOwner.shift_id ?? null,
+                assumption_user_shift_ids: userShiftIds,
             })
             .select()
             .single();

@@ -46,8 +46,17 @@ export async function GET(request: Request) {
             .eq('restaurant_id', restaurant_id)
             .eq('user_id', user.id);
 
+        // Sprint 61: turnos do colaborador (segmentação de visibilidade — mesmo
+        // predicado do GET /api/my-activities para manter badge == lista).
+        const { data: userShiftRows } = await adminSupabase
+            .from('user_shifts')
+            .select('shift_id')
+            .eq('restaurant_id', restaurant_id)
+            .eq('user_id', user.id);
+
         const userAreaIds = (userAreaRows ?? []).map((r) => r.area_id);
         const userRoleIds = (userRoleRows ?? []).map((r) => r.role_id);
+        const userShiftIds = (userShiftRows ?? []).map((r) => r.shift_id);
         if (userAreaIds.length === 0) return NextResponse.json({ pending: 0 });
 
         // Checklists ativos nas áreas/funções do usuário
@@ -58,7 +67,7 @@ export async function GET(request: Request) {
         }
         filterParts.push(`and(assigned_to_user_id.eq.${user.id},area_id.in.(${userAreaIds.join(',')}))`);
 
-        const checklistSelect = 'id, end_time, task_count:checklist_tasks(count)';
+        const checklistSelect = 'id, shift_id, end_time, task_count:checklist_tasks(count)';
         const { data: checklistsData } = await adminSupabase
             .from('checklists')
             .select(checklistSelect)
@@ -67,7 +76,15 @@ export async function GET(request: Request) {
             .eq('status', 'active')
             .or(filterParts.join(','));
 
-        let checklists = checklistsData || [];
+        // Sprint 61 — segmentação por turno (igual ao GET): sem turno → vê tudo;
+        // shift_id NULL → sempre visível; senão só os turnos do colaborador.
+        // Filtro no conjunto base; órfãos in_progress abaixo bypassam.
+        const isManagerRole = membership.role === 'owner' || membership.role === 'manager';
+        const applyShiftFilter = !isManagerRole && userShiftIds.length > 0;
+        let checklists = !applyShiftFilter
+            ? (checklistsData || [])
+            : (checklistsData || []).filter((c: { shift_id?: string | null }) =>
+                c.shift_id == null || userShiftIds.includes(c.shift_id));
 
         // Defesa em profundidade: reincorpora checklists com assumptions
         // in_progress mesmo quando active=false. Mantém coerência com

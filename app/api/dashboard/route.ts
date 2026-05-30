@@ -171,7 +171,7 @@ export async function GET(request: Request) {
         const archivedQuickIds = await fetchArchivedQuickIdsForToday(adminSupabase, restaurantIds, todayKey);
 
         // ── Round 1: Queries paralelas ─────────────────────────────────────
-        const checklistSelect = 'id, name, restaurant_id, shift, area_id, end_time, start_time, recurrence, recurrence_config, assigned_to_user_id, areas(id, name, color), checklist_tasks(id, is_critical)';
+        const checklistSelect = 'id, name, restaurant_id, shift, shift_id, area_id, end_time, start_time, recurrence, recurrence_config, assigned_to_user_id, areas(id, name, color), checklist_tasks(id, is_critical)';
         const [checklistsRes, archivedQuicksRes, assumptionsRes, taskExecsRes, shiftsRes] = await Promise.all([
             adminSupabase
                 .from('checklists')
@@ -206,7 +206,7 @@ export async function GET(request: Request) {
 
             adminSupabase
                 .from('shifts')
-                .select('shift_type, days_of_week, restaurant_id')
+                .select('id, shift_type, days_of_week, restaurant_id')
                 .in('restaurant_id', restaurantIds)
                 .eq('active', true),
         ]);

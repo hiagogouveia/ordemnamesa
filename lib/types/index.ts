@@ -86,6 +86,9 @@ export interface ChecklistAssumption {
     observation?: string
     execution_status: 'in_progress' | 'blocked' | 'done'
     blocked_reason?: string | null
+    // Sprint 62 — Auditoria de turno (snapshot no momento da assunção).
+    assumption_shift_id?: string | null
+    assumption_user_shift_ids?: string[] | null
 }
 
 export interface Checklist {
@@ -94,6 +97,10 @@ export interface Checklist {
     name: string
     description?: string
     shift: ShiftType
+    // Sprint 61 — Turno cadastrado (shifts.id). NULL = "Todos os turnos".
+    // Fonte da verdade para visibilidade e dias da recorrência; `shift` (enum)
+    // permanece como sombra derivada para consumidores legados.
+    shift_id?: string | null
     status: ChecklistStatus
     active: boolean
     created_by: string
@@ -296,6 +303,7 @@ export interface MyActivity {
     name: string
     description?: string | null
     shift: ShiftType
+    shift_id?: string | null // Sprint 61 — turno cadastrado; NULL = todos os turnos
     checklist_type: 'regular' | 'opening' | 'closing' | 'receiving'
     is_required: boolean
     start_time?: string | null

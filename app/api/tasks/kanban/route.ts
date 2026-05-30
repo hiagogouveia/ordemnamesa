@@ -69,6 +69,29 @@ export async function GET(request: Request) {
         const areaIds = userAreas?.map(ua => ua.area_id) || [];
         const roleIds = userRoles?.map(ur => ur.role_id) || [];
 
+        // Sprint 61 — Segmentação por turno (visibilidade). Aplica apenas em modo
+        // single e para perfil staff; managers/owners e modo global (gestão) veem
+        // tudo (req #7). Colaborador sem turno vinculado também vê tudo (opt-in).
+        let userShiftIds: string[] = [];
+        let isManagerRole = isGlobal;
+        if (!isGlobal) {
+            const { data: membership } = await adminSupabase
+                .from('restaurant_users')
+                .select('role')
+                .eq('restaurant_id', restaurant_id!)
+                .eq('user_id', user.id)
+                .eq('active', true)
+                .maybeSingle();
+            isManagerRole = membership?.role === 'owner' || membership?.role === 'manager';
+            const { data: userShiftRows } = await adminSupabase
+                .from('user_shifts')
+                .select('shift_id')
+                .eq('restaurant_id', restaurant_id!)
+                .eq('user_id', user.id);
+            userShiftIds = (userShiftRows ?? []).map(r => r.shift_id);
+        }
+        const applyShiftFilter = !isManagerRole && userShiftIds.length > 0;
+
         // 2. Buscar checklists ativos visíveis para este usuário:
         //    - Da área do usuário (sem atribuição individual)
         //    - Do role do usuário E com area_id nas áreas do usuário (sem atribuição individual)
@@ -95,7 +118,7 @@ export async function GET(request: Request) {
             });
         }
 
-        const checklistSelect = 'id, name, description, shift, is_required, recurrence, recurrence_config, last_reset_at, assigned_to_user_id, role_id, area_id, order_index, restaurant_id, roles(id, name, color), areas(id, name, color), checklist_type, start_time, end_time, is_one_shot, supplier_id, source_template_id';
+        const checklistSelect = 'id, name, description, shift, shift_id, is_required, recurrence, recurrence_config, last_reset_at, assigned_to_user_id, role_id, area_id, order_index, restaurant_id, roles(id, name, color), areas(id, name, color), checklist_type, start_time, end_time, is_one_shot, supplier_id, source_template_id';
 
         const { data: activeChecklistsData } = await adminSupabase
             .from('checklists')
@@ -115,7 +138,12 @@ export async function GET(request: Request) {
         // Reincorporamos via segunda query para que permaneçam visíveis em Meu Turno
         // até a virada do dia.
         const archivedQuickIds = await fetchArchivedQuickIdsForToday(adminSupabase, restaurantIds, brazil.dateKey);
-        let activeChecklists = activeChecklistsData || [];
+        // Filtro de turno aplicado só ao conjunto base; merges de quick receivings
+        // arquivados e órfãos in_progress (abaixo) bypassam — nunca perder execução.
+        let activeChecklists = applyShiftFilter
+            ? (activeChecklistsData || []).filter((c: { shift_id?: string | null }) =>
+                c.shift_id == null || userShiftIds.includes(c.shift_id))
+            : (activeChecklistsData || []);
         if (archivedQuickIds.size > 0) {
             const knownIds = new Set(activeChecklists.map((c: { id: string }) => c.id));
             const idsToFetch = Array.from(archivedQuickIds).filter((id) => !knownIds.has(id));
@@ -160,7 +188,7 @@ export async function GET(request: Request) {
         // Buscar shifts para resolver recurrence='shift_days'
         const { data: shifts } = await adminSupabase
             .from('shifts')
-            .select('shift_type, days_of_week')
+            .select('id, shift_type, days_of_week')
             .in('restaurant_id', restaurantIds)
             .eq('active', true);
 

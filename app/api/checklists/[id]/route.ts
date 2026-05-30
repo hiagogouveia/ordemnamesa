@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import type { ShiftType } from '@/lib/types';
 import { processRecurrencePayload } from '@/lib/api/recurrence-payload';
+import { deriveShiftEnum } from '@/lib/api/derive-shift-enum';
 import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
 import { getAccountBilling, canManageChecklists, canDeleteChecklists } from '@/lib/billing/subscription-access';
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
@@ -31,7 +33,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         }
 
         const body = await request.json();
-        const { restaurant_id, name, description, shift, status, tasks, category, role_id, is_required, checklist_type, assigned_to_user_id, recurrence, start_time, end_time, recurrence_config, enforce_sequential_order, area_id, target_role, assignment_type } = body;
+        const { restaurant_id, name, description, shift, shift_id, status, tasks, category, role_id, is_required, checklist_type, assigned_to_user_id, recurrence, start_time, end_time, recurrence_config, enforce_sequential_order, area_id, target_role, assignment_type } = body;
 
         if (!restaurant_id || !name) {
             return NextResponse.json({ error: 'restaurant_id e name são obrigatórios.' }, { status: 400 });
@@ -143,11 +145,23 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
                 ? recurrenceProcess.validated
                 : (recurrence_config || null);
 
+        // Sprint 61: quando shift_id vem no payload, ele é a fonte da verdade —
+        // grava shift_id e deriva o enum legado `shift`. Quando ausente (update
+        // parcial / chamador legado), preserva ambas as colunas como estão.
+        const shiftFields: { shift?: ShiftType; shift_id?: string | null } = {};
+        if ('shift_id' in body) {
+            const sid = shift_id || null;
+            shiftFields.shift_id = sid;
+            shiftFields.shift = await deriveShiftEnum(adminSupabase, restaurant_id, sid);
+        } else if (shift !== undefined) {
+            shiftFields.shift = shift;
+        }
+
         // 1. Atualizar Checklist
         const { error: updateError } = await adminSupabase
             .from('checklists')
             .update({
-                name, description, shift, status, category,
+                name, description, ...shiftFields, status, category,
                 role_id, is_required: is_required !== undefined ? is_required : true, checklist_type: checklist_type || 'regular',
                 assigned_to_user_id: assigned_to_user_id || null,
                 recurrence: finalRecurrence,

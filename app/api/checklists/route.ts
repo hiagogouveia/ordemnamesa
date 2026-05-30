@@ -7,6 +7,7 @@ import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
 import { getAccountBilling, canManageChecklists } from '@/lib/billing/subscription-access';
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
 import { processRecurrencePayload } from '@/lib/api/recurrence-payload';
+import { deriveShiftEnum } from '@/lib/api/derive-shift-enum';
 import { trackChecklistEvent } from '@/lib/analytics/track-event';
 
 const getAdminSupabase = () => {
@@ -223,9 +224,9 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json();
-        const { restaurant_id, name, description, shift, status, tasks, category, role_id, is_required, checklist_type, assigned_to_user_id, recurrence, start_time, end_time, recurrence_config, enforce_sequential_order, area_id, target_role, assignment_type } = body;
+        const { restaurant_id, name, description, shift, shift_id, status, tasks, category, role_id, is_required, checklist_type, assigned_to_user_id, recurrence, start_time, end_time, recurrence_config, enforce_sequential_order, area_id, target_role, assignment_type } = body;
 
-        if (!restaurant_id || !name || !shift) {
+        if (!restaurant_id || !name) {
             return NextResponse.json({ error: 'Campos obrigatórios faltando' }, { status: 400 });
         }
 
@@ -309,6 +310,14 @@ export async function POST(request: Request) {
                 ? recurrenceProcess.validated
                 : (recurrence_config || null);
 
+        // Sprint 61: shift_id é a fonte da verdade. Quando enviado, deriva o enum
+        // legado `shift` a partir do turno (authoritative, evita divergência).
+        // Quando ausente, mantém o enum recebido (compat com chamadores legados).
+        const finalShiftId = ('shift_id' in body) ? (shift_id || null) : null;
+        const finalShift = ('shift_id' in body)
+            ? await deriveShiftEnum(adminSupabase, restaurant_id, finalShiftId)
+            : (shift || 'any');
+
         // 1. Criar o Checklist
         const { data: newChecklist, error: checklistError } = await adminSupabase
             .from('checklists')
@@ -316,7 +325,8 @@ export async function POST(request: Request) {
                 restaurant_id,
                 name,
                 description,
-                shift,
+                shift: finalShift,
+                shift_id: finalShiftId,
                 category,
                 status,
                 role_id,
@@ -347,7 +357,7 @@ export async function POST(request: Request) {
             userId: user.id,
             metadata: {
                 checklist_id: newChecklist.id,
-                shift,
+                shift: finalShift,
                 checklist_type: checklist_type || 'regular',
                 tasks_count: Array.isArray(tasks) ? tasks.length : 0,
             },
