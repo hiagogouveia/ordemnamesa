@@ -2,6 +2,7 @@
 
 import { createContext, useState, useEffect, useMemo } from 'react'
 import { useAuthUser } from '@/lib/hooks/use-auth-user'
+import { useUserProfile } from '@/lib/hooks/use-user-profile'
 import { useRestaurantStore } from '@/lib/store/restaurant-store'
 import { useAccountSessionStore } from '@/lib/store/account-session-store'
 import type { SessionContextValue, UserRole } from './session-types'
@@ -58,6 +59,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // Fonte 1: Supabase Auth (via React Query)
   const { data: authUser, isLoading: authLoading } = useAuthUser()
 
+  // Nome oficial: public.users (fonte de verdade). Cacheado e só dispara quando
+  // já temos o id autenticado — sem query duplicada.
+  const { data: profile } = useUserProfile(authUser?.id)
+
   // Fonte 2 (sinal de reatividade): quando Zustand muda, re-lemos cookies
   const storeRestaurantId = useRestaurantStore((s) => s.restaurantId)
   const storeMode = useAccountSessionStore((s) => s.mode)
@@ -85,7 +90,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       status: 'authenticated',
       user: authUser,
       userId: authUser.id,
-      userName: (authUser.user_metadata?.name as string) || 'Membro',
+      userName:
+        profile?.name ||
+        (authUser.user_metadata?.name as string | undefined) ||
+        'Membro',
       restaurantId: cookies.restaurantId,
       restaurant:
         cookies.restaurantId && cookies.restaurantName
@@ -102,7 +110,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           : null,
       isGlobal,
     }
-  }, [authLoading, authUser, cookies])
+  }, [authLoading, authUser, cookies, profile])
 
   return (
     <SessionContext.Provider value={value}>
