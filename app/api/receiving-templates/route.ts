@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { ReceivingTemplate } from '@/lib/types';
 import { deriveShiftEnum } from '@/lib/api/derive-shift-enum';
+import { validateShiftAssignment } from '@/lib/api/validate-shift-assignment';
 
 const getAdminSupabase = () =>
     createClient(
@@ -159,6 +160,13 @@ export async function POST(request: Request) {
         const finalShiftId = hasShiftId && typeof shift_id === 'string' && shift_id ? shift_id : null;
         const derivedEnum = hasShiftId ? await deriveShiftEnum(adminSupabase, restaurant_id, finalShiftId) : null;
         const finalShift = hasShiftId ? (derivedEnum === 'any' ? null : derivedEnum) : cleanShift;
+
+        // Sprint 66: atribuição direta exige que o colaborador pertença ao turno.
+        const cleanAssigned = typeof assigned_to_user_id === 'string' && assigned_to_user_id ? assigned_to_user_id : null;
+        const tplShiftAssignErr = await validateShiftAssignment(adminSupabase, restaurant_id, cleanAssigned, finalShiftId);
+        if (tplShiftAssignErr) {
+            return NextResponse.json({ error: tplShiftAssignErr, code: 'SHIFT_ASSIGNMENT_INVALID' }, { status: 422 });
+        }
 
         // Insert template
         const { data: template, error: insertErr } = await adminSupabase

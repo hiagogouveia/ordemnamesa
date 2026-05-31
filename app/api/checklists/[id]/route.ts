@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { ShiftType } from '@/lib/types';
 import { processRecurrencePayload } from '@/lib/api/recurrence-payload';
 import { deriveShiftEnum } from '@/lib/api/derive-shift-enum';
+import { validateShiftAssignment } from '@/lib/api/validate-shift-assignment';
 import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
 import { getAccountBilling, canManageChecklists, canDeleteChecklists } from '@/lib/billing/subscription-access';
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
@@ -64,7 +65,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         // 1. Buscar estado atual para proteger campos críticos contra remoção acidental
         const { data: currentChecklist } = await adminSupabase
             .from('checklists')
-            .select('area_id, status')
+            .select('area_id, status, shift_id')
             .eq('id', id)
             .eq('restaurant_id', restaurant_id)
             .single();
@@ -132,6 +133,14 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
                     { status: 422 }
                 );
             }
+        }
+
+        // Sprint 66: atribuição direta exige que o colaborador pertença ao turno.
+        // shift_id efetivo = enviado no body, senão o atual do registro.
+        const effectiveShiftId = ('shift_id' in body) ? (shift_id || null) : (currentChecklist?.shift_id ?? null);
+        const putShiftAssignErr = await validateShiftAssignment(adminSupabase, restaurant_id, effectiveUserId, effectiveShiftId);
+        if (putShiftAssignErr) {
+            return NextResponse.json({ error: putShiftAssignErr, code: 'SHIFT_ASSIGNMENT_INVALID' }, { status: 422 });
         }
 
         // PR 2: Em v2, a fonte de verdade é o JSONB validado — sincroniza coluna text

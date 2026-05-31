@@ -23,6 +23,7 @@ import {
 import { useAllAreas } from "@/lib/hooks/use-areas";
 import { useShifts } from "@/lib/hooks/use-shifts";
 import { useEquipe } from "@/lib/hooks/use-equipe";
+import { useUserShifts } from "@/lib/hooks/use-user-roles-shifts";
 import { RecurrencePicker } from "@/components/checklists/recurrence-picker-modal";
 import { DailyConfig } from "@/components/checklists/recurrence/daily-config";
 import { WeeklyConfig } from "@/components/checklists/recurrence/weekly-config";
@@ -211,6 +212,36 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
         return equipe.filter((m) => m.areas?.some((a) => a.id === areaId));
     }, [equipe, areaId]);
 
+    // Sprint 66 — turnos de cada colaborador, para segmentar a seleção de responsável.
+    const { data: allUserShifts = [] } = useUserShifts(restaurantId);
+    const shiftNameById = useMemo(() => {
+        const m = new Map<string, string>();
+        shiftsData.forEach((s) => m.set(s.id, s.name));
+        return m;
+    }, [shiftsData]);
+    const userShiftIdsByUser = useMemo(() => {
+        const m = new Map<string, string[]>();
+        allUserShifts.forEach((us) => {
+            if (!m.has(us.user_id)) m.set(us.user_id, []);
+            m.get(us.user_id)!.push(us.shift_id);
+        });
+        return m;
+    }, [allUserShifts]);
+    const memberShiftNames = useCallback(
+        (userId: string): string[] => (userShiftIdsByUser.get(userId) ?? []).map((id) => shiftNameById.get(id) ?? "—"),
+        [userShiftIdsByUser, shiftNameById],
+    );
+    const isMemberShiftCompatible = useCallback(
+        (userId: string): boolean => {
+            if (!shiftId) return true;
+            return (userShiftIdsByUser.get(userId) ?? []).includes(shiftId);
+        },
+        [shiftId, userShiftIdsByUser],
+    );
+    const compatibleMembers = useMemo(() => areaMembers.filter((m) => isMemberShiftCompatible(m.user_id)), [areaMembers, isMemberShiftCompatible]);
+    const incompatibleMembers = useMemo(() => areaMembers.filter((m) => !isMemberShiftCompatible(m.user_id)), [areaMembers, isMemberShiftCompatible]);
+    const selectedShiftName = shiftId ? (shiftNameById.get(shiftId) ?? "selecionado") : null;
+
     // Sprint 63: turno selecionado + handler. Escolher turno deriva o enum e
     // sugere recorrência 'shift_days' (herda os dias do turno cadastrado).
     const selectedShift = shiftId ? shiftsData.find((s) => s.id === shiftId) ?? null : null;
@@ -232,8 +263,13 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                 setRecurrenceConfig({ version: 2, type: "daily" });
                 return "daily";
             });
+            // Reset responsável se ficar incompatível com o novo turno
+            setAssignedToUserId((prevAssigned) => {
+                if (prevAssigned && newId && !(userShiftIdsByUser.get(prevAssigned) ?? []).includes(newId)) return "";
+                return prevAssigned;
+            });
         },
-        [shiftsData],
+        [shiftsData, userShiftIdsByUser],
     );
 
     // Recurrence handlers — mesmo padrão de checklist-form
@@ -505,19 +541,55 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                                         </button>
                                     </div>
                                     {isIndividualMode && (
-                                        <select
-                                            value={assignedToUserId}
-                                            onChange={(e) => setAssignedToUserId(e.target.value)}
-                                            disabled={!areaId}
-                                            className="mt-2 w-full bg-[#101d22] border border-[#233f48] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#13b6ec] disabled:opacity-50"
-                                        >
-                                            <option value="">— Selecione o colaborador —</option>
-                                            {areaMembers.map((m) => (
-                                                <option key={m.user_id} value={m.user_id}>
-                                                    {m.name}
-                                                </option>
-                                            ))}
-                                        </select>
+                                        <>
+                                            <select
+                                                value={assignedToUserId}
+                                                onChange={(e) => setAssignedToUserId(e.target.value)}
+                                                disabled={!areaId}
+                                                className="mt-2 w-full bg-[#101d22] border border-[#233f48] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#13b6ec] disabled:opacity-50"
+                                            >
+                                                <option value="">— Selecione o colaborador —</option>
+                                                {!shiftId && areaMembers.map((m) => {
+                                                    const tn = memberShiftNames(m.user_id);
+                                                    return (
+                                                        <option key={m.user_id} value={m.user_id}>
+                                                            {m.name}{tn.length > 0 ? ` — Turnos: ${tn.join(", ")}` : ""}
+                                                        </option>
+                                                    );
+                                                })}
+                                                {shiftId && compatibleMembers.length > 0 && (
+                                                    <optgroup label="Compatíveis">
+                                                        {compatibleMembers.map((m) => (
+                                                            <option key={m.user_id} value={m.user_id}>
+                                                                {m.name} — Turnos: {memberShiftNames(m.user_id).join(", ")}
+                                                            </option>
+                                                        ))}
+                                                    </optgroup>
+                                                )}
+                                                {shiftId && incompatibleMembers.length > 0 && (
+                                                    <optgroup label="Incompatíveis — não pertencem ao turno">
+                                                        {incompatibleMembers.map((m) => {
+                                                            const tn = memberShiftNames(m.user_id);
+                                                            return (
+                                                                <option key={m.user_id} value={m.user_id} disabled>
+                                                                    🔒 {m.name} — {tn.length > 0 ? `Turnos: ${tn.join(", ")}` : "Sem turno vinculado"}
+                                                                </option>
+                                                            );
+                                                        })}
+                                                    </optgroup>
+                                                )}
+                                            </select>
+                                            {shiftId && incompatibleMembers.length > 0 && (
+                                                <p className="text-xs text-amber-400 mt-1.5">
+                                                    {incompatibleMembers.length} colaborador{incompatibleMembers.length > 1 ? "es" : ""} da área não pertence{incompatibleMembers.length > 1 ? "m" : ""} ao turno {selectedShiftName} e não pode{incompatibleMembers.length > 1 ? "m" : ""} ser atribuído{incompatibleMembers.length > 1 ? "s" : ""}.
+                                                </p>
+                                            )}
+                                            {areaId && shiftId && areaMembers.length > 0 && compatibleMembers.length === 0 && (
+                                                <p className="text-xs text-amber-400 mt-1.5">
+                                                    Nenhum colaborador da área pertence ao turno {selectedShiftName}.
+                                                </p>
+                                            )}
+                                        </>
                                     )}
                                 </div>
 

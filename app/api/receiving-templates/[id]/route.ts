@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { ReceivingTemplate } from '@/lib/types';
 import { deriveShiftEnum } from '@/lib/api/derive-shift-enum';
+import { validateShiftAssignment } from '@/lib/api/validate-shift-assignment';
 
 const getAdminSupabase = () =>
     createClient(
@@ -179,6 +180,23 @@ export async function PATCH(
         const hasTasks = b.tasks !== undefined;
         if (Object.keys(upd).length === 0 && !hasTasks) {
             return NextResponse.json({ error: 'Nada para atualizar.' }, { status: 400 });
+        }
+
+        // Sprint 66: atribuição direta exige que o colaborador pertença ao turno.
+        // Usa valores efetivos (do body quando enviados; senão os atuais do registro).
+        if (('assigned_to_user_id' in b) || ('shift_id' in b)) {
+            const { data: currentTpl } = await adminSupabase
+                .from('receiving_templates')
+                .select('assigned_to_user_id, shift_id')
+                .eq('id', id)
+                .eq('restaurant_id', restaurant_id)
+                .maybeSingle<{ assigned_to_user_id: string | null; shift_id: string | null }>();
+            const effAssigned = ('assigned_to_user_id' in b) ? (upd.assigned_to_user_id as string | null) : (currentTpl?.assigned_to_user_id ?? null);
+            const effShiftId = ('shift_id' in b) ? (upd.shift_id as string | null) : (currentTpl?.shift_id ?? null);
+            const tplPutShiftErr = await validateShiftAssignment(adminSupabase, restaurant_id, effAssigned, effShiftId);
+            if (tplPutShiftErr) {
+                return NextResponse.json({ error: tplPutShiftErr, code: 'SHIFT_ASSIGNMENT_INVALID' }, { status: 422 });
+            }
         }
 
         if (Object.keys(upd).length > 0) {

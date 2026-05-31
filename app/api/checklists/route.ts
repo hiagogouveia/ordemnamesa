@@ -8,6 +8,7 @@ import { getAccountBilling, canManageChecklists } from '@/lib/billing/subscripti
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
 import { processRecurrencePayload } from '@/lib/api/recurrence-payload';
 import { deriveShiftEnum } from '@/lib/api/derive-shift-enum';
+import { validateShiftAssignment } from '@/lib/api/validate-shift-assignment';
 import { trackChecklistEvent } from '@/lib/analytics/track-event';
 
 const getAdminSupabase = () => {
@@ -317,6 +318,12 @@ export async function POST(request: Request) {
         const finalShift = ('shift_id' in body)
             ? await deriveShiftEnum(adminSupabase, restaurant_id, finalShiftId)
             : (shift || 'any');
+
+        // Sprint 66: atribuição direta exige que o colaborador pertença ao turno.
+        const shiftAssignErr = await validateShiftAssignment(adminSupabase, restaurant_id, assigned_to_user_id || null, finalShiftId);
+        if (shiftAssignErr) {
+            return NextResponse.json({ error: shiftAssignErr, code: 'SHIFT_ASSIGNMENT_INVALID' }, { status: 422 });
+        }
 
         // 1. Criar o Checklist
         const { data: newChecklist, error: checklistError } = await adminSupabase

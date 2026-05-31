@@ -18,6 +18,7 @@ import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useEquipe } from "@/lib/hooks/use-equipe";
 import { useAllAreas } from "@/lib/hooks/use-areas";
 import { useShifts } from "@/lib/hooks/use-shifts";
+import { useUserShifts } from "@/lib/hooks/use-user-roles-shifts";
 import isEqual from "lodash/isEqual";
 import { getDraft, saveDraft, removeDraft, type DraftData } from "@/lib/utils/draft-storage";
 import { describeRecurrence } from "@/lib/utils/recurrence/describe";
@@ -244,6 +245,39 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     const filteredEquipe = areaId
         ? activeEquipe.filter(m => m.areas?.some(a => a.id === areaId))
         : activeEquipe;
+
+    // Sprint 66 — turnos de cada colaborador, para segmentar a seleção de
+    // responsável pelo turno da rotina.
+    const { data: allUserShifts = [] } = useUserShifts(restaurantId || undefined);
+    const shiftNameById = useMemo(() => {
+        const m = new Map<string, string>();
+        shiftsData.forEach(s => m.set(s.id, s.name));
+        return m;
+    }, [shiftsData]);
+    const userShiftIdsByUser = useMemo(() => {
+        const m = new Map<string, string[]>();
+        allUserShifts.forEach((us) => {
+            if (!m.has(us.user_id)) m.set(us.user_id, []);
+            m.get(us.user_id)!.push(us.shift_id);
+        });
+        return m;
+    }, [allUserShifts]);
+    const memberShiftNames = useCallback((userId: string): string[] =>
+        (userShiftIdsByUser.get(userId) ?? []).map(id => shiftNameById.get(id) ?? '—'),
+        [userShiftIdsByUser, shiftNameById]);
+    // Compatível: rotina "Todos os turnos" (shiftId vazio) → todos; senão precisa
+    // ter o turno da rotina vinculado.
+    const isMemberShiftCompatible = useCallback((userId: string): boolean => {
+        if (!shiftId) return true;
+        return (userShiftIdsByUser.get(userId) ?? []).includes(shiftId);
+    }, [shiftId, userShiftIdsByUser]);
+    const compatibleMembers = useMemo(
+        () => filteredEquipe.filter(m => isMemberShiftCompatible(m.user_id)),
+        [filteredEquipe, isMemberShiftCompatible]);
+    const incompatibleMembers = useMemo(
+        () => filteredEquipe.filter(m => !isMemberShiftCompatible(m.user_id)),
+        [filteredEquipe, isMemberShiftCompatible]);
+    const selectedShiftName = shiftId ? (shiftNameById.get(shiftId) ?? 'selecionado') : null;
 
     const createMutation = useCreateChecklist();
     const updateMutation = useUpdateChecklist();
@@ -963,6 +997,10 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                         setShiftId(newId);
                                         const sel = shiftsData.find(s => s.id === newId);
                                         setShift(deriveShiftEnumFromType(sel?.shift_type));
+                                        // Reset responsável se ficar incompatível com o novo turno
+                                        if (assignedToUserId && newId && !(userShiftIdsByUser.get(assignedToUserId) ?? []).includes(newId)) {
+                                            setAssignedToUserId("");
+                                        }
                                     }}
                                     className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
                                 >
@@ -1099,10 +1137,45 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                         className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
                                     >
                                         <option value="">Selecionar colaborador...</option>
-                                        {filteredEquipe.map(m => (
-                                            <option key={m.user_id} value={m.user_id}>{m.name}</option>
-                                        ))}
+                                        {/* Sem turno específico: lista simples (todos compatíveis) */}
+                                        {!shiftId && filteredEquipe.map(m => {
+                                            const tn = memberShiftNames(m.user_id);
+                                            return (
+                                                <option key={m.user_id} value={m.user_id}>
+                                                    {m.name}{tn.length > 0 ? ` — Turnos: ${tn.join(', ')}` : ''}
+                                                </option>
+                                            );
+                                        })}
+                                        {/* Turno específico: separa compatíveis (selecionáveis) de incompatíveis (bloqueados) */}
+                                        {shiftId && compatibleMembers.length > 0 && (
+                                            <optgroup label="Compatíveis">
+                                                {compatibleMembers.map(m => (
+                                                    <option key={m.user_id} value={m.user_id}>
+                                                        {m.name} — Turnos: {memberShiftNames(m.user_id).join(', ')}
+                                                    </option>
+                                                ))}
+                                            </optgroup>
+                                        )}
+                                        {shiftId && incompatibleMembers.length > 0 && (
+                                            <optgroup label="Incompatíveis — não pertencem ao turno">
+                                                {incompatibleMembers.map(m => {
+                                                    const tn = memberShiftNames(m.user_id);
+                                                    return (
+                                                        <option key={m.user_id} value={m.user_id} disabled>
+                                                            🔒 {m.name} — {tn.length > 0 ? `Turnos: ${tn.join(', ')}` : 'Sem turno vinculado'}
+                                                        </option>
+                                                    );
+                                                })}
+                                            </optgroup>
+                                        )}
                                     </select>
+                                    {/* Aviso: turno específico + existem incompatíveis na área */}
+                                    {shiftId && incompatibleMembers.length > 0 && (
+                                        <p className="text-xs text-amber-400 mt-1.5 flex items-start gap-1">
+                                            <span className="material-symbols-outlined text-[14px] shrink-0">lock</span>
+                                            {incompatibleMembers.length} colaborador{incompatibleMembers.length > 1 ? 'es' : ''} da área não pertence{incompatibleMembers.length > 1 ? 'm' : ''} ao turno {selectedShiftName} e não pode{incompatibleMembers.length > 1 ? 'm' : ''} ser atribuído{incompatibleMembers.length > 1 ? 's' : ''}.
+                                        </p>
+                                    )}
                                     {!assignedToUserId && (
                                         <p className="text-xs text-amber-400 mt-1.5">Selecione um colaborador para continuar.</p>
                                     )}
@@ -1112,6 +1185,11 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                     {areaId && filteredEquipe.length === 0 && (
                                         <p className="text-xs text-amber-400 mt-1.5">
                                             Nenhum colaborador vinculado a esta área. Adicione colaboradores na tela de Equipe.
+                                        </p>
+                                    )}
+                                    {areaId && shiftId && filteredEquipe.length > 0 && compatibleMembers.length === 0 && (
+                                        <p className="text-xs text-amber-400 mt-1.5">
+                                            Nenhum colaborador da área pertence ao turno {selectedShiftName}. Vincule colaboradores a esse turno na tela de Equipe.
                                         </p>
                                     )}
                                 </div>
