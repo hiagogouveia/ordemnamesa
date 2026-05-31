@@ -79,8 +79,9 @@ export async function GET(request: Request) {
         // Sprint 61 — segmentação por turno (igual ao GET): sem turno → vê tudo;
         // shift_id NULL → sempre visível; senão só os turnos do colaborador.
         // Filtro no conjunto base; órfãos in_progress abaixo bypassam.
-        const isManagerRole = membership.role === 'owner' || membership.role === 'manager';
-        const applyShiftFilter = !isManagerRole && userShiftIds.length > 0;
+        // "Meu Turno" = visão operacional pessoal: segmenta por turno para TODOS
+        // os perfis. Sem turno vinculado → vê tudo. (Mesmo predicado do GET.)
+        const applyShiftFilter = userShiftIds.length > 0;
         let checklists = !applyShiftFilter
             ? (checklistsData || [])
             : (checklistsData || []).filter((c: { shift_id?: string | null }) =>

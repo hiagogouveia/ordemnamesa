@@ -149,8 +149,10 @@ export async function GET(request: Request) {
         //   - caso contrário, só vê rotinas dos turnos a que pertence.
         // Aplicada só ao conjunto base; merges de órfãos (in_progress) e quick
         // receivings arquivados abaixo BYPASSAM o filtro (nunca perder execução).
-        const isManagerRole = membership.role === 'owner' || membership.role === 'manager';
-        const applyShiftFilter = !isManagerRole && userShiftIds.length > 0;
+        // "Meu Turno" é visão operacional pessoal: segmenta por turno para TODOS
+        // os perfis (a exceção "owner/manager vê tudo" vale só para telas
+        // administrativas). Sem turno vinculado → vê tudo (opt-in, zero regressão).
+        const applyShiftFilter = userShiftIds.length > 0;
         const baseChecklists = !applyShiftFilter
             ? (checklistsData || [])
             : (checklistsData || []).filter((c: { shift_id?: string | null }) =>

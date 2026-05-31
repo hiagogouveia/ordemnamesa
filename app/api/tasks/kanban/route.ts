@@ -69,20 +69,13 @@ export async function GET(request: Request) {
         const areaIds = userAreas?.map(ua => ua.area_id) || [];
         const roleIds = userRoles?.map(ur => ur.role_id) || [];
 
-        // Sprint 61 — Segmentação por turno (visibilidade). Aplica apenas em modo
-        // single e para perfil staff; managers/owners e modo global (gestão) veem
-        // tudo (req #7). Colaborador sem turno vinculado também vê tudo (opt-in).
+        // Sprint 61 — Segmentação por turno em "Meu Turno" (visão operacional
+        // pessoal): aplica para TODOS os perfis (staff/manager/owner). A exceção
+        // "owner/manager vê tudo" vale só para telas administrativas, não aqui.
+        // Sem turno vinculado → vê tudo (opt-in). Modo global (gestão multi-unidade)
+        // não tem user_shifts por unidade → sem filtro.
         let userShiftIds: string[] = [];
-        let isManagerRole = isGlobal;
         if (!isGlobal) {
-            const { data: membership } = await adminSupabase
-                .from('restaurant_users')
-                .select('role')
-                .eq('restaurant_id', restaurant_id!)
-                .eq('user_id', user.id)
-                .eq('active', true)
-                .maybeSingle();
-            isManagerRole = membership?.role === 'owner' || membership?.role === 'manager';
             const { data: userShiftRows } = await adminSupabase
                 .from('user_shifts')
                 .select('shift_id')
@@ -90,7 +83,7 @@ export async function GET(request: Request) {
                 .eq('user_id', user.id);
             userShiftIds = (userShiftRows ?? []).map(r => r.shift_id);
         }
-        const applyShiftFilter = !isManagerRole && userShiftIds.length > 0;
+        const applyShiftFilter = userShiftIds.length > 0;
 
         // 2. Buscar checklists ativos visíveis para este usuário:
         //    - Da área do usuário (sem atribuição individual)
