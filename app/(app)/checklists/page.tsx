@@ -26,11 +26,12 @@ import { ChecklistBoardView } from "@/components/checklists/management/Checklist
 import { ChecklistEditorPanel } from "@/components/checklists/management/ChecklistEditorPanel";
 import { ChecklistPreviewView } from "@/components/checklists/management/ChecklistPreviewView";
 import { ChecklistForm } from "@/components/checklists/checklist-form";
+import { TemplatesBrowserModal } from "@/components/checklists/templates/TemplatesBrowserModal";
 import { Modal } from "@/components/ui/modal";
 import { filterChecklistsByCollaborator } from "@/lib/utils/filter-checklists-by-collaborator";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
 import { getOperationalStatus } from "@/lib/utils/get-operational-status";
-import type { ChecklistOrder, ExecutionStatus, PriorityMode } from "@/lib/types";
+import type { ChecklistOrder, ChecklistTemplate, ExecutionStatus, PriorityMode } from "@/lib/types";
 
 type SortField = "name" | "shift" | "area" | "responsible" | "status";
 type SortOrder = "asc" | "desc";
@@ -61,6 +62,9 @@ function ChecklistsContent() {
     const [editorState, setEditorState] = useState<EditorState>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [copyModalOpen, setCopyModalOpen] = useState(false);
+    // Sprint 70 — Modelos de Rotinas Prontas
+    const [templatesBrowserOpen, setTemplatesBrowserOpen] = useState(false);
+    const [pendingTemplate, setPendingTemplate] = useState<ChecklistTemplate | null>(null);
 
     useEffect(() => { setMounted(true); }, []);
 
@@ -493,7 +497,34 @@ function ChecklistsContent() {
 
     const handleEditorSaved = () => {
         setEditorState(null);
+        setPendingTemplate(null);
     };
+
+    const closeEditor = () => {
+        setEditorState(null);
+        setPendingTemplate(null);
+    };
+
+    // Sprint 70 — abrir nova rotina vazia (limpa qualquer modelo pendente).
+    const handleNewChecklist = () => {
+        setPendingTemplate(null);
+        setEditorState({ checklist: null, mode: "new" });
+    };
+
+    // Sprint 70 — "Usar Este Modelo": fecha o browser e abre o form pré-preenchido.
+    const handleUseTemplate = (template: ChecklistTemplate) => {
+        setTemplatesBrowserOpen(false);
+        setPendingTemplate(template);
+        setEditorState({ checklist: null, mode: "new" });
+    };
+
+    // Sprint 70 — casa a área sugerida do modelo com uma área existente (por nome).
+    const templateInitialAreaId = useMemo(() => {
+        if (!pendingTemplate) return selectedAreaId;
+        const label = pendingTemplate.suggested_area_label?.trim().toLowerCase();
+        const match = label ? areas.find((a) => a.name.trim().toLowerCase() === label) : undefined;
+        return match?.id ?? selectedAreaId;
+    }, [pendingTemplate, areas, selectedAreaId]);
 
     const showSidePanel = editorState?.mode === "view";
     const showEditModal = editorState?.mode === "edit" || editorState?.mode === "new";
@@ -507,7 +538,8 @@ function ChecklistsContent() {
                 onSearchChange={setSearchQuery}
                 view={view}
                 onViewChange={setView}
-                onNewChecklist={() => setEditorState({ checklist: null, mode: "new" })}
+                onNewChecklist={handleNewChecklist}
+                onExploreTemplates={() => setTemplatesBrowserOpen(true)}
                 canCreate={billing?.access.can_create_resources ?? true}
             />
 
@@ -637,14 +669,24 @@ function ChecklistsContent() {
 
             {/* Modal de edição/criação */}
             {mounted && (
-                <Modal isOpen={showEditModal} onClose={() => setEditorState(null)} maxWidthClass="max-w-[1080px]">
+                <Modal isOpen={showEditModal} onClose={closeEditor} maxWidthClass="max-w-[1080px]">
                     <ChecklistForm
                         checklist={editorState?.checklist ?? null}
                         onSaved={handleEditorSaved}
-                        onCancel={() => setEditorState(null)}
-                        initialAreaId={editorState?.mode === "new" ? selectedAreaId : undefined}
+                        onCancel={closeEditor}
+                        initialAreaId={editorState?.mode === "new" ? templateInitialAreaId : undefined}
+                        initialTemplate={editorState?.mode === "new" ? pendingTemplate : null}
                     />
                 </Modal>
+            )}
+
+            {/* Sprint 70 — Explorar Modelos Prontos */}
+            {mounted && (
+                <TemplatesBrowserModal
+                    isOpen={templatesBrowserOpen}
+                    onClose={() => setTemplatesBrowserOpen(false)}
+                    onUseTemplate={handleUseTemplate}
+                />
             )}
 
             {/* Bulk actions (visão global) */}

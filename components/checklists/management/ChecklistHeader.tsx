@@ -6,6 +6,7 @@ interface ChecklistHeaderProps {
     view: "list" | "board" | "preview";
     onViewChange: (v: "list" | "board" | "preview") => void;
     onNewChecklist: () => void;
+    onExploreTemplates?: () => void;
     canCreate?: boolean;
 }
 
@@ -15,6 +16,7 @@ export function ChecklistHeader({
     view,
     onViewChange,
     onNewChecklist,
+    onExploreTemplates,
     canCreate = true,
 }: ChecklistHeaderProps) {
     return (
@@ -82,6 +84,19 @@ export function ChecklistHeader({
                         <span className="hidden sm:inline">Preview</span>
                     </button>
                 </div>
+
+                {/* Explorar Modelos Prontos */}
+                {onExploreTemplates && (
+                    <button
+                        onClick={onExploreTemplates}
+                        disabled={!canCreate}
+                        title={!canCreate ? "Plano expirado ou limite atingido" : "Explorar modelos prontos"}
+                        className="flex items-center gap-1.5 bg-[#16262c] border border-[#233f48] text-[#92bbc9] hover:text-white hover:border-[#325a67] font-bold text-xs px-3 py-2 rounded-lg transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                        <span className="material-symbols-outlined text-[16px]">library_add</span>
+                        <span className="hidden sm:inline">Modelos</span>
+                    </button>
+                )}
 
                 {/* Nova lista */}
                 <button

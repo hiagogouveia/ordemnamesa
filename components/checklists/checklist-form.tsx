@@ -14,6 +14,7 @@ import { TaskItem } from "./task-item";
 import { ExtendedChecklist } from "./checklist-card";
 import { useCreateChecklist, useUpdateChecklist, useDeleteChecklist, useReorderTasks } from "@/lib/hooks/use-checklists";
 import { ChecklistTask } from "@/lib/types";
+import type { ChecklistTemplate } from "@/lib/types";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useEquipe } from "@/lib/hooks/use-equipe";
 import { useAllAreas } from "@/lib/hooks/use-areas";
@@ -33,6 +34,27 @@ interface ChecklistFormProps {
     onCancel: () => void;
     disableReorder?: boolean;
     initialAreaId?: string;
+    // Sprint 70 — quando presente (e checklist=null), pré-preenche o form a partir
+    // de um modelo do catálogo, em modo de CRIAÇÃO. Caminho aditivo e isolado:
+    // sem este prop, o comportamento de criar/editar permanece inalterado.
+    initialTemplate?: ChecklistTemplate | null;
+}
+
+// Sprint 70 — mapeia itens de um modelo para o shape de tasks do form (com tempId).
+function mapTemplateItemsToTasks(template: ChecklistTemplate): (Partial<ChecklistTask> & { tempId: string })[] {
+    const items = [...(template.items ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    return items.map((item, idx) => ({
+        tempId: `tpl-${idx}-${item.item_slug}`,
+        title: item.title,
+        description: item.description ?? "",
+        requires_photo: item.requires_photo,
+        is_critical: item.is_critical,
+        requires_observation: item.requires_observation,
+        type: item.type ?? 'boolean',
+        max_photos: item.max_photos ?? null,
+        task_config: item.task_config ?? null,
+        order: item.order,
+    }));
 }
 
 // Sprint 61: o seletor de turno deixou de usar uma lista fixa
@@ -129,7 +151,7 @@ function hasMeaningfulDraft(parsed: DraftData): boolean {
     return name.length > 0 || description.length > 0 || tasks.length > 0;
 }
 
-export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = false, initialAreaId }: ChecklistFormProps) {
+export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = false, initialAreaId, initialTemplate }: ChecklistFormProps) {
     const restaurantId = useRestaurantStore((state) => state.restaurantId);
 
     const [name, setName] = useState("");
@@ -418,6 +440,28 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 area_id: checklist.area_id || null,
             };
             setSaveState("idle");
+        } else if (initialTemplate) {
+            // Sprint 70 — Modo "importar modelo": pré-preenche a partir do catálogo,
+            // como rotina NOVA. Não restaura draft (importação tem prioridade).
+            setName(initialTemplate.name);
+            setDescription(initialTemplate.description ?? "");
+            setShiftIds([]);
+            setChecklistType(initialTemplate.suggested_type ?? "regular");
+            setAssignedToUserId("");
+            setIsIndividualMode(false);
+            setIsRequired(true);
+            setRecurrence("daily");
+            setStartTime("");
+            setEndTime("");
+            setHasTimeWindow(false);
+            setRecurrenceConfig(undefined);
+            setEnforceSequentialOrder(false);
+            setAreaId(initialAreaId ?? "");
+            setTasks(mapTemplateItemsToTasks(initialTemplate));
+            setErrorMsg(null);
+            setShowDeleteModal(false);
+            setSaveState("idle");
+            setPendingDraftRestore(null);
         } else {
             // Modo "nova rotina": iniciar sempre limpo. Se houver draft local salvo,
             // não aplicar automaticamente — perguntar ao usuário (ver pendingDraftRestore).
@@ -447,7 +491,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 setPendingDraftRestore(null);
             }
         }
-    }, [checklist, initialAreaId, restaurantId]);
+    }, [checklist, initialAreaId, initialTemplate, restaurantId]);
 
     const applyPendingDraft = useCallback(() => {
         const parsed = pendingDraftRestore;
@@ -742,6 +786,10 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 ? (originalChecklistRef.current?.status || 'active')
                 : 'active') as "active" | "archived",
             target_role: checklist?.target_role || 'all',
+            // Sprint 70 — rastreabilidade da origem: só em criação a partir de modelo.
+            ...(initialTemplate && !checklist?.id
+                ? { origin_template_id: initialTemplate.id, origin_template_version: initialTemplate.version }
+                : {}),
             tasks: tasks.map(t => ({
                 id: t.id || undefined,
                 title: t.title,
