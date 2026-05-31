@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { fetchShiftIdsByChecklist, isVisibleByShiftIntersection } from '@/lib/api/shift-links';
 
 const getAdminSupabase = () =>
     createClient(
@@ -76,19 +77,18 @@ export async function GET(request: Request) {
             .eq('status', 'active')
             .or(filterParts.join(','));
 
-        // Sprint 61 — segmentação por turno (igual ao GET): sem turno → vê tudo;
-        // shift_id NULL → sempre visível; senão só os turnos do colaborador.
-        // Filtro no conjunto base; órfãos in_progress abaixo bypassam.
-        // "Meu Turno" = visão operacional pessoal: segmenta por turno para TODOS
-        // os perfis. Sem turno vinculado → vê tudo. (Mesmo predicado do GET.)
-        // Prioridade: atribuição direta > "Todos os turnos" > turno.
+        // Sprint 66 — segmentação por turno (interseção, igual ao GET): sem turno
+        // → vê tudo; atribuição direta → sempre; rotina sem turnos → visível;
+        // interseção rotina ∩ usuário ≠ ∅ → visível. Filtro no conjunto base.
         const applyShiftFilter = userShiftIds.length > 0;
+        const shiftMap = await fetchShiftIdsByChecklist(
+            adminSupabase,
+            (checklistsData || []).map((c: { id: string }) => c.id),
+        );
         let checklists = !applyShiftFilter
             ? (checklistsData || [])
-            : (checklistsData || []).filter((c: { shift_id?: string | null; assigned_to_user_id?: string | null }) =>
-                c.assigned_to_user_id === user.id
-                || c.shift_id == null
-                || userShiftIds.includes(c.shift_id));
+            : (checklistsData || []).filter((c: { id: string; assigned_to_user_id?: string | null }) =>
+                isVisibleByShiftIntersection(shiftMap.get(c.id) ?? [], userShiftIds, c.assigned_to_user_id, user.id));
 
         // Defesa em profundidade: reincorpora checklists com assumptions
         // in_progress mesmo quando active=false. Mantém coerência com

@@ -4,6 +4,7 @@ import type { MyActivity, MyActivityStatus, TargetRole } from '@/lib/types';
 import { getBrazilNow, getBrazilStartAndEndOfDay } from '@/lib/utils/brazil-date';
 import { filterChecklistsByRecurrence } from '@/lib/utils/should-checklist-appear-today';
 import { OPERATIONAL_PREDICATE, fetchArchivedQuickIdsForToday } from '@/lib/utils/operational-activity';
+import { fetchShiftIdsByChecklist, isVisibleByShiftIntersection } from '@/lib/api/shift-links';
 
 const getAdminSupabase = () =>
     createClient(
@@ -144,23 +145,21 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: checklistsError.message }, { status: 500 });
         }
 
-        // Sprint 61 — Segmentação por turno (visibilidade). Regra graciosa:
-        //   - colaborador SEM turno vinculado → vê tudo (opt-in, zero regressão);
-        //   - rotina shift_id = NULL ("Todos os turnos") → sempre visível;
-        //   - caso contrário, só vê rotinas dos turnos a que pertence.
-        // Aplicada só ao conjunto base; merges de órfãos (in_progress) e quick
-        // receivings arquivados abaixo BYPASSAM o filtro (nunca perder execução).
-        // "Meu Turno" é visão operacional pessoal: segmenta por turno para TODOS
-        // os perfis (a exceção "owner/manager vê tudo" vale só para telas
-        // administrativas). Sem turno vinculado → vê tudo (opt-in, zero regressão).
-        // Prioridade: atribuição direta ao usuário > "Todos os turnos" > turno.
+        // Sprint 66 — Segmentação por turno (visibilidade) no modelo N:N. Regra:
+        //   - sem turno vinculado → vê tudo (opt-in);
+        //   - atribuição direta ao usuário → sempre visível (prioridade);
+        //   - rotina sem turnos (conjunto vazio) → "Todos os turnos" → visível;
+        //   - interseção (turnos da rotina ∩ turnos do usuário) ≠ ∅ → visível.
+        // Aplicada só ao conjunto base; merges (órfãos/quick) abaixo BYPASSAM.
         const applyShiftFilter = userShiftIds.length > 0;
+        const baseShiftMap = await fetchShiftIdsByChecklist(
+            adminSupabase,
+            (checklistsData || []).map((c: { id: string }) => c.id),
+        );
         const baseChecklists = !applyShiftFilter
             ? (checklistsData || [])
-            : (checklistsData || []).filter((c: { shift_id?: string | null; assigned_to_user_id?: string | null }) =>
-                c.assigned_to_user_id === user.id
-                || c.shift_id == null
-                || userShiftIds.includes(c.shift_id));
+            : (checklistsData || []).filter((c: { id: string; assigned_to_user_id?: string | null }) =>
+                isVisibleByShiftIntersection(baseShiftMap.get(c.id) ?? [], userShiftIds, c.assigned_to_user_id, user.id));
 
         // Reincorpora quick receivings arquivados hoje (active=false após conclusão s53)
         // para que permaneçam visíveis em Meu Turno até a virada do dia.
@@ -231,6 +230,16 @@ export async function GET(request: Request) {
             .eq('restaurant_id', restaurant_id)
             .eq('date_key', brazil.dateKey);
         const assumedTodayIds = new Set((assumedTodayRows ?? []).map((r: { checklist_id: string }) => r.checklist_id));
+
+        // Anexa os turnos (N:N) a cada rotina para a recorrência usar a UNIÃO dos
+        // dias dos turnos. Cobre também itens reincorporados pelos merges acima.
+        const fullShiftMap = await fetchShiftIdsByChecklist(
+            adminSupabase,
+            checklists.map((c: { id: string }) => c.id),
+        );
+        for (const c of checklists as Array<{ id: string; shift_ids?: string[] }>) {
+            c.shift_ids = fullShiftMap.get(c.id) ?? [];
+        }
 
         const visibleChecklists = filterChecklistsByRecurrence(
             checklists,
@@ -318,6 +327,7 @@ export async function GET(request: Request) {
                 description: checklist.description ?? null,
                 shift: checklist.shift,
                 shift_id: checklist.shift_id ?? null,
+                shift_ids: checklist.shift_ids ?? [],
                 checklist_type: checklist.checklist_type ?? 'regular',
                 is_required: checklist.is_required ?? false,
                 start_time: checklist.start_time ?? null,

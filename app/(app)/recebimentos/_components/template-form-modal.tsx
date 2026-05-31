@@ -150,11 +150,9 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
     const [name, setName] = useState(effectiveTemplate?.name ?? "");
     const [description, setDescription] = useState(effectiveTemplate?.description ?? "");
     const [areaId, setAreaId] = useState(effectiveTemplate?.area_id ?? "");
-    // Sprint 63: shiftId ("" = "Todos os turnos") é a fonte da verdade; `shift`
-    // (enum) é sombra derivada para compat.
-    const [shiftId, setShiftId] = useState<string>(effectiveTemplate?.shift_id ?? "");
-    const [shift, setShift] = useState<ShiftValue>(
-        (effectiveTemplate?.shift as ShiftValue) ?? "any",
+    // Sprint 67: shiftIds (N:N) é a fonte da verdade. Vazio = "Todos os turnos".
+    const [shiftIds, setShiftIds] = useState<string[]>(
+        effectiveTemplate?.shift_ids ?? (effectiveTemplate?.shift_id ? [effectiveTemplate.shift_id] : []),
     );
     const [isIndividualMode, setIsIndividualMode] = useState(
         !!effectiveTemplate?.assigned_to_user_id,
@@ -185,8 +183,7 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
     // Quando detalhe completo chega, sincroniza estado.
     useEffect(() => {
         if (!fullTemplate) return;
-        setShift((fullTemplate.shift as ShiftValue) ?? "any");
-        setShiftId(fullTemplate.shift_id ?? "");
+        setShiftIds(fullTemplate.shift_ids ?? (fullTemplate.shift_id ? [fullTemplate.shift_id] : []));
         setRecurrence(fullTemplate.recurrence ?? "daily");
         setRecurrenceConfig(fullTemplate.recurrence_config ?? null);
         setAssignedToUserId(fullTemplate.assigned_to_user_id ?? "");
@@ -231,46 +228,61 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
         (userId: string): string[] => (userShiftIdsByUser.get(userId) ?? []).map((id) => shiftNameById.get(id) ?? "—"),
         [userShiftIdsByUser, shiftNameById],
     );
+    // Sprint 67: compatibilidade por INTERSEÇÃO; vazio = "Todos os turnos".
     const isMemberShiftCompatible = useCallback(
         (userId: string): boolean => {
-            if (!shiftId) return true;
-            return (userShiftIdsByUser.get(userId) ?? []).includes(shiftId);
+            if (shiftIds.length === 0) return true;
+            const us = userShiftIdsByUser.get(userId) ?? [];
+            return shiftIds.some((id) => us.includes(id));
         },
-        [shiftId, userShiftIdsByUser],
+        [shiftIds, userShiftIdsByUser],
     );
     const compatibleMembers = useMemo(() => areaMembers.filter((m) => isMemberShiftCompatible(m.user_id)), [areaMembers, isMemberShiftCompatible]);
     const incompatibleMembers = useMemo(() => areaMembers.filter((m) => !isMemberShiftCompatible(m.user_id)), [areaMembers, isMemberShiftCompatible]);
-    const selectedShiftName = shiftId ? (shiftNameById.get(shiftId) ?? "selecionado") : null;
 
-    // Sprint 63: turno selecionado + handler. Escolher turno deriva o enum e
-    // sugere recorrência 'shift_days' (herda os dias do turno cadastrado).
-    const selectedShift = shiftId ? shiftsData.find((s) => s.id === shiftId) ?? null : null;
-    const resolvedShiftDays = selectedShift
-        ? [...new Set(selectedShift.days_of_week)].sort((a, b) => a - b)
+    // Turnos selecionados (N:N): dias (união) e enum sombra derivado.
+    const selectedShifts = useMemo(() => shiftsData.filter((s) => shiftIds.includes(s.id)), [shiftsData, shiftIds]);
+    const resolvedShiftDays = selectedShifts.length > 0
+        ? [...new Set(selectedShifts.flatMap((s) => s.days_of_week))].sort((a, b) => a - b)
         : null;
-    const handleShiftChange = useCallback(
-        (newId: string) => {
-            setShiftId(newId);
-            const sel = shiftsData.find((s) => s.id === newId);
-            const st = sel?.shift_type;
-            setShift((st === "morning" || st === "afternoon" || st === "evening" ? st : "any") as ShiftValue);
-            setRecurrence((prev) => {
-                if (prev !== "daily" && prev !== "shift_days") return prev;
-                if (newId) {
-                    setRecurrenceConfig({ version: 2, type: "shift_days" });
-                    return "shift_days";
-                }
-                setRecurrenceConfig({ version: 2, type: "daily" });
-                return "daily";
-            });
-            // Reset responsável se ficar incompatível com o novo turno
-            setAssignedToUserId((prevAssigned) => {
-                if (prevAssigned && newId && !(userShiftIdsByUser.get(prevAssigned) ?? []).includes(newId)) return "";
-                return prevAssigned;
+    const selectedShiftLabel = shiftIds.length > 0 ? selectedShifts.map((s) => s.name).join(", ") : null;
+    const shiftEnum: ShiftValue = useMemo(() => {
+        if (shiftIds.length !== 1) return "any";
+        const st = shiftsData.find((s) => s.id === shiftIds[0])?.shift_type;
+        return (st === "morning" || st === "afternoon" || st === "evening" ? st : "any") as ShiftValue;
+    }, [shiftIds, shiftsData]);
+
+    // Toggle de turno (checkbox). Ao mudar, sugere recorrência e reseta o
+    // responsável se a interseção ficar vazia.
+    const toggleShift = useCallback(
+        (id: string) => {
+            setShiftIds((prev) => {
+                const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+                setRecurrence((prevRec) => {
+                    if (prevRec !== "daily" && prevRec !== "shift_days") return prevRec;
+                    setRecurrenceConfig({ version: 2, type: next.length > 0 ? "shift_days" : "daily" });
+                    return next.length > 0 ? "shift_days" : "daily";
+                });
+                setAssignedToUserId((prevAssigned) => {
+                    if (prevAssigned && next.length > 0) {
+                        const us = userShiftIdsByUser.get(prevAssigned) ?? [];
+                        if (!next.some((sid) => us.includes(sid))) return "";
+                    }
+                    return prevAssigned;
+                });
+                return next;
             });
         },
-        [shiftsData, userShiftIdsByUser],
+        [userShiftIdsByUser],
     );
+    const selectAllTurnos = useCallback(() => {
+        setShiftIds([]);
+        setRecurrence((prevRec) => {
+            if (prevRec !== "daily" && prevRec !== "shift_days") return prevRec;
+            setRecurrenceConfig({ version: 2, type: "daily" });
+            return "daily";
+        });
+    }, []);
 
     // Recurrence handlers — mesmo padrão de checklist-form
     const dropdownValue = recurrenceToDropdownValue(recurrence, recurrenceConfig);
@@ -368,7 +380,7 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
             return;
         }
 
-        const shiftPayload = shift === "any" ? null : shift;
+        const shiftPayload = shiftEnum === "any" ? null : shiftEnum;
         const assignedPayload =
             isIndividualMode && assignedToUserId ? assignedToUserId : null;
 
@@ -395,7 +407,7 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                     area_id: areaId,
                     assigned_to_user_id: assignedPayload,
                     shift: shiftPayload,
-                    shift_id: shiftId || null,
+                    shift_ids: shiftIds,
                     recurrence: recurrence as ReceivingTemplate["recurrence"],
                     recurrence_config: recurrenceConfig,
                     tasks: tasksPayload,
@@ -408,7 +420,7 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                     area_id: areaId,
                     assigned_to_user_id: assignedPayload ?? undefined,
                     shift: shiftPayload,
-                    shift_id: shiftId || null,
+                    shift_ids: shiftIds,
                     recurrence: recurrence as ReceivingTemplate["recurrence"],
                     recurrence_config: recurrenceConfig ?? undefined,
                     tasks: tasksPayload,
@@ -549,7 +561,7 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                                                 className="mt-2 w-full bg-[#101d22] border border-[#233f48] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#13b6ec] disabled:opacity-50"
                                             >
                                                 <option value="">— Selecione o colaborador —</option>
-                                                {!shiftId && areaMembers.map((m) => {
+                                                {shiftIds.length === 0 && areaMembers.map((m) => {
                                                     const tn = memberShiftNames(m.user_id);
                                                     return (
                                                         <option key={m.user_id} value={m.user_id}>
@@ -557,7 +569,7 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                                                         </option>
                                                     );
                                                 })}
-                                                {shiftId && compatibleMembers.length > 0 && (
+                                                {shiftIds.length > 0 && compatibleMembers.length > 0 && (
                                                     <optgroup label="Compatíveis">
                                                         {compatibleMembers.map((m) => (
                                                             <option key={m.user_id} value={m.user_id}>
@@ -566,8 +578,8 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                                                         ))}
                                                     </optgroup>
                                                 )}
-                                                {shiftId && incompatibleMembers.length > 0 && (
-                                                    <optgroup label="Incompatíveis — não pertencem ao turno">
+                                                {shiftIds.length > 0 && incompatibleMembers.length > 0 && (
+                                                    <optgroup label="Incompatíveis — não pertencem aos turnos">
                                                         {incompatibleMembers.map((m) => {
                                                             const tn = memberShiftNames(m.user_id);
                                                             return (
@@ -579,14 +591,14 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                                                     </optgroup>
                                                 )}
                                             </select>
-                                            {shiftId && incompatibleMembers.length > 0 && (
+                                            {shiftIds.length > 0 && incompatibleMembers.length > 0 && (
                                                 <p className="text-xs text-amber-400 mt-1.5">
-                                                    {incompatibleMembers.length} colaborador{incompatibleMembers.length > 1 ? "es" : ""} da área não pertence{incompatibleMembers.length > 1 ? "m" : ""} ao turno {selectedShiftName} e não pode{incompatibleMembers.length > 1 ? "m" : ""} ser atribuído{incompatibleMembers.length > 1 ? "s" : ""}.
+                                                    {incompatibleMembers.length} colaborador{incompatibleMembers.length > 1 ? "es" : ""} da área não pertence{incompatibleMembers.length > 1 ? "m" : ""} aos turnos selecionados ({selectedShiftLabel}) e não pode{incompatibleMembers.length > 1 ? "m" : ""} ser atribuído{incompatibleMembers.length > 1 ? "s" : ""}.
                                                 </p>
                                             )}
-                                            {areaId && shiftId && areaMembers.length > 0 && compatibleMembers.length === 0 && (
+                                            {areaId && shiftIds.length > 0 && areaMembers.length > 0 && compatibleMembers.length === 0 && (
                                                 <p className="text-xs text-amber-400 mt-1.5">
-                                                    Nenhum colaborador da área pertence ao turno {selectedShiftName}.
+                                                    Nenhum colaborador da área pertence aos turnos selecionados ({selectedShiftLabel}).
                                                 </p>
                                             )}
                                         </>
@@ -595,25 +607,35 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
 
                                 <div>
                                     <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-1.5">
-                                        Turno
+                                        Turnos
                                     </label>
-                                    <select
-                                        value={shiftId}
-                                        onChange={(e) => handleShiftChange(e.target.value)}
-                                        className="w-full bg-[#101d22] border border-[#233f48] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#13b6ec]"
-                                    >
-                                        <option value="">Todos os turnos</option>
+                                    <div className="bg-[#101d22] border border-[#233f48] rounded-lg p-2.5 space-y-1">
+                                        <label className="flex items-center gap-2.5 cursor-pointer text-sm text-white py-1">
+                                            <input
+                                                type="checkbox"
+                                                checked={shiftIds.length === 0}
+                                                onChange={selectAllTurnos}
+                                                className="w-4 h-4 accent-[#13b6ec]"
+                                            />
+                                            <span className="font-medium">Todos os turnos</span>
+                                        </label>
                                         {shiftsData.filter((s) => s.active).map((s) => (
-                                            <option key={s.id} value={s.id}>
-                                                {s.name}
-                                            </option>
+                                            <label key={s.id} className="flex items-center gap-2.5 cursor-pointer text-sm text-white py-1">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={shiftIds.includes(s.id)}
+                                                    onChange={() => toggleShift(s.id)}
+                                                    className="w-4 h-4 accent-[#13b6ec]"
+                                                />
+                                                <span>{s.name}</span>
+                                            </label>
                                         ))}
-                                    </select>
-                                    {recurrence === "shift_days" && selectedShift && (
+                                    </div>
+                                    {recurrence === "shift_days" && shiftIds.length > 0 && (
                                         <p className="mt-1.5 text-[11px] text-[#13b6ec]">
                                             {resolvedShiftDays && resolvedShiftDays.length > 0
-                                                ? `Disponível nos dias do turno ${selectedShift.name}: ${resolvedShiftDays.map((d) => DAYS_SHORT[d]).join(", ")}`
-                                                : `O turno ${selectedShift.name} não tem dias configurados.`}
+                                                ? `Disponível nos dias dos turnos (${selectedShiftLabel}): ${resolvedShiftDays.map((d) => DAYS_SHORT[d]).join(", ")}`
+                                                : `Os turnos selecionados não têm dias configurados.`}
                                         </p>
                                     )}
                                 </div>
@@ -761,7 +783,7 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                     onConfirm={handleModalConfirm}
                     onCancel={() => setActiveRecurrenceModal(null)}
                     shifts={shiftsData}
-                    shiftLabel={shift === "any" ? null : shift}
+                    shiftLabel={shiftEnum === "any" ? null : shiftEnum}
                 />
             )}
             {activeRecurrenceModal === "weekly" && (
@@ -780,7 +802,7 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                     onConfirm={handleModalConfirm}
                     onCancel={() => setActiveRecurrenceModal(null)}
                     shifts={shiftsData}
-                    shiftLabel={shift === "any" ? null : shift}
+                    shiftLabel={shiftEnum === "any" ? null : shiftEnum}
                 />
             )}
             {activeRecurrenceModal === "monthly" && (
@@ -796,7 +818,7 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                     onConfirm={handleModalConfirm}
                     onCancel={() => setActiveRecurrenceModal(null)}
                     shifts={shiftsData}
-                    shiftLabel={shift === "any" ? null : shift}
+                    shiftLabel={shiftEnum === "any" ? null : shiftEnum}
                 />
             )}
             {activeRecurrenceModal === "yearly" && (
@@ -812,7 +834,7 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                     onConfirm={handleModalConfirm}
                     onCancel={() => setActiveRecurrenceModal(null)}
                     shifts={shiftsData}
-                    shiftLabel={shift === "any" ? null : shift}
+                    shiftLabel={shiftEnum === "any" ? null : shiftEnum}
                 />
             )}
             {showRecurrencePicker && (

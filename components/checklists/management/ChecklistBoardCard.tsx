@@ -1,17 +1,13 @@
 "use client";
 
+import { formatShiftNames } from "@/lib/utils/shift-labels";
+
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
 import { UnitBadge } from "@/components/ui/unit-badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { IssueBadge } from "@/components/checklists/issues/IssueBadge";
 import { ChecklistTypeBadge } from "@/components/checklists/management/ChecklistTypeBadge";
 
-const SHIFT_LABELS: Record<string, string> = {
-    morning: "Manhã",
-    afternoon: "Tarde",
-    evening: "Noite",
-    any: "Qualquer",
-};
 
 interface ChecklistBoardCardProps {
     checklist: ExtendedChecklist;
@@ -154,7 +150,7 @@ export function ChecklistBoardCard({
                         </span>
                     )}
                     <span className="text-[#325a67] text-[10px] font-bold">
-                        {SHIFT_LABELS[checklist.shift] ?? checklist.shift}
+                        {formatShiftNames(checklist.shifts)}
                     </span>
                 </div>
             </div>

@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { ReceivingTemplate } from '@/lib/types';
 import { deriveShiftEnum } from '@/lib/api/derive-shift-enum';
 import { validateShiftAssignment } from '@/lib/api/validate-shift-assignment';
+import { normalizeShiftIds, shiftIdShadow, replaceTemplateShifts } from '@/lib/api/shift-links';
 
 const getAdminSupabase = () =>
     createClient(
@@ -119,7 +120,7 @@ export async function POST(request: Request) {
         const body = await request.json().catch(() => ({}));
         const {
             restaurant_id, name, description, area_id, role_id, assigned_to_user_id,
-            recurrence, recurrence_config, enforce_sequential_order, tasks, shift, shift_id,
+            recurrence, recurrence_config, enforce_sequential_order, tasks, shift, shift_id, shift_ids,
         } = body as Record<string, unknown>;
 
         if (!restaurant_id || typeof restaurant_id !== 'string') {
@@ -153,17 +154,21 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Permissão negada.' }, { status: 403 });
         }
 
-        // Sprint 63: shift_id é a fonte da verdade. Quando enviado, deriva o enum
-        // `shift` do turno (mapeando 'any' → null, pois o CHECK do template não
-        // aceita 'any'). Sem shift_id no body → mantém o enum legado recebido.
-        const hasShiftId = 'shift_id' in body;
-        const finalShiftId = hasShiftId && typeof shift_id === 'string' && shift_id ? shift_id : null;
-        const derivedEnum = hasShiftId ? await deriveShiftEnum(adminSupabase, restaurant_id, finalShiftId) : null;
-        const finalShift = hasShiftId ? (derivedEnum === 'any' ? null : derivedEnum) : cleanShift;
+        // Sprint 67: turnos N:N. shift_ids é a fonte da verdade (vazio = "Todos os
+        // turnos"). Shadows: shift_id (primário, só com 1 turno) + enum `shift`
+        // ('any' → null, pois o CHECK do template não aceita 'any').
+        const incomingShiftIds = ('shift_ids' in body)
+            ? normalizeShiftIds(shift_ids)
+            : (typeof shift_id === 'string' && shift_id ? [shift_id] : []);
+        const finalShiftId = shiftIdShadow(incomingShiftIds);
+        const derivedEnum = await deriveShiftEnum(adminSupabase, restaurant_id, finalShiftId);
+        const finalShift = ('shift_ids' in body) || ('shift_id' in body)
+            ? (derivedEnum === 'any' ? null : derivedEnum)
+            : cleanShift;
 
-        // Sprint 66: atribuição direta exige que o colaborador pertença ao turno.
+        // Sprint 66: atribuição direta exige interseção com os turnos do modelo.
         const cleanAssigned = typeof assigned_to_user_id === 'string' && assigned_to_user_id ? assigned_to_user_id : null;
-        const tplShiftAssignErr = await validateShiftAssignment(adminSupabase, restaurant_id, cleanAssigned, finalShiftId);
+        const tplShiftAssignErr = await validateShiftAssignment(adminSupabase, restaurant_id, cleanAssigned, incomingShiftIds);
         if (tplShiftAssignErr) {
             return NextResponse.json({ error: tplShiftAssignErr, code: 'SHIFT_ASSIGNMENT_INVALID' }, { status: 422 });
         }
@@ -191,6 +196,9 @@ export async function POST(request: Request) {
             console.error('[POST /api/receiving-templates] insert error:', insertErr);
             return NextResponse.json({ error: insertErr?.message || 'Falha ao criar template.' }, { status: 500 });
         }
+
+        // Sprint 67: grava os turnos N:N do modelo (vazio = "Todos os turnos").
+        await replaceTemplateShifts(adminSupabase, restaurant_id, template.id, incomingShiftIds);
 
         // Insert tasks via RPC (atomic)
         const { error: tasksErr } = await adminSupabase.rpc('replace_receiving_template_tasks', {

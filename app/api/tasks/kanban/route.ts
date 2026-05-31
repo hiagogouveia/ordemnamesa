@@ -4,6 +4,7 @@ import { getBrazilNow, getBrazilStartAndEndOfDay } from '@/lib/utils/brazil-date
 import { filterChecklistsByRecurrence } from '@/lib/utils/should-checklist-appear-today';
 import { resolveGlobalScope, isGlobalScopeResult } from '@/lib/api/global-scope';
 import { fetchArchivedQuickIdsForToday } from '@/lib/utils/operational-activity';
+import { fetchShiftIdsByChecklist, isVisibleByShiftIntersection } from '@/lib/api/shift-links';
 
 const getAdminSupabase = () => {
     return createClient(
@@ -131,13 +132,15 @@ export async function GET(request: Request) {
         // Reincorporamos via segunda query para que permaneçam visíveis em Meu Turno
         // até a virada do dia.
         const archivedQuickIds = await fetchArchivedQuickIdsForToday(adminSupabase, restaurantIds, brazil.dateKey);
-        // Filtro de turno aplicado só ao conjunto base; merges de quick receivings
-        // arquivados e órfãos in_progress (abaixo) bypassam — nunca perder execução.
+        // Sprint 66 — Filtro de turno por INTERSEÇÃO no conjunto base; merges de
+        // quick receivings arquivados e órfãos in_progress (abaixo) bypassam.
+        const baseShiftMap = await fetchShiftIdsByChecklist(
+            adminSupabase,
+            (activeChecklistsData || []).map((c: { id: string }) => c.id),
+        );
         let activeChecklists = applyShiftFilter
-            ? (activeChecklistsData || []).filter((c: { shift_id?: string | null; assigned_to_user_id?: string | null }) =>
-                c.assigned_to_user_id === user.id
-                || c.shift_id == null
-                || userShiftIds.includes(c.shift_id))
+            ? (activeChecklistsData || []).filter((c: { id: string; assigned_to_user_id?: string | null }) =>
+                isVisibleByShiftIntersection(baseShiftMap.get(c.id) ?? [], userShiftIds, c.assigned_to_user_id, user.id))
             : (activeChecklistsData || []);
         if (archivedQuickIds.size > 0) {
             const knownIds = new Set(activeChecklists.map((c: { id: string }) => c.id));
@@ -198,6 +201,15 @@ export async function GET(request: Request) {
             .in('restaurant_id', restaurantIds)
             .eq('date_key', brazil.dateKey);
         const assumedTodayIds = new Set((assumedTodayRows ?? []).map((r: { checklist_id: string }) => r.checklist_id));
+
+        // Anexa turnos (N:N) a cada rotina → recorrência usa a UNIÃO dos dias.
+        const fullShiftMap = await fetchShiftIdsByChecklist(
+            adminSupabase,
+            (activeChecklists || []).map((c: { id: string }) => c.id),
+        );
+        for (const c of (activeChecklists || []) as Array<{ id: string; shift_ids?: string[] }>) {
+            c.shift_ids = fullShiftMap.get(c.id) ?? [];
+        }
 
         // Filtrar checklists por regras de recorrência (dia da semana, custom, etc.)
         const visibleChecklists = filterChecklistsByRecurrence(

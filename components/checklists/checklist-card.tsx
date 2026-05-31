@@ -2,6 +2,7 @@
 
 import { Checklist } from "@/lib/types";
 import { getChecklistPriority, ChecklistPriorityLevel } from "@/lib/utils/checklist-priority";
+import { formatShiftNames } from "@/lib/utils/shift-labels";
 
 // Extended interface with UI-specific properties that we added
 export interface ExtendedChecklist extends Checklist {
@@ -21,15 +22,6 @@ export function ChecklistCard({ checklist, isSelected, onClick, currentMinutes =
             case 'active': return <span className="bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide">Ativo</span>;
             case 'archived': return <span className="bg-amber-500/20 text-amber-500 border border-amber-500/30 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide">Arquivado</span>;
             default: return null;
-        }
-    };
-
-    const getShiftLabel = (shift: string) => {
-        switch (shift) {
-            case 'morning': return 'Manhã';
-            case 'afternoon': return 'Tarde';
-            case 'evening': return 'Noite';
-            default: return 'Qualquer turno';
         }
     };
 
@@ -103,7 +95,7 @@ export function ChecklistCard({ checklist, isSelected, onClick, currentMinutes =
             <div className="flex items-center flex-wrap gap-x-4 gap-y-2 mt-auto pt-3 border-t border-[#233f48]/50">
                 <div className="flex items-center gap-1.5 text-[#325a67]">
                     <span className="material-symbols-outlined text-[16px]">schedule</span>
-                    <span className="text-xs font-medium text-[#92bbc9]">{getShiftLabel(checklist.shift)}</span>
+                    <span className="text-xs font-medium text-[#92bbc9]">{formatShiftNames(checklist.shifts)}</span>
                 </div>
 
                 {checklist.category ? (

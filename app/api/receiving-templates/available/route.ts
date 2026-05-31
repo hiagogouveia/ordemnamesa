@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getBrazilNow } from '@/lib/utils/brazil-date';
 import { filterChecklistsByRecurrence } from '@/lib/utils/should-checklist-appear-today';
+import { fetchShiftIdsByTemplate, isVisibleByShiftIntersection } from '@/lib/api/shift-links';
 import type { ReceivingTemplate } from '@/lib/types';
 
 const getAdminSupabase = () =>
@@ -101,6 +102,13 @@ export async function GET(request: Request) {
             tasks_count?: Array<{ count: number }> | number;
         }>;
 
+        // Sprint 67 — turnos do modelo (N:N). Anexa shift_ids para a recorrência
+        // usar a UNIÃO dos dias e para a visibilidade por interseção.
+        const templateShiftMap = await fetchShiftIdsByTemplate(adminSupabase, templates.map((t) => t.id));
+        for (const t of templates) {
+            t.shift_ids = templateShiftMap.get(t.id) ?? [];
+        }
+
         const visible = filterChecklistsByRecurrence(
             templates,
             brazil.dayOfWeek,
@@ -108,15 +116,13 @@ export async function GET(request: Request) {
             shiftsRes.data ?? [],
         );
 
-        // Sprint 63 — Segmentação por turno (prioridade: atribuição direta >
-        // "Todos os turnos" > turno). Sem turno vinculado → vê tudo (opt-in).
+        // Sprint 67 — Segmentação por turno por INTERSEÇÃO (prioridade: atribuição
+        // direta > "Todos os turnos" > turno). Sem turno vinculado → vê tudo.
         const applyShiftFilter = userShiftIds.length > 0;
         const visibleByShift = !applyShiftFilter
             ? visible
             : visible.filter((t) =>
-                t.assigned_to_user_id === user.id
-                || t.shift_id == null
-                || userShiftIds.includes(t.shift_id as string));
+                isVisibleByShiftIntersection(t.shift_ids ?? [], userShiftIds, t.assigned_to_user_id, user.id));
 
         // Normaliza tasks_count para number
         const normalized = visibleByShift.map((t) => {

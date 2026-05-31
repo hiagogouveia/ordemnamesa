@@ -6,6 +6,13 @@ interface ChecklistForRecurrence {
     recurrence_config?: RecurrenceConfig | RecurrenceV2 | null
     shift?: string | null
     shift_id?: string | null
+    shift_ids?: string[] | null // Sprint 66 — N:N
+}
+
+/** Turnos efetivos da rotina: N:N quando fornecido (mesmo vazio), senão o shadow single. */
+function effectiveShiftIds(c: ChecklistForRecurrence): string[] {
+    if (c.shift_ids != null) return c.shift_ids
+    return c.shift_id ? [c.shift_id] : []
 }
 
 interface ShiftForRecurrence {
@@ -51,7 +58,7 @@ export function shouldChecklistAppearToday(
             dayOfWeek: brazilDayOfWeek,
             dateKey: brazilDateKey,
             shifts,
-            shiftId: checklist.shift_id,
+            shiftIds: effectiveShiftIds(checklist),
             shiftLabel: checklist.shift,
         })
     }
@@ -70,7 +77,7 @@ export function shouldChecklistAppearToday(
     // Sprint 61: resolve pelo turno cadastrado (shift_id) quando disponível;
     // senão mantém o caminho legado por enum/shift_type.
     if (recurrence === 'shift_days') {
-        const days = resolveShiftDays(checklist.shift_id, checklist.shift, shifts)
+        const days = resolveShiftDays(effectiveShiftIds(checklist), checklist.shift, shifts)
         if (days === null) return true
         return new Set(days).has(brazilDayOfWeek)
     }

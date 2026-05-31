@@ -15,34 +15,35 @@ export interface EvaluateContext {
     dateKey: string
     /** Shifts ativos do restaurante — necessário apenas para `type='shift_days'`. */
     shifts?: ShiftForRecurrence[]
-    /** Sprint 61: turno cadastrado (shifts.id) do checklist. Fonte da verdade. */
-    shiftId?: string | null
-    /** Enum legado do shift (`'morning' | 'afternoon' | 'evening' | 'any'`). Fallback quando shiftId é nulo. */
+    /** Sprint 66: turnos da rotina (shifts.id) — N:N. Conjunto vazio = "Todos os turnos". */
+    shiftIds?: string[] | null
+    /** Enum legado do shift. Fallback quando não há shiftIds (rotinas pré-s61/legadas). */
     shiftLabel?: string | null
 }
 
 /**
- * Sprint 61: resolve os dias da semana ativos para `shift_days`.
- * - shiftId preenchido → usa diretamente os dias do turno cadastrado (fonte da verdade).
- * - shiftId nulo → caminho legado: casa o enum `shiftLabel` com `shift_type` e une os dias.
+ * Sprint 66: resolve os dias da semana ativos para `shift_days` no modelo N:N.
+ * - shiftIds com 1+ turnos → UNIÃO dos `days_of_week` de todos os turnos da rotina.
+ * - sem shiftIds, enum legado presente → caminho legado por `shift_type` (compat).
+ * - nenhum turno → null ("Todos os turnos" → todo dia).
  *
- * Retorna `null` quando deve aparecer todo dia (fallback defensivo: "Todos os
- * turnos", sem dados de shifts, ou turno não encontrado na lista fornecida).
+ * Retorna `null` quando deve aparecer todo dia (fallback defensivo).
  */
 export function resolveShiftDays(
-    shiftId: string | null | undefined,
+    shiftIds: string[] | null | undefined,
     shiftLabel: string | null | undefined,
     shifts: ShiftForRecurrence[] | undefined,
 ): number[] | null {
-    if (shiftId) {
+    if (shiftIds && shiftIds.length > 0) {
         if (!shifts || shifts.length === 0) return null
-        const match = shifts.find((s) => s.id === shiftId)
-        // Turno não encontrado (ex.: inativo, fora da lista) → fallback "mostra".
-        if (!match) return null
-        return match.days_of_week
+        const idSet = new Set(shiftIds)
+        const matching = shifts.filter((s) => s.id != null && idSet.has(s.id))
+        // Nenhum turno encontrado na lista (ex.: inativos) → fallback "mostra".
+        if (matching.length === 0) return null
+        return matching.flatMap((s) => s.days_of_week)
     }
 
-    // Caminho legado por enum (shift_id ausente em rotinas pré-s61).
+    // Caminho legado por enum (rotinas sem turnos N:N).
     if (!shiftLabel || shiftLabel === "any") return null
     if (!shifts || shifts.length === 0) return null
     const matching = shifts.filter((s) => s.shift_type === shiftLabel)
@@ -85,7 +86,7 @@ export function evaluateV2(config: RecurrenceV2, ctx: EvaluateContext): boolean 
  * comportamento legado por enum/shift_type — indistinguível do anterior.
  */
 function evaluateShiftDays(ctx: EvaluateContext): boolean {
-    const days = resolveShiftDays(ctx.shiftId, ctx.shiftLabel, ctx.shifts)
+    const days = resolveShiftDays(ctx.shiftIds, ctx.shiftLabel, ctx.shifts)
     if (days === null) return true
     return new Set(days).has(ctx.dayOfWeek)
 }

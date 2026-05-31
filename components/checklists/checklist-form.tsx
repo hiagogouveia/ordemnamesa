@@ -134,10 +134,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
 
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
-    // Sprint 61: `shiftId` ("" = "Todos os turnos") é a fonte da verdade.
-    // `shift` (enum) é mantido como sombra derivada para consumidores legados.
-    const [shiftId, setShiftId] = useState("");
-    const [shift, setShift] = useState("any");
+    // Sprint 66: `shiftIds` (N:N) é a fonte da verdade. Conjunto vazio = "Todos
+    // os turnos". `shift` (enum) é sombra derivada para consumidores legados.
+    const [shiftIds, setShiftIds] = useState<string[]>([]);
     const [checklistType, setChecklistType] = useState("regular");
     const [assignedToUserId, setAssignedToUserId] = useState("");
     const [isIndividualMode, setIsIndividualMode] = useState(false);
@@ -195,48 +194,55 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     const { data: areas = [] } = useAllAreas(restaurantId || undefined);
     const { data: shiftsData = [] } = useShifts(restaurantId || undefined);
 
-    // Turno selecionado (objeto completo) e seus dias — fonte da verdade
-    // para o preview e para a recorrência 'shift_days'.
-    const selectedShift = shiftId ? shiftsData.find(s => s.id === shiftId) ?? null : null;
-    const resolvedShiftDays = selectedShift
-        ? [...new Set(selectedShift.days_of_week)].sort((a, b) => a - b)
+    // Turnos selecionados (N:N) e dias — fonte da verdade do preview e da
+    // recorrência 'shift_days' (UNIÃO dos dias de todos os turnos da rotina).
+    const selectedShifts = useMemo(
+        () => shiftsData.filter(s => shiftIds.includes(s.id)),
+        [shiftsData, shiftIds]);
+    const resolvedShiftDays = selectedShifts.length > 0
+        ? [...new Set(selectedShifts.flatMap(s => s.days_of_week))].sort((a, b) => a - b)
         : null;
+    // Enum sombra derivado (compat): 1 turno com type → esse; senão 'any'.
+    const shift = useMemo(
+        () => (shiftIds.length === 1 ? deriveShiftEnumFromType(shiftsData.find(s => s.id === shiftIds[0])?.shift_type) : 'any'),
+        [shiftIds, shiftsData]);
+    const selectedShiftNames = selectedShifts.map(s => s.name);
 
-    // Sprint 61 (req #8): aviso NÃO-bloqueante quando o horário de conclusão da
-    // rotina ultrapassa o fim do turno selecionado. Apenas alerta; salvar segue
-    // liberado. Trata turnos que viram a meia-noite (ex.: Madrugada 23:00→06:00):
-    // nesses, só excede se o horário cai na janela fora do turno (entre fim e início).
+    // Sprint 66 (req #8): aviso NÃO-bloqueante quando o horário de conclusão
+    // ultrapassa o fim de TODOS os turnos selecionados. Aplicado quando há turno
+    // específico; trata virada de meia-noite. Não-bloqueante.
     const shiftEndWarning = (() => {
-        if (!selectedShift || !hasTimeWindow || !endTime) return null;
-        const shiftEnd = toHHMM(selectedShift.end_time);
-        const shiftStart = toHHMM(selectedShift.start_time);
-        if (!shiftEnd) return null;
-        const isOvernight = !!shiftStart && shiftEnd < shiftStart;
-        const exceeds = isOvernight
-            ? (endTime > shiftEnd && (!shiftStart || endTime < shiftStart))
-            : endTime > shiftEnd;
-        if (!exceeds) return null;
-        return { shiftName: selectedShift.name, shiftEnd, endTime };
+        if (selectedShifts.length === 0 || !hasTimeWindow || !endTime) return null;
+        const exceedsAll = selectedShifts.every((s) => {
+            const shiftEnd = toHHMM(s.end_time);
+            const shiftStart = toHHMM(s.start_time);
+            if (!shiftEnd) return false;
+            const isOvernight = !!shiftStart && shiftEnd < shiftStart;
+            return isOvernight
+                ? (endTime > shiftEnd && (!shiftStart || endTime < shiftStart))
+                : endTime > shiftEnd;
+        });
+        if (!exceedsAll) return null;
+        return { shiftNames: selectedShiftNames.join(', '), endTime };
     })();
 
-    // Smart default: quando o turno muda, sugerir a recorrência adequada.
-    // Turno específico → 'shift_days' (herda os dias do turno cadastrado);
-    // "Todos os turnos" → 'daily'. Só auto-altera se a recorrência atual é um
-    // dos defaults automáticos (não sobrescreve config explícita do gestor).
-    const prevShiftIdRef = useRef(shiftId);
+    // Smart default: quando os turnos mudam, sugerir recorrência adequada.
+    // Com turnos → 'shift_days' (herda a união dos dias); vazio → 'daily'.
+    const shiftIdsKey = shiftIds.join(',');
+    const prevShiftIdsRef = useRef(shiftIdsKey);
     useEffect(() => {
-        if (prevShiftIdRef.current === shiftId) return;
-        prevShiftIdRef.current = shiftId;
+        if (prevShiftIdsRef.current === shiftIdsKey) return;
+        prevShiftIdsRef.current = shiftIdsKey;
         const autoRecurrences = ['daily', 'shift_days'];
         if (!autoRecurrences.includes(recurrence)) return;
-        if (shiftId) {
+        if (shiftIds.length > 0) {
             setRecurrence('shift_days');
             setRecurrenceConfig({ version: 2, type: 'shift_days' });
         } else {
             setRecurrence('daily');
             setRecurrenceConfig({ version: 2, type: 'daily' });
         }
-    }, [shiftId, recurrence]);
+    }, [shiftIdsKey, shiftIds.length, recurrence]);
     const equipe = equipeData?.equipe || [];
 
     const activeEquipe = equipe.filter(m => m.active);
@@ -265,19 +271,20 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     const memberShiftNames = useCallback((userId: string): string[] =>
         (userShiftIdsByUser.get(userId) ?? []).map(id => shiftNameById.get(id) ?? '—'),
         [userShiftIdsByUser, shiftNameById]);
-    // Compatível: rotina "Todos os turnos" (shiftId vazio) → todos; senão precisa
-    // ter o turno da rotina vinculado.
+    // Compatível por INTERSEÇÃO: rotina "Todos os turnos" (vazio) → todos; senão
+    // o colaborador precisa compartilhar ao menos um turno com a rotina.
     const isMemberShiftCompatible = useCallback((userId: string): boolean => {
-        if (!shiftId) return true;
-        return (userShiftIdsByUser.get(userId) ?? []).includes(shiftId);
-    }, [shiftId, userShiftIdsByUser]);
+        if (shiftIds.length === 0) return true;
+        const userShifts = userShiftIdsByUser.get(userId) ?? [];
+        return shiftIds.some(id => userShifts.includes(id));
+    }, [shiftIds, userShiftIdsByUser]);
     const compatibleMembers = useMemo(
         () => filteredEquipe.filter(m => isMemberShiftCompatible(m.user_id)),
         [filteredEquipe, isMemberShiftCompatible]);
     const incompatibleMembers = useMemo(
         () => filteredEquipe.filter(m => !isMemberShiftCompatible(m.user_id)),
         [filteredEquipe, isMemberShiftCompatible]);
-    const selectedShiftName = shiftId ? (shiftNameById.get(shiftId) ?? 'selecionado') : null;
+    const selectedShiftLabel = shiftIds.length > 0 ? selectedShiftNames.join(', ') : null;
 
     const createMutation = useCreateChecklist();
     const updateMutation = useUpdateChecklist();
@@ -308,8 +315,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             if (parsed) {
                 setName(parsed.name ?? "");
                 setDescription(parsed.description ?? "");
-                setShift(parsed.shift ?? "any");
-                setShiftId(parsed.shiftId ?? "");
+                setShiftIds(parsed.shiftIds ?? (parsed.shiftId ? [parsed.shiftId] : []));
                 setChecklistType(parsed.checklistType ?? "regular");
                 setAssignedToUserId(parsed.assignedToUserId ?? "");
                 setIsIndividualMode(parsed.isIndividualMode ?? !!parsed.assignedToUserId);
@@ -327,8 +333,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 previousStateRef.current = {
                     name: parsed.name ?? "",
                     description: parsed.description ?? "",
-                    shift: parsed.shift ?? "any",
-                    shiftId: parsed.shiftId ?? "",
+                    shiftIds: parsed.shiftIds ?? (parsed.shiftId ? [parsed.shiftId] : []),
                     checklistType: parsed.checklistType ?? "regular",
                     assignedToUserId: parsed.assignedToUserId ?? "",
                     isIndividualMode: parsed.isIndividualMode ?? !!parsed.assignedToUserId,
@@ -352,8 +357,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
 
             const loadedName = checklist.name;
             const loadedDescription = checklist.description || "";
-            const loadedShift = checklist.shift;
-            const loadedShiftId = checklist.shift_id ?? "";
+            const loadedShiftIds = checklist.shift_ids ?? (checklist.shift_id ? [checklist.shift_id] : []);
             const loadedChecklistType = checklist.checklist_type || "regular";
             const loadedAssignedToUserId = checklist.assigned_to_user_id || "";
             const loadedIsIndividualMode = checklist.assignment_type === 'user' || !!checklist.assigned_to_user_id;
@@ -373,8 +377,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
 
             setName(loadedName);
             setDescription(loadedDescription);
-            setShift(loadedShift);
-            setShiftId(loadedShiftId);
+            setShiftIds(loadedShiftIds);
             setChecklistType(loadedChecklistType);
             setAssignedToUserId(loadedAssignedToUserId);
             setIsIndividualMode(loadedIsIndividualMode);
@@ -393,8 +396,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             previousStateRef.current = {
                 name: loadedName,
                 description: loadedDescription,
-                shift: loadedShift,
-                shiftId: loadedShiftId,
+                shiftIds: loadedShiftIds,
                 checklistType: loadedChecklistType,
                 assignedToUserId: loadedAssignedToUserId,
                 isIndividualMode: loadedIsIndividualMode,
@@ -421,8 +423,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             // não aplicar automaticamente — perguntar ao usuário (ver pendingDraftRestore).
             setName("");
             setDescription("");
-            setShift("any");
-            setShiftId("");
+            setShiftIds([]);
             setChecklistType("regular");
             setAssignedToUserId("");
             setIsIndividualMode(false);
@@ -454,8 +455,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
 
         const draftName = parsed.name ?? "";
         const draftDescription = parsed.description ?? "";
-        const draftShift = parsed.shift ?? "any";
-        const draftShiftId = parsed.shiftId ?? "";
+        const draftShiftIds = parsed.shiftIds ?? (parsed.shiftId ? [parsed.shiftId] : []);
         const draftChecklistType = parsed.checklistType ?? "regular";
         const draftAssignedToUserId = parsed.assignedToUserId ?? "";
         const draftIsIndividualMode = parsed.isIndividualMode ?? !!parsed.assignedToUserId;
@@ -471,8 +471,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
 
         setName(draftName);
         setDescription(draftDescription);
-        setShift(draftShift);
-        setShiftId(draftShiftId);
+        setShiftIds(draftShiftIds);
         setChecklistType(draftChecklistType);
         setAssignedToUserId(draftAssignedToUserId);
         setIsIndividualMode(draftIsIndividualMode);
@@ -488,7 +487,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         setSaveState("saved");
         isFirstLoad.current = false;
         previousStateRef.current = {
-            name: draftName, description: draftDescription, shift: draftShift, shiftId: draftShiftId,
+            name: draftName, description: draftDescription, shiftIds: draftShiftIds,
             checklistType: draftChecklistType, assignedToUserId: draftAssignedToUserId,
             isIndividualMode: draftIsIndividualMode, isRequired: draftIsRequired,
             recurrence: draftRecurrence, startTime: draftStartTime, endTime: draftEndTime,
@@ -506,7 +505,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
 
     useEffect(() => {
         const formState = {
-            name, description, shift, shiftId, checklistType, assignedToUserId, isIndividualMode,
+            name, description, shiftIds, checklistType, assignedToUserId, isIndividualMode,
             isRequired, recurrence, startTime, endTime, hasTimeWindow,
             recurrenceConfig, enforceSequentialOrder,
             areaId, tasks
@@ -564,7 +563,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                         name,
                         description,
                         shift,
-                        shift_id: shiftId || null,
+                        shift_ids: shiftIds,
                         checklist_type: checklistType,
                         assigned_to_user_id: assignedToUserId || null,
                         is_required: isRequired,
@@ -620,7 +619,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         }, 1500);
 
         return () => clearTimeout(handler);
-    }, [name, description, shift, shiftId, checklistType, assignedToUserId, isIndividualMode, isRequired, recurrence, startTime, endTime, hasTimeWindow, recurrenceConfig, enforceSequentialOrder, areaId, tasks, checklist, restaurantId, updateMutation, blockedByBilling]);
+    }, [name, description, shift, shiftIds, checklistType, assignedToUserId, isIndividualMode, isRequired, recurrence, startTime, endTime, hasTimeWindow, recurrenceConfig, enforceSequentialOrder, areaId, tasks, checklist, restaurantId, updateMutation, blockedByBilling]);
 
     const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 8 } });
     const keyboardSensor = useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates });
@@ -726,7 +725,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             name,
             description,
             shift: shift as "morning" | "afternoon" | "evening" | "any",
-            shift_id: shiftId || null,
+            shift_ids: shiftIds,
             checklist_type: checklistType as "regular" | "opening" | "closing" | "receiving",
             assigned_to_user_id: assignedToUserId || null,
             is_required: isRequired,
@@ -989,26 +988,40 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                             <div>
-                                <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Turno</label>
-                                <select
-                                    value={shiftId}
-                                    onChange={(e) => {
-                                        const newId = e.target.value;
-                                        setShiftId(newId);
-                                        const sel = shiftsData.find(s => s.id === newId);
-                                        setShift(deriveShiftEnumFromType(sel?.shift_type));
-                                        // Reset responsável se ficar incompatível com o novo turno
-                                        if (assignedToUserId && newId && !(userShiftIdsByUser.get(assignedToUserId) ?? []).includes(newId)) {
-                                            setAssignedToUserId("");
-                                        }
-                                    }}
-                                    className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
-                                >
-                                    <option value="">Todos os turnos</option>
-                                    {shiftsData.filter(s => s.active).map(s => (
-                                        <option key={s.id} value={s.id}>{s.name}</option>
-                                    ))}
-                                </select>
+                                <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Turnos</label>
+                                <div className="bg-[#16262c] border border-[#233f48] rounded-xl p-3 space-y-1.5">
+                                    <label className="flex items-center gap-2.5 cursor-pointer text-sm text-white py-1">
+                                        <input
+                                            type="checkbox"
+                                            checked={shiftIds.length === 0}
+                                            onChange={() => setShiftIds([])}
+                                            className="w-4 h-4 accent-[#13b6ec]"
+                                        />
+                                        <span className="font-medium">Todos os turnos</span>
+                                    </label>
+                                    {shiftsData.filter(s => s.active).map(s => {
+                                        const checked = shiftIds.includes(s.id);
+                                        return (
+                                            <label key={s.id} className="flex items-center gap-2.5 cursor-pointer text-sm text-white py-1">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={checked}
+                                                    onChange={() => {
+                                                        const next = checked ? shiftIds.filter(x => x !== s.id) : [...shiftIds, s.id];
+                                                        setShiftIds(next);
+                                                        // Reset responsável se a interseção com os turnos ficar vazia
+                                                        if (assignedToUserId && next.length > 0) {
+                                                            const us = userShiftIdsByUser.get(assignedToUserId) ?? [];
+                                                            if (!next.some(id => us.includes(id))) setAssignedToUserId("");
+                                                        }
+                                                    }}
+                                                    className="w-4 h-4 accent-[#13b6ec]"
+                                                />
+                                                <span>{s.name}</span>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
                                 {shiftsData.filter(s => s.active).length === 0 && (
                                     <p className="text-amber-400 text-xs mt-1.5">
                                         Nenhum turno cadastrado. Cadastre em Configurações &gt; Turnos para segmentar por turno.
@@ -1039,15 +1052,15 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                     <div className="mt-2 px-3 py-2 bg-[#13b6ec]/10 border border-[#13b6ec]/30 rounded-lg text-xs">
                                         {resolvedShiftDays && resolvedShiftDays.length > 0 ? (
                                             <span className="text-[#13b6ec] font-medium">
-                                                Executada nos dias do turno {selectedShift?.name}: {resolvedShiftDays.map(d => DAYS_SHORT[d]).join(', ')}
+                                                Executada nos dias dos turnos ({selectedShiftLabel}): {resolvedShiftDays.map(d => DAYS_SHORT[d]).join(', ')}
                                             </span>
-                                        ) : !shiftId ? (
+                                        ) : shiftIds.length === 0 ? (
                                             <span className="text-[#92bbc9]">
                                                 &quot;Todos os turnos&quot; selecionado — aparecerá todos os dias
                                             </span>
                                         ) : (
                                             <span className="text-amber-400">
-                                                O turno {selectedShift?.name ?? 'selecionado'} não tem dias configurados. Configure em Configurações &gt; Turnos.
+                                                Os turnos selecionados não têm dias configurados. Configure em Configurações &gt; Turnos.
                                             </span>
                                         )}
                                     </div>
@@ -1138,7 +1151,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                     >
                                         <option value="">Selecionar colaborador...</option>
                                         {/* Sem turno específico: lista simples (todos compatíveis) */}
-                                        {!shiftId && filteredEquipe.map(m => {
+                                        {shiftIds.length === 0 && filteredEquipe.map(m => {
                                             const tn = memberShiftNames(m.user_id);
                                             return (
                                                 <option key={m.user_id} value={m.user_id}>
@@ -1146,8 +1159,8 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                                 </option>
                                             );
                                         })}
-                                        {/* Turno específico: separa compatíveis (selecionáveis) de incompatíveis (bloqueados) */}
-                                        {shiftId && compatibleMembers.length > 0 && (
+                                        {/* Turnos específicos: separa compatíveis (interseção) de incompatíveis */}
+                                        {shiftIds.length > 0 && compatibleMembers.length > 0 && (
                                             <optgroup label="Compatíveis">
                                                 {compatibleMembers.map(m => (
                                                     <option key={m.user_id} value={m.user_id}>
@@ -1156,8 +1169,8 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                                 ))}
                                             </optgroup>
                                         )}
-                                        {shiftId && incompatibleMembers.length > 0 && (
-                                            <optgroup label="Incompatíveis — não pertencem ao turno">
+                                        {shiftIds.length > 0 && incompatibleMembers.length > 0 && (
+                                            <optgroup label="Incompatíveis — não pertencem aos turnos">
                                                 {incompatibleMembers.map(m => {
                                                     const tn = memberShiftNames(m.user_id);
                                                     return (
@@ -1169,11 +1182,11 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                             </optgroup>
                                         )}
                                     </select>
-                                    {/* Aviso: turno específico + existem incompatíveis na área */}
-                                    {shiftId && incompatibleMembers.length > 0 && (
+                                    {/* Aviso: turnos específicos + existem incompatíveis na área */}
+                                    {shiftIds.length > 0 && incompatibleMembers.length > 0 && (
                                         <p className="text-xs text-amber-400 mt-1.5 flex items-start gap-1">
                                             <span className="material-symbols-outlined text-[14px] shrink-0">lock</span>
-                                            {incompatibleMembers.length} colaborador{incompatibleMembers.length > 1 ? 'es' : ''} da área não pertence{incompatibleMembers.length > 1 ? 'm' : ''} ao turno {selectedShiftName} e não pode{incompatibleMembers.length > 1 ? 'm' : ''} ser atribuído{incompatibleMembers.length > 1 ? 's' : ''}.
+                                            {incompatibleMembers.length} colaborador{incompatibleMembers.length > 1 ? 'es' : ''} da área não pertence{incompatibleMembers.length > 1 ? 'm' : ''} aos turnos selecionados ({selectedShiftLabel}) e não pode{incompatibleMembers.length > 1 ? 'm' : ''} ser atribuído{incompatibleMembers.length > 1 ? 's' : ''}.
                                         </p>
                                     )}
                                     {!assignedToUserId && (
@@ -1187,9 +1200,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                             Nenhum colaborador vinculado a esta área. Adicione colaboradores na tela de Equipe.
                                         </p>
                                     )}
-                                    {areaId && shiftId && filteredEquipe.length > 0 && compatibleMembers.length === 0 && (
+                                    {areaId && shiftIds.length > 0 && filteredEquipe.length > 0 && compatibleMembers.length === 0 && (
                                         <p className="text-xs text-amber-400 mt-1.5">
-                                            Nenhum colaborador da área pertence ao turno {selectedShiftName}. Vincule colaboradores a esse turno na tela de Equipe.
+                                            Nenhum colaborador da área pertence aos turnos selecionados ({selectedShiftLabel}). Vincule colaboradores a esses turnos na tela de Equipe.
                                         </p>
                                     )}
                                 </div>
@@ -1283,7 +1296,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                     <div className="col-span-2 flex items-start gap-2 px-3 py-2 bg-amber-400/10 border border-amber-400/30 rounded-lg">
                                         <span className="material-symbols-outlined text-amber-400 text-[16px] shrink-0 mt-0.5">warning</span>
                                         <p className="text-amber-400 text-xs">
-                                            O horário de conclusão ({shiftEndWarning.endTime}) ultrapassa o fim do turno {shiftEndWarning.shiftName} ({shiftEndWarning.shiftEnd}). Você pode continuar mesmo assim.
+                                            O horário de conclusão ({shiftEndWarning.endTime}) ultrapassa o fim dos turnos selecionados ({shiftEndWarning.shiftNames}). Você pode continuar mesmo assim.
                                         </p>
                                     </div>
                                 )}

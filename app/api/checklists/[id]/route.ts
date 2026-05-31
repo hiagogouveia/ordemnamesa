@@ -4,6 +4,7 @@ import type { ShiftType } from '@/lib/types';
 import { processRecurrencePayload } from '@/lib/api/recurrence-payload';
 import { deriveShiftEnum } from '@/lib/api/derive-shift-enum';
 import { validateShiftAssignment } from '@/lib/api/validate-shift-assignment';
+import { normalizeShiftIds, shiftIdShadow, replaceChecklistShifts, fetchShiftIdsByChecklist } from '@/lib/api/shift-links';
 import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
 import { getAccountBilling, canManageChecklists, canDeleteChecklists } from '@/lib/billing/subscription-access';
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
@@ -34,7 +35,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         }
 
         const body = await request.json();
-        const { restaurant_id, name, description, shift, shift_id, status, tasks, category, role_id, is_required, checklist_type, assigned_to_user_id, recurrence, start_time, end_time, recurrence_config, enforce_sequential_order, area_id, target_role, assignment_type } = body;
+        const { restaurant_id, name, description, shift, shift_id, shift_ids, status, tasks, category, role_id, is_required, checklist_type, assigned_to_user_id, recurrence, start_time, end_time, recurrence_config, enforce_sequential_order, area_id, target_role, assignment_type } = body;
 
         if (!restaurant_id || !name) {
             return NextResponse.json({ error: 'restaurant_id e name são obrigatórios.' }, { status: 400 });
@@ -135,10 +136,17 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
             }
         }
 
-        // Sprint 66: atribuição direta exige que o colaborador pertença ao turno.
-        // shift_id efetivo = enviado no body, senão o atual do registro.
-        const effectiveShiftId = ('shift_id' in body) ? (shift_id || null) : (currentChecklist?.shift_id ?? null);
-        const putShiftAssignErr = await validateShiftAssignment(adminSupabase, restaurant_id, effectiveUserId, effectiveShiftId);
+        // Sprint 66: turnos N:N. incomingShiftIds = null → não alterar turnos.
+        const incomingShiftIds: string[] | null = ('shift_ids' in body)
+            ? normalizeShiftIds(shift_ids)
+            : (('shift_id' in body) ? (shift_id ? [shift_id as string] : []) : null);
+
+        // Atribuição direta exige interseção com os turnos da rotina (efetivos:
+        // enviados no body, senão os atuais do registro via junção N:N).
+        const effectiveShiftIds = incomingShiftIds !== null
+            ? incomingShiftIds
+            : ((await fetchShiftIdsByChecklist(adminSupabase, [id])).get(id) ?? []);
+        const putShiftAssignErr = await validateShiftAssignment(adminSupabase, restaurant_id, effectiveUserId, effectiveShiftIds);
         if (putShiftAssignErr) {
             return NextResponse.json({ error: putShiftAssignErr, code: 'SHIFT_ASSIGNMENT_INVALID' }, { status: 422 });
         }
@@ -154,14 +162,14 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
                 ? recurrenceProcess.validated
                 : (recurrence_config || null);
 
-        // Sprint 61: quando shift_id vem no payload, ele é a fonte da verdade —
-        // grava shift_id e deriva o enum legado `shift`. Quando ausente (update
-        // parcial / chamador legado), preserva ambas as colunas como estão.
+        // Sprint 66: quando o payload traz turnos (shift_ids/shift_id), atualiza os
+        // shadows (shift_id primário + enum derivado); a junção N:N é substituída
+        // após o update. Quando ausente, preserva as colunas atuais.
         const shiftFields: { shift?: ShiftType; shift_id?: string | null } = {};
-        if ('shift_id' in body) {
-            const sid = shift_id || null;
-            shiftFields.shift_id = sid;
-            shiftFields.shift = await deriveShiftEnum(adminSupabase, restaurant_id, sid);
+        if (incomingShiftIds !== null) {
+            const sidShadow = shiftIdShadow(incomingShiftIds);
+            shiftFields.shift_id = sidShadow;
+            shiftFields.shift = await deriveShiftEnum(adminSupabase, restaurant_id, sidShadow);
         } else if (shift !== undefined) {
             shiftFields.shift = shift;
         }
@@ -188,6 +196,11 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         if (updateError) {
             console.error('[PUT /api/checklists/[id]] Erro no update do checklist:', updateError);
             return NextResponse.json({ error: updateError.message }, { status: 500 });
+        }
+
+        // Sprint 66: substitui os turnos N:N quando o payload os trouxe.
+        if (incomingShiftIds !== null) {
+            await replaceChecklistShifts(adminSupabase, restaurant_id, id, incomingShiftIds);
         }
 
         // 2. Atualizar Tasks

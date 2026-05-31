@@ -1,5 +1,7 @@
 "use client";
 
+import { formatShiftNames } from "@/lib/utils/shift-labels";
+
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
@@ -11,12 +13,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { IssueBadge } from "@/components/checklists/issues/IssueBadge";
 import { ChecklistTypeBadge } from "@/components/checklists/management/ChecklistTypeBadge";
 
-const SHIFT_LABELS: Record<string, string> = {
-    morning: "Manhã",
-    afternoon: "Tarde",
-    evening: "Noite",
-    any: "Todos",
-};
 
 const EXECUTION_STATUS_CONFIG: Record<ExecutionStatus, { label: string; className: string }> = {
     incomplete: {
@@ -158,7 +154,7 @@ export function ChecklistRow({
 
             {/* Turno */}
             <td className="px-3 py-3" onClick={onSelect}>
-                <span className="text-[#92bbc9] text-sm">{SHIFT_LABELS[checklist.shift] ?? checklist.shift}</span>
+                <span className="text-[#92bbc9] text-sm">{formatShiftNames(checklist.shifts)}</span>
             </td>
 
             {/* Área */}
