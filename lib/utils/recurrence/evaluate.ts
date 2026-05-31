@@ -3,6 +3,7 @@ import type { RecurrenceV2 } from "@/lib/types"
 import { findWeekdayPositionInMonth, parseDateKey } from "./weekday-position"
 
 export interface ShiftForRecurrence {
+    id?: string
     shift_type?: string | null
     days_of_week: number[]
 }
@@ -14,8 +15,40 @@ export interface EvaluateContext {
     dateKey: string
     /** Shifts ativos do restaurante — necessário apenas para `type='shift_days'`. */
     shifts?: ShiftForRecurrence[]
-    /** Identificador do shift do checklist (`'morning' | 'afternoon' | 'evening' | 'any'`). */
+    /** Sprint 66: turnos da rotina (shifts.id) — N:N. Conjunto vazio = "Todos os turnos". */
+    shiftIds?: string[] | null
+    /** Enum legado do shift. Fallback quando não há shiftIds (rotinas pré-s61/legadas). */
     shiftLabel?: string | null
+}
+
+/**
+ * Sprint 66: resolve os dias da semana ativos para `shift_days` no modelo N:N.
+ * - shiftIds com 1+ turnos → UNIÃO dos `days_of_week` de todos os turnos da rotina.
+ * - sem shiftIds, enum legado presente → caminho legado por `shift_type` (compat).
+ * - nenhum turno → null ("Todos os turnos" → todo dia).
+ *
+ * Retorna `null` quando deve aparecer todo dia (fallback defensivo).
+ */
+export function resolveShiftDays(
+    shiftIds: string[] | null | undefined,
+    shiftLabel: string | null | undefined,
+    shifts: ShiftForRecurrence[] | undefined,
+): number[] | null {
+    if (shiftIds && shiftIds.length > 0) {
+        if (!shifts || shifts.length === 0) return null
+        const idSet = new Set(shiftIds)
+        const matching = shifts.filter((s) => s.id != null && idSet.has(s.id))
+        // Nenhum turno encontrado na lista (ex.: inativos) → fallback "mostra".
+        if (matching.length === 0) return null
+        return matching.flatMap((s) => s.days_of_week)
+    }
+
+    // Caminho legado por enum (rotinas sem turnos N:N).
+    if (!shiftLabel || shiftLabel === "any") return null
+    if (!shifts || shifts.length === 0) return null
+    const matching = shifts.filter((s) => s.shift_type === shiftLabel)
+    if (matching.length === 0) return null
+    return matching.flatMap((s) => s.days_of_week)
 }
 
 /**
@@ -48,19 +81,14 @@ export function evaluateV2(config: RecurrenceV2, ctx: EvaluateContext): boolean 
 }
 
 /**
- * Replica fielmente o comportamento atual de v1 para `shift_days` para que a
- * versão 2 deste tipo seja indistinguível do legado.
+ * `shift_days`: a rotina aparece nos dias configurados no turno. Sprint 61 passa
+ * a resolver pelo turno cadastrado (shiftId) quando disponível; senão mantém o
+ * comportamento legado por enum/shift_type — indistinguível do anterior.
  */
 function evaluateShiftDays(ctx: EvaluateContext): boolean {
-    const shiftLabel = ctx.shiftLabel
-    if (!shiftLabel || shiftLabel === "any") return true
-    if (!ctx.shifts || ctx.shifts.length === 0) return true
-
-    const matching = ctx.shifts.filter((s) => s.shift_type === shiftLabel)
-    if (matching.length === 0) return true
-
-    const allDays = new Set(matching.flatMap((s) => s.days_of_week))
-    return allDays.has(ctx.dayOfWeek)
+    const days = resolveShiftDays(ctx.shiftIds, ctx.shiftLabel, ctx.shifts)
+    if (days === null) return true
+    return new Set(days).has(ctx.dayOfWeek)
 }
 
 function evaluateMonthly(

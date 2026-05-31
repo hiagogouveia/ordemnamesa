@@ -1,13 +1,22 @@
 import type { RecurrenceConfig, RecurrenceV2 } from '@/lib/types'
-import { evaluateV2 } from './recurrence/evaluate'
+import { evaluateV2, resolveShiftDays } from './recurrence/evaluate'
 
 interface ChecklistForRecurrence {
     recurrence?: string | null
     recurrence_config?: RecurrenceConfig | RecurrenceV2 | null
     shift?: string | null
+    shift_id?: string | null
+    shift_ids?: string[] | null // Sprint 66 — N:N
+}
+
+/** Turnos efetivos da rotina: N:N quando fornecido (mesmo vazio), senão o shadow single. */
+function effectiveShiftIds(c: ChecklistForRecurrence): string[] {
+    if (c.shift_ids != null) return c.shift_ids
+    return c.shift_id ? [c.shift_id] : []
 }
 
 interface ShiftForRecurrence {
+    id?: string
     shift_type?: string | null
     days_of_week: number[]
 }
@@ -49,6 +58,7 @@ export function shouldChecklistAppearToday(
             dayOfWeek: brazilDayOfWeek,
             dateKey: brazilDateKey,
             shifts,
+            shiftIds: effectiveShiftIds(checklist),
             shiftLabel: checklist.shift,
         })
     }
@@ -63,20 +73,13 @@ export function shouldChecklistAppearToday(
         return brazilDayOfWeek >= 1 && brazilDayOfWeek <= 5
     }
 
-    // Dias do turno: vincula dinamicamente aos dias configurados no turno
+    // Dias do turno: vincula dinamicamente aos dias configurados no turno.
+    // Sprint 61: resolve pelo turno cadastrado (shift_id) quando disponível;
+    // senão mantém o caminho legado por enum/shift_type.
     if (recurrence === 'shift_days') {
-        const shiftLabel = checklist.shift
-        // Turno 'any' ou sem turno → mostra todo dia
-        if (!shiftLabel || shiftLabel === 'any') return true
-        // Sem dados de shifts → fallback defensivo (mostra)
-        if (!shifts || shifts.length === 0) return true
-
-        const matchingShifts = shifts.filter(s => s.shift_type === shiftLabel)
-        // Nenhum shift com shift_type configurado → fallback (mostra)
-        if (matchingShifts.length === 0) return true
-
-        const allDays = new Set(matchingShifts.flatMap(s => s.days_of_week))
-        return allDays.has(brazilDayOfWeek)
+        const days = resolveShiftDays(effectiveShiftIds(checklist), checklist.shift, shifts)
+        if (days === null) return true
+        return new Set(days).has(brazilDayOfWeek)
     }
 
     // Semanal/Mensal/Anual simples: aparece todo dia (lógica simplificada atual)

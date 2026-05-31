@@ -371,3 +371,25 @@ describe("evaluateV2 — dateKey malformado", () => {
         expect(evaluateV2(config, ctx(MON, ""))).toBe(false)
     })
 })
+
+// Sprint 66 — shift_days no modelo N:N: UNIÃO dos dias de todos os turnos.
+describe("evaluateV2 — shift_days N:N (união de turnos)", () => {
+    const SHIFTS = [
+        { id: "manha", shift_type: "morning", days_of_week: [MON, TUE, WED, THU, FRI] },
+        { id: "noite", shift_type: "evening", days_of_week: [MON, TUE, WED, THU, FRI, SAT] },
+    ]
+    const cfg = { version: 2 as const, type: "shift_days" as const }
+
+    it("rotina Manhã+Noite aparece no SÁB (só Noite tem sábado) — união", () => {
+        expect(evaluateV2(cfg, ctx(SAT, "2026-05-30", { shifts: SHIFTS, shiftIds: ["manha", "noite"] }))).toBe(true)
+    })
+    it("rotina só Manhã NÃO aparece no SÁB", () => {
+        expect(evaluateV2(cfg, ctx(SAT, "2026-05-30", { shifts: SHIFTS, shiftIds: ["manha"] }))).toBe(false)
+    })
+    it("rotina Manhã+Noite aparece na SEG (interseção de dias)", () => {
+        expect(evaluateV2(cfg, ctx(MON, "2026-06-01", { shifts: SHIFTS, shiftIds: ["manha", "noite"] }))).toBe(true)
+    })
+    it('conjunto vazio (Todos os turnos) → aparece todo dia', () => {
+        expect(evaluateV2(cfg, ctx(SUN, "2026-05-31", { shifts: SHIFTS, shiftIds: [] }))).toBe(true)
+    })
+})

@@ -6,7 +6,8 @@ import { useAccountSessionStore } from '@/lib/store/account-session-store';
 import { useKanbanTasks, KanbanChecklist } from '@/lib/hooks/use-tasks';
 import { useShifts } from '@/lib/hooks/use-shifts';
 import { useMyAreas } from '@/lib/hooks/use-user-areas';
-import { getCurrentShift } from '@/lib/utils';
+import { useUserShifts } from '@/lib/hooks/use-user-roles-shifts';
+import { pickMyShiftForHeader } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { getRoutineState, type RoutineStateInfo } from '@/lib/utils/routine-state';
 import type { Scope } from '@/lib/types/scope';
@@ -49,6 +50,12 @@ export default function KanbanPage() {
 
     const { data: kanbanData, isLoading: loadingKanban } = useKanbanTasks(scope, userId);
     const { data: shifts = [] } = useShifts(restaurantId || undefined);
+    // Turnos vinculados ao usuário (fonte da verdade do cabeçalho). Em modo
+    // global (gestão) não há vínculo por unidade → não consultar.
+    const { data: myShiftAssignments = [] } = useUserShifts(
+        isGlobal ? undefined : (restaurantId || undefined),
+        userId ?? undefined,
+    );
     const { data: myAreaAssignments = [], isLoading: loadingMyAreas } = useMyAreas(restaurantId || undefined, userId);
     const { data: availableMeta } = useReceivingTemplatesAvailableMeta(
         isGlobal ? undefined : restaurantId || undefined,
@@ -102,7 +109,18 @@ export default function KanbanPage() {
         return () => clearInterval(interval);
     }, []);
 
-    const currentShift = useMemo(() => getCurrentShift(shifts, timeNow), [shifts, timeNow]);
+    // Cabeçalho baseado no VÍNCULO user↔shifts (não no relógio). Resolve os
+    // turnos do usuário a partir das atribuições + lista de turnos do restaurante.
+    const myShifts = useMemo(
+        () => myShiftAssignments
+            .map((a) => shifts.find((s) => s.id === a.shift_id))
+            .filter((s): s is NonNullable<typeof s> => Boolean(s)),
+        [myShiftAssignments, shifts],
+    );
+    const headerShift = useMemo(
+        () => (timeNow ? pickMyShiftForHeader(myShifts, timeNow) : null),
+        [myShifts, timeNow],
+    );
     const hasNoAreaAssigned = !userLoading && user !== null && !isGlobal && !loadingMyAreas && myAreaAssignments.length === 0;
 
     const currentMinutes = useMemo(() => {
@@ -472,21 +490,30 @@ export default function KanbanPage() {
                                 ? 'Meu Turno · Global'
                                 : `${getGreeting()}, ${user?.name.split(' ')[0] || '...'}.`}
                         </h1>
-                        <div className="mt-1 flex items-center gap-1.5 text-[10px] sm:text-[11px] text-[#92bbc9] font-medium uppercase tracking-wider flex-wrap">
-                            {isGlobal ? (
-                                <span className="text-[#13b6ec]">{unitsList.length} unidades</span>
-                            ) : currentShift ? (
-                                <>
-                                    <span className="text-[#13b6ec]">Turno {currentShift.name}</span>
-                                    {currentShift.start_time && currentShift.end_time && (
-                                        <>
-                                            <span className="text-[#325a67]">·</span>
-                                            <span className="tabular-nums">{currentShift.start_time.slice(0,5)} – {currentShift.end_time.slice(0,5)}</span>
-                                        </>
-                                    )}
-                                </>
-                            ) : (
-                                <span>Fora do turno</span>
+                        <div className="mt-1 flex flex-col gap-0.5">
+                            <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] text-[#92bbc9] font-medium uppercase tracking-wider flex-wrap">
+                                {isGlobal ? (
+                                    <span className="text-[#13b6ec]">{unitsList.length} unidades</span>
+                                ) : headerShift ? (
+                                    <>
+                                        <span className="text-[#13b6ec]">Turno {headerShift.shift.name}</span>
+                                        {headerShift.shift.start_time && headerShift.shift.end_time && (
+                                            <>
+                                                <span className="text-[#325a67]">·</span>
+                                                <span className="tabular-nums">{headerShift.shift.start_time.slice(0,5)} – {headerShift.shift.end_time.slice(0,5)}</span>
+                                            </>
+                                        )}
+                                    </>
+                                ) : (
+                                    <span>Todos os turnos</span>
+                                )}
+                            </div>
+                            {/* Aviso operacional não-bloqueante: fora do horário do turno. */}
+                            {!isGlobal && headerShift && !headerShift.isActiveNow && headerShift.shift.start_time && (
+                                <span className="flex items-center gap-1 text-[10px] sm:text-[11px] text-amber-400 font-medium normal-case tracking-normal">
+                                    <span className="material-symbols-outlined text-[13px]">schedule</span>
+                                    Você está fora do horário do seu turno — inicia às {headerShift.shift.start_time.slice(0,5)}.
+                                </span>
                             )}
                         </div>
                     </div>

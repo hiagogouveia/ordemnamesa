@@ -7,6 +7,9 @@ import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
 import { getAccountBilling, canManageChecklists } from '@/lib/billing/subscription-access';
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
 import { processRecurrencePayload } from '@/lib/api/recurrence-payload';
+import { deriveShiftEnum } from '@/lib/api/derive-shift-enum';
+import { validateShiftAssignment } from '@/lib/api/validate-shift-assignment';
+import { normalizeShiftIds, shiftIdShadow, replaceChecklistShifts } from '@/lib/api/shift-links';
 import { trackChecklistEvent } from '@/lib/analytics/track-event';
 
 const getAdminSupabase = () => {
@@ -91,6 +94,7 @@ export async function GET(request: Request) {
                     roles ( id, name, color ),
                     area:areas!area_id ( id, name, color ),
                     responsible:users!assigned_to_user_id ( id, name ),
+                    checklist_shifts ( shift_id, shifts ( id, name ) ),
                     tasks:checklist_tasks (*)
                 `)
             .in('restaurant_id', restaurantIds)
@@ -125,6 +129,7 @@ export async function GET(request: Request) {
                         roles ( id, name, color ),
                         area:areas!area_id ( id, name, color ),
                         responsible:users!assigned_to_user_id ( id, name ),
+                        checklist_shifts ( shift_id, shifts ( id, name ) ),
                         tasks:checklist_tasks (*)
                     `)
                     .in('restaurant_id', restaurantIds)
@@ -186,8 +191,15 @@ export async function GET(request: Request) {
             }
 
             const unit = unitsById[checklist.restaurant_id];
+            // Sprint 66: turnos N:N → shift_ids + shifts (id,name) para exibição.
+            const shiftLinks = (checklist.checklist_shifts ?? []) as Array<{ shift_id: string; shifts: { id: string; name: string } | null }>;
+            const shiftIds = shiftLinks.map((l) => l.shift_id);
+            const shiftObjs = shiftLinks.map((l) => l.shifts).filter((s): s is { id: string; name: string } => Boolean(s));
             return {
                 ...checklist,
+                checklist_shifts: undefined,
+                shift_ids: shiftIds,
+                shifts: shiftObjs,
                 tasks: (checklist.tasks ?? []).sort((a: { order: number }, b: { order: number }) => a.order - b.order),
                 execution_status,
                 assumed_by_name: assumption?.user_name ?? null,
@@ -223,9 +235,9 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json();
-        const { restaurant_id, name, description, shift, status, tasks, category, role_id, is_required, checklist_type, assigned_to_user_id, recurrence, start_time, end_time, recurrence_config, enforce_sequential_order, area_id, target_role, assignment_type } = body;
+        const { restaurant_id, name, description, shift, shift_id, shift_ids, status, tasks, category, role_id, is_required, checklist_type, assigned_to_user_id, recurrence, start_time, end_time, recurrence_config, enforce_sequential_order, area_id, target_role, assignment_type, origin_template_id, origin_template_version } = body;
 
-        if (!restaurant_id || !name || !shift) {
+        if (!restaurant_id || !name) {
             return NextResponse.json({ error: 'Campos obrigatórios faltando' }, { status: 400 });
         }
 
@@ -309,6 +321,22 @@ export async function POST(request: Request) {
                 ? recurrenceProcess.validated
                 : (recurrence_config || null);
 
+        // Sprint 66: turnos N:N. shift_ids é a fonte da verdade (vazio = "Todos os
+        // turnos"). Mantém shadows: shift_id (primário, só com 1 turno) + enum `shift`.
+        const incomingShiftIds = ('shift_ids' in body)
+            ? normalizeShiftIds(shift_ids)
+            : (('shift_id' in body) ? (shift_id ? [shift_id as string] : []) : []);
+        const finalShiftId = shiftIdShadow(incomingShiftIds);
+        const finalShift = ('shift_ids' in body) || ('shift_id' in body)
+            ? await deriveShiftEnum(adminSupabase, restaurant_id, finalShiftId)
+            : (shift || 'any');
+
+        // Sprint 66: atribuição direta exige interseção com os turnos da rotina.
+        const shiftAssignErr = await validateShiftAssignment(adminSupabase, restaurant_id, assigned_to_user_id || null, incomingShiftIds);
+        if (shiftAssignErr) {
+            return NextResponse.json({ error: shiftAssignErr, code: 'SHIFT_ASSIGNMENT_INVALID' }, { status: 422 });
+        }
+
         // 1. Criar o Checklist
         const { data: newChecklist, error: checklistError } = await adminSupabase
             .from('checklists')
@@ -316,7 +344,8 @@ export async function POST(request: Request) {
                 restaurant_id,
                 name,
                 description,
-                shift,
+                shift: finalShift,
+                shift_id: finalShiftId,
                 category,
                 status,
                 role_id,
@@ -331,6 +360,9 @@ export async function POST(request: Request) {
                 area_id: area_id || null,
                 target_role: target_role || 'all',
                 assignment_type: assignment_type || (assigned_to_user_id ? 'user' : (area_id ? 'area' : 'all')),
+                // Sprint 70 — rastreabilidade da origem (importação de modelo do catálogo)
+                origin_template_id: origin_template_id || null,
+                origin_template_version: origin_template_version ?? null,
                 active: true,
                 created_by: user.id
             })
@@ -342,12 +374,15 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: checklistError.message }, { status: 500 });
         }
 
+        // Sprint 66: grava os turnos N:N da rotina (vazio = "Todos os turnos").
+        await replaceChecklistShifts(adminSupabase, restaurant_id, newChecklist.id, incomingShiftIds);
+
         await trackChecklistEvent('checklist_created', {
             restaurantId: restaurant_id,
             userId: user.id,
             metadata: {
                 checklist_id: newChecklist.id,
-                shift,
+                shift: finalShift,
                 checklist_type: checklist_type || 'regular',
                 tasks_count: Array.isArray(tasks) ? tasks.length : 0,
             },

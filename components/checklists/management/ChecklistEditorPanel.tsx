@@ -1,5 +1,7 @@
 "use client";
 
+import { formatShiftNames } from "@/lib/utils/shift-labels";
+
 import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
@@ -14,12 +16,6 @@ import { IssueDetail } from "@/components/checklists/issues/IssueDetail";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import type { TaskIssue } from "@/lib/types";
 
-const SHIFT_LABELS: Record<string, string> = {
-    morning: "Manhã",
-    afternoon: "Tarde",
-    evening: "Noite",
-    any: "Todos os turnos",
-};
 
 const TYPE_LABELS: Record<string, string> = {
     regular: "Regular",
@@ -385,7 +381,7 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose, focusIss
                         <div className="flex items-center justify-between">
                             <span className="text-[#92bbc9] text-sm">Turno</span>
                             <span className="text-white text-sm font-medium">
-                                {SHIFT_LABELS[checklist.shift] ?? checklist.shift}
+                                {formatShiftNames(checklist.shifts)}
                             </span>
                         </div>
                         <div className="flex items-center justify-between">

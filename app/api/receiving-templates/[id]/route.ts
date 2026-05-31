@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { ReceivingTemplate } from '@/lib/types';
+import { deriveShiftEnum } from '@/lib/api/derive-shift-enum';
+import { validateShiftAssignment } from '@/lib/api/validate-shift-assignment';
+import { normalizeShiftIds, shiftIdShadow, replaceTemplateShifts, fetchShiftIdsByTemplate } from '@/lib/api/shift-links';
 
 const getAdminSupabase = () =>
     createClient(
@@ -83,7 +86,7 @@ export async function GET(
 
         const { data, error } = await adminSupabase
             .from('receiving_templates')
-            .select('*, area:areas(id, name, color), role:roles(id, name, color), tasks:receiving_template_tasks(*)')
+            .select('*, area:areas(id, name, color), role:roles(id, name, color), tasks:receiving_template_tasks(*), receiving_template_shifts ( shift_id, shifts ( id, name ) )')
             .eq('id', id)
             .eq('restaurant_id', restaurant_id)
             .maybeSingle();
@@ -94,7 +97,15 @@ export async function GET(
         }
         if (!data) return NextResponse.json({ error: 'Não encontrado.' }, { status: 404 });
 
-        return NextResponse.json(data as ReceivingTemplate);
+        // Sprint 67: turnos N:N → shift_ids + shifts (id,name).
+        const links = ((data as { receiving_template_shifts?: Array<{ shift_id: string; shifts: { id: string; name: string } | null }> }).receiving_template_shifts) ?? [];
+        const out = {
+            ...data,
+            receiving_template_shifts: undefined,
+            shift_ids: links.map((l) => l.shift_id),
+            shifts: links.map((l) => l.shifts).filter((s): s is { id: string; name: string } => Boolean(s)),
+        };
+        return NextResponse.json(out as ReceivingTemplate);
     } catch (error: unknown) {
         console.error('[GET /api/receiving-templates/:id] inesperado:', error);
         return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 });
@@ -157,6 +168,18 @@ export async function PATCH(
                 return NextResponse.json({ error: 'shift inválido.' }, { status: 400 });
             }
         }
+        // Sprint 67: turnos N:N. shift_ids (ou shift_id legado) define os turnos.
+        // incomingShiftIds = null → não alterar turnos. Atualiza shadows; a junção
+        // é substituída após o update.
+        const incomingShiftIds: string[] | null = ('shift_ids' in b)
+            ? normalizeShiftIds(b.shift_ids)
+            : ('shift_id' in b ? (typeof b.shift_id === 'string' && b.shift_id ? [b.shift_id] : []) : null);
+        if (incomingShiftIds !== null) {
+            const sidShadow = shiftIdShadow(incomingShiftIds);
+            upd.shift_id = sidShadow;
+            const derived = await deriveShiftEnum(adminSupabase, restaurant_id, sidShadow);
+            upd.shift = derived === 'any' ? null : derived;
+        }
         if (b.recurrence !== undefined) {
             if (typeof b.recurrence !== 'string' || !VALID_RECURRENCES.includes(b.recurrence)) {
                 return NextResponse.json({ error: 'recurrence inválida.' }, { status: 400 });
@@ -172,6 +195,25 @@ export async function PATCH(
             return NextResponse.json({ error: 'Nada para atualizar.' }, { status: 400 });
         }
 
+        // Sprint 66: atribuição direta exige interseção com os turnos do modelo.
+        // Valores efetivos: do body quando enviados; senão os atuais do registro.
+        if (('assigned_to_user_id' in b) || incomingShiftIds !== null) {
+            const { data: currentTpl } = await adminSupabase
+                .from('receiving_templates')
+                .select('assigned_to_user_id')
+                .eq('id', id)
+                .eq('restaurant_id', restaurant_id)
+                .maybeSingle<{ assigned_to_user_id: string | null }>();
+            const effAssigned = ('assigned_to_user_id' in b) ? (upd.assigned_to_user_id as string | null) : (currentTpl?.assigned_to_user_id ?? null);
+            const effShiftIds = incomingShiftIds !== null
+                ? incomingShiftIds
+                : ((await fetchShiftIdsByTemplate(adminSupabase, [id])).get(id) ?? []);
+            const tplPutShiftErr = await validateShiftAssignment(adminSupabase, restaurant_id, effAssigned, effShiftIds);
+            if (tplPutShiftErr) {
+                return NextResponse.json({ error: tplPutShiftErr, code: 'SHIFT_ASSIGNMENT_INVALID' }, { status: 422 });
+            }
+        }
+
         if (Object.keys(upd).length > 0) {
             const { error } = await adminSupabase
                 .from('receiving_templates')
@@ -182,6 +224,11 @@ export async function PATCH(
                 console.error('[PATCH /api/receiving-templates/:id]', error);
                 return NextResponse.json({ error: error.message }, { status: 500 });
             }
+        }
+
+        // Sprint 67: substitui os turnos N:N quando o payload os trouxe.
+        if (incomingShiftIds !== null) {
+            await replaceTemplateShifts(adminSupabase, restaurant_id, id, incomingShiftIds);
         }
 
         if (hasTasks) {

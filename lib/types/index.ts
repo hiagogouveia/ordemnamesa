@@ -86,6 +86,10 @@ export interface ChecklistAssumption {
     observation?: string
     execution_status: 'in_progress' | 'blocked' | 'done'
     blocked_reason?: string | null
+    // Sprint 62 — Auditoria de turno (snapshot no momento da assunção).
+    assumption_shift_id?: string | null // deprecado (single) — ver assumption_shift_ids
+    assumption_shift_ids?: string[] | null // Sprint 68 — turnos da rotina (N:N) no momento
+    assumption_user_shift_ids?: string[] | null
 }
 
 export interface Checklist {
@@ -94,6 +98,14 @@ export interface Checklist {
     name: string
     description?: string
     shift: ShiftType
+    // Sprint 61 — Turno cadastrado (shifts.id). NULL = "Todos os turnos".
+    // Sprint 66: DEPRECADO — mantido como sombra (primário) durante transição.
+    // A fonte da verdade dos turnos é o N:N (shift_ids / checklist_shifts).
+    shift_id?: string | null
+    // Sprint 66 — Turnos da rotina (N:N). Conjunto vazio = "Todos os turnos".
+    shift_ids?: string[]
+    // Turnos resolvidos (id+nome) para exibição (board). Vem do join checklist_shifts.
+    shifts?: { id: string; name: string }[]
     status: ChecklistStatus
     active: boolean
     created_by: string
@@ -131,6 +143,10 @@ export interface Checklist {
     source_template_id?: string | null
     supplier_id?: string | null
     supplier?: Supplier | null
+    // Sprint 70 — Modelos de Rotinas Prontas. Rastreabilidade da origem quando a
+    // rotina foi importada do catálogo global. Somente registro — não sincroniza.
+    origin_template_id?: string | null
+    origin_template_version?: number | null
 }
 
 // Sprint 56 — Receiving Templates + Suppliers
@@ -153,6 +169,9 @@ export interface ReceivingTemplate {
     role_id?: string | null
     assigned_to_user_id?: string | null
     shift?: 'morning' | 'afternoon' | 'evening' | null
+    shift_id?: string | null // Sprint 63 — DEPRECADO (sombra); ver shift_ids (N:N)
+    shift_ids?: string[] // Sprint 67 — turnos do modelo (N:N). Vazio = todos os turnos
+    shifts?: { id: string; name: string }[] // turnos resolvidos para exibição
     recurrence: 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekdays' | 'custom' | 'shift_days'
     recurrence_config?: RecurrenceConfig | RecurrenceV2 | null
     enforce_sequential_order: boolean
@@ -182,6 +201,53 @@ export interface ReceivingTemplateTask {
 // Sprint 48 (Etapa 4): ReceivingExpectation removida do código TS. A tabela
 // `receiving_expectations` permanece no banco como histórico read-only.
 // Substituída pelo modelo Etapa 2: receiving_templates + checklists one-shot.
+
+// Sprint 70 — Modelos de Rotinas Prontas (catálogo global, read-only)
+export type TemplateCategory =
+    | 'caixa'
+    | 'cozinha'
+    | 'salao'
+    | 'estoque'
+    | 'limpeza'
+    | 'banheiros'
+    | 'seguranca_alimentar'
+    | 'equipamentos'
+    | 'manutencao'
+    | 'delivery'
+    | 'administrativo'
+
+export interface ChecklistTemplateItem {
+    id: string
+    template_id: string
+    item_slug: string
+    title: string
+    description?: string | null
+    order: number
+    requires_photo: boolean
+    is_critical: boolean
+    requires_observation: boolean
+    type?: TaskType | null
+    max_photos?: number | null
+    task_config?: TaskConfig | null
+}
+
+export interface ChecklistTemplate {
+    id: string
+    slug: string
+    name: string
+    description?: string | null
+    category: TemplateCategory
+    icon?: string | null
+    suggested_type: 'regular' | 'opening' | 'closing'
+    suggested_area_label?: string | null
+    suggested_recurrence?: string | null
+    suggested_recurrence_config?: RecurrenceConfig | RecurrenceV2 | null
+    is_premium: boolean
+    is_active: boolean
+    version: number
+    sort_order: number
+    items?: ChecklistTemplateItem[]
+}
 
 // Sprint 35 — Tipos de resposta estruturados
 export type TaskType = 'boolean' | 'date' | 'number' | 'rating'
@@ -296,6 +362,8 @@ export interface MyActivity {
     name: string
     description?: string | null
     shift: ShiftType
+    shift_id?: string | null // Sprint 61 — DEPRECADO (sombra)
+    shift_ids?: string[] // Sprint 66 — turnos da rotina (N:N); vazio = todos os turnos
     checklist_type: 'regular' | 'opening' | 'closing' | 'receiving'
     is_required: boolean
     start_time?: string | null

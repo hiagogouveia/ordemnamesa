@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { fetchShiftIdsByChecklist, isVisibleByShiftIntersection } from '@/lib/api/shift-links';
 
 const getAdminSupabase = () =>
     createClient(
@@ -46,8 +47,17 @@ export async function GET(request: Request) {
             .eq('restaurant_id', restaurant_id)
             .eq('user_id', user.id);
 
+        // Sprint 61: turnos do colaborador (segmentação de visibilidade — mesmo
+        // predicado do GET /api/my-activities para manter badge == lista).
+        const { data: userShiftRows } = await adminSupabase
+            .from('user_shifts')
+            .select('shift_id')
+            .eq('restaurant_id', restaurant_id)
+            .eq('user_id', user.id);
+
         const userAreaIds = (userAreaRows ?? []).map((r) => r.area_id);
         const userRoleIds = (userRoleRows ?? []).map((r) => r.role_id);
+        const userShiftIds = (userShiftRows ?? []).map((r) => r.shift_id);
         if (userAreaIds.length === 0) return NextResponse.json({ pending: 0 });
 
         // Checklists ativos nas áreas/funções do usuário
@@ -58,7 +68,7 @@ export async function GET(request: Request) {
         }
         filterParts.push(`and(assigned_to_user_id.eq.${user.id},area_id.in.(${userAreaIds.join(',')}))`);
 
-        const checklistSelect = 'id, end_time, task_count:checklist_tasks(count)';
+        const checklistSelect = 'id, shift_id, assigned_to_user_id, end_time, task_count:checklist_tasks(count)';
         const { data: checklistsData } = await adminSupabase
             .from('checklists')
             .select(checklistSelect)
@@ -67,7 +77,18 @@ export async function GET(request: Request) {
             .eq('status', 'active')
             .or(filterParts.join(','));
 
-        let checklists = checklistsData || [];
+        // Sprint 66 — segmentação por turno (interseção, igual ao GET): sem turno
+        // → vê tudo; atribuição direta → sempre; rotina sem turnos → visível;
+        // interseção rotina ∩ usuário ≠ ∅ → visível. Filtro no conjunto base.
+        const applyShiftFilter = userShiftIds.length > 0;
+        const shiftMap = await fetchShiftIdsByChecklist(
+            adminSupabase,
+            (checklistsData || []).map((c: { id: string }) => c.id),
+        );
+        let checklists = !applyShiftFilter
+            ? (checklistsData || [])
+            : (checklistsData || []).filter((c: { id: string; assigned_to_user_id?: string | null }) =>
+                isVisibleByShiftIntersection(shiftMap.get(c.id) ?? [], userShiftIds, c.assigned_to_user_id, user.id));
 
         // Defesa em profundidade: reincorpora checklists com assumptions
         // in_progress mesmo quando active=false. Mantém coerência com

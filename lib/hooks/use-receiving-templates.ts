@@ -121,6 +121,8 @@ interface CreateTemplateVars {
     role_id?: string | null;
     assigned_to_user_id?: string | null;
     shift?: "morning" | "afternoon" | "evening" | null;
+    shift_id?: string | null;
+    shift_ids?: string[];
     recurrence: ReceivingTemplate["recurrence"];
     recurrence_config?: ReceivingTemplate["recurrence_config"];
     enforce_sequential_order?: boolean;
@@ -157,6 +159,8 @@ interface UpdateTemplateVars {
     role_id?: string | null;
     assigned_to_user_id?: string | null;
     shift?: "morning" | "afternoon" | "evening" | null;
+    shift_id?: string | null;
+    shift_ids?: string[];
     recurrence?: ReceivingTemplate["recurrence"];
     recurrence_config?: ReceivingTemplate["recurrence_config"];
     enforce_sequential_order?: boolean;

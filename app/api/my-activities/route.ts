@@ -4,6 +4,7 @@ import type { MyActivity, MyActivityStatus, TargetRole } from '@/lib/types';
 import { getBrazilNow, getBrazilStartAndEndOfDay } from '@/lib/utils/brazil-date';
 import { filterChecklistsByRecurrence } from '@/lib/utils/should-checklist-appear-today';
 import { OPERATIONAL_PREDICATE, fetchArchivedQuickIdsForToday } from '@/lib/utils/operational-activity';
+import { fetchShiftIdsByChecklist, isVisibleByShiftIntersection } from '@/lib/api/shift-links';
 
 const getAdminSupabase = () =>
     createClient(
@@ -73,8 +74,16 @@ export async function GET(request: Request) {
             .eq('restaurant_id', restaurant_id)
             .eq('user_id', user.id);
 
+        // Sprint 61: turnos do colaborador (para segmentação de visibilidade).
+        const { data: userShiftRows } = await adminSupabase
+            .from('user_shifts')
+            .select('shift_id')
+            .eq('restaurant_id', restaurant_id)
+            .eq('user_id', user.id);
+
         const areaIds = (userAreaRows ?? []).map((r) => r.area_id);
         const roleIds = (userRoleRows ?? []).map((r) => r.role_id);
+        const userShiftIds = (userShiftRows ?? []).map((r) => r.shift_id);
 
         // Filtro: checklists da área/role do usuário (sem atribuição individual),
         //         OU atribuídos diretamente ao usuário.
@@ -102,6 +111,8 @@ export async function GET(request: Request) {
                 name,
                 description,
                 shift,
+                shift_id,
+                assigned_to_user_id,
                 checklist_type,
                 is_required,
                 start_time,
@@ -134,10 +145,26 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: checklistsError.message }, { status: 500 });
         }
 
+        // Sprint 66 — Segmentação por turno (visibilidade) no modelo N:N. Regra:
+        //   - sem turno vinculado → vê tudo (opt-in);
+        //   - atribuição direta ao usuário → sempre visível (prioridade);
+        //   - rotina sem turnos (conjunto vazio) → "Todos os turnos" → visível;
+        //   - interseção (turnos da rotina ∩ turnos do usuário) ≠ ∅ → visível.
+        // Aplicada só ao conjunto base; merges (órfãos/quick) abaixo BYPASSAM.
+        const applyShiftFilter = userShiftIds.length > 0;
+        const baseShiftMap = await fetchShiftIdsByChecklist(
+            adminSupabase,
+            (checklistsData || []).map((c: { id: string }) => c.id),
+        );
+        const baseChecklists = !applyShiftFilter
+            ? (checklistsData || [])
+            : (checklistsData || []).filter((c: { id: string; assigned_to_user_id?: string | null }) =>
+                isVisibleByShiftIntersection(baseShiftMap.get(c.id) ?? [], userShiftIds, c.assigned_to_user_id, user.id));
+
         // Reincorpora quick receivings arquivados hoje (active=false após conclusão s53)
         // para que permaneçam visíveis em Meu Turno até a virada do dia.
         const archivedQuickIds = await fetchArchivedQuickIdsForToday(adminSupabase, [restaurant_id]);
-        let checklists = checklistsData || [];
+        let checklists = baseChecklists;
         if (archivedQuickIds.size > 0) {
             const knownIds = new Set(checklists.map((c: { id: string }) => c.id));
             const idsToFetch = Array.from(archivedQuickIds).filter((id) => !knownIds.has(id));
@@ -190,16 +217,36 @@ export async function GET(request: Request) {
         // Buscar shifts para resolver recurrence='shift_days'
         const { data: shifts } = await adminSupabase
             .from('shifts')
-            .select('shift_type, days_of_week')
+            .select('id, shift_type, days_of_week')
             .eq('restaurant_id', restaurant_id)
             .eq('active', true);
+
+        // Sprint 65 — Execução de recebimento é evento do dia, não rotina
+        // recorrente: instância one-shot só aparece se foi assumida HOJE. Evita
+        // que execuções de dias passados reapareçam como pendência nova.
+        const { data: assumedTodayRows } = await adminSupabase
+            .from('checklist_assumptions')
+            .select('checklist_id')
+            .eq('restaurant_id', restaurant_id)
+            .eq('date_key', brazil.dateKey);
+        const assumedTodayIds = new Set((assumedTodayRows ?? []).map((r: { checklist_id: string }) => r.checklist_id));
+
+        // Anexa os turnos (N:N) a cada rotina para a recorrência usar a UNIÃO dos
+        // dias dos turnos. Cobre também itens reincorporados pelos merges acima.
+        const fullShiftMap = await fetchShiftIdsByChecklist(
+            adminSupabase,
+            checklists.map((c: { id: string }) => c.id),
+        );
+        for (const c of checklists as Array<{ id: string; shift_ids?: string[] }>) {
+            c.shift_ids = fullShiftMap.get(c.id) ?? [];
+        }
 
         const visibleChecklists = filterChecklistsByRecurrence(
             checklists,
             brazil.dayOfWeek,
             brazil.dateKey,
             shifts || [],
-        );
+        ).filter((c: { is_one_shot?: boolean; id: string }) => !c.is_one_shot || assumedTodayIds.has(c.id));
 
         if (visibleChecklists.length === 0) {
             return NextResponse.json([]);
@@ -279,6 +326,8 @@ export async function GET(request: Request) {
                 name: checklist.name,
                 description: checklist.description ?? null,
                 shift: checklist.shift,
+                shift_id: checklist.shift_id ?? null,
+                shift_ids: checklist.shift_ids ?? [],
                 checklist_type: checklist.checklist_type ?? 'regular',
                 is_required: checklist.is_required ?? false,
                 start_time: checklist.start_time ?? null,
