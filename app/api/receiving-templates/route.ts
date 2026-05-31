@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { ReceivingTemplate } from '@/lib/types';
+import { deriveShiftEnum } from '@/lib/api/derive-shift-enum';
 
 const getAdminSupabase = () =>
     createClient(
@@ -117,7 +118,7 @@ export async function POST(request: Request) {
         const body = await request.json().catch(() => ({}));
         const {
             restaurant_id, name, description, area_id, role_id, assigned_to_user_id,
-            recurrence, recurrence_config, enforce_sequential_order, tasks, shift,
+            recurrence, recurrence_config, enforce_sequential_order, tasks, shift, shift_id,
         } = body as Record<string, unknown>;
 
         if (!restaurant_id || typeof restaurant_id !== 'string') {
@@ -151,6 +152,14 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Permissão negada.' }, { status: 403 });
         }
 
+        // Sprint 63: shift_id é a fonte da verdade. Quando enviado, deriva o enum
+        // `shift` do turno (mapeando 'any' → null, pois o CHECK do template não
+        // aceita 'any'). Sem shift_id no body → mantém o enum legado recebido.
+        const hasShiftId = 'shift_id' in body;
+        const finalShiftId = hasShiftId && typeof shift_id === 'string' && shift_id ? shift_id : null;
+        const derivedEnum = hasShiftId ? await deriveShiftEnum(adminSupabase, restaurant_id, finalShiftId) : null;
+        const finalShift = hasShiftId ? (derivedEnum === 'any' ? null : derivedEnum) : cleanShift;
+
         // Insert template
         const { data: template, error: insertErr } = await adminSupabase
             .from('receiving_templates')
@@ -161,7 +170,8 @@ export async function POST(request: Request) {
                 area_id,
                 role_id: typeof role_id === 'string' && role_id ? role_id : null,
                 assigned_to_user_id: typeof assigned_to_user_id === 'string' && assigned_to_user_id ? assigned_to_user_id : null,
-                shift: cleanShift,
+                shift: finalShift,
+                shift_id: finalShiftId,
                 recurrence: cleanRecurrence,
                 recurrence_config: recurrence_config ?? null,
                 enforce_sequential_order: !!enforce_sequential_order,

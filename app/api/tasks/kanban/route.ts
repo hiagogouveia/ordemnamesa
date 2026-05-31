@@ -134,8 +134,10 @@ export async function GET(request: Request) {
         // Filtro de turno aplicado só ao conjunto base; merges de quick receivings
         // arquivados e órfãos in_progress (abaixo) bypassam — nunca perder execução.
         let activeChecklists = applyShiftFilter
-            ? (activeChecklistsData || []).filter((c: { shift_id?: string | null }) =>
-                c.shift_id == null || userShiftIds.includes(c.shift_id))
+            ? (activeChecklistsData || []).filter((c: { shift_id?: string | null; assigned_to_user_id?: string | null }) =>
+                c.assigned_to_user_id === user.id
+                || c.shift_id == null
+                || userShiftIds.includes(c.shift_id))
             : (activeChecklistsData || []);
         if (archivedQuickIds.size > 0) {
             const knownIds = new Set(activeChecklists.map((c: { id: string }) => c.id));

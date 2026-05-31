@@ -160,6 +160,7 @@ export interface ReceivingTemplate {
     role_id?: string | null
     assigned_to_user_id?: string | null
     shift?: 'morning' | 'afternoon' | 'evening' | null
+    shift_id?: string | null // Sprint 63 — turno cadastrado; NULL = todos os turnos
     recurrence: 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekdays' | 'custom' | 'shift_days'
     recurrence_config?: RecurrenceConfig | RecurrenceV2 | null
     enforce_sequential_order: boolean

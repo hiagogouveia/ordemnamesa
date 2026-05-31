@@ -30,7 +30,9 @@ import { MonthlyConfig } from "@/components/checklists/recurrence/monthly-config
 import { YearlyConfig } from "@/components/checklists/recurrence/yearly-config";
 import { TaskItem } from "@/components/checklists/task-item";
 import { describeRecurrence } from "@/lib/utils/recurrence/describe";
-import { SHIFT_OPTIONS, type ShiftValue } from "@/lib/utils/shift-labels";
+import { type ShiftValue } from "@/lib/utils/shift-labels";
+
+const DAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 import type {
     ChecklistTask,
     ReceivingTemplate,
@@ -147,6 +149,9 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
     const [name, setName] = useState(effectiveTemplate?.name ?? "");
     const [description, setDescription] = useState(effectiveTemplate?.description ?? "");
     const [areaId, setAreaId] = useState(effectiveTemplate?.area_id ?? "");
+    // Sprint 63: shiftId ("" = "Todos os turnos") é a fonte da verdade; `shift`
+    // (enum) é sombra derivada para compat.
+    const [shiftId, setShiftId] = useState<string>(effectiveTemplate?.shift_id ?? "");
     const [shift, setShift] = useState<ShiftValue>(
         (effectiveTemplate?.shift as ShiftValue) ?? "any",
     );
@@ -180,6 +185,7 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
     useEffect(() => {
         if (!fullTemplate) return;
         setShift((fullTemplate.shift as ShiftValue) ?? "any");
+        setShiftId(fullTemplate.shift_id ?? "");
         setRecurrence(fullTemplate.recurrence ?? "daily");
         setRecurrenceConfig(fullTemplate.recurrence_config ?? null);
         setAssignedToUserId(fullTemplate.assigned_to_user_id ?? "");
@@ -204,6 +210,31 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
         if (!areaId) return [];
         return equipe.filter((m) => m.areas?.some((a) => a.id === areaId));
     }, [equipe, areaId]);
+
+    // Sprint 63: turno selecionado + handler. Escolher turno deriva o enum e
+    // sugere recorrência 'shift_days' (herda os dias do turno cadastrado).
+    const selectedShift = shiftId ? shiftsData.find((s) => s.id === shiftId) ?? null : null;
+    const resolvedShiftDays = selectedShift
+        ? [...new Set(selectedShift.days_of_week)].sort((a, b) => a - b)
+        : null;
+    const handleShiftChange = useCallback(
+        (newId: string) => {
+            setShiftId(newId);
+            const sel = shiftsData.find((s) => s.id === newId);
+            const st = sel?.shift_type;
+            setShift((st === "morning" || st === "afternoon" || st === "evening" ? st : "any") as ShiftValue);
+            setRecurrence((prev) => {
+                if (prev !== "daily" && prev !== "shift_days") return prev;
+                if (newId) {
+                    setRecurrenceConfig({ version: 2, type: "shift_days" });
+                    return "shift_days";
+                }
+                setRecurrenceConfig({ version: 2, type: "daily" });
+                return "daily";
+            });
+        },
+        [shiftsData],
+    );
 
     // Recurrence handlers — mesmo padrão de checklist-form
     const dropdownValue = recurrenceToDropdownValue(recurrence, recurrenceConfig);
@@ -328,6 +359,7 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                     area_id: areaId,
                     assigned_to_user_id: assignedPayload,
                     shift: shiftPayload,
+                    shift_id: shiftId || null,
                     recurrence: recurrence as ReceivingTemplate["recurrence"],
                     recurrence_config: recurrenceConfig,
                     tasks: tasksPayload,
@@ -340,6 +372,7 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                     area_id: areaId,
                     assigned_to_user_id: assignedPayload ?? undefined,
                     shift: shiftPayload,
+                    shift_id: shiftId || null,
                     recurrence: recurrence as ReceivingTemplate["recurrence"],
                     recurrence_config: recurrenceConfig ?? undefined,
                     tasks: tasksPayload,
@@ -493,16 +526,24 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                                         Turno
                                     </label>
                                     <select
-                                        value={shift}
-                                        onChange={(e) => setShift(e.target.value as ShiftValue)}
+                                        value={shiftId}
+                                        onChange={(e) => handleShiftChange(e.target.value)}
                                         className="w-full bg-[#101d22] border border-[#233f48] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#13b6ec]"
                                     >
-                                        {SHIFT_OPTIONS.map((s) => (
-                                            <option key={s.value} value={s.value}>
-                                                {s.label}
+                                        <option value="">Todos os turnos</option>
+                                        {shiftsData.filter((s) => s.active).map((s) => (
+                                            <option key={s.id} value={s.id}>
+                                                {s.name}
                                             </option>
                                         ))}
                                     </select>
+                                    {recurrence === "shift_days" && selectedShift && (
+                                        <p className="mt-1.5 text-[11px] text-[#13b6ec]">
+                                            {resolvedShiftDays && resolvedShiftDays.length > 0
+                                                ? `Disponível nos dias do turno ${selectedShift.name}: ${resolvedShiftDays.map((d) => DAYS_SHORT[d]).join(", ")}`
+                                                : `O turno ${selectedShift.name} não tem dias configurados.`}
+                                        </p>
+                                    )}
                                 </div>
 
                                 {/* Recorrência — exatamente o mesmo conjunto/handler das rotinas */}

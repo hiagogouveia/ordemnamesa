@@ -55,13 +55,15 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Sem acesso a este restaurante.' }, { status: 403 });
         }
 
-        // Escopo do user: áreas e roles dele
-        const [{ data: userAreas }, { data: userRoles }] = await Promise.all([
+        // Escopo do user: áreas, roles e turnos dele
+        const [{ data: userAreas }, { data: userRoles }, { data: userShiftRows }] = await Promise.all([
             adminSupabase.from('user_areas').select('area_id').eq('restaurant_id', restaurant_id).eq('user_id', user.id),
             adminSupabase.from('user_roles').select('role_id').eq('restaurant_id', restaurant_id).eq('user_id', user.id),
+            adminSupabase.from('user_shifts').select('shift_id').eq('restaurant_id', restaurant_id).eq('user_id', user.id),
         ]);
         const userAreaIds = (userAreas ?? []).map((r) => r.area_id);
         const userRoleIds = (userRoles ?? []).map((r) => r.role_id);
+        const userShiftIds = (userShiftRows ?? []).map((r) => r.shift_id);
 
         if (userAreaIds.length === 0) {
             return NextResponse.json(withMeta ? { available: [], total_in_scope: 0 } : []);
@@ -86,7 +88,7 @@ export async function GET(request: Request) {
 
         const [templatesRes, shiftsRes] = await Promise.all([
             query,
-            adminSupabase.from('shifts').select('shift_type, days_of_week').eq('restaurant_id', restaurant_id).eq('active', true),
+            adminSupabase.from('shifts').select('id, shift_type, days_of_week').eq('restaurant_id', restaurant_id).eq('active', true),
         ]);
 
         if (templatesRes.error) {
@@ -106,8 +108,18 @@ export async function GET(request: Request) {
             shiftsRes.data ?? [],
         );
 
+        // Sprint 63 — Segmentação por turno (prioridade: atribuição direta >
+        // "Todos os turnos" > turno). Sem turno vinculado → vê tudo (opt-in).
+        const applyShiftFilter = userShiftIds.length > 0;
+        const visibleByShift = !applyShiftFilter
+            ? visible
+            : visible.filter((t) =>
+                t.assigned_to_user_id === user.id
+                || t.shift_id == null
+                || userShiftIds.includes(t.shift_id as string));
+
         // Normaliza tasks_count para number
-        const normalized = visible.map((t) => {
+        const normalized = visibleByShift.map((t) => {
             const rawCount = (t as { tasks_count?: Array<{ count: number }> | number }).tasks_count;
             const count = Array.isArray(rawCount) ? (rawCount[0]?.count ?? 0) : (rawCount ?? 0);
             return { ...t, tasks_count: count };

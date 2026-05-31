@@ -111,6 +111,7 @@ export async function GET(request: Request) {
                 description,
                 shift,
                 shift_id,
+                assigned_to_user_id,
                 checklist_type,
                 is_required,
                 start_time,
@@ -152,11 +153,14 @@ export async function GET(request: Request) {
         // "Meu Turno" é visão operacional pessoal: segmenta por turno para TODOS
         // os perfis (a exceção "owner/manager vê tudo" vale só para telas
         // administrativas). Sem turno vinculado → vê tudo (opt-in, zero regressão).
+        // Prioridade: atribuição direta ao usuário > "Todos os turnos" > turno.
         const applyShiftFilter = userShiftIds.length > 0;
         const baseChecklists = !applyShiftFilter
             ? (checklistsData || [])
-            : (checklistsData || []).filter((c: { shift_id?: string | null }) =>
-                c.shift_id == null || userShiftIds.includes(c.shift_id));
+            : (checklistsData || []).filter((c: { shift_id?: string | null; assigned_to_user_id?: string | null }) =>
+                c.assigned_to_user_id === user.id
+                || c.shift_id == null
+                || userShiftIds.includes(c.shift_id));
 
         // Reincorpora quick receivings arquivados hoje (active=false após conclusão s53)
         // para que permaneçam visíveis em Meu Turno até a virada do dia.

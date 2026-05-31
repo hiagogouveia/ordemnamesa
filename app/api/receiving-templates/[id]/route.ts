@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { ReceivingTemplate } from '@/lib/types';
+import { deriveShiftEnum } from '@/lib/api/derive-shift-enum';
 
 const getAdminSupabase = () =>
     createClient(
@@ -156,6 +157,14 @@ export async function PATCH(
             } else {
                 return NextResponse.json({ error: 'shift inválido.' }, { status: 400 });
             }
+        }
+        // Sprint 63: shift_id é a fonte da verdade. Quando enviado, grava shift_id
+        // e deriva o enum `shift` do turno ('any' → null; CHECK não aceita 'any').
+        if (b.shift_id !== undefined) {
+            const sid = typeof b.shift_id === 'string' && b.shift_id ? b.shift_id : null;
+            upd.shift_id = sid;
+            const derived = await deriveShiftEnum(adminSupabase, restaurant_id, sid);
+            upd.shift = derived === 'any' ? null : derived;
         }
         if (b.recurrence !== undefined) {
             if (typeof b.recurrence !== 'string' || !VALID_RECURRENCES.includes(b.recurrence)) {

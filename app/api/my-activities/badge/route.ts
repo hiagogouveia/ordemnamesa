@@ -67,7 +67,7 @@ export async function GET(request: Request) {
         }
         filterParts.push(`and(assigned_to_user_id.eq.${user.id},area_id.in.(${userAreaIds.join(',')}))`);
 
-        const checklistSelect = 'id, shift_id, end_time, task_count:checklist_tasks(count)';
+        const checklistSelect = 'id, shift_id, assigned_to_user_id, end_time, task_count:checklist_tasks(count)';
         const { data: checklistsData } = await adminSupabase
             .from('checklists')
             .select(checklistSelect)
@@ -81,11 +81,14 @@ export async function GET(request: Request) {
         // Filtro no conjunto base; órfãos in_progress abaixo bypassam.
         // "Meu Turno" = visão operacional pessoal: segmenta por turno para TODOS
         // os perfis. Sem turno vinculado → vê tudo. (Mesmo predicado do GET.)
+        // Prioridade: atribuição direta > "Todos os turnos" > turno.
         const applyShiftFilter = userShiftIds.length > 0;
         let checklists = !applyShiftFilter
             ? (checklistsData || [])
-            : (checklistsData || []).filter((c: { shift_id?: string | null }) =>
-                c.shift_id == null || userShiftIds.includes(c.shift_id));
+            : (checklistsData || []).filter((c: { shift_id?: string | null; assigned_to_user_id?: string | null }) =>
+                c.assigned_to_user_id === user.id
+                || c.shift_id == null
+                || userShiftIds.includes(c.shift_id));
 
         // Defesa em profundidade: reincorpora checklists com assumptions
         // in_progress mesmo quando active=false. Mantém coerência com
