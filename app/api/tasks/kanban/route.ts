@@ -187,13 +187,25 @@ export async function GET(request: Request) {
             .in('restaurant_id', restaurantIds)
             .eq('active', true);
 
+        // Sprint 65 — Execução de recebimento é um evento do dia, NÃO uma rotina
+        // recorrente: uma instância one-shot só aparece se foi assumida HOJE.
+        // Isso desacopla a execução da lógica de recorrência e evita que
+        // instâncias antigas (in_progress de dias passados) reapareçam como
+        // pendência nova. Auto-corrige dados legados (sem saneamento de visibilidade).
+        const { data: assumedTodayRows } = await adminSupabase
+            .from('checklist_assumptions')
+            .select('checklist_id')
+            .in('restaurant_id', restaurantIds)
+            .eq('date_key', brazil.dateKey);
+        const assumedTodayIds = new Set((assumedTodayRows ?? []).map((r: { checklist_id: string }) => r.checklist_id));
+
         // Filtrar checklists por regras de recorrência (dia da semana, custom, etc.)
         const visibleChecklists = filterChecklistsByRecurrence(
             activeChecklists || [],
             brazil.dayOfWeek,
             brazil.dateKey,
             shifts || [],
-        );
+        ).filter((c) => !c.is_one_shot || assumedTodayIds.has(c.id));
 
         const checklistIds = visibleChecklists.map(c => c.id);
         const checklistMeta = new Map(visibleChecklists.map(c => [c.id, { is_required: c.is_required, recurrence: c.recurrence, last_reset_at: c.last_reset_at }]));
@@ -209,6 +221,9 @@ export async function GET(request: Request) {
 
         for (const cl of (activeChecklists || [])) {
             if (!cl.recurrence) continue;
+            // Sprint 65: execução one-shot não é recorrente — nunca resetar suas
+            // tarefas (protege execuções legadas com recurrence='daily').
+            if (cl.is_one_shot) continue;
 
             let periodStart: Date | null = null;
             const lastReset = cl.last_reset_at ? new Date(cl.last_reset_at) : null;

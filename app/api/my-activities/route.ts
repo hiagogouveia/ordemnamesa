@@ -222,12 +222,22 @@ export async function GET(request: Request) {
             .eq('restaurant_id', restaurant_id)
             .eq('active', true);
 
+        // Sprint 65 — Execução de recebimento é evento do dia, não rotina
+        // recorrente: instância one-shot só aparece se foi assumida HOJE. Evita
+        // que execuções de dias passados reapareçam como pendência nova.
+        const { data: assumedTodayRows } = await adminSupabase
+            .from('checklist_assumptions')
+            .select('checklist_id')
+            .eq('restaurant_id', restaurant_id)
+            .eq('date_key', brazil.dateKey);
+        const assumedTodayIds = new Set((assumedTodayRows ?? []).map((r: { checklist_id: string }) => r.checklist_id));
+
         const visibleChecklists = filterChecklistsByRecurrence(
             checklists,
             brazil.dayOfWeek,
             brazil.dateKey,
             shifts || [],
-        );
+        ).filter((c: { is_one_shot?: boolean; id: string }) => !c.is_one_shot || assumedTodayIds.has(c.id));
 
         if (visibleChecklists.length === 0) {
             return NextResponse.json([]);
