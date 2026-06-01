@@ -6,7 +6,7 @@ import {
 } from "@/lib/seo";
 import { HOME_FAQ } from "@/lib/faq";
 import { JsonLd } from "@/components/seo/JsonLd";
-import { Navbar } from "@/components/landing/Navbar";
+import { SiteHeader } from "@/components/layout/SiteHeader";
 import { CinematicHero } from "@/components/landing/CinematicHero";
 import { ProblemSection } from "@/components/landing/sections/ProblemSection";
 import { SolutionSection } from "@/components/landing/sections/SolutionSection";
@@ -15,7 +15,7 @@ import { BenefitsSection } from "@/components/landing/sections/BenefitsSection";
 import { TestimonialsSection } from "@/components/landing/sections/TestimonialsSection";
 import { CTASection } from "@/components/landing/sections/CTASection";
 import { FAQSection } from "@/components/landing/sections/FAQSection";
-import { Footer } from "@/components/landing/sections/Footer";
+import { SiteFooter } from "@/components/layout/SiteFooter";
 
 export const metadata: Metadata = buildMetadata({
   // Página index (/) — o template do layout raiz NÃO se aplica aqui, então a
@@ -32,7 +32,7 @@ export default function LandingPage() {
       <JsonLd data={softwareApplicationJsonLd()} />
       <JsonLd data={faqPageJsonLd(HOME_FAQ)} />
       <main id="top" className="min-h-screen bg-background-dark text-white scroll-smooth">
-        <Navbar />
+        <SiteHeader variant="transparent" />
         <CinematicHero />
         <ProblemSection />
         <SolutionSection />
@@ -41,7 +41,7 @@ export default function LandingPage() {
         <TestimonialsSection />
         <CTASection />
         <FAQSection />
-        <Footer />
+        <SiteFooter />
       </main>
     </>
   );
