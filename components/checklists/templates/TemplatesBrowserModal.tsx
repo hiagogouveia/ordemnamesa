@@ -3,12 +3,20 @@
 import { useMemo, useState, useEffect } from "react";
 import { Modal } from "@/components/ui/modal";
 import { useChecklistTemplates } from "@/lib/hooks/use-checklist-templates";
+import { useRestaurantStore } from "@/lib/store/restaurant-store";
+import { KitsTab } from "@/components/checklists/kits/KitsTab";
 import type { ChecklistTemplate, ChecklistTemplateItem, TemplateCategory } from "@/lib/types";
+
+type BrowserTab = "modelos" | "kits";
 
 interface TemplatesBrowserModalProps {
     isOpen: boolean;
     onClose: () => void;
     onUseTemplate: (template: ChecklistTemplate) => void;
+    initialTab?: BrowserTab;
+    // Para o preview dos Kits (dedupe + áreas). Opcionais — default vazios.
+    existingTemplateIds?: Set<string>;
+    existingAreaNames?: Set<string>;
 }
 
 // Metadados de exibição das categorias (label + ícone Material Symbols).
@@ -44,8 +52,17 @@ function typeBadge(item: ChecklistTemplateItem): { label: string; cls: string } 
     }
 }
 
-export function TemplatesBrowserModal({ isOpen, onClose, onUseTemplate }: TemplatesBrowserModalProps) {
-    const { data: templates = [], isLoading, isError, refetch } = useChecklistTemplates(isOpen);
+export function TemplatesBrowserModal({
+    isOpen,
+    onClose,
+    onUseTemplate,
+    initialTab = "modelos",
+    existingTemplateIds,
+    existingAreaNames,
+}: TemplatesBrowserModalProps) {
+    const restaurantId = useRestaurantStore((s) => s.restaurantId);
+    const [tab, setTab] = useState<BrowserTab>(initialTab);
+    const { data: templates = [], isLoading, isError, refetch } = useChecklistTemplates(isOpen && tab === "modelos");
 
     const [selectedCategory, setSelectedCategory] = useState<TemplateCategory | null>(null);
     const [detail, setDetail] = useState<ChecklistTemplate | null>(null);
@@ -64,14 +81,16 @@ export function TemplatesBrowserModal({ isOpen, onClose, onUseTemplate }: Templa
         }
     }, [availableCategories, selectedCategory]);
 
-    // Reset ao fechar.
+    // Reset ao abrir/fechar.
     useEffect(() => {
         if (!isOpen) {
             setDetail(null);
             setSelectedCategory(null);
             setSearch("");
+        } else {
+            setTab(initialTab);
         }
-    }, [isOpen]);
+    }, [isOpen, initialTab]);
 
     const trimmedSearch = search.trim().toLowerCase();
     const isSearching = trimmedSearch.length > 0;
@@ -103,8 +122,37 @@ export function TemplatesBrowserModal({ isOpen, onClose, onUseTemplate }: Templa
                 </button>
             </div>
 
-            {/* Body */}
-            <div className="flex flex-1 min-h-0">
+            {/* Abas */}
+            <div className="shrink-0 flex items-center gap-1 px-4 sm:px-6 border-b border-[#233f48]">
+                {([["modelos", "Modelos"], ["kits", "Kits"]] as [BrowserTab, string][]).map(([key, label]) => (
+                    <button
+                        key={key}
+                        onClick={() => setTab(key)}
+                        className={`px-3 py-2.5 text-sm font-bold border-b-2 -mb-px transition-colors ${
+                            tab === key
+                                ? "border-[#13b6ec] text-[#13b6ec]"
+                                : "border-transparent text-[#92bbc9] hover:text-white"
+                        }`}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
+
+            {/* Aba Kits */}
+            {tab === "kits" && (
+                <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
+                    <KitsTab
+                        restaurantId={restaurantId}
+                        existingTemplateIds={existingTemplateIds ?? new Set()}
+                        existingAreaNames={existingAreaNames ?? new Set()}
+                        onClose={onClose}
+                    />
+                </div>
+            )}
+
+            {/* Body (Modelos) */}
+            <div className={`flex flex-1 min-h-0 ${tab !== "modelos" ? "hidden" : ""}`}>
                 {/* Coluna de categorias (desktop) */}
                 <aside className="hidden sm:flex sm:flex-col w-56 shrink-0 border-r border-[#233f48] overflow-y-auto py-4">
                     <p className="px-5 pb-2 text-[10px] font-bold text-[#325a67] uppercase tracking-wider">

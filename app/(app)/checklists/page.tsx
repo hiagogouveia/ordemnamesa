@@ -518,6 +518,19 @@ function ChecklistsContent() {
         setEditorState({ checklist: null, mode: "new" });
     };
 
+    // Sprint 72 — dados para o preview dos Kits (dedupe + áreas existentes).
+    const existingTemplateIds = useMemo(() => {
+        const set = new Set<string>();
+        for (const c of checklists) {
+            if (c.origin_template_id && c.status !== "archived") set.add(c.origin_template_id);
+        }
+        return set;
+    }, [checklists]);
+    const existingAreaNames = useMemo(
+        () => new Set(areas.map((a) => a.name.trim().toLowerCase())),
+        [areas]
+    );
+
     // Sprint 70 — casa a área sugerida do modelo com uma área existente (por nome).
     const templateInitialAreaId = useMemo(() => {
         if (!pendingTemplate) return selectedAreaId;
@@ -686,6 +699,8 @@ function ChecklistsContent() {
                     isOpen={templatesBrowserOpen}
                     onClose={() => setTemplatesBrowserOpen(false)}
                     onUseTemplate={handleUseTemplate}
+                    existingTemplateIds={existingTemplateIds}
+                    existingAreaNames={existingAreaNames}
                 />
             )}
 

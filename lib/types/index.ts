@@ -249,6 +249,51 @@ export interface ChecklistTemplate {
     items?: ChecklistTemplateItem[]
 }
 
+// Sprint 72 — Kits de Rotinas (catálogo global de implantação)
+export type KitSegment =
+    | 'restaurante'
+    | 'hamburgueria'
+    | 'pizzaria'
+    | 'cafeteria'
+    | 'fast_food'
+    | 'gastrobar'
+
+export type KitRequirementLevel = 'obrigatorio' | 'recomendado' | 'opcional'
+
+export interface ChecklistKitItem {
+    template_id: string
+    requirement_level: KitRequirementLevel
+    sort_order: number
+    // dados do modelo para exibição (preenchidos pelo GET)
+    template_slug: string
+    template_name: string
+    template_category: TemplateCategory
+    template_icon?: string | null
+    template_suggested_area?: string | null
+    template_item_count: number
+}
+
+export interface ChecklistKit {
+    id: string
+    slug: string
+    name: string
+    description?: string | null
+    segment: KitSegment
+    icon?: string | null
+    is_active: boolean
+    version: number
+    sort_order: number
+    items?: ChecklistKitItem[]
+}
+
+export interface ApplyKitResult {
+    created_count: number
+    created_checklist_ids: string[]
+    skipped_count: number
+    skipped_template_ids: string[]
+    created_area_ids: string[]
+}
+
 // Sprint 35 — Tipos de resposta estruturados
 export type TaskType = 'boolean' | 'date' | 'number' | 'rating'
 
