@@ -4,6 +4,7 @@ import ChecklistsDigitaisBody from "@/content/blog/checklists-digitais-para-rest
 import HigieneCozinhaBody from "@/content/blog/higiene-na-cozinha-como-garantir";
 import ControleTarefasBody from "@/content/blog/controle-de-tarefas-em-restaurantes";
 import ChecklistVsExecucaoBody from "@/content/blog/software-de-checklist-vs-execucao-operacional";
+import QuantoCustaBody from "@/content/blog/quanto-custa-software-checklist-restaurante";
 
 export interface BlogPost {
   slug: string;
@@ -26,6 +27,49 @@ export interface BlogPost {
 
 // Posts versionados em content/blog/*.tsx (corpo) + metadados aqui.
 export const blogPosts: BlogPost[] = [
+  {
+    slug: "quanto-custa-software-checklist-restaurante",
+    title: "Quanto custa um software de checklist para restaurante?",
+    metaTitle: "Quanto Custa um Software de Checklist para Restaurante?",
+    description:
+      "Quanto custa um software de checklist para restaurante? Veja preços públicos vs sob consulta, modelos de cobrança, custos ocultos e como estimar o custo da sua operação.",
+    publishedAt: "2026-06-01",
+    updatedAt: "2026-06-01",
+    author: "Equipe Ordem na Mesa",
+    category: "Guia",
+    tags: ["software de checklist", "preço", "guia"],
+    faqs: [
+      {
+        q: "Quanto custa um software de checklist para restaurante?",
+        a: "Depende do modelo de cobrança. Há opção pública a partir de cerca de R$ 99/mês por loja (ex.: Checkbits); a maioria trabalha sob consulta, com valor definido por unidades, usuários e recursos.",
+      },
+      {
+        q: "Existe software de checklist com preço público?",
+        a: "Sim. Em junho de 2026, o Checkbits divulga preço aberto, por loja (CNPJ). A maioria dos demais (Koncluí, Sults, Food Sistemas, Checklist Fácil) trabalha sob consulta.",
+      },
+      {
+        q: "Por que tantos sistemas não mostram o preço?",
+        a: "Porque o escopo varia muito entre uma operação de uma unidade e uma rede de franquias. O fornecedor avalia porte, número de unidades e recursos antes de propor um valor.",
+      },
+      {
+        q: "O preço é por usuário ou por loja?",
+        a: "Varia por fornecedor. Alguns cobram por loja (CNPJ) com usuários inclusos; outros por usuário; redes costumam ter modelo por unidade ou enterprise. Confirme sempre qual modelo se aplica.",
+      },
+      {
+        q: "Há custos além da mensalidade?",
+        a: "Pode haver: implantação, treinamento, limites de usuários/checklists, armazenamento de fotos e fidelidade. Pergunte antes de fechar.",
+      },
+      {
+        q: "Existe teste grátis?",
+        a: "Vários oferecem. Os prazos variam por fornecedor (por exemplo, 7, 14 ou 30 dias). Confirme a duração e o que está liberado no teste.",
+      },
+      {
+        q: "Quanto custa o Ordem na Mesa?",
+        a: "A proposta é sob medida, conforme unidades, equipe e recursos, com 30 dias grátis para testar. Você pode pedir um valor para o seu cenário específico.",
+      },
+    ],
+    Body: QuantoCustaBody,
+  },
   {
     slug: "software-de-checklist-vs-execucao-operacional",
     title:
