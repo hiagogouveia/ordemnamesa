@@ -67,8 +67,17 @@ function ChecklistsContent() {
     // Sprint 70 — Modelos de Rotinas Prontas
     const [templatesBrowserOpen, setTemplatesBrowserOpen] = useState(false);
     const [pendingTemplate, setPendingTemplate] = useState<ChecklistTemplate | null>(null);
+    // Sprint 75 — feedback transitório da exclusão (sucesso/erro)
+    const [deleteToast, setDeleteToast] = useState<{ kind: "success" | "error"; message: string } | null>(null);
 
     useEffect(() => { setMounted(true); }, []);
+
+    // Auto-dismiss do toast de exclusão
+    useEffect(() => {
+        if (!deleteToast) return;
+        const t = setTimeout(() => setDeleteToast(null), 4000);
+        return () => clearTimeout(t);
+    }, [deleteToast]);
 
     const focusIssueId = searchParams.get("issue");
     const selectedShift = searchParams.get("shift") ?? "";
@@ -374,7 +383,19 @@ function ChecklistsContent() {
 
     const handleDelete = (id: string) => {
         if (!restaurantId) return;
-        deleteChecklist({ id, restaurantId });
+        const checklist = checklists.find((c) => c.id === id);
+        const nome = checklist?.name ? `"${checklist.name}"` : "Rotina";
+        deleteChecklist(
+            { id, restaurantId },
+            {
+                onSuccess: () => setDeleteToast({ kind: "success", message: `${nome} excluída com sucesso.` }),
+                onError: (err: unknown) =>
+                    setDeleteToast({
+                        kind: "error",
+                        message: err instanceof Error ? err.message : "Erro ao excluir a rotina.",
+                    }),
+            },
+        );
     };
 
     const handleOrdersSave = async (newOrders: ChecklistOrder[]) => {
@@ -544,6 +565,30 @@ function ChecklistsContent() {
 
     return (
         <div className="flex flex-col h-[calc(100vh-72px)] overflow-hidden bg-[#0a1215]">
+            {/* Sprint 75 — toast transitório de exclusão (sucesso/erro) */}
+            {deleteToast && (
+                <div
+                    role="status"
+                    aria-live="polite"
+                    className={`fixed top-3 left-1/2 -translate-x-1/2 z-[70] max-w-[440px] w-[calc(100%-1.5rem)] rounded-xl shadow-2xl px-4 py-3 flex items-start gap-2.5 animate-in fade-in slide-in-from-top-4 duration-300 ${
+                        deleteToast.kind === "success"
+                            ? "bg-emerald-500 text-[#04221a]"
+                            : "bg-red-500 text-white"
+                    }`}
+                >
+                    <span className="material-symbols-outlined text-[20px] shrink-0">
+                        {deleteToast.kind === "success" ? "check_circle" : "error"}
+                    </span>
+                    <div className="flex-1 text-sm font-semibold leading-tight">{deleteToast.message}</div>
+                    <button
+                        onClick={() => setDeleteToast(null)}
+                        className="opacity-70 hover:opacity-100 text-lg leading-none"
+                        aria-label="Fechar"
+                    >
+                        ×
+                    </button>
+                </div>
+            )}
             <ChecklistHeader
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
