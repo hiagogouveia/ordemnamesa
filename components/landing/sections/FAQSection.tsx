@@ -2,46 +2,7 @@
 
 import { useState } from "react";
 import { Plus } from "../icons";
-
-interface FAQItem {
-  q: string;
-  a: string;
-}
-
-const FAQ_ITEMS: FAQItem[] = [
-  {
-    q: "Preciso instalar algo no restaurante?",
-    a: "Não. O Ordem na Mesa funciona 100% pelo navegador (gestor) e pelo celular dos funcionários. Sem instalação, sem hardware novo, sem mexer na infra do seu restaurante.",
-  },
-  {
-    q: "Funciona no celular?",
-    a: "Sim — e é justamente onde ele brilha. A equipe usa pelo celular pessoal ou um dispositivo do estabelecimento. Interface mobile-first, otimizada para um polegar e tela pequena.",
-  },
-  {
-    q: "Serve para qualquer tipo de restaurante?",
-    a: "Sim. Bar, pizzaria, hamburgueria, cantina, restaurante self-service, dark kitchen — qualquer operação com equipe que executa rotinas se beneficia. Os checklists são totalmente personalizáveis.",
-  },
-  {
-    q: "Precisa de internet o tempo todo?",
-    a: "Funciona online com sincronização em tempo real, e tem modo offline para áreas com sinal instável. As tarefas marcadas offline sincronizam assim que a conexão volta.",
-  },
-  {
-    q: "Quanto tempo leva para colocar no ar?",
-    a: "Menos de uma hora para o setup básico. Você cria as áreas, monta os primeiros checklists e a equipe já começa a usar no próximo turno. Sem treinamento longo.",
-  },
-  {
-    q: "Tem multi-loja para quem tem mais de uma unidade?",
-    a: "Sim. Você gerencia várias unidades no mesmo painel, com checklists próprios por loja e visão consolidada por rede. Ideal para grupos e franquias.",
-  },
-  {
-    q: "Como funciona o suporte?",
-    a: "Atendimento direto pelo WhatsApp com pessoas reais. Sem ticket, sem URA. Você manda mensagem, a gente resolve.",
-  },
-  {
-    q: "Quanto custa?",
-    a: "O preço varia conforme o tamanho da operação. Fale com a gente pelo WhatsApp e mandamos uma proposta sob medida — sem surpresa, sem letra miúda.",
-  },
-];
+import { HOME_FAQ as FAQ_ITEMS } from "@/lib/faq";
 
 export function FAQSection() {
   const [open, setOpen] = useState<number | null>(0);

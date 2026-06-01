@@ -3,28 +3,37 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/ui/Logo";
-import { Menu, X } from "./icons";
+import { Menu, X } from "@/components/landing/icons";
 
 const SIGNUP_CTA_URL = "/qualificacao";
 
+// Âncoras cross-page (/#...) para funcionarem tanto na Home quanto fora dela.
 const NAV_LINKS = [
-  { href: "#problema", label: "Problema" },
-  { href: "#solucao", label: "Solução" },
-  { href: "#como-funciona", label: "Como funciona" },
-  { href: "#depoimentos", label: "Depoimentos" },
-  { href: "#faq", label: "FAQ" },
+  { href: "/#problema", label: "Problema" },
+  { href: "/#solucao", label: "Solução" },
+  { href: "/#como-funciona", label: "Como funciona" },
+  { href: "/#depoimentos", label: "Depoimentos" },
+  { href: "/execucao-operacional", label: "Execução operacional" },
+  { href: "/blog", label: "Blog" },
+  { href: "/#faq", label: "FAQ" },
 ];
 
-export function Navbar() {
+type SiteHeaderProps = {
+  /** transparent: sobre o hero da Home (fica sólido ao rolar). solid: páginas de conteúdo. */
+  variant?: "transparent" | "solid";
+};
+
+export function SiteHeader({ variant = "solid" }: SiteHeaderProps) {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    if (variant !== "transparent") return;
     const onScroll = () => setScrolled(window.scrollY > 10);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+  }, [variant]);
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -33,17 +42,19 @@ export function Navbar() {
     };
   }, [open]);
 
+  const showSolid = variant === "solid" || scrolled;
+
   return (
     <nav
       className={`fixed top-0 z-50 w-full transition-all duration-300 ${
-        scrolled
-          ? "bg-background-dark/90 backdrop-blur-md border-b border-border-dark"
+        showSolid
+          ? "bg-background-dark/95 backdrop-blur-md border-b border-border-dark"
           : "bg-transparent"
       }`}
     >
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 md:h-20 items-center justify-between gap-4">
-          <Link href="#top" className="flex items-center gap-3 shrink-0">
+          <Link href="/" className="flex items-center gap-3 shrink-0">
             <Logo width={32} height={32} />
             <span className="text-lg md:text-xl font-black tracking-tight text-white hidden sm:block">
               Ordem <span className="italic font-light text-text-secondary">na Mesa</span>

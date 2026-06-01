@@ -53,9 +53,12 @@ export async function middleware(request: NextRequest) {
     }
 
     const publicRoutes = ['/', '/login', '/cadastro', '/signup', '/forgot-password', '/reset-password']
+    // Rotas de marketing/SEO públicas — precisam ser acessíveis a crawlers
+    // (Google, GPTBot, ClaudeBot etc.) sem autenticação.
+    const publicPrefixes = ['/blog', '/modelos', '/comparativos', '/execucao-operacional']
     const isPublicRoute =
         publicRoutes.includes(request.nextUrl.pathname) ||
-        request.nextUrl.pathname.startsWith('/blog')
+        publicPrefixes.some((prefix) => request.nextUrl.pathname.startsWith(prefix))
 
     // Redirect to login if unauthenticated user tries to access a protected route
     if (!user && !isPublicRoute && !request.nextUrl.pathname.startsWith('/api')) {
@@ -85,7 +88,7 @@ export async function middleware(request: NextRequest) {
         pathnameForContextCheck === '/selecionar-account' ||
         pathnameForContextCheck === '/selecionar-restaurante' ||
         pathnameForContextCheck.startsWith('/api') ||
-        pathnameForContextCheck.startsWith('/blog') ||
+        publicPrefixes.some((prefix) => pathnameForContextCheck.startsWith(prefix)) ||
         pathnameForContextCheck === '/login' ||
         pathnameForContextCheck === '/cadastro' ||
         pathnameForContextCheck === '/signup'
@@ -126,6 +129,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
     matcher: [
-        '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+        // Exclui assets e arquivos de SEO/metadata (robots, sitemap, manifest,
+        // opengraph-image, ícones) para que crawlers consigam buscá-los sem
+        // serem redirecionados para /login pelo middleware de auth.
+        '/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|manifest.webmanifest|opengraph-image|icon|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|xml|txt|webmanifest)$).*)',
     ],
 }
