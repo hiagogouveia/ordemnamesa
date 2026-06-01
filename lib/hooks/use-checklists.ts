@@ -300,7 +300,7 @@ export function useReplicateChecklists() {
     });
 }
 
-// Deletar Checklist (Soft Delete)
+// Deletar Checklist (Hard Delete — cascata no banco remove todos os dados derivados; s75)
 export function useDeleteChecklist() {
     const queryClient = useQueryClient();
 

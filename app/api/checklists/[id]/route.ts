@@ -436,19 +436,10 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
         const delAccess = canDeleteChecklists(delBilling);
         if (!delAccess.allowed) return buildAccessDeniedResponse(delAccess);
 
-        // Deletar task_executions antes (sem cascade automático)
-        const { error: execError } = await adminSupabase
-            .from('task_executions')
-            .delete()
-            .eq('checklist_id', id)
-            .eq('restaurant_id', restaurant_id);
-
-        if (execError) {
-            console.error('[DELETE /api/checklists/[id]] Erro ao deletar task_executions:', execError);
-            return NextResponse.json({ error: execError.message }, { status: 500 });
-        }
-
-        // Hard delete (cascata para tasks, assumptions e orders)
+        // Hard delete. A cascata no banco (s75) remove todos os dados derivados:
+        // checklist_tasks, checklist_assumptions, checklist_orders, checklist_shifts,
+        // task_executions e task_issues/task_issue_events. Não é mais necessário
+        // apagar filhos manualmente.
         const { error } = await adminSupabase
             .from('checklists')
             .delete()
