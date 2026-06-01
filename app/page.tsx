@@ -18,9 +18,11 @@ import { FAQSection } from "@/components/landing/sections/FAQSection";
 import { Footer } from "@/components/landing/sections/Footer";
 
 export const metadata: Metadata = buildMetadata({
-  title: "Plataforma de Execução Operacional para Restaurantes",
+  // Página index (/) — o template do layout raiz NÃO se aplica aqui, então a
+  // marca é incluída manualmente (resulta em sufixo único, sem duplicação).
+  title: "Software de Checklist para Restaurante | Ordem na Mesa",
   description:
-    "Checklists digitais com evidência fotográfica, abertura, fechamento, auditoria e recebimento. A plataforma de execução operacional que faz seu restaurante rodar no padrão — todos os dias, sem falhas.",
+    "Checklists digitais com foto, abertura, fechamento e auditoria para sua equipe executar a operação no padrão. Agende uma demonstração do Ordem na Mesa.",
   path: "/",
 });
 

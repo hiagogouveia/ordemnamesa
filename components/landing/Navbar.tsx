@@ -12,6 +12,8 @@ const NAV_LINKS = [
   { href: "#solucao", label: "Solução" },
   { href: "#como-funciona", label: "Como funciona" },
   { href: "#depoimentos", label: "Depoimentos" },
+  // Rota de conteúdo (SEO/GEO) — pilar da categoria no menu principal.
+  { href: "/execucao-operacional", label: "Execução operacional" },
   { href: "#faq", label: "FAQ" },
 ];
 

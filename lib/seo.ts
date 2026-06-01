@@ -147,7 +147,9 @@ export function howToJsonLd(opts: {
 
 /**
  * SoftwareApplication — entidade central do produto para SEO/GEO.
- * Inclui aggregateRating/review a partir dos depoimentos reais da landing.
+ * NÃO inclui Review/AggregateRating: não há avaliações reais ainda (G2/Capterra/
+ * GetApp). Schema de avaliação só deve ser adicionado quando houver reviews
+ * legítimas e verificáveis — caso contrário viola a política de structured data.
  */
 export function softwareApplicationJsonLd() {
   return {
@@ -166,36 +168,6 @@ export function softwareApplicationJsonLd() {
       priceCurrency: "BRL",
       description: "Teste grátis de 30 dias após aprovação",
     },
-    aggregateRating: {
-      "@type": "AggregateRating",
-      ratingValue: "5",
-      reviewCount: "3",
-      bestRating: "5",
-      worstRating: "1",
-    },
-    review: [
-      {
-        "@type": "Review",
-        reviewRating: { "@type": "Rating", ratingValue: "5", bestRating: "5" },
-        author: { "@type": "Person", name: "Marcos Almeida" },
-        reviewBody:
-          "Antes eu chegava no restaurante e ficava 1 hora só conferindo. Hoje abro o app, vejo tudo, e parto pro que importa.",
-      },
-      {
-        "@type": "Review",
-        reviewRating: { "@type": "Rating", ratingValue: "5", bestRating: "5" },
-        author: { "@type": "Person", name: "Renata Oliveira" },
-        reviewBody:
-          "A equipe parou de me perguntar 'o que tenho que fazer?'. Cada um sabe a rotina dele. Mudou o clima do salão.",
-      },
-      {
-        "@type": "Review",
-        reviewRating: { "@type": "Rating", ratingValue: "5", bestRating: "5" },
-        author: { "@type": "Person", name: "Felipe Costa" },
-        reviewBody:
-          "O histórico com foto resolveu nossa briga interna. Quando dá problema, eu vejo exatamente o que aconteceu, sem achismo.",
-      },
-    ],
   };
 }
 

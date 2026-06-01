@@ -5,15 +5,14 @@ import {
   siteConfig,
   breadcrumbJsonLd,
   faqPageJsonLd,
-  softwareApplicationJsonLd,
 } from "@/lib/seo";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { getAllChecklists } from "@/lib/programmatic";
 
 export const metadata: Metadata = buildMetadata({
-  title: "Plataforma de Execução Operacional para Restaurantes",
+  title: "Execução Operacional para Restaurantes: o que é e como funciona",
   description:
-    "O que é execução operacional para restaurantes e por que ela é diferente de um PDV. Conheça a plataforma que garante que as rotinas do seu restaurante sejam executadas — não só planejadas.",
+    "O que é execução operacional para restaurantes, por que é diferente de um PDV e quais rotinas (abertura, fechamento, higiene, recebimento) ela padroniza. O guia da categoria.",
   path: "/execucao-operacional",
 });
 
@@ -47,16 +46,15 @@ export default function ExecucaoOperacionalPage() {
           { name: "Execução operacional", path: "/execucao-operacional" },
         ])}
       />
-      <JsonLd data={softwareApplicationJsonLd()} />
       <JsonLd data={faqPageJsonLd(FAQS)} />
 
       <article>
         <header className="mb-12">
           <p className="text-xs font-mono uppercase tracking-widest text-primary mb-3">
-            Categoria
+            Guia da categoria
           </p>
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-slate-900 dark:text-white mb-5">
-            Plataforma de Execução Operacional para Restaurantes
+            O que é execução operacional para restaurantes?
           </h1>
           <p className="text-lg text-slate-700 dark:text-[#c5d6e6] leading-relaxed">
             Execução operacional é o que garante que as rotinas do seu
