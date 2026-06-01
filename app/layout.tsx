@@ -3,7 +3,8 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import QueryProvider from "@/components/providers/query-provider";
 import { PhotoTraceProvider } from "@/components/photo-trace-provider";
-import { siteConfig } from "@/lib/seo";
+import { siteConfig, organizationJsonLd } from "@/lib/seo";
+import { JsonLd } from "@/components/seo/JsonLd";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -18,14 +19,16 @@ export const metadata: Metadata = {
   },
   description: siteConfig.description,
   keywords: [
-    "checklist restaurante",
-    "gestão de restaurante",
-    "controle operacional cozinha",
-    "checklist digital",
-    "abertura e fechamento restaurante",
-    "auditoria cozinha",
+    "execução operacional para restaurantes",
+    "software de execução operacional restaurante",
+    "checklist operacional restaurante",
+    "checklist digital restaurante",
+    "software de checklist para restaurante",
+    "rotina de abertura e fechamento restaurante",
+    "auditoria operacional restaurante",
+    "padronização operacional restaurante",
+    "gestão operacional de restaurante",
     "ordem na mesa",
-    "gestão operacional restaurante",
   ],
   authors: [{ name: siteConfig.name, url: siteConfig.url }],
   creator: siteConfig.name,
@@ -68,20 +71,6 @@ export const metadata: Metadata = {
   },
 };
 
-const organizationJsonLd = {
-  "@context": "https://schema.org",
-  "@type": "Organization",
-  name: siteConfig.name,
-  url: siteConfig.url,
-  logo: `${siteConfig.url}/logo-ordem-na-mes.png`,
-  description: siteConfig.description,
-  contactPoint: {
-    "@type": "ContactPoint",
-    contactType: "customer support",
-    availableLanguage: "Portuguese",
-  },
-};
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -94,12 +83,7 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
           rel="stylesheet"
         />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify(organizationJsonLd),
-          }}
-        />
+        <JsonLd data={organizationJsonLd()} />
       </head>
       <body
         className={`${inter.variable} font-display antialiased bg-background-light dark:bg-background-dark text-slate-900 dark:text-white selection:bg-primary/30 selection:text-primary`}
