@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { buildMetadata, siteConfig, breadcrumbJsonLd, faqPageJsonLd } from "@/lib/seo";
 import { JsonLd } from "@/components/seo/JsonLd";
-import { getAllPosts, getPostBySlug } from "@/lib/blog";
+import { getAllPosts, getPostBySlug, getRelatedPosts } from "@/lib/blog";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -60,6 +60,7 @@ export default async function BlogPostPage({ params }: Props) {
   };
 
   const Body = post.Body;
+  const related = getRelatedPosts(post.slug, 3);
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-24 sm:px-6 lg:px-8">
@@ -134,6 +135,30 @@ export default async function BlogPostPage({ params }: Props) {
                     {f.a}
                   </p>
                 </details>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {related.length > 0 && (
+          <section className="mt-12 border-t border-slate-200 dark:border-[#233f48] pt-8">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+              Conteúdos relacionados
+            </h2>
+            <div className="grid gap-4 sm:grid-cols-3">
+              {related.map((r) => (
+                <Link
+                  key={r.slug}
+                  href={`/blog/${r.slug}`}
+                  className="block rounded-xl border border-slate-200 dark:border-[#233f48] p-4 hover:border-primary/40 transition-colors"
+                >
+                  <span className="block font-bold text-slate-900 dark:text-white text-sm leading-snug">
+                    {r.title}
+                  </span>
+                  <span className="mt-2 block text-xs text-slate-600 dark:text-[#93adc8] line-clamp-3">
+                    {r.description}
+                  </span>
+                </Link>
               ))}
             </div>
           </section>

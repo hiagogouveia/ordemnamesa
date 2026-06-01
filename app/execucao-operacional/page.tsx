@@ -8,6 +8,14 @@ import {
 } from "@/lib/seo";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { getAllChecklists } from "@/lib/programmatic";
+import { getPostsBySlugs } from "@/lib/blog";
+
+// Curadoria estratégica fixa: ponte → conceito → execução de tarefas.
+const LEITURA_RECOMENDADA = [
+  "software-de-checklist-vs-execucao-operacional",
+  "checklists-digitais-para-restaurantes",
+  "controle-de-tarefas-em-restaurantes",
+];
 
 export const metadata: Metadata = buildMetadata({
   title: "Execução Operacional para Restaurantes: o guia completo da categoria",
@@ -184,6 +192,7 @@ const extLink =
 
 export default function ExecucaoOperacionalPage() {
   const checklists = getAllChecklists();
+  const leituraRecomendada = getPostsBySlugs(LEITURA_RECOMENDADA);
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-24 sm:px-6 lg:px-8">
@@ -595,6 +604,30 @@ export default function ExecucaoOperacionalPage() {
             ))}
           </ul>
         </section>
+
+        {leituraRecomendada.length > 0 && (
+          <section className="mb-12">
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+              Leitura recomendada
+            </h2>
+            <div className="grid gap-4 sm:grid-cols-3">
+              {leituraRecomendada.map((post) => (
+                <Link
+                  key={post.slug}
+                  href={`/blog/${post.slug}`}
+                  className="block rounded-xl border border-slate-200 dark:border-[#233f48] p-4 hover:border-primary/40 transition-colors"
+                >
+                  <span className="block font-bold text-slate-900 dark:text-white text-sm leading-snug">
+                    {post.title}
+                  </span>
+                  <span className="mt-2 block text-xs text-slate-600 dark:text-[#93adc8] line-clamp-3">
+                    {post.description}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="mb-12 text-sm">
           <h2 className="text-base font-bold text-slate-900 dark:text-white mb-3">

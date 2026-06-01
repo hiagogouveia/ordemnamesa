@@ -115,3 +115,54 @@ export function getAllPosts(): BlogPost[] {
       new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
   );
 }
+
+/**
+ * Curadoria fixa por slug — usada onde queremos destaque estratégico
+ * (ex.: "Leitura recomendada" na pílula). Preserva a ordem informada e
+ * descarta slugs inexistentes.
+ */
+export function getPostsBySlugs(slugs: string[]): BlogPost[] {
+  return slugs
+    .map((slug) => getPostBySlug(slug))
+    .filter((post): post is BlogPost => post !== undefined);
+}
+
+/**
+ * Posts relacionados — seleção genérica por afinidade, sem lógica por slug.
+ * Pontua por categoria em comum (peso 3) + tags em comum (peso 1) e ordena
+ * por score e, em empate, por data. Completa com os mais recentes (fallback)
+ * para nunca devolver menos que `limit` quando houver outros posts.
+ */
+export function getRelatedPosts(slug: string, limit = 3): BlogPost[] {
+  const current = getPostBySlug(slug);
+  if (!current) return [];
+
+  const sharedTagCount = (a: string[], b: string[]): number =>
+    a.filter((tag) => b.includes(tag)).length;
+
+  const scored = blogPosts
+    .filter((post) => post.slug !== slug)
+    .map((post) => ({
+      post,
+      score:
+        (post.category && current.category && post.category === current.category
+          ? 3
+          : 0) + sharedTagCount(post.tags, current.tags),
+    }))
+    .sort((a, b) =>
+      b.score !== a.score
+        ? b.score - a.score
+        : new Date(b.post.publishedAt).getTime() -
+          new Date(a.post.publishedAt).getTime()
+    );
+
+  const related = scored.filter((s) => s.score > 0).map((s) => s.post);
+  if (related.length >= limit) return related.slice(0, limit);
+
+  // Fallback: completa com os mais recentes ainda não incluídos.
+  const chosen = new Set(related.map((post) => post.slug));
+  const fillers = getAllPosts().filter(
+    (post) => post.slug !== slug && !chosen.has(post.slug)
+  );
+  return [...related, ...fillers].slice(0, limit);
+}
