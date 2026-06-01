@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { buildMetadata, siteConfig, breadcrumbJsonLd } from "@/lib/seo";
+import { buildMetadata, siteConfig, breadcrumbJsonLd, faqPageJsonLd } from "@/lib/seo";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { getAllPosts, getPostBySlug } from "@/lib/blog";
 
@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!post) return {};
 
   return buildMetadata({
-    title: post.title,
+    title: post.metaTitle ?? post.title,
     description: post.description,
     path: `/blog/${post.slug}`,
   });
@@ -71,6 +71,9 @@ export default async function BlogPostPage({ params }: Props) {
           { name: post.title, path: `/blog/${post.slug}` },
         ])}
       />
+      {post.faqs && post.faqs.length > 0 && (
+        <JsonLd data={faqPageJsonLd(post.faqs)} />
+      )}
 
       <nav className="mb-8 text-sm text-slate-500 dark:text-[#93adc8]">
         <Link href="/" className="hover:text-primary">Início</Link>
@@ -112,6 +115,29 @@ export default async function BlogPostPage({ params }: Props) {
         <div className="prose prose-slate dark:prose-invert max-w-none prose-headings:font-bold prose-a:text-primary">
           <Body />
         </div>
+
+        {post.faqs && post.faqs.length > 0 && (
+          <section className="mt-12">
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+              Perguntas frequentes
+            </h2>
+            <div className="space-y-3">
+              {post.faqs.map((f) => (
+                <details
+                  key={f.q}
+                  className="rounded-xl border border-slate-200 dark:border-[#233f48] p-4"
+                >
+                  <summary className="font-bold text-slate-900 dark:text-white cursor-pointer">
+                    {f.q}
+                  </summary>
+                  <p className="mt-2 text-slate-700 dark:text-[#c5d6e6] leading-relaxed">
+                    {f.a}
+                  </p>
+                </details>
+              ))}
+            </div>
+          </section>
+        )}
 
         <div className="mt-12 rounded-2xl border border-primary/30 bg-primary/5 p-6 text-center">
           <p className="text-lg font-bold text-slate-900 dark:text-white">
