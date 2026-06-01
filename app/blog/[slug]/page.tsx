@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
-import { buildMetadata, siteConfig } from "@/lib/seo";
+import { buildMetadata, siteConfig, breadcrumbJsonLd } from "@/lib/seo";
+import { JsonLd } from "@/components/seo/JsonLd";
 import { getAllPosts, getPostBySlug } from "@/lib/blog";
 
 interface Props {
@@ -37,6 +39,7 @@ export default async function BlogPostPage({ params }: Props) {
     headline: post.title,
     description: post.description,
     datePublished: post.publishedAt,
+    dateModified: post.updatedAt ?? post.publishedAt,
     author: {
       "@type": "Organization",
       name: post.author,
@@ -56,12 +59,24 @@ export default async function BlogPostPage({ params }: Props) {
     },
   };
 
+  const Body = post.Body;
+
   return (
     <main className="mx-auto max-w-3xl px-4 py-24 sm:px-6 lg:px-8">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
+      <JsonLd data={articleJsonLd} />
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: "Início", path: "/" },
+          { name: "Blog", path: "/blog" },
+          { name: post.title, path: `/blog/${post.slug}` },
+        ])}
       />
+
+      <nav className="mb-8 text-sm text-slate-500 dark:text-[#93adc8]">
+        <Link href="/" className="hover:text-primary">Início</Link>
+        <span className="mx-2">/</span>
+        <Link href="/blog" className="hover:text-primary">Blog</Link>
+      </nav>
 
       <article>
         <header className="mb-12">
@@ -94,10 +109,24 @@ export default async function BlogPostPage({ params }: Props) {
           </div>
         </header>
 
-        <div className="prose prose-slate dark:prose-invert max-w-none">
-          {post.content || (
-            <p className="text-slate-500">Conteúdo em breve.</p>
-          )}
+        <div className="prose prose-slate dark:prose-invert max-w-none prose-headings:font-bold prose-a:text-primary">
+          <Body />
+        </div>
+
+        <div className="mt-12 rounded-2xl border border-primary/30 bg-primary/5 p-6 text-center">
+          <p className="text-lg font-bold text-slate-900 dark:text-white">
+            Quer rodar sua operação no padrão todos os dias?
+          </p>
+          <p className="mt-2 text-slate-600 dark:text-[#93adc8]">
+            O Ordem na Mesa é a plataforma de execução operacional para
+            restaurantes. Fale com a gente e veja na prática.
+          </p>
+          <Link
+            href="/qualificacao"
+            className="mt-4 inline-block rounded-full bg-primary px-6 py-3 font-bold text-white transition-opacity hover:opacity-90"
+          >
+            Agendar demonstração
+          </Link>
         </div>
       </article>
     </main>

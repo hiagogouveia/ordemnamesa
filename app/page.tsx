@@ -1,5 +1,11 @@
 import type { Metadata } from "next";
-import { buildMetadata, siteConfig } from "@/lib/seo";
+import {
+  buildMetadata,
+  faqPageJsonLd,
+  softwareApplicationJsonLd,
+} from "@/lib/seo";
+import { HOME_FAQ } from "@/lib/faq";
+import { JsonLd } from "@/components/seo/JsonLd";
 import { Navbar } from "@/components/landing/Navbar";
 import { CinematicHero } from "@/components/landing/CinematicHero";
 import { ProblemSection } from "@/components/landing/sections/ProblemSection";
@@ -12,36 +18,17 @@ import { FAQSection } from "@/components/landing/sections/FAQSection";
 import { Footer } from "@/components/landing/sections/Footer";
 
 export const metadata: Metadata = buildMetadata({
-  title: "Checklists Digitais para Restaurantes",
+  title: "Plataforma de Execução Operacional para Restaurantes",
   description:
-    "Sistema operacional para restaurantes. Checklists com evidência fotográfica e histórico auditável. Pare de apagar incêndio na sua operação.",
+    "Checklists digitais com evidência fotográfica, abertura, fechamento, auditoria e recebimento. A plataforma de execução operacional que faz seu restaurante rodar no padrão — todos os dias, sem falhas.",
   path: "/",
 });
-
-const softwareJsonLd = {
-  "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
-  name: siteConfig.name,
-  applicationCategory: "BusinessApplication",
-  operatingSystem: "Web, iOS, Android",
-  description:
-    "Sistema de checklists digitais para restaurantes com controle de abertura, fechamento, auditorias e monitoramento da equipe em tempo real.",
-  offers: {
-    "@type": "Offer",
-    price: "0",
-    priceCurrency: "BRL",
-    description: "Teste grátis disponível",
-  },
-  inLanguage: "pt-BR",
-};
 
 export default function LandingPage() {
   return (
     <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareJsonLd) }}
-      />
+      <JsonLd data={softwareApplicationJsonLd()} />
+      <JsonLd data={faqPageJsonLd(HOME_FAQ)} />
       <main id="top" className="min-h-screen bg-background-dark text-white scroll-smooth">
         <Navbar />
         <CinematicHero />

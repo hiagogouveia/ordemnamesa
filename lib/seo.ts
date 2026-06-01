@@ -1,12 +1,26 @@
 import type { Metadata } from "next";
 
+// Domínio de produção. Usa NEXT_PUBLIC_SITE_URL quando definido (ex.: nonprod),
+// com fallback para o domínio verificado de produção.
+// IMPORTANTE: o valor anterior ("ordennaMesa.com.br") era um typo que envenenava
+// canonicals, sitemap, robots e Open Graph. O domínio correto é ordemnamesa.com.br.
+const SITE_URL = (
+  process.env.NEXT_PUBLIC_SITE_URL?.startsWith("http")
+    ? process.env.NEXT_PUBLIC_SITE_URL
+    : "https://ordemnamesa.com.br"
+).replace(/\/$/, "");
+
 export const siteConfig = {
   name: "Ordem na Mesa",
-  url: "https://ordennaMesa.com.br",
+  url: SITE_URL,
+  // Categoria-âncora — usar de forma consistente em metadata, schema, H1/H2 e conteúdo.
+  category: "Plataforma de Execução Operacional para Restaurantes",
   description:
-    "Sistema de checklists para restaurantes. Controle operacional digital: abertura, fechamento, auditorias e checklists em tempo real.",
+    "Plataforma de execução operacional para restaurantes. Checklists digitais com evidência fotográfica, abertura, fechamento, auditoria e recebimento — para a operação rodar no padrão todos os dias.",
   locale: "pt_BR",
   brandColor: "#13b6ec",
+  whatsapp: "https://wa.me/5567991364767",
+  instagram: "https://www.instagram.com/ordemnamesabr/",
 } as const;
 
 export function buildMetadata({
@@ -74,5 +88,142 @@ export function buildMetadata({
             "max-snippet": -1,
           },
         },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// JSON-LD helpers reutilizáveis (schema.org) — usados em páginas e templates.
+// Renderizar com <JsonLd data={...} /> (components/seo/JsonLd.tsx).
+// ---------------------------------------------------------------------------
+
+type Faq = { q: string; a: string };
+
+/** FAQPage — usar em qualquer página com seção de perguntas frequentes. */
+export function faqPageJsonLd(items: Faq[]) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: items.map((item) => ({
+      "@type": "Question",
+      name: item.q,
+      acceptedAnswer: { "@type": "Answer", text: item.a },
+    })),
+  };
+}
+
+/** BreadcrumbList — melhora navegação e rich results. */
+export function breadcrumbJsonLd(crumbs: { name: string; path: string }[]) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: crumbs.map((crumb, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: crumb.name,
+      item: `${siteConfig.url}${crumb.path}`,
+    })),
+  };
+}
+
+/** HowTo — ideal para páginas de checklist (passo a passo executável). */
+export function howToJsonLd(opts: {
+  name: string;
+  description: string;
+  steps: { name: string; text: string }[];
+}) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    name: opts.name,
+    description: opts.description,
+    step: opts.steps.map((step, i) => ({
+      "@type": "HowToStep",
+      position: i + 1,
+      name: step.name,
+      text: step.text,
+    })),
+  };
+}
+
+/**
+ * SoftwareApplication — entidade central do produto para SEO/GEO.
+ * Inclui aggregateRating/review a partir dos depoimentos reais da landing.
+ */
+export function softwareApplicationJsonLd() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: siteConfig.name,
+    applicationCategory: "BusinessApplication",
+    applicationSubCategory: siteConfig.category,
+    operatingSystem: "Web, iOS, Android",
+    url: siteConfig.url,
+    description: siteConfig.description,
+    inLanguage: "pt-BR",
+    offers: {
+      "@type": "Offer",
+      price: "0",
+      priceCurrency: "BRL",
+      description: "Teste grátis de 30 dias após aprovação",
+    },
+    aggregateRating: {
+      "@type": "AggregateRating",
+      ratingValue: "5",
+      reviewCount: "3",
+      bestRating: "5",
+      worstRating: "1",
+    },
+    review: [
+      {
+        "@type": "Review",
+        reviewRating: { "@type": "Rating", ratingValue: "5", bestRating: "5" },
+        author: { "@type": "Person", name: "Marcos Almeida" },
+        reviewBody:
+          "Antes eu chegava no restaurante e ficava 1 hora só conferindo. Hoje abro o app, vejo tudo, e parto pro que importa.",
+      },
+      {
+        "@type": "Review",
+        reviewRating: { "@type": "Rating", ratingValue: "5", bestRating: "5" },
+        author: { "@type": "Person", name: "Renata Oliveira" },
+        reviewBody:
+          "A equipe parou de me perguntar 'o que tenho que fazer?'. Cada um sabe a rotina dele. Mudou o clima do salão.",
+      },
+      {
+        "@type": "Review",
+        reviewRating: { "@type": "Rating", ratingValue: "5", bestRating: "5" },
+        author: { "@type": "Person", name: "Felipe Costa" },
+        reviewBody:
+          "O histórico com foto resolveu nossa briga interna. Quando dá problema, eu vejo exatamente o que aconteceu, sem achismo.",
+      },
+    ],
+  };
+}
+
+/** Organization — entidade de marca para o Knowledge Graph e GEO. */
+export function organizationJsonLd() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: siteConfig.name,
+    url: siteConfig.url,
+    logo: `${siteConfig.url}/logo-ordem-na-mes.png`,
+    description: siteConfig.description,
+    slogan: "Seu restaurante rodando no padrão. Todos os dias. Sem falhas.",
+    areaServed: { "@type": "Country", name: "Brasil" },
+    knowsAbout: [
+      "execução operacional para restaurantes",
+      "checklist operacional para restaurantes",
+      "rotinas de abertura e fechamento",
+      "auditoria operacional",
+      "padronização operacional",
+      "recebimento de mercadorias",
+    ],
+    sameAs: [siteConfig.instagram],
+    contactPoint: {
+      "@type": "ContactPoint",
+      contactType: "customer support",
+      availableLanguage: "Portuguese",
+      url: siteConfig.whatsapp,
+    },
   };
 }
