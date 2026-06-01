@@ -4,7 +4,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { ChecklistBoardColumn } from "./ChecklistBoardColumn";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
 import type { ExecutionStatus } from "@/lib/types";
-import { getOperationalStatus } from "@/lib/utils/get-operational-status";
+import { getOperationalStatus, type StatusContext } from "@/lib/utils/get-operational-status";
 
 const STATUS_COLUMNS: {
     status: ExecutionStatus;
@@ -24,6 +24,7 @@ interface ChecklistBoardViewProps {
     checklists: ExtendedChecklist[];
     isLoading: boolean;
     currentMinutes: number;
+    statusCtx?: StatusContext;
     onSelect: (checklist: ExtendedChecklist) => void;
     onStatusToggle: (id: string, active: boolean) => void;
     isGlobal?: boolean;
@@ -38,6 +39,7 @@ export function ChecklistBoardView({
     checklists,
     isLoading,
     currentMinutes,
+    statusCtx,
     onSelect,
     onStatusToggle,
     isGlobal,
@@ -87,12 +89,12 @@ export function ChecklistBoardView({
         };
 
         for (const c of checklists) {
-            const status = getOperationalStatus(c, currentMinutes);
+            const status = getOperationalStatus(c, currentMinutes, statusCtx);
             map[status].push(c);
         }
 
         return map;
-    }, [checklists, currentMinutes]);
+    }, [checklists, currentMinutes, statusCtx]);
 
     if (isLoading) {
         return (

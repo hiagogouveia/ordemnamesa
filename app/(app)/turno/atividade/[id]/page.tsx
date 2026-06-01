@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useSession } from '@/lib/providers/use-session';
 import { useActivityData } from '@/lib/hooks/use-activity-execution';
+import { useRestaurantNow } from '@/lib/hooks/use-restaurant-now';
 import { useChecklistAssumption, useAssumeChecklist } from '@/lib/hooks/use-tasks';
 import { useSuppliers } from '@/lib/hooks/use-suppliers';
 import { createClient } from '@/lib/supabase/client';
@@ -33,16 +34,11 @@ export default function ActivityDetailsPage() {
     const restaurantId = session.restaurantId;
     const sessionLoading = session.status === 'loading';
 
-    const [currentTime, setCurrentTime] = useState('');
+    // Sprint 73 — "agora" no fuso do restaurante.
+    const { timeHHMM: currentTime } = useRestaurantNow();
     const [user, setUser] = useState<{ id: string; name: string } | null>(null);
     const [assuming, setAssuming] = useState(false);
     const [limitError, setLimitError] = useState<string | null>(null);
-
-    useEffect(() => {
-        setCurrentTime(new Date().toTimeString().slice(0, 5));
-        const interval = setInterval(() => setCurrentTime(new Date().toTimeString().slice(0, 5)), 60000);
-        return () => clearInterval(interval);
-    }, []);
 
     useEffect(() => {
         createClient().auth.getUser().then(({ data }) => {

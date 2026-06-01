@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getBrazilDateKey } from '@/lib/utils/brazil-date';
+import { getNowInTz } from '@/lib/utils/brazil-date';
+import { getRestaurantTimezone } from '@/lib/utils/restaurant-time';
 
 const getAdminSupabase = () =>
     createClient(
@@ -37,7 +38,7 @@ export async function POST(
         }
 
         // Buscar assumption ativa de hoje para este checklist
-        const todayKey = getBrazilDateKey();
+        const todayKey = getNowInTz(await getRestaurantTimezone(adminSupabase, restaurant_id)).dateKey;
 
         const { data: assumption } = await adminSupabase
             .from('checklist_assumptions')

@@ -14,6 +14,7 @@ interface MyRestaurant {
     logo_url: string | null;
     account_id: string;
     account_name: string;
+    timezone?: string;
     role: "owner" | "manager" | "staff";
 }
 
@@ -64,6 +65,7 @@ export default function SelecionarRestaurantePage() {
                 name: restaurant.name,
                 slug: restaurant.slug,
                 role: restaurant.role,
+                timezone: restaurant.timezone,
             });
             setAccount({ id: restaurant.account_id, name: restaurant.account_name });
             setContextCookies(restaurant);

@@ -1,46 +1,65 @@
-const TZ = 'America/Sao_Paulo'
+// Sprint 73 — Fuso padrão (preserva comportamento da base existente).
+export const DEFAULT_TZ = 'America/Sao_Paulo'
 
-interface BrazilNow {
+interface TzNow {
     dayOfWeek: number   // 0=Dom, 1=Seg, ..., 6=Sab
     dateKey: string     // YYYY-MM-DD
     timeHHMM: string    // HH:mm
+    minutes: number     // minutos desde 00:00 (h*60+m) no fuso
 }
 
-export function getBrazilNow(date: Date = new Date()): BrazilNow {
-    const parts = new Intl.DateTimeFormat('en-CA', {
-        timeZone: TZ,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        weekday: 'short',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-    }).formatToParts(date)
+// Cache de formatters por fuso (evita recriar Intl em loops).
+const FORMATTER_CACHE = new Map<string, Intl.DateTimeFormat>()
+function formatterFor(tz: string): Intl.DateTimeFormat {
+    let fmt = FORMATTER_CACHE.get(tz)
+    if (!fmt) {
+        fmt = new Intl.DateTimeFormat('en-CA', {
+            timeZone: tz,
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false,
+        })
+        FORMATTER_CACHE.set(tz, fmt)
+    }
+    return fmt
+}
 
+/**
+ * Sprint 73 — Fonte única de data/hora operacional.
+ * Retorna dia/data/hora no FUSO do restaurante (IANA). Use sempre este
+ * helper (server e client) com o timezone do restaurante; nunca a hora
+ * do navegador nem um fuso fixo.
+ */
+export function getNowInTz(tz: string = DEFAULT_TZ, date: Date = new Date()): TzNow {
+    const parts = formatterFor(tz).formatToParts(date)
     const get = (type: Intl.DateTimeFormatPartTypes) =>
         parts.find(p => p.type === type)?.value ?? ''
 
     const dateKey = `${get('year')}-${get('month')}-${get('day')}`
-
     const weekdayMap: Record<string, number> = {
         Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
     }
     const dayOfWeek = weekdayMap[get('weekday')] ?? 0
+    const hh = get('hour').padStart(2, '0')
+    const mm = get('minute').padStart(2, '0')
+    return {
+        dayOfWeek,
+        dateKey,
+        timeHHMM: `${hh}:${mm}`,
+        minutes: Number(hh) * 60 + Number(mm),
+    }
+}
 
-    const hour = get('hour').padStart(2, '0')
-    const minute = get('minute').padStart(2, '0')
-    const timeHHMM = `${hour}:${minute}`
-
-    return { dayOfWeek, dateKey, timeHHMM }
+/** @deprecated Use getNowInTz(tz) com o fuso do restaurante. Alias = fuso padrão. */
+export function getBrazilNow(date: Date = new Date()): TzNow {
+    return getNowInTz(DEFAULT_TZ, date)
 }
 
 export function getBrazilDateKey(date?: Date): string {
-    return getBrazilNow(date).dateKey
+    return getNowInTz(DEFAULT_TZ, date).dateKey
 }
 
 export function getBrazilDayOfWeek(date?: Date): number {
-    return getBrazilNow(date).dayOfWeek
+    return getNowInTz(DEFAULT_TZ, date).dayOfWeek
 }
 
 /**
@@ -58,9 +77,45 @@ export function formatDateBR(value: string | null | undefined): string {
     return `${match[3]}/${match[2]}/${match[1]}`
 }
 
+// Sprint 73 — offset (minutos) de um fuso IANA num instante (DST-safe).
+function tzOffsetMinutes(tz: string, at: Date): number {
+    const dtf = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz, hour12: false,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+    })
+    const p: Record<string, string> = {}
+    for (const part of dtf.formatToParts(at)) p[part.type] = part.value
+    const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second)
+    return Math.round((asUTC - at.getTime()) / 60000)
+}
+
+/**
+ * Sprint 73 — ISO (UTC) do início do dia local (00:00) num fuso IANA.
+ * Para filtros Supabase .gte()/.lte() corretos por restaurante.
+ */
+export function getStartOfDayIsoInTz(tz: string, dateKey: string): string {
+    const ref = new Date(`${dateKey}T12:00:00Z`)
+    const off = tzOffsetMinutes(tz, ref) // ex.: SP=-180, Manaus=-240
+    const sign = off >= 0 ? '+' : '-'
+    const abs = Math.abs(off)
+    const hh = String(Math.floor(abs / 60)).padStart(2, '0')
+    const mm = String(abs % 60).padStart(2, '0')
+    return new Date(`${dateKey}T00:00:00.000${sign}${hh}:${mm}`).toISOString()
+}
+
+export function getDayRangeIsoInTz(tz: string, dateKey: string): { start: string; end: string } {
+    const start = getStartOfDayIsoInTz(tz, dateKey)
+    // fim = início do próximo dia - 1ms
+    const next = new Date(new Date(`${dateKey}T00:00:00Z`).getTime() + 24 * 3600 * 1000)
+    const nextKey = `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}-${String(next.getUTCDate()).padStart(2, '0')}`
+    const end = new Date(new Date(getStartOfDayIsoInTz(tz, nextKey)).getTime() - 1).toISOString()
+    return { start, end }
+}
+
 /**
  * Retorna os limites do dia atual em São Paulo como ISO strings (UTC).
- * Útil para queries Supabase com .gte() / .lte().
+ * @deprecated Use getDayRangeIsoInTz(tz, dateKey) com o fuso do restaurante.
  */
 export function getBrazilStartAndEndOfDay(date?: Date): { start: string; end: string } {
     const { dateKey } = getBrazilNow(date)

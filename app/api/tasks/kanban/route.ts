@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getBrazilNow, getBrazilStartAndEndOfDay } from '@/lib/utils/brazil-date';
+import { getNowInTz, getDayRangeIsoInTz } from '@/lib/utils/brazil-date';
+import { getRestaurantTimezone } from '@/lib/utils/restaurant-time';
 import { filterChecklistsByRecurrence } from '@/lib/utils/should-checklist-appear-today';
 import { resolveGlobalScope, isGlobalScopeResult } from '@/lib/api/global-scope';
 import { fetchArchivedQuickIdsForToday } from '@/lib/utils/operational-activity';
@@ -124,9 +125,10 @@ export async function GET(request: Request) {
             .order('order_index', { ascending: true, nullsFirst: false })
             .order('id', { ascending: true });
 
-        // Timezone Brasil para todas as operações de data
-        const brazil = getBrazilNow();
-        const { start: brazilDayStart, end: brazilDayEnd } = getBrazilStartAndEndOfDay();
+        // Sprint 73 — fuso do restaurante para todas as operações de data
+        const tz = await getRestaurantTimezone(adminSupabase, restaurantIds[0]);
+        const brazil = getNowInTz(tz);
+        const { start: brazilDayStart, end: brazilDayEnd } = getDayRangeIsoInTz(tz, brazil.dateKey);
 
         // Sprint 54: quick receivings concluídos hoje ficam arquivados (active=false).
         // Reincorporamos via segunda query para que permaneçam visíveis em Meu Turno

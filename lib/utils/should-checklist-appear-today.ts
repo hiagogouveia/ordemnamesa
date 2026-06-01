@@ -82,8 +82,18 @@ export function shouldChecklistAppearToday(
         return new Set(days).has(brazilDayOfWeek)
     }
 
-    // Semanal/Mensal/Anual simples: aparece todo dia (lógica simplificada atual)
-    if (recurrence === 'weekly') return true
+    // Sprint 73 — Semanal v1: respeitar os dias configurados (days_of_week)
+    // quando presentes; sem dias → mantém o fallback de aparecer todo dia.
+    if (recurrence === 'weekly') {
+        const cfg = recurrence_config as RecurrenceConfig | null | undefined
+        const days = cfg?.days_of_week
+        if (Array.isArray(days) && days.length > 0) {
+            return days.includes(brazilDayOfWeek)
+        }
+        return true
+    }
+
+    // Mensal/Anual simples: aparece todo dia (lógica simplificada atual, fora do escopo)
     if (recurrence === 'monthly') return true
     if (recurrence === 'yearly') return true
 

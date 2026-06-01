@@ -10,6 +10,7 @@ export interface Unit {
     active: boolean
     account_id: string
     created_at: string
+    timezone?: string
 }
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
@@ -86,6 +87,7 @@ interface UpdateUnitInput {
     id: string
     account_id: string
     name?: string
+    timezone?: string
 }
 
 export function useUpdateUnit() {
@@ -96,7 +98,7 @@ export function useUpdateUnit() {
             const res = await fetch(`/api/units/${input.id}`, {
                 method: "PATCH",
                 headers,
-                body: JSON.stringify({ account_id: input.account_id, name: input.name }),
+                body: JSON.stringify({ account_id: input.account_id, name: input.name, timezone: input.timezone }),
             })
             if (!res.ok) throw (await parseError(res, "Erro ao atualizar unidade."))
             const data = (await res.json()) as { unit: Unit }

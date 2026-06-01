@@ -12,6 +12,7 @@ interface RestaurantUserJoin {
         logo_url: string | null
         active: boolean
         account_id: string
+        timezone: string | null
         accounts: { id: string; name: string } | null
     } | null
 }
@@ -53,6 +54,7 @@ export async function GET() {
                 logo_url,
                 active,
                 account_id,
+                timezone,
                 accounts!inner ( id, name )
             )
         `)
@@ -73,6 +75,7 @@ export async function GET() {
             logo_url: row.restaurants!.logo_url,
             account_id: row.restaurants!.account_id,
             account_name: row.restaurants!.accounts?.name ?? '',
+            timezone: row.restaurants!.timezone ?? 'America/Sao_Paulo',
             role: row.role,
         }))
 

@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { MyActivity, MyActivityStatus, TargetRole } from '@/lib/types';
-import { getBrazilNow, getBrazilStartAndEndOfDay } from '@/lib/utils/brazil-date';
+import { getNowInTz, getStartOfDayIsoInTz } from '@/lib/utils/brazil-date';
+import { getRestaurantTimezone } from '@/lib/utils/restaurant-time';
 import { filterChecklistsByRecurrence } from '@/lib/utils/should-checklist-appear-today';
 import { OPERATIONAL_PREDICATE, fetchArchivedQuickIdsForToday } from '@/lib/utils/operational-activity';
 import { fetchShiftIdsByChecklist, isVisibleByShiftIntersection } from '@/lib/api/shift-links';
@@ -210,9 +211,10 @@ export async function GET(request: Request) {
             return NextResponse.json([]);
         }
 
-        // Timezone Brasil e filtragem de recorrência
-        const brazil = getBrazilNow();
-        const { start: brazilDayStart } = getBrazilStartAndEndOfDay();
+        // Sprint 73 — fuso do restaurante (fonte da verdade) e filtragem de recorrência
+        const tz = await getRestaurantTimezone(adminSupabase, restaurant_id);
+        const brazil = getNowInTz(tz);
+        const brazilDayStart = getStartOfDayIsoInTz(tz, brazil.dateKey);
 
         // Buscar shifts para resolver recurrence='shift_days'
         const { data: shifts } = await adminSupabase

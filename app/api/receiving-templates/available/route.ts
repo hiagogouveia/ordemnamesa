@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getBrazilNow } from '@/lib/utils/brazil-date';
+import { getNowInTz } from '@/lib/utils/brazil-date';
+import { getRestaurantTimezone } from '@/lib/utils/restaurant-time';
 import { filterChecklistsByRecurrence } from '@/lib/utils/should-checklist-appear-today';
 import { fetchShiftIdsByTemplate, isVisibleByShiftIntersection } from '@/lib/api/shift-links';
 import type { ReceivingTemplate } from '@/lib/types';
@@ -97,7 +98,7 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: templatesRes.error.message }, { status: 500 });
         }
 
-        const brazil = getBrazilNow();
+        const brazil = getNowInTz(await getRestaurantTimezone(adminSupabase, restaurant_id));
         const templates = (templatesRes.data ?? []) as Array<ReceivingTemplate & {
             tasks_count?: Array<{ count: number }> | number;
         }>;

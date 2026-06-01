@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { ExecutionStatus } from '@/lib/types';
-import { getBrazilDateKey } from '@/lib/utils/brazil-date';
+import { getNowInTz } from '@/lib/utils/brazil-date';
+import { getRestaurantTimezone } from '@/lib/utils/restaurant-time';
 import { resolveGlobalScope, rejectIfGlobal, isGlobalScopeResult } from '@/lib/api/global-scope';
 import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
 import { getAccountBilling, canManageChecklists } from '@/lib/billing/subscription-access';
@@ -85,7 +86,8 @@ export async function GET(request: Request) {
             return NextResponse.json([]);
         }
 
-        const todayKey = getBrazilDateKey();
+        const tz = await getRestaurantTimezone(adminSupabase, restaurantIds[0]);
+        const todayKey = getNowInTz(tz).dateKey;
 
         const checklistsQuery = adminSupabase
             .from('checklists')

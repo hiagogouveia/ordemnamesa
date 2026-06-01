@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getBrazilDateKey } from '@/lib/utils/brazil-date';
+import { getNowInTz } from '@/lib/utils/brazil-date';
+import { getRestaurantTimezone } from '@/lib/utils/restaurant-time';
 import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
 import { getAccountBilling, canExecuteTasks } from '@/lib/billing/subscription-access';
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
@@ -84,7 +85,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             .eq('id', user.id)
             .maybeSingle();
         const userName = userRecord?.name || user.user_metadata?.name || user.email || 'Funcionário';
-        const dateKey = getBrazilDateKey();
+        const dateKey = getNowInTz(await getRestaurantTimezone(adminSupabase, restaurant_id)).dateKey;
 
         // Verificar se já existe assumption para hoje (por qualquer pessoa)
         const { data: existing } = await adminSupabase
@@ -274,7 +275,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
             return NextResponse.json({ error: 'Sem acesso a este restaurante' }, { status: 403 });
         }
 
-        const dateKey = getBrazilDateKey();
+        const dateKey = getNowInTz(await getRestaurantTimezone(adminSupabase, restaurant_id)).dateKey;
 
         const { data: assumption } = await adminSupabase
             .from('checklist_assumptions')

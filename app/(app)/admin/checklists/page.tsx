@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
+import { useRestaurantNow } from "@/lib/hooks/use-restaurant-now";
 import { createClient } from "@/lib/supabase/client";
 import { useSignedUrl } from "@/lib/hooks/use-signed-url";
 import { useQuery } from "@tanstack/react-query";
@@ -64,7 +65,6 @@ export default function AdminChecklists() {
     const { restaurantId } = useRestaurantStore();
     const { data, isLoading } = useAdminChecklistsData(restaurantId || undefined);
 
-    const [currentTime, setCurrentTime] = useState("");
     const [activeTab, setActiveTab] = useState<"ativas" | "concluidas">("ativas");
     const [selectedChecklistId, setSelectedChecklistId] = useState<string | null>(null);
     const [selectedExecution, setSelectedExecution] = useState<HistoricoEntry | null>(null);
@@ -77,17 +77,8 @@ export default function AdminChecklists() {
     console.log("SISTEMA ATUALIZADO - ABA:", activeTab);
     console.log("SISTEMA ATUALIZADO - DADOS:", data);
 
-    useEffect(() => {
-        setCurrentTime(new Date().toTimeString().slice(0, 5));
-        const interval = setInterval(() => setCurrentTime(new Date().toTimeString().slice(0, 5)), 60000);
-        return () => clearInterval(interval);
-    }, []);
-
-    const currentMinutes = useMemo(() => {
-        if (!currentTime) return 0;
-        const [h, m] = currentTime.split(':').map(Number);
-        return h * 60 + m;
-    }, [currentTime]);
+    // Sprint 73 — "agora" no fuso do restaurante.
+    const { currentMinutes } = useRestaurantNow();
 
     const { activeChecklists, completedChecklists } = useMemo(() => {
         if (!data) return { activeChecklists: [], completedChecklists: [] };

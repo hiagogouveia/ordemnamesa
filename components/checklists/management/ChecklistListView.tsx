@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import type { StatusContext } from "@/lib/utils/get-operational-status";
 import {
     DndContext,
     closestCenter,
@@ -88,6 +89,7 @@ interface ChecklistListViewProps {
     selectedAreaId: string;
     hasReducingFilters: boolean;
     currentMinutes: number;
+    statusCtx?: StatusContext;
     priorityMode: PriorityMode;
     isGlobal?: boolean;
     selectable?: boolean;
@@ -114,6 +116,7 @@ export function ChecklistListView({
     selectedAreaId,
     hasReducingFilters,
     currentMinutes,
+    statusCtx,
     priorityMode,
     isGlobal,
     selectable,
@@ -453,6 +456,7 @@ export function ChecklistListView({
                                         onDuplicate={() => onDuplicate(checklist)}
                                         onDelete={() => onDelete(checklist.id)}
                                         currentMinutes={currentMinutes}
+                                        statusCtx={statusCtx}
                                         isGlobal={isGlobal}
                                     />
                                 ))}
@@ -469,6 +473,7 @@ export function ChecklistListView({
                                     onDuplicate={() => onDuplicate(checklist)}
                                     onDelete={() => onDelete(checklist.id)}
                                     currentMinutes={currentMinutes}
+                                    statusCtx={statusCtx}
                                     isGlobal={isGlobal}
                                     selectable={selectable && !reorderMode}
                                     checked={selectedIds?.has(checklist.id)}

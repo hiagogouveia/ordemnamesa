@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getBrazilDateKey, getBrazilStartAndEndOfDay } from '@/lib/utils/brazil-date';
+import { getNowInTz, getStartOfDayIsoInTz } from '@/lib/utils/brazil-date';
+import { getRestaurantTimezone } from '@/lib/utils/restaurant-time';
 
 const getAdminSupabase = () =>
     createClient(
@@ -65,8 +66,9 @@ export async function GET(request: Request) {
         const userRole = userRoleRes.data?.role;
 
         if (userRole === 'owner' || userRole === 'manager') {
-            const todayKey = getBrazilDateKey();
-            const { start: todayStartISO } = getBrazilStartAndEndOfDay();
+            const tz = await getRestaurantTimezone(adminSupabase, restaurant_id);
+            const todayKey = getNowInTz(tz).dateKey;
+            const todayStartISO = getStartOfDayIsoInTz(tz, todayKey);
 
             // 1. Buscar assumption_ids com tasks bloqueadas hoje
             const { data: blockedTasks } = await adminSupabase

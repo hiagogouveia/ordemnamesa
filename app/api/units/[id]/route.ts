@@ -28,6 +28,7 @@ interface UnitRow {
     active: boolean
     account_id: string
     created_at: string
+    timezone?: string
 }
 
 async function assertOwner(
@@ -74,14 +75,24 @@ export async function PATCH(
         }
 
         const body = await request.json().catch(() => null) as
-            | { account_id?: string; name?: string; set_primary?: boolean }
+            | { account_id?: string; name?: string; set_primary?: boolean; timezone?: string }
             | null
 
         if (!body) {
             return NextResponse.json({ error: 'Corpo inválido.' }, { status: 400 })
         }
 
-        const { account_id, name, set_primary } = body
+        const { account_id, name, set_primary, timezone } = body
+
+        // Sprint 73 — fusos IANA do Brasil suportados (espelha o CHECK do banco)
+        const ALLOWED_TZ = new Set([
+            'America/Sao_Paulo', 'America/Bahia', 'America/Fortaleza', 'America/Recife', 'America/Maceio',
+            'America/Belem', 'America/Araguaina', 'America/Campo_Grande', 'America/Cuiaba', 'America/Manaus',
+            'America/Boa_Vista', 'America/Porto_Velho', 'America/Rio_Branco', 'America/Eirunepe', 'America/Noronha',
+        ])
+        if (timezone !== undefined && !ALLOWED_TZ.has(timezone)) {
+            return NextResponse.json({ error: 'Fuso horário inválido.' }, { status: 400 })
+        }
 
         if (!account_id) {
             return NextResponse.json({ error: 'account_id é obrigatório.' }, { status: 400 })
@@ -125,6 +136,9 @@ export async function PATCH(
         if (set_primary === true) {
             updates.is_primary = true
         }
+        if (timezone !== undefined) {
+            updates.timezone = timezone
+        }
 
         if (Object.keys(updates).length === 0) {
             return NextResponse.json({ unit })
@@ -135,7 +149,7 @@ export async function PATCH(
             .update(updates)
             .eq('id', id)
             .eq('account_id', account_id)
-            .select('id, name, slug, cnpj, is_primary, active, account_id, created_at')
+            .select('id, name, slug, cnpj, is_primary, active, account_id, created_at, timezone')
             .single<UnitRow>()
 
         if (error || !updated) {

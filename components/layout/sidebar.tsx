@@ -107,16 +107,16 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggle }: Sideba
 
         const { data: link } = await supabase
             .from('restaurant_users')
-            .select('role, restaurants ( id, name, slug )')
+            .select('role, restaurants ( id, name, slug, timezone )')
             .eq('restaurant_id', unitId)
             .eq('user_id', user.id)
             .eq('active', true)
-            .maybeSingle<{ role: 'owner' | 'manager' | 'staff'; restaurants: { id: string; name: string; slug: string } | null }>();
+            .maybeSingle<{ role: 'owner' | 'manager' | 'staff'; restaurants: { id: string; name: string; slug: string; timezone: string | null } | null }>();
 
         const nextRole = link?.role ?? (accountRole === 'owner' ? 'owner' : 'manager');
         const slug = link?.restaurants?.slug ?? '';
 
-        setRestaurant({ id: unitId, name: unitName, slug, role: nextRole });
+        setRestaurant({ id: unitId, name: unitName, slug, role: nextRole, timezone: link?.restaurants?.timezone });
         setAccountMode("single");
 
         const base = "; path=/; SameSite=Strict";

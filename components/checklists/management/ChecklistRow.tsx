@@ -6,7 +6,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
 import type { ExecutionStatus } from "@/lib/types";
-import { getOperationalStatus } from "@/lib/utils/get-operational-status";
+import { getOperationalStatus, type StatusContext } from "@/lib/utils/get-operational-status";
 import { describeRecurrence } from "@/lib/utils/recurrence/describe";
 import { UnitBadge } from "@/components/ui/unit-badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -50,6 +50,7 @@ interface ChecklistRowProps {
     onDuplicate: () => void;
     onDelete: () => void;
     currentMinutes: number;
+    statusCtx?: StatusContext;
     isGlobal?: boolean;
     selectable?: boolean;
     checked?: boolean;
@@ -66,6 +67,7 @@ export function ChecklistRow({
     onDuplicate,
     onDelete,
     currentMinutes,
+    statusCtx,
     isGlobal,
     selectable,
     checked,
@@ -115,7 +117,7 @@ export function ChecklistRow({
     };
 
     // Derivar status operacional centralizado
-    const execStatus = getOperationalStatus(checklist, currentMinutes);
+    const execStatus = getOperationalStatus(checklist, currentMinutes, statusCtx);
     const execConfig = EXECUTION_STATUS_CONFIG[execStatus] ?? EXECUTION_STATUS_CONFIG.not_started;
 
     return (

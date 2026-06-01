@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getNowInTz } from "@/lib/utils/brazil-date";
+import { getRestaurantTimezone } from "@/lib/utils/restaurant-time";
 
 const getAdminSupabase = () => {
     return createClient(
@@ -131,9 +133,8 @@ export async function POST(request: Request) {
             }
         }
 
-        // Build enriched list
-        const now = new Date();
-        const currentMinutes = now.getHours() * 60 + now.getMinutes();
+        // Build enriched list — Sprint 73: minutos no fuso do restaurante
+        const currentMinutes = getNowInTz(await getRestaurantTimezone(adminSupabase, restaurant_id)).minutes;
 
         const enriched: ChecklistRow[] = checklists.map((c) => ({
             id: c.id,

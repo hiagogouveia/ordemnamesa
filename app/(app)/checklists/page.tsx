@@ -9,7 +9,7 @@ import { useChecklists, useCreateChecklist, useDeleteChecklist, useToggleCheckli
 import { useIssueCountsByChecklist } from "@/lib/hooks/use-task-issues";
 import { useShifts } from "@/lib/hooks/use-shifts";
 import { shouldChecklistAppearToday } from "@/lib/utils/should-checklist-appear-today";
-import { getBrazilNow, getBrazilDateKey } from "@/lib/utils/brazil-date";
+import { useRestaurantNow } from "@/lib/hooks/use-restaurant-now";
 import { BulkActionBar } from "@/components/checklists/management/BulkActionBar";
 import { CopyChecklistModal } from "@/components/checklists/management/CopyChecklistModal";
 import { useChecklistOrders, useUpdateChecklistOrders } from "@/lib/hooks/use-checklist-orders";
@@ -54,10 +54,12 @@ function ChecklistsContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
 
+    // Sprint 73 — "agora" no fuso do restaurante (fonte única)
+    const { currentMinutes, dayOfWeek: tzDayOfWeek, dateKey: tzDateKey } = useRestaurantNow();
+
     // UI state
     const [mounted, setMounted] = useState(false);
     const [view, setView] = useState<"list" | "board" | "preview">("list");
-    const [currentMinutes, setCurrentMinutes] = useState(0);
     const [searchQuery, setSearchQuery] = useState("");
     const [editorState, setEditorState] = useState<EditorState>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -67,16 +69,6 @@ function ChecklistsContent() {
     const [pendingTemplate, setPendingTemplate] = useState<ChecklistTemplate | null>(null);
 
     useEffect(() => { setMounted(true); }, []);
-
-    useEffect(() => {
-        const compute = () => {
-            const now = new Date();
-            return now.getHours() * 60 + now.getMinutes();
-        };
-        setCurrentMinutes(compute());
-        const id = setInterval(() => setCurrentMinutes(compute()), 60_000);
-        return () => clearInterval(id);
-    }, []);
 
     const focusIssueId = searchParams.get("issue");
     const selectedShift = searchParams.get("shift") ?? "";
@@ -115,12 +107,17 @@ function ChecklistsContent() {
     const { data: orders = [] } = useChecklistOrders(restaurantId ?? undefined);
     const { data: areas = [], isLoading: isLoadingAreas } = useAllAreas(restaurantId ?? undefined);
     const { data: shifts = [] } = useShifts(restaurantId ?? undefined);
+    // Sprint 73 — contexto p/ status recorrência-aware (fuso do restaurante)
+    const statusCtx = useMemo(
+        () => ({ dayOfWeek: tzDayOfWeek, dateKey: tzDateKey, shifts }),
+        [tzDayOfWeek, tzDateKey, shifts]
+    );
     const { data: equipeData } = useEquipe(
         isGlobal
             ? { restaurantId: null, accountId, mode: 'global' }
             : (restaurantId ?? null)
     );
-    const { data: issueCounts = {} } = useIssueCountsByChecklist(restaurantId ?? undefined, getBrazilDateKey());
+    const { data: issueCounts = {} } = useIssueCountsByChecklist(restaurantId ?? undefined, tzDateKey);
     const { data: units = [] } = useUnits(isGlobal ? accountId : null);
 
     // Mutations
@@ -150,7 +147,8 @@ function ChecklistsContent() {
             : checklists as ExtendedChecklist[];
 
         // "Hoje": só rotinas ativas e que devem aparecer hoje pelas regras de recorrência.
-        const brazilNow = selectedAvailability === "today" ? getBrazilNow() : null;
+        // Sprint 73 — usa o fuso do restaurante (não o do navegador).
+        const brazilNow = selectedAvailability === "today" ? { dayOfWeek: tzDayOfWeek, dateKey: tzDateKey } : null;
 
         const result = collaboratorFiltered.filter((c) => {
             if (q && !c.name.toLowerCase().includes(q)) return false;
@@ -173,9 +171,9 @@ function ChecklistsContent() {
                 if (!shouldChecklistAppearToday(c, brazilNow.dayOfWeek, brazilNow.dateKey, shifts)) return false;
             }
 
-            // Filtro por status de execução
+            // Filtro por status de execução (recorrência-aware)
             if (selectedExecStatus) {
-                const computed = getOperationalStatus(c, currentMinutes);
+                const computed = getOperationalStatus(c, currentMinutes, statusCtx);
                 if (computed !== selectedExecStatus) return false;
             }
 
@@ -224,7 +222,7 @@ function ChecklistsContent() {
         });
         
         return sortedResult;
-    }, [checklists, searchQuery, selectedShift, selectedAreaId, selectedAvailability, selectedExecStatus, selectedType, selectedCollaboratorId, selectedUnitId, isGlobal, equipeData, shifts, currentMinutes, sortField, sortOrder]);
+    }, [checklists, searchQuery, selectedShift, selectedAreaId, selectedAvailability, selectedExecStatus, selectedType, selectedCollaboratorId, selectedUnitId, isGlobal, equipeData, shifts, currentMinutes, tzDayOfWeek, tzDateKey, statusCtx, sortField, sortOrder]);
 
     // ─── BULK SELECTION (visão global) ─────────────────────────────────────────
 
@@ -640,6 +638,7 @@ function ChecklistsContent() {
                             onReorder={handleReorder}
                             onAutoReprioritize={handleAutoReprioritize}
                             currentMinutes={currentMinutes}
+                            statusCtx={statusCtx}
                             priorityMode={selectedAreaPriorityMode}
                             isGlobal={isGlobal}
                             selectable={canBulkAction}
@@ -653,6 +652,7 @@ function ChecklistsContent() {
                             checklists={filtered}
                             isLoading={isLoading}
                             currentMinutes={currentMinutes}
+                            statusCtx={statusCtx}
                             onSelect={handleSelect}
                             onStatusToggle={handleStatusToggle}
                             isGlobal={isGlobal}

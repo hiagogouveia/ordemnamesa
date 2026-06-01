@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/providers/use-session';
 import { useAccountSessionStore } from '@/lib/store/account-session-store';
 import { useDashboard, type TarefaCriticaTipo, type EquipeMembroStatus } from '@/lib/hooks/use-dashboard';
+import { useRestaurantNow } from '@/lib/hooks/use-restaurant-now';
 import { UnitBadge } from '@/components/ui/unit-badge';
 import { Avatar } from '@/components/ui/avatar';
 import Link from 'next/link';
@@ -115,6 +116,7 @@ export default function DashboardPage() {
     }, [isGlobal, accountId, restaurantId]);
 
     const { data: dashboardData, isLoading, error, refetch, isFetching } = useDashboard(scope);
+    const restaurantNow = useRestaurantNow();
 
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -176,7 +178,8 @@ export default function DashboardPage() {
         top_performers = [],
     } = dashboardData || {};
 
-    const todayDateStr = new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' }).format(new Date());
+    // Sprint 73 — data do cabeçalho no fuso do restaurante (consistente com o gráfico).
+    const todayDateStr = new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', timeZone: restaurantNow.tz }).format(new Date());
     const formattedDate = todayDateStr.charAt(0).toUpperCase() + todayDateStr.slice(1);
 
     return (

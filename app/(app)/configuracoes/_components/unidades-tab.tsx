@@ -40,6 +40,7 @@ export function UnidadesTab() {
     const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
     const [formName, setFormName] = useState("");
     const [formCnpj, setFormCnpj] = useState("");
+    const [formTimezone, setFormTimezone] = useState("America/Sao_Paulo");
     const [formError, setFormError] = useState<string | null>(null);
 
     const [deleteTarget, setDeleteTarget] = useState<Unit | null>(null);
@@ -55,6 +56,7 @@ export function UnidadesTab() {
         setEditingUnit(null);
         setFormName("");
         setFormCnpj("");
+        setFormTimezone("America/Sao_Paulo");
         setFormError(null);
         setIsModalOpen(true);
     };
@@ -64,6 +66,7 @@ export function UnidadesTab() {
         setEditingUnit(unit);
         setFormName(unit.name);
         setFormCnpj(unit.cnpj ?? "");
+        setFormTimezone(unit.timezone ?? "America/Sao_Paulo");
         setFormError(null);
         setIsModalOpen(true);
     };
@@ -93,6 +96,7 @@ export function UnidadesTab() {
                     id: editingUnit.id,
                     account_id: accountId,
                     name: formName.trim(),
+                    timezone: formTimezone,
                 });
             }
             setIsModalOpen(false);
@@ -308,6 +312,36 @@ export function UnidadesTab() {
                                     />
                                     <p className="text-[10px] text-[#325a67]">
                                         A unidade começa vazia — nenhuma configuração é copiada automaticamente.
+                                    </p>
+                                </div>
+                            )}
+
+                            {mode === "edit" && (
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-sm font-medium text-[#92bbc9]">Fuso horário</label>
+                                    <select
+                                        value={formTimezone}
+                                        onChange={(e) => setFormTimezone(e.target.value)}
+                                        className="bg-[#101d22] border border-[#233f48] text-white rounded-lg px-4 py-3 focus:outline-none focus:border-[#13b6ec] transition-colors"
+                                    >
+                                        <option value="America/Sao_Paulo">Brasília / São Paulo (GMT-3)</option>
+                                        <option value="America/Bahia">Bahia (GMT-3)</option>
+                                        <option value="America/Fortaleza">Fortaleza (GMT-3)</option>
+                                        <option value="America/Recife">Recife (GMT-3)</option>
+                                        <option value="America/Belem">Belém (GMT-3)</option>
+                                        <option value="America/Araguaina">Araguaína (GMT-3)</option>
+                                        <option value="America/Maceio">Maceió (GMT-3)</option>
+                                        <option value="America/Campo_Grande">Campo Grande (GMT-4)</option>
+                                        <option value="America/Cuiaba">Cuiabá (GMT-4)</option>
+                                        <option value="America/Manaus">Manaus / Amazonas (GMT-4)</option>
+                                        <option value="America/Boa_Vista">Boa Vista (GMT-4)</option>
+                                        <option value="America/Porto_Velho">Porto Velho (GMT-4)</option>
+                                        <option value="America/Rio_Branco">Rio Branco / Acre (GMT-5)</option>
+                                        <option value="America/Eirunepe">Eirunepé (GMT-5)</option>
+                                        <option value="America/Noronha">Fernando de Noronha (GMT-2)</option>
+                                    </select>
+                                    <p className="text-[10px] text-[#325a67]">
+                                        Define o cálculo de &quot;hoje&quot; e dos atrasos das rotinas desta unidade.
                                     </p>
                                 </div>
                             )}

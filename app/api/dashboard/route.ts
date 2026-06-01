@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getBrazilNow, getBrazilStartAndEndOfDay, getBrazilDateKey } from '@/lib/utils/brazil-date';
+import { getNowInTz, getDayRangeIsoInTz } from '@/lib/utils/brazil-date';
+import { getRestaurantTimezone } from '@/lib/utils/restaurant-time';
 import { filterChecklistsByRecurrence } from '@/lib/utils/should-checklist-appear-today';
 import { resolveGlobalScope, isGlobalScopeResult } from '@/lib/api/global-scope';
 import { OPERATIONAL_PREDICATE, fetchArchivedQuickIdsForToday } from '@/lib/utils/operational-activity';
@@ -155,18 +156,22 @@ export async function GET(request: Request) {
         const getUnit = (rid: string): UnitInfo | undefined =>
             isGlobal ? unitsById[rid] : undefined;
 
-        // ── Datas (timezone Brasil) ────────────────────────────────────────
-        const brazil = getBrazilNow();
+        // ── Datas (Sprint 73: fuso do restaurante) ─────────────────────────
+        // Single: fuso do próprio restaurante. Global (multi-unidade): usa o
+        // fuso da unidade primária como referência do agregado (aproximação
+        // documentada; agregação multi-fuso é evolução).
+        const tz = await getRestaurantTimezone(adminSupabase, restaurantIds[0]);
+        const brazil = getNowInTz(tz);
         const todayKey = brazil.dateKey;
-        const { start: todayStartISO, end: todayEndISO } = getBrazilStartAndEndOfDay();
+        const { start: todayStartISO, end: todayEndISO } = getDayRangeIsoInTz(tz, todayKey);
 
         const yesterdayDate = new Date();
         yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-        const yesterdayKey = getBrazilDateKey(yesterdayDate);
+        const yesterdayKey = getNowInTz(tz, yesterdayDate).dateKey;
 
         const sevenDaysAgoDate = new Date();
         sevenDaysAgoDate.setDate(sevenDaysAgoDate.getDate() - 6);
-        const sevenDaysAgoKey = getBrazilDateKey(sevenDaysAgoDate);
+        const sevenDaysAgoKey = getNowInTz(tz, sevenDaysAgoDate).dateKey;
 
         const archivedQuickIds = await fetchArchivedQuickIdsForToday(adminSupabase, restaurantIds, todayKey);
 
@@ -268,7 +273,7 @@ export async function GET(request: Request) {
         );
         const completedToday = completedChecklistIdsToday.size;
 
-        const yesterdayBrazil = getBrazilNow(yesterdayDate);
+        const yesterdayBrazil = getNowInTz(tz, yesterdayDate);
         const checklistsYesterday = filterChecklistsByRecurrence(allChecklists, yesterdayBrazil.dayOfWeek, yesterdayKey, shifts || []);
         const totalRoutinesYesterday = checklistsYesterday.length;
         const completedChecklistIdsYesterday = new Set(
@@ -604,7 +609,7 @@ export async function GET(request: Request) {
         for (let i = 6; i >= 0; i--) {
             const d = new Date();
             d.setDate(d.getDate() - i);
-            const dayInfo = getBrazilNow(d);
+            const dayInfo = getNowInTz(tz, d);
             const dateKey = dayInfo.dateKey;
 
             const dayChecklists = filterChecklistsByRecurrence(allChecklists, dayInfo.dayOfWeek, dateKey, shifts || []);

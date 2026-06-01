@@ -30,6 +30,7 @@ interface UnitRow {
     active: boolean
     account_id: string
     created_at: string
+    timezone: string
 }
 
 function digitsOnly(value: string): string {
@@ -84,7 +85,7 @@ export async function GET(request: Request) {
 
         const { data, error } = await admin
             .from('restaurants')
-            .select('id, name, slug, cnpj, is_primary, active, account_id, created_at')
+            .select('id, name, slug, cnpj, is_primary, active, account_id, created_at, timezone')
             .eq('account_id', account_id)
             .eq('active', true)
             .order('is_primary', { ascending: false })
@@ -187,7 +188,7 @@ export async function POST(request: Request) {
                 is_primary: false,
                 active: true,
             })
-            .select('id, name, slug, cnpj, is_primary, active, account_id, created_at')
+            .select('id, name, slug, cnpj, is_primary, active, account_id, created_at, timezone')
             .single<UnitRow>()
 
         if (insertError || !restaurant) {

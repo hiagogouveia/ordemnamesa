@@ -13,6 +13,8 @@ export interface Restaurant {
     account_id: string
     is_primary: boolean
     deleted_at?: string | null
+    // Sprint 73 — fuso operacional (IANA). Default 'America/Sao_Paulo'.
+    timezone?: string
 }
 
 // Sprint 28 — Accounts (tenant de topo)

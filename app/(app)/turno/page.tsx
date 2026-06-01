@@ -5,6 +5,7 @@ import { useSession } from '@/lib/providers/use-session';
 import { useAccountSessionStore } from '@/lib/store/account-session-store';
 import { useKanbanTasks, KanbanChecklist } from '@/lib/hooks/use-tasks';
 import { useShifts } from '@/lib/hooks/use-shifts';
+import { useRestaurantNow } from '@/lib/hooks/use-restaurant-now';
 import { useMyAreas } from '@/lib/hooks/use-user-areas';
 import { useUserShifts } from '@/lib/hooks/use-user-roles-shifts';
 import { pickMyShiftForHeader } from '@/lib/utils';
@@ -102,12 +103,8 @@ export default function KanbanPage() {
         }, 150);
     };
 
-    const [timeNow, setTimeNow] = useState<string>('');
-    useEffect(() => {
-        setTimeNow(new Date().toTimeString().slice(0, 5));
-        const interval = setInterval(() => setTimeNow(new Date().toTimeString().slice(0, 5)), 60000);
-        return () => clearInterval(interval);
-    }, []);
+    // Sprint 73 — "agora" no fuso do restaurante (não no relógio do navegador).
+    const { timeHHMM: timeNow, currentMinutes } = useRestaurantNow();
 
     // Cabeçalho baseado no VÍNCULO user↔shifts (não no relógio). Resolve os
     // turnos do usuário a partir das atribuições + lista de turnos do restaurante.
@@ -122,12 +119,6 @@ export default function KanbanPage() {
         [myShifts, timeNow],
     );
     const hasNoAreaAssigned = !userLoading && user !== null && !isGlobal && !loadingMyAreas && myAreaAssignments.length === 0;
-
-    const currentMinutes = useMemo(() => {
-        if (!timeNow) return 0;
-        const [h, m] = timeNow.split(':').map(Number);
-        return h * 60 + m;
-    }, [timeNow]);
 
     const unitsList = useMemo(() => {
         if (!isGlobal || !kanbanData?.units_by_id) return [];
