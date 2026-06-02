@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { BR_TIMEZONES } from '@/lib/constants/timezones'
 
 const getAdminSupabase = () =>
     createClient(
@@ -84,13 +85,8 @@ export async function PATCH(
 
         const { account_id, name, set_primary, timezone } = body
 
-        // Sprint 73 — fusos IANA do Brasil suportados (espelha o CHECK do banco)
-        const ALLOWED_TZ = new Set([
-            'America/Sao_Paulo', 'America/Bahia', 'America/Fortaleza', 'America/Recife', 'America/Maceio',
-            'America/Belem', 'America/Araguaina', 'America/Campo_Grande', 'America/Cuiaba', 'America/Manaus',
-            'America/Boa_Vista', 'America/Porto_Velho', 'America/Rio_Branco', 'America/Eirunepe', 'America/Noronha',
-        ])
-        if (timezone !== undefined && !ALLOWED_TZ.has(timezone)) {
+        // Sprint 73 — fusos IANA do Brasil suportados (fonte única: lib/constants/timezones)
+        if (timezone !== undefined && !BR_TIMEZONES.has(timezone)) {
             return NextResponse.json({ error: 'Fuso horário inválido.' }, { status: 400 })
         }
 

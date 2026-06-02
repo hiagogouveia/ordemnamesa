@@ -11,6 +11,8 @@ export interface RestaurantStore {
     // Sprint 73 — fuso operacional do restaurante atual (fonte da verdade no client).
     timezone: string
     setRestaurant: (data: { id: string; name: string; slug: string; role: 'owner' | 'manager' | 'staff'; timezone?: string | null }) => void
+    // Sprint 73 — atualiza só o fuso (self-heal quando muda no banco sem relogin).
+    setTimezone: (timezone: string) => void
     clearRestaurant: () => void
 }
 
@@ -30,6 +32,7 @@ export const useRestaurantStore = create<RestaurantStore>()(
                     userRole: data.role,
                     timezone: data.timezone || FALLBACK_TZ,
                 }),
+            setTimezone: (timezone) => set({ timezone: timezone || FALLBACK_TZ }),
             clearRestaurant: () =>
                 set({
                     restaurantId: null,
