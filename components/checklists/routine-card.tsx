@@ -15,6 +15,8 @@ export interface RoutineCardProps {
     start_time?: string | null;
     end_time?: string | null;
     currentMinutes?: number;
+    /** Sprint 76: permite iniciar antes do start_time (usado no fallback de estado). */
+    allow_early_start?: boolean;
 
     // Status visual (admin)
     isActiveStatus?: boolean;
@@ -125,6 +127,7 @@ export function RoutineCard({
     start_time,
     end_time,
     currentMinutes = 0,
+    allow_early_start = false,
     isActiveStatus = true,
     adminStatusString = "active",
     itemsCount,
@@ -278,6 +281,7 @@ export function RoutineCard({
         currentMinutes,
         hasBlockedTask: false,
         hasInProgressExecution: variant === "collaborator_doing",
+        allow_early_start,
     });
 
     const visual = buildStateVisual(resolvedState.kind, start_time ?? null);

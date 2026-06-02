@@ -181,6 +181,8 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     const [recurrenceConfig, setRecurrenceConfig] = useState<RecurrenceConfig | RecurrenceV2 | null | undefined>(undefined);
     // Sequence order
     const [enforceSequentialOrder, setEnforceSequentialOrder] = useState(false);
+    // Sprint 76: permite iniciar a rotina antes do start_time (só relevante com janela de horário)
+    const [allowEarlyStart, setAllowEarlyStart] = useState(false);
     const [showRecurrencePicker, setShowRecurrencePicker] = useState(false);
     // PR 4 (UX): qual modal de configuração v2 está aberto. `null` = nenhum.
     const [activeRecurrenceModal, setActiveRecurrenceModal] = useState<
@@ -377,6 +379,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 setHasTimeWindow(parsed.hasTimeWindow ?? false);
                 setRecurrenceConfig(parsed.recurrenceConfig ?? undefined);
                 setEnforceSequentialOrder(parsed.enforceSequentialOrder ?? false);
+                setAllowEarlyStart(parsed.allowEarlyStart ?? false);
                 setAreaId(parsed.areaId ?? checklist.area_id ?? "");
                 setTasks(parsed.tasks ?? []);
                 setSaveState("saved");
@@ -395,6 +398,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                     hasTimeWindow: parsed.hasTimeWindow ?? false,
                     recurrenceConfig: parsed.recurrenceConfig ?? undefined,
                     enforceSequentialOrder: parsed.enforceSequentialOrder ?? false,
+                    allowEarlyStart: parsed.allowEarlyStart ?? false,
                     areaId: parsed.areaId ?? checklist.area_id ?? "",
                     tasks: parsed.tasks ?? [],
                 };
@@ -423,6 +427,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             // Sprint 8: recurrence config
             const loadedRecurrenceConfig = checklist.recurrence_config as RecurrenceConfig | undefined;
             const loadedEnforceSequentialOrder = checklist.enforce_sequential_order ?? false;
+            const loadedAllowEarlyStart = checklist.allow_early_start ?? false;
             const loadedAreaId = checklist.area_id || "";
             const loadedTasks = (checklist.tasks || []).map((t) => ({ ...t, tempId: t.id }));
 
@@ -439,6 +444,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             setHasTimeWindow(loadedHasTimeWindow);
             setRecurrenceConfig(loadedRecurrenceConfig);
             setEnforceSequentialOrder(loadedEnforceSequentialOrder);
+            setAllowEarlyStart(loadedAllowEarlyStart);
             setAreaId(loadedAreaId);
             setTasks(loadedTasks);
 
@@ -458,6 +464,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 hasTimeWindow: loadedHasTimeWindow,
                 recurrenceConfig: loadedRecurrenceConfig,
                 enforceSequentialOrder: loadedEnforceSequentialOrder,
+                allowEarlyStart: loadedAllowEarlyStart,
                 areaId: loadedAreaId,
                 tasks: loadedTasks,
             };
@@ -485,6 +492,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             setHasTimeWindow(false);
             setRecurrenceConfig(undefined);
             setEnforceSequentialOrder(false);
+            setAllowEarlyStart(false);
             setAreaId(initialAreaId ?? "");
             setTasks(mapTemplateItemsToTasks(initialTemplate));
             setErrorMsg(null);
@@ -507,6 +515,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             setHasTimeWindow(false);
             setRecurrenceConfig(undefined);
             setEnforceSequentialOrder(false);
+            setAllowEarlyStart(false);
             setAreaId(initialAreaId ?? "");
             setTasks([]);
             setErrorMsg(null);
@@ -539,6 +548,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         const draftHasTimeWindow = parsed.hasTimeWindow ?? false;
         const draftRecurrenceConfig = parsed.recurrenceConfig ?? undefined;
         const draftEnforceSequentialOrder = parsed.enforceSequentialOrder ?? false;
+        const draftAllowEarlyStart = parsed.allowEarlyStart ?? false;
         const draftAreaId = parsed.areaId ?? "";
         const draftTasks = parsed.tasks ?? [];
 
@@ -555,6 +565,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         setHasTimeWindow(draftHasTimeWindow);
         setRecurrenceConfig(draftRecurrenceConfig);
         setEnforceSequentialOrder(draftEnforceSequentialOrder);
+        setAllowEarlyStart(draftAllowEarlyStart);
         setAreaId(draftAreaId);
         setTasks(draftTasks);
         setSaveState("saved");
@@ -566,6 +577,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             recurrence: draftRecurrence, startTime: draftStartTime, endTime: draftEndTime,
             hasTimeWindow: draftHasTimeWindow, recurrenceConfig: draftRecurrenceConfig,
             enforceSequentialOrder: draftEnforceSequentialOrder,
+            allowEarlyStart: draftAllowEarlyStart,
             areaId: draftAreaId, tasks: draftTasks,
         };
         setPendingDraftRestore(null);
@@ -580,7 +592,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         const formState = {
             name, description, shiftIds, checklistType, assignedToUserId, isIndividualMode,
             isRequired, recurrence, startTime, endTime, hasTimeWindow,
-            recurrenceConfig, enforceSequentialOrder,
+            recurrenceConfig, enforceSequentialOrder, allowEarlyStart,
             areaId, tasks
         };
 
@@ -648,6 +660,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                         // - v2: objeto com version=2 → backend valida e persiste estruturado
                         recurrence_config: recurrenceConfig ?? null,
                         enforce_sequential_order: enforceSequentialOrder,
+                        allow_early_start: allowEarlyStart,
                         area_id: areaId || null,
                         target_role: checklist.target_role || 'all',
                         assignment_type: (isIndividualMode && assignedToUserId) ? 'user' : (areaId ? 'area' : 'all'),
@@ -692,7 +705,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         }, 1500);
 
         return () => clearTimeout(handler);
-    }, [name, description, shift, shiftIds, checklistType, assignedToUserId, isIndividualMode, isRequired, recurrence, startTime, endTime, hasTimeWindow, recurrenceConfig, enforceSequentialOrder, areaId, tasks, checklist, restaurantId, updateMutation, blockedByBilling]);
+    }, [name, description, shift, shiftIds, checklistType, assignedToUserId, isIndividualMode, isRequired, recurrence, startTime, endTime, hasTimeWindow, recurrenceConfig, enforceSequentialOrder, allowEarlyStart, areaId, tasks, checklist, restaurantId, updateMutation, blockedByBilling]);
 
     const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 8 } });
     const keyboardSensor = useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates });
@@ -808,6 +821,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             // PR 3: igual ao auto-save — envia config como está no estado.
             recurrence_config: recurrenceConfig ?? null,
             enforce_sequential_order: enforceSequentialOrder,
+            allow_early_start: allowEarlyStart,
             area_id: areaId || null,
             assignment_type: (isIndividualMode && assignedToUserId) ? 'user' : (areaId ? 'area' : 'all'),
             // Em update, preserva status original (active/archived). Em criação, sempre active.
@@ -1460,6 +1474,29 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                             </p>
                                         </div>
                                     )}
+                                </div>
+
+                                {/* Sprint 76: permitir iniciar antes do horário de início */}
+                                <div className="bg-[#16262c] border border-[#233f48] rounded-xl p-4">
+                                    <label className="flex items-start justify-between gap-3 cursor-pointer">
+                                        <div>
+                                            <p className="text-white text-sm font-bold">Permitir iniciar antes do horário</p>
+                                            {allowEarlyStart && (
+                                                <p className="text-[#92bbc9] text-xs mt-1">
+                                                    Colaboradores podem iniciar esta rotina antes do horário configurado.
+                                                </p>
+                                            )}
+                                        </div>
+                                        <span className="relative inline-flex items-center shrink-0 mt-0.5">
+                                            <input
+                                                type="checkbox"
+                                                checked={allowEarlyStart}
+                                                onChange={(e) => setAllowEarlyStart(e.target.checked)}
+                                                className="sr-only peer"
+                                            />
+                                            <span className="w-11 h-6 bg-[#233f48] rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#13b6ec]"></span>
+                                        </span>
+                                    </label>
                                 </div>
                             </div>
                         )}
