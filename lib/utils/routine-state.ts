@@ -21,6 +21,11 @@ export interface RoutineStateInput {
     hasBlockedTask?: boolean;
     /** Se a rotina tem execução em andamento (doing/done/flagged). */
     hasInProgressExecution?: boolean;
+    /**
+     * Sprint 76: quando true, a rotina pode ser iniciada antes do start_time.
+     * Só afeta o estado "future" (antes do início) — atraso (após o fim) é mantido.
+     */
+    allow_early_start?: boolean;
 }
 
 /**
@@ -28,7 +33,7 @@ export interface RoutineStateInput {
  *   Impedimento > Atrasada > Em execução > Disponível (Futura é uma sub-variante atenuada).
  */
 export function getRoutineState(input: RoutineStateInput): RoutineStateInfo {
-    const { start_time, end_time, currentMinutes, hasBlockedTask, hasInProgressExecution } = input;
+    const { start_time, end_time, currentMinutes, hasBlockedTask, hasInProgressExecution, allow_early_start } = input;
 
     if (hasBlockedTask) {
         return { kind: "blocked", inProgress: Boolean(hasInProgressExecution) };
@@ -47,6 +52,10 @@ export function getRoutineState(input: RoutineStateInput): RoutineStateInfo {
     }
 
     if (isFuture) {
+        // Sprint 76: rotina configurada para iniciar antes do horário fica disponível.
+        if (allow_early_start) {
+            return { kind: "available", inProgress: false };
+        }
         return { kind: "future", inProgress: false };
     }
 

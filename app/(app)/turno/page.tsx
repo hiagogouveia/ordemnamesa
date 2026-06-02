@@ -292,6 +292,7 @@ export default function KanbanPage() {
                     currentMinutes,
                     hasBlockedTask: cl.hasBlockedTask,
                     hasInProgressExecution: cl.hasInProgressExecution,
+                    allow_early_start: cl.allow_early_start ?? false,
                 });
 
             const isReceiving = cl.checklist_type === 'receiving';

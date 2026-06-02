@@ -123,6 +123,7 @@ export interface Checklist {
     end_time?: string          // Sprint 8: formato HH:mm
     recurrence_config?: RecurrenceConfig // Sprint 8
     enforce_sequential_order?: boolean
+    allow_early_start?: boolean // Sprint 76: permite iniciar antes do start_time
     order_index?: number | null
     tasks?: ChecklistTask[]
     roles?: Role
