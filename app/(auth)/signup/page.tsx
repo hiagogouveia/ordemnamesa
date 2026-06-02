@@ -57,10 +57,15 @@ export default function SignupPage() {
         setLoading(true);
         setError(null);
 
+        // Sprint 73 — detecta o fuso do navegador para pré-configurar o restaurante.
+        // O backend valida contra a allowlist BR e cai em São Paulo se inválido.
+        // O dono pode ajustar depois em Configurações → Unidades.
+        const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
         const res = await fetch('/api/signup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(form),
+            body: JSON.stringify({ ...form, timezone: detectedTimezone }),
         });
 
         if (!res.ok) {

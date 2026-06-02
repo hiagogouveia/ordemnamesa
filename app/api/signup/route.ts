@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { trackOnboardingEvent } from '@/lib/analytics/track-event'
 import { getTrialEndsAtIso } from '@/lib/billing/trial'
 import { buildOwnerAccountUserRow } from '@/lib/supabase/accounts'
+import { normalizeBrTimezone } from '@/lib/constants/timezones'
 
 // ── Rate limiting (in-memory, por IP) ─────────────────────
 const rateLimit = new Map<string, { count: number; resetAt: number }>()
@@ -55,6 +56,8 @@ interface SignupBody {
     telefone: string
     cep: string
     endereco: string
+    /** Sprint 73 — fuso detectado no navegador (opcional; normalizado no backend). */
+    timezone?: string
 }
 
 // ── POST /api/signup ──────────────────────────────────────
@@ -76,7 +79,9 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Corpo da requisição inválido.' }, { status: 400 })
     }
 
-    const { nome_responsavel, email, senha, nome_fantasia, cnpj, telefone, cep, endereco } = body
+    const { nome_responsavel, email, senha, nome_fantasia, cnpj, telefone, cep, endereco, timezone } = body
+    // Fuso detectado no navegador; cai em São Paulo se ausente/fora da allowlist BR.
+    const restaurantTimezone = normalizeBrTimezone(timezone)
 
     if (!nome_responsavel?.trim()) return NextResponse.json({ error: 'Nome do responsável é obrigatório.' }, { status: 400 })
     if (!email?.trim()) return NextResponse.json({ error: 'E-mail é obrigatório.' }, { status: 400 })
@@ -200,6 +205,7 @@ export async function POST(request: Request) {
                 address: endereco.trim(),
                 account_id: newAccountId,
                 is_primary: true,
+                timezone: restaurantTimezone,
             })
             .select('id')
             .single<{ id: string }>()
