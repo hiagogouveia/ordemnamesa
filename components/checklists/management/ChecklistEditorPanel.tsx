@@ -393,6 +393,18 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose, focusIss
                                 })}
                             </span>
                         </div>
+                        {(checklist.start_time || checklist.end_time) && (
+                            <div className="flex items-center justify-between">
+                                <span className="text-[#92bbc9] text-sm">Horário</span>
+                                <span className="text-white text-sm font-medium">
+                                    {checklist.start_time && checklist.end_time
+                                        ? `${checklist.start_time} – ${checklist.end_time}`
+                                        : checklist.start_time
+                                            ? `A partir de ${checklist.start_time}`
+                                            : `Até ${checklist.end_time}`}
+                                </span>
+                            </div>
+                        )}
                         <div className="flex items-center justify-between">
                             <span className="text-[#92bbc9] text-sm">Tipo</span>
                             <span className="text-white text-sm font-medium">
