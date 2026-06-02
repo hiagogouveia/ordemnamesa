@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseTimeToMinutes, durationMinutes, addDuration, formatDuration } from "@/lib/utils/time-window";
+import { parseTimeToMinutes, durationMinutes, addDuration, formatDuration, getTimeWindowStatus } from "@/lib/utils/time-window";
 
 describe("time-window utils", () => {
     describe("parseTimeToMinutes", () => {
@@ -57,6 +57,29 @@ describe("time-window utils", () => {
         it("retorna string vazia para valores não positivos", () => {
             expect(formatDuration(0)).toBe("");
             expect(formatDuration(-5)).toBe("");
+        });
+    });
+
+    describe("getTimeWindowStatus (Sprint 76 — allow_early_start)", () => {
+        it("sem janela → always", () => {
+            expect(getTimeWindowStatus(undefined, undefined, "10:00")).toBe("always");
+            expect(getTimeWindowStatus(null, null, "10:00", true)).toBe("always");
+        });
+        it("allow_early_start = false: antes do início → before (bloqueado)", () => {
+            expect(getTimeWindowStatus("16:00", "19:55", "15:30")).toBe("before");
+            expect(getTimeWindowStatus("16:00", "19:55", "15:59")).toBe("before");
+        });
+        it("allow_early_start = true: antes do início → active (liberado)", () => {
+            expect(getTimeWindowStatus("16:00", "19:55", "15:30", true)).toBe("active");
+            expect(getTimeWindowStatus("16:00", "19:55", "12:00", true)).toBe("active");
+        });
+        it("dentro da janela → active (independente de allow_early_start)", () => {
+            expect(getTimeWindowStatus("16:00", "19:55", "17:00")).toBe("active");
+            expect(getTimeWindowStatus("16:00", "19:55", "17:00", true)).toBe("active");
+        });
+        it("após o fim → after, mesmo com allow_early_start = true (atraso preservado)", () => {
+            expect(getTimeWindowStatus("16:00", "19:55", "20:30")).toBe("after");
+            expect(getTimeWindowStatus("16:00", "19:55", "20:30", true)).toBe("after");
         });
     });
 });
