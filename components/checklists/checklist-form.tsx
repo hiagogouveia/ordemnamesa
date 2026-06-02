@@ -23,6 +23,7 @@ import { useUserShifts } from "@/lib/hooks/use-user-roles-shifts";
 import isEqual from "lodash/isEqual";
 import { getDraft, saveDraft, removeDraft, type DraftData } from "@/lib/utils/draft-storage";
 import { describeRecurrence } from "@/lib/utils/recurrence/describe";
+import { durationMinutes, addDuration, formatDuration } from "@/lib/utils/time-window";
 import { useCanManageChecklists } from "@/lib/hooks/use-can-manage-checklists";
 import { isBillingError } from "@/lib/billing/client-errors";
 
@@ -168,6 +169,12 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     const [hasTimeWindow, setHasTimeWindow] = useState(false);
     const [startTime, setStartTime] = useState("");
     const [endTime, setEndTime] = useState("");
+    // Modo de definição do fim da janela: "time" (informa o horário final, padrão e
+    // retrocompatível) ou "duration" (informa a duração e o fim é calculado).
+    // Estado apenas de UI — sempre persistimos start_time/end_time.
+    const [endMode, setEndMode] = useState<"time" | "duration">("time");
+    const [durationHours, setDurationHours] = useState("");
+    const [durationMins, setDurationMins] = useState("");
     // Sprint 8 (v1) + Sprint 34 (v2): aceita ambos formatos.
     // Identidade do objeto importa: se admin não tocar no dropdown nem no picker,
     // permanece o original carregado do banco — backend trata como v1.
@@ -247,6 +254,28 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         if (!exceedsAll) return null;
         return { shiftNames: selectedShiftNames.join(', '), endTime };
     })();
+
+    // Duração da janela (em minutos) para o informativo "Tempo disponível".
+    // `null` quando o horário é incompleto/inválido — nesse caso não exibimos.
+    const availableMinutes = durationMinutes(startTime, endTime);
+
+    // Modo "duração": recalcula o horário final a partir do início + duração informada.
+    const recalcEndFromDuration = (start: string, hours: string, mins: string) => {
+        const total = (parseInt(hours, 10) || 0) * 60 + (parseInt(mins, 10) || 0);
+        setEndTime(addDuration(start, total) ?? "");
+    };
+
+    // Ao alternar para "duração", pré-popula h/min a partir da janela atual
+    // (preserva dados ao editar rotina antiga). Ao voltar para "horário final",
+    // mantém o end_time já calculado.
+    const switchToDurationMode = () => {
+        const d = durationMinutes(startTime, endTime);
+        if (d !== null) {
+            setDurationHours(String(Math.floor(d / 60)));
+            setDurationMins(String(d % 60));
+        }
+        setEndMode("duration");
+    };
 
     // Smart default: quando os turnos mudam, sugerir recorrência adequada.
     // Com turnos → 'shift_days' (herda a união dos dias); vazio → 'daily'.
@@ -993,6 +1022,15 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                     >
                         {isLoading ? "Salvando..." : "Salvar rotina"}
                     </button>
+                    <button
+                        type="button"
+                        onClick={onCancel}
+                        aria-label="Fechar"
+                        title="Fechar"
+                        className="p-2 text-[#92bbc9] hover:text-white hover:bg-[#16262c] rounded-lg transition-colors sm:ml-1"
+                    >
+                        <span className="material-symbols-outlined">close</span>
+                    </button>
                 </div>
             </div>
 
@@ -1316,38 +1354,113 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                         </div>
 
                         {hasTimeWindow && (
-                            <div className="grid grid-cols-2 gap-4 pt-2">
-                                <div>
-                                    <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Início</label>
-                                    <input
-                                        type="time"
-                                        value={startTime}
-                                        onChange={(e) => setStartTime(e.target.value)}
-                                        className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all"
-                                    />
+                            <div className="space-y-4 pt-2">
+                                {/* Alternância: definir o fim por horário final ou por duração */}
+                                <div className="inline-flex w-full sm:w-auto rounded-xl border border-[#233f48] bg-[#16262c] p-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => setEndMode("time")}
+                                        className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${endMode === "time" ? "bg-[#13b6ec] text-[#0a1215]" : "text-[#92bbc9] hover:text-white"}`}
+                                    >
+                                        Horário final
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={switchToDurationMode}
+                                        className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${endMode === "duration" ? "bg-[#13b6ec] text-[#0a1215]" : "text-[#92bbc9] hover:text-white"}`}
+                                    >
+                                        Duração
+                                    </button>
                                 </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Fim</label>
-                                    <input
-                                        type="time"
-                                        value={endTime}
-                                        onChange={(e) => setEndTime(e.target.value)}
-                                        className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all"
-                                    />
-                                </div>
-                                {startTime && endTime && (
-                                    <p className="col-span-2 text-[#13b6ec] text-xs font-medium">
-                                        Disponível das {startTime} às {endTime}
-                                    </p>
-                                )}
-                                {shiftEndWarning && (
-                                    <div className="col-span-2 flex items-start gap-2 px-3 py-2 bg-amber-400/10 border border-amber-400/30 rounded-lg">
-                                        <span className="material-symbols-outlined text-amber-400 text-[16px] shrink-0 mt-0.5">warning</span>
-                                        <p className="text-amber-400 text-xs">
-                                            O horário de conclusão ({shiftEndWarning.endTime}) ultrapassa o fim dos turnos selecionados ({shiftEndWarning.shiftNames}). Você pode continuar mesmo assim.
-                                        </p>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Início</label>
+                                        <input
+                                            type="time"
+                                            value={startTime}
+                                            onChange={(e) => {
+                                                const v = e.target.value;
+                                                setStartTime(v);
+                                                if (endMode === "duration") recalcEndFromDuration(v, durationHours, durationMins);
+                                            }}
+                                            className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all"
+                                        />
                                     </div>
-                                )}
+
+                                    {endMode === "time" ? (
+                                        <div>
+                                            <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Fim</label>
+                                            <input
+                                                type="time"
+                                                value={endTime}
+                                                onChange={(e) => setEndTime(e.target.value)}
+                                                className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all"
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">Duração</label>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    max={23}
+                                                    inputMode="numeric"
+                                                    placeholder="0"
+                                                    value={durationHours}
+                                                    onChange={(e) => {
+                                                        const v = e.target.value;
+                                                        setDurationHours(v);
+                                                        recalcEndFromDuration(startTime, v, durationMins);
+                                                    }}
+                                                    className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-3 py-3 text-white text-center focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all"
+                                                />
+                                                <span className="text-[#92bbc9] text-sm shrink-0">h</span>
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    max={59}
+                                                    inputMode="numeric"
+                                                    placeholder="00"
+                                                    value={durationMins}
+                                                    onChange={(e) => {
+                                                        const v = e.target.value;
+                                                        setDurationMins(v);
+                                                        recalcEndFromDuration(startTime, durationHours, v);
+                                                    }}
+                                                    className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-3 py-3 text-white text-center focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all"
+                                                />
+                                                <span className="text-[#92bbc9] text-sm shrink-0">min</span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Informativos */}
+                                    <div className="col-span-2 space-y-1">
+                                        {endMode === "duration" && endTime && (
+                                            <p className="text-[#92bbc9] text-xs">
+                                                Fim calculado: <span className="text-white font-medium">{endTime}</span>
+                                            </p>
+                                        )}
+                                        {availableMinutes !== null ? (
+                                            <p className="text-[#13b6ec] text-xs font-medium">
+                                                Tempo disponível para execução: {formatDuration(availableMinutes)}
+                                            </p>
+                                        ) : endMode === "duration" && (durationHours || durationMins) && !startTime ? (
+                                            <p className="text-[#92bbc9] text-xs">Defina o horário de início para calcular o fim.</p>
+                                        ) : null}
+                                    </div>
+
+                                    {shiftEndWarning && (
+                                        <div className="col-span-2 flex items-start gap-2 px-3 py-2 bg-amber-400/10 border border-amber-400/30 rounded-lg">
+                                            <span className="material-symbols-outlined text-amber-400 text-[16px] shrink-0 mt-0.5">warning</span>
+                                            <p className="text-amber-400 text-xs">
+                                                O horário de conclusão ({shiftEndWarning.endTime}) ultrapassa o fim dos turnos selecionados ({shiftEndWarning.shiftNames}). Você pode continuar mesmo assim.
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
                     </div>
