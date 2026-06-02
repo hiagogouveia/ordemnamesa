@@ -261,6 +261,10 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     // `null` quando o horário é incompleto/inválido — nesse caso não exibimos.
     const availableMinutes = durationMinutes(startTime, endTime);
 
+    // Janela inválida: ambos horários preenchidos mas o fim não é maior que o início.
+    // Bloqueia o salvar e o auto-save até a correção.
+    const timeWindowInvalid = hasTimeWindow && !!startTime && !!endTime && availableMinutes === null;
+
     // Modo "duração": recalcula o horário final a partir do início + duração informada.
     const recalcEndFromDuration = (start: string, hours: string, mins: string) => {
         const total = (parseInt(hours, 10) || 0) * 60 + (parseInt(mins, 10) || 0);
@@ -615,6 +619,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
 
         if (!name.trim() && tasks.length === 0) return;
         if (!tasks || tasks.length === 0) return; // Prevent deleting tasks by accidentally sending empty list
+        if (timeWindowInvalid) return; // Não persistir janela de horário inválida (fim <= início)
 
         // GUARD 3: Comparação profunda — só prosseguir se houve mudança REAL
         if (isEqual(previousStateRef.current, formState)) return;
@@ -705,7 +710,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         }, 1500);
 
         return () => clearTimeout(handler);
-    }, [name, description, shift, shiftIds, checklistType, assignedToUserId, isIndividualMode, isRequired, recurrence, startTime, endTime, hasTimeWindow, recurrenceConfig, enforceSequentialOrder, allowEarlyStart, areaId, tasks, checklist, restaurantId, updateMutation, blockedByBilling]);
+    }, [name, description, shift, shiftIds, checklistType, assignedToUserId, isIndividualMode, isRequired, recurrence, startTime, endTime, hasTimeWindow, recurrenceConfig, enforceSequentialOrder, allowEarlyStart, areaId, tasks, checklist, restaurantId, updateMutation, blockedByBilling, timeWindowInvalid]);
 
     const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 8 } });
     const keyboardSensor = useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates });
@@ -778,6 +783,11 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
 
     const handleSave = async () => {
         if (!name.trim() || !restaurantId) return;
+
+        if (timeWindowInvalid) {
+            setErrorMsg('O horário de término deve ser maior que o horário de início.');
+            return;
+        }
 
         if (!areaId) {
             setErrorMsg('Selecione uma área para a rotina.');
@@ -1030,8 +1040,8 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                     </button>
                     <button
                         onClick={() => handleSave()}
-                        disabled={isLoading || !name.trim() || tasks.length === 0}
-                        title={tasks.length === 0 ? 'Adicione ao menos uma tarefa para salvar' : undefined}
+                        disabled={isLoading || !name.trim() || tasks.length === 0 || timeWindowInvalid}
+                        title={timeWindowInvalid ? 'O horário de término deve ser maior que o horário de início' : (tasks.length === 0 ? 'Adicione ao menos uma tarefa para salvar' : undefined)}
                         className="px-4 py-2 rounded-lg font-bold text-sm bg-[#13b6ec] text-[#111e22] hover:bg-[#10a0d0] shadow-[0_4px_14px_0_rgba(19,182,236,0.2)] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                     >
                         {isLoading ? "Salvando..." : "Salvar rotina"}
@@ -1457,7 +1467,12 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                                 Fim calculado: <span className="text-white font-medium">{endTime}</span>
                                             </p>
                                         )}
-                                        {availableMinutes !== null ? (
+                                        {timeWindowInvalid ? (
+                                            <p className="text-red-400 text-xs font-medium flex items-center gap-1">
+                                                <span className="material-symbols-outlined text-[14px]">error</span>
+                                                O horário de término deve ser maior que o horário de início.
+                                            </p>
+                                        ) : availableMinutes !== null ? (
                                             <p className="text-[#13b6ec] text-xs font-medium">
                                                 Tempo disponível para execução: {formatDuration(availableMinutes)}
                                             </p>

@@ -8,17 +8,7 @@ import { useRestaurantNow } from '@/lib/hooks/use-restaurant-now';
 import { useChecklistAssumption, useAssumeChecklist } from '@/lib/hooks/use-tasks';
 import { useSuppliers } from '@/lib/hooks/use-suppliers';
 import { createClient } from '@/lib/supabase/client';
-
-function getTimeWindowStatus(
-    startTime: string | undefined,
-    endTime: string | undefined,
-    currentTime: string
-): 'always' | 'before' | 'active' | 'after' {
-    if (!startTime && !endTime) return 'always';
-    if (startTime && currentTime < startTime) return 'before';
-    if (endTime && currentTime > endTime) return 'after';
-    return 'active';
-}
+import { getTimeWindowStatus } from '@/lib/utils/time-window';
 
 export default function ActivityDetailsPage() {
     const router = useRouter();
@@ -61,7 +51,8 @@ export default function ActivityDetailsPage() {
     const timeWindowStatus = getTimeWindowStatus(
         checklist?.start_time as string | undefined,
         checklist?.end_time as string | undefined,
-        currentTime
+        currentTime,
+        (checklist?.allow_early_start as boolean | undefined) ?? false
     );
 
     const handleAssume = async () => {

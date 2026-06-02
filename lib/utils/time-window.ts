@@ -46,6 +46,30 @@ export function addDuration(start: string | null | undefined, minutes: number): 
     return minutesToTime(endMin);
 }
 
+export type TimeWindowStatus = 'always' | 'before' | 'active' | 'after';
+
+/**
+ * Status da janela de horário relativo ao "agora" (string "HH:MM" no fuso do restaurante).
+ * - 'always': rotina sem janela definida.
+ * - 'before': antes do início (bloqueia) — salvo quando allowEarlyStart=true.
+ * - 'after': após o fim (atraso).
+ * - 'active': dentro da janela (ou liberada por allowEarlyStart antes do início).
+ *
+ * Sprint 76: quando allowEarlyStart=true, o início deixa de bloquear; o fim/atraso
+ * continua sendo respeitado normalmente.
+ */
+export function getTimeWindowStatus(
+    startTime: string | null | undefined,
+    endTime: string | null | undefined,
+    currentTime: string,
+    allowEarlyStart = false,
+): TimeWindowStatus {
+    if (!startTime && !endTime) return 'always';
+    if (startTime && currentTime < startTime && !allowEarlyStart) return 'before';
+    if (endTime && currentTime > endTime) return 'after';
+    return 'active';
+}
+
 /**
  * Formata uma duração em minutos de forma amigável.
  * 65 → "1h 05min", 90 → "1h 30min", 45 → "45min", 60 → "1h".
