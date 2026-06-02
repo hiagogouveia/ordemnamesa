@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
+import { useRestaurantTimezoneSync } from "@/lib/hooks/use-restaurant-timezone-sync";
 import { useNotifications, useNotificationsRealtime, useMarkNotificationRead } from "@/lib/hooks/use-notifications";
 import { BillingBanner } from "@/components/billing/BillingBanner";
 import { BillingProvider } from "@/lib/context/billing-context";
@@ -45,6 +46,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const userRole = useRestaurantStore((state) => state.userRole);
     const restaurantId = useRestaurantStore((state) => state.restaurantId);
+    // Sprint 73 — mantém o fuso do store sincronizado com o banco (self-heal).
+    useRestaurantTimezoneSync();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [collapsed, setCollapsed] = useState(false);
 
