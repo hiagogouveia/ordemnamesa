@@ -37,6 +37,10 @@ export function ChecklistBoardCard({
     const executorName = checklist.assumed_by_name || null;
     const assignedName = !executorName ? checklist.responsible?.name ?? null : null;
     const hasOpenIssues = openIssuesCount > 0;
+    // 'done' é o único estado de conclusão da rotina (a API normaliza completed_at
+    // / execution_status para 'done'). Quando concluída, o card mostra "Concluída
+    // por" em vez de "Em execução por", apesar de assumed_by_name persistir (auditoria).
+    const isDone = checklist.execution_status === "done";
 
     return (
         <div
@@ -107,13 +111,22 @@ export function ChecklistBoardCard({
                 )}
             </div>
 
-            {/* Em execução por (assumed_by_name) — estado transitório do dia */}
+            {/* Quem executou a rotina hoje (assumed_by_name). Concluída → "Concluída por";
+                em execução/bloqueada → "Em execução por". */}
             {executorName && (
-                <div className="flex items-center gap-1.5 mt-2" title="Quem iniciou esta rotina hoje">
-                    <span className="material-symbols-outlined text-[14px] shrink-0 text-[#13b6ec]">play_arrow</span>
-                    <span className="text-[#92bbc9] text-xs shrink-0">Em execução por</span>
-                    <span className="text-white text-sm truncate font-medium">{executorName}</span>
-                </div>
+                isDone ? (
+                    <div className="flex items-center gap-1.5 mt-2" title="Quem concluiu esta rotina hoje">
+                        <span className="material-symbols-outlined text-[14px] shrink-0 text-emerald-400">task_alt</span>
+                        <span className="text-[#92bbc9] text-xs shrink-0">Concluída por</span>
+                        <span className="text-white text-sm truncate font-medium">{executorName}</span>
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-1.5 mt-2" title="Quem iniciou esta rotina hoje">
+                        <span className="material-symbols-outlined text-[14px] shrink-0 text-[#13b6ec]">play_arrow</span>
+                        <span className="text-[#92bbc9] text-xs shrink-0">Em execução por</span>
+                        <span className="text-white text-sm truncate font-medium">{executorName}</span>
+                    </div>
+                )
             )}
             {/* Atribuído a (responsible) — configuração permanente da rotina */}
             {assignedName && (
