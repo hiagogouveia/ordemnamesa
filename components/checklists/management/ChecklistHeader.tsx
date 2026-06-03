@@ -21,7 +21,7 @@ export function ChecklistHeader({
 }: ChecklistHeaderProps) {
     return (
         <div className="shrink-0 px-4 pt-4 pb-3 border-b border-[#233f48] bg-[#0a1215]">
-            {/* Busca + Toggle de visualização + Nova lista */}
+            {/* Busca + Toggle de visualização + Nova rotina */}
             <div className="flex items-center gap-2">
                 {/* Search */}
                 <div className="flex-1 relative">
@@ -98,7 +98,7 @@ export function ChecklistHeader({
                     </button>
                 )}
 
-                {/* Nova lista */}
+                {/* Nova rotina */}
                 <button
                     onClick={onNewChecklist}
                     disabled={!canCreate}
@@ -106,7 +106,7 @@ export function ChecklistHeader({
                     className="flex items-center gap-1.5 bg-[#13b6ec] hover:bg-[#0ea5d4] text-[#0a1215] font-bold text-xs px-3 py-2 rounded-lg transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#13b6ec]"
                 >
                     <span className="material-symbols-outlined text-[16px]">add</span>
-                    <span className="hidden sm:inline">Nova lista</span>
+                    <span className="hidden sm:inline">Nova rotina</span>
                 </button>
             </div>
         </div>

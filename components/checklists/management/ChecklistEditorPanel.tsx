@@ -10,6 +10,7 @@ import { ChecklistForm } from "@/components/checklists/checklist-form";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
 import { getBrazilDateKey, formatDateBR } from "@/lib/utils/brazil-date";
 import { describeRecurrence } from "@/lib/utils/recurrence/describe";
+import { durationMinutes, formatDuration } from "@/lib/utils/time-window";
 import { useTaskIssues } from "@/lib/hooks/use-task-issues";
 import { IssueList } from "@/components/checklists/issues/IssueList";
 import { IssueDetail } from "@/components/checklists/issues/IssueDetail";
@@ -393,6 +394,30 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose, focusIss
                                 })}
                             </span>
                         </div>
+                        {(checklist.start_time || checklist.end_time) && (
+                            <div className="flex items-center justify-between">
+                                <span className="text-[#92bbc9] text-sm">Horário</span>
+                                <span className="text-white text-sm font-medium">
+                                    {checklist.start_time && checklist.end_time
+                                        ? `${checklist.start_time} – ${checklist.end_time}`
+                                        : checklist.start_time
+                                            ? `A partir de ${checklist.start_time}`
+                                            : `Até ${checklist.end_time}`}
+                                </span>
+                            </div>
+                        )}
+                        {(() => {
+                            const minutes = durationMinutes(checklist.start_time, checklist.end_time);
+                            if (minutes === null) return null;
+                            return (
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[#92bbc9] text-sm">Duração</span>
+                                    <span className="text-white text-sm font-medium">
+                                        {formatDuration(minutes)}
+                                    </span>
+                                </div>
+                            );
+                        })()}
                         <div className="flex items-center justify-between">
                             <span className="text-[#92bbc9] text-sm">Tipo</span>
                             <span className="text-white text-sm font-medium">

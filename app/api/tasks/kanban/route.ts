@@ -113,7 +113,7 @@ export async function GET(request: Request) {
             });
         }
 
-        const checklistSelect = 'id, name, description, shift, shift_id, is_required, recurrence, recurrence_config, last_reset_at, assigned_to_user_id, role_id, area_id, order_index, restaurant_id, roles(id, name, color), areas(id, name, color), checklist_type, start_time, end_time, is_one_shot, supplier_id, source_template_id';
+        const checklistSelect = 'id, name, description, shift, shift_id, is_required, recurrence, recurrence_config, last_reset_at, assigned_to_user_id, role_id, area_id, order_index, restaurant_id, roles(id, name, color), areas(id, name, color), checklist_type, start_time, end_time, allow_early_start, is_one_shot, supplier_id, source_template_id';
 
         const { data: activeChecklistsData } = await adminSupabase
             .from('checklists')
