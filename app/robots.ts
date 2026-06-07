@@ -8,7 +8,6 @@ export default function robots(): MetadataRoute.Robots {
         userAgent: "*",
         allow: [
           "/",
-          "/login",
           "/blog/",
           "/blog/*",
           "/modelos/",
@@ -18,6 +17,7 @@ export default function robots(): MetadataRoute.Robots {
           "/execucao-operacional",
         ],
         disallow: [
+          "/login",
           "/dashboard/",
           "/checklists/",
           "/equipe/",
@@ -29,6 +29,9 @@ export default function robots(): MetadataRoute.Robots {
           "/admin/",
           "/selecionar-restaurante/",
           "/api/",
+          "/control-hub-admin/",
+          "/conta-suspensa/",
+          "/debug/",
         ],
       },
     ],
