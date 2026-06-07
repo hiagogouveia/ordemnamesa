@@ -436,9 +436,9 @@ export function CinematicHero({
         <h1 className="text-track gsap-reveal text-3d-matte text-4xl sm:text-5xl md:text-7xl lg:text-[6rem] font-bold tracking-tight mb-2 leading-[1.05] max-w-[90vw]">
           {tagline1}
         </h1>
-        <h1 className="text-days gsap-reveal text-silver-matte text-4xl sm:text-5xl md:text-7xl lg:text-[6rem] font-extrabold tracking-tighter italic">
+        <span className="text-days gsap-reveal text-silver-matte block text-4xl sm:text-5xl md:text-7xl lg:text-[6rem] font-extrabold tracking-tighter italic">
           {tagline2}
-        </h1>
+        </span>
       </div>
 
       {/* CTA (post-scroll) */}

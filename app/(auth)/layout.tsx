@@ -6,6 +6,7 @@ export const metadata: Metadata = buildMetadata({
   description:
     "Acesse o painel de gestão do Ordem na Mesa. Controle checklists, equipe e operações do seu restaurante.",
   path: "/login",
+  noindex: true,
 });
 
 export default function AuthLayout({
