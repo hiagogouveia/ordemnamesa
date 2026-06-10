@@ -283,6 +283,8 @@ export default function KanbanPage() {
             const assumption = kanbanData.assumptions?.find(a => a.checklist_id === cl.id);
             const isAssignedToOther = Boolean(cl.assigned_to_user_id && cl.assigned_to_user_id !== user?.id);
             const isAssignedToMe = assumption?.user_id === user?.id;
+            // Atribuição exclusiva ao usuário logado (não é "assumiu", é atribuição direta).
+            const isExclusivelyMine = Boolean(cl.assigned_to_user_id && cl.assigned_to_user_id === user?.id);
 
             const state: RoutineStateInfo = cl.isDone
                 ? { kind: 'available', inProgress: false }
@@ -315,6 +317,7 @@ export default function KanbanPage() {
                     assumptionName: assumption?.user_name,
                     isAssignedToMe,
                     isAssignedToOther,
+                    exclusivelyAssignedToMe: isExclusivelyMine,
                     unitName: getUnitName(cl),
                     supplier: cl.supplier_id ? (supplierById.get(cl.supplier_id) ?? null) : null,
                     isQuick,
@@ -668,6 +671,7 @@ export default function KanbanPage() {
                                                 assumptionName?: string;
                                                 isAssignedToMe?: boolean;
                                                 isAssignedToOther?: boolean;
+                                                exclusivelyAssignedToMe?: boolean;
                                                 unitName?: string;
                                                 supplier?: string | null;
                                                 isQuick?: boolean;
@@ -693,6 +697,7 @@ export default function KanbanPage() {
                                                     assumptionName={m.assumptionName}
                                                     isAssignedToMe={m.isAssignedToMe}
                                                     isAssignedToOther={m.isAssignedToOther}
+                                                    exclusivelyAssignedToMe={m.exclusivelyAssignedToMe}
                                                     unitName={m.unitName}
                                                     onClick={item.onClick}
                                                 />
@@ -966,6 +971,7 @@ function ExecutandoBlock({ items }: { items: OperationItem[] }) {
                         assumptionName?: string;
                         isAssignedToMe?: boolean;
                         isAssignedToOther?: boolean;
+                        exclusivelyAssignedToMe?: boolean;
                         unitName?: string;
                         supplier?: string | null;
                         isQuick?: boolean;
@@ -992,6 +998,7 @@ function ExecutandoBlock({ items }: { items: OperationItem[] }) {
                             assumptionName={m.assumptionName}
                             isAssignedToMe={m.isAssignedToMe}
                             isAssignedToOther={m.isAssignedToOther}
+                            exclusivelyAssignedToMe={m.exclusivelyAssignedToMe}
                             unitName={m.unitName}
                             onClick={item.onClick}
                         />

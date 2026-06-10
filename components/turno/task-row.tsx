@@ -33,6 +33,8 @@ export interface TaskRowProps {
     assumptionName?: string | null;
     isAssignedToMe?: boolean;
     isAssignedToOther?: boolean;
+    /** Rotina atribuída exclusivamente ao usuário logado (assigned_to_user_id === user). */
+    exclusivelyAssignedToMe?: boolean;
 
     // Global
     unitName?: string;
@@ -123,6 +125,7 @@ export function TaskRow({
     assumptionName,
     isAssignedToMe,
     isAssignedToOther,
+    exclusivelyAssignedToMe,
     unitName,
     onClick,
 }: TaskRowProps) {
@@ -165,6 +168,16 @@ export function TaskRow({
                         {isRequired && (
                             <span className="shrink-0 inline-flex items-center text-[9px] font-bold uppercase tracking-wider text-[#92bbc9] bg-[#16262c] border border-[#233f48] px-1.5 py-px rounded">
                                 Obrig.
+                            </span>
+                        )}
+                        {exclusivelyAssignedToMe && (
+                            <span
+                                className="shrink-0 inline-flex items-center gap-0.5 text-[9px] font-semibold text-[#13b6ec] bg-[#13b6ec]/10 border border-[#13b6ec]/30 px-1.5 py-px rounded"
+                                title="Atribuída a você"
+                            >
+                                <span className="material-symbols-outlined text-[11px]" aria-hidden>person</span>
+                                <span className="sm:hidden">Sua</span>
+                                <span className="hidden sm:inline">Atribuída a você</span>
                             </span>
                         )}
                     </div>
