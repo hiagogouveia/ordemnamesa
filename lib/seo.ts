@@ -176,9 +176,18 @@ export function organizationJsonLd() {
   return {
     "@context": "https://schema.org",
     "@type": "Organization",
+    // @id estável: permite que WebSite/AboutPage referenciem a mesma entidade,
+    // formando um grafo coeso em vez de schemas soltos.
+    "@id": `${siteConfig.url}/#organization`,
     name: siteConfig.name,
+    // Reforça para o Google que estas variações são a mesma marca — ajuda a
+    // desambiguar de "ordem na mesa" como expressão comum em português.
+    alternateName: ["OrdemNaMesa", "Ordem na Mesa Software"],
     url: siteConfig.url,
-    logo: `${siteConfig.url}/logo-ordem-na-mes.png`,
+    logo: {
+      "@type": "ImageObject",
+      url: `${siteConfig.url}/logo-ordem-na-mes.png`,
+    },
     description: siteConfig.description,
     slogan: "Seu restaurante rodando no padrão. Todos os dias. Sem falhas.",
     areaServed: { "@type": "Country", name: "Brasil" },
@@ -197,5 +206,26 @@ export function organizationJsonLd() {
       availableLanguage: "Portuguese",
       url: siteConfig.whatsapp,
     },
+  };
+}
+
+/**
+ * WebSite — sinal canônico que amarra o domínio ao NOME da marca.
+ * É o schema central para o Google consolidar "Ordem na Mesa" como entidade
+ * (e não como expressão comum) e habilitar sitelinks. Publisher referencia a
+ * Organization via @id, formando um grafo de entidade coeso.
+ * NÃO incluímos potentialAction/SearchAction porque o site não tem busca interna.
+ */
+export function webSiteJsonLd() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "@id": `${siteConfig.url}/#website`,
+    name: siteConfig.name,
+    alternateName: ["OrdemNaMesa", "Ordem na Mesa Software"],
+    url: siteConfig.url,
+    inLanguage: "pt-BR",
+    description: siteConfig.description,
+    publisher: { "@id": `${siteConfig.url}/#organization` },
   };
 }

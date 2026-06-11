@@ -3,7 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import QueryProvider from "@/components/providers/query-provider";
 import { PhotoTraceProvider } from "@/components/photo-trace-provider";
-import { siteConfig, organizationJsonLd } from "@/lib/seo";
+import { siteConfig, organizationJsonLd, webSiteJsonLd } from "@/lib/seo";
 import { JsonLd } from "@/components/seo/JsonLd";
 
 const inter = Inter({
@@ -84,6 +84,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
         <JsonLd data={organizationJsonLd()} />
+        <JsonLd data={webSiteJsonLd()} />
       </head>
       <body
         className={`${inter.variable} font-display antialiased bg-background-light dark:bg-background-dark text-slate-900 dark:text-white selection:bg-primary/30 selection:text-primary`}
