@@ -90,7 +90,7 @@ export default function OgImage() {
           <span
             style={{ color: "#13b6ec", fontSize: "18px", fontWeight: 600 }}
           >
-            ordennaMesa.com.br
+            {siteConfig.url.replace(/^https?:\/\//, "")}
           </span>
         </div>
       </div>

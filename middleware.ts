@@ -55,7 +55,7 @@ export async function middleware(request: NextRequest) {
     const publicRoutes = ['/', '/login', '/cadastro', '/signup', '/forgot-password', '/reset-password']
     // Rotas de marketing/SEO públicas — precisam ser acessíveis a crawlers
     // (Google, GPTBot, ClaudeBot etc.) sem autenticação.
-    const publicPrefixes = ['/blog', '/modelos', '/comparativos', '/execucao-operacional']
+    const publicPrefixes = ['/blog', '/modelos', '/comparativos', '/execucao-operacional', '/sobre']
     const isPublicRoute =
         publicRoutes.includes(request.nextUrl.pathname) ||
         publicPrefixes.some((prefix) => request.nextUrl.pathname.startsWith(prefix))
