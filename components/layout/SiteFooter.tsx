@@ -20,6 +20,7 @@ const RESOURCE_LINKS = [
   { href: "/modelos", label: "Modelos de checklist" },
   { href: "/comparativos", label: "Comparativos" },
   { href: "/blog", label: "Blog" },
+  { href: "/sobre", label: "Sobre" },
 ];
 
 export function SiteFooter() {
