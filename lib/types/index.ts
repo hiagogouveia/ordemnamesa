@@ -453,6 +453,32 @@ export interface Notification {
 }
 
 // ============================================================
+// Sprint 77 — Canais de notificação (Telegram fase 1)
+// ============================================================
+
+export type NotificationChannelType = 'telegram' | 'whatsapp' | 'email'
+
+export interface NotificationChannel {
+    id: string
+    user_id: string
+    restaurant_id: string | null
+    channel_type: NotificationChannelType
+    external_id: string
+    is_active: boolean
+    created_at: string
+    updated_at: string
+}
+
+export interface TelegramLinkToken {
+    id: string
+    user_id: string
+    token: string
+    expires_at: string
+    used_at: string | null
+    created_at: string
+}
+
+// ============================================================
 // Sprint 45 — Ocorrências operacionais (task_issues)
 // Desacoplado de task_executions: a task pode ser concluída normalmente
 // mesmo com ocorrência aberta. Gestor/owner trata via status + comentário.
