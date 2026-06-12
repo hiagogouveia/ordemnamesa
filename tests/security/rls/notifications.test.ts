@@ -36,13 +36,13 @@ describe("RLS · notifications", () => {
             {
                 user_id: fx.staffA.id,
                 restaurant_id: fx.restaurantA.id,
-                type: "audit",
+                type: "NEW_TASK_ASSIGNED", // s60 restringiu o CHECK aos tipos atuais
                 title: `for-staffA-${fx.runId}`,
             },
             {
                 user_id: fx.managerA.id,
                 restaurant_id: fx.restaurantA.id,
-                type: "audit",
+                type: "NEW_TASK_ASSIGNED",
                 title: `for-managerA-${fx.runId}`,
             },
         ]);

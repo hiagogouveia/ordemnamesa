@@ -55,6 +55,7 @@ describe("RLS · task_executions", () => {
                 checklist_id: fx.restaurantA.checklistId,
                 restaurant_id: fx.restaurantA.id,
                 user_id: fx.staffA.id,
+                status: "done", // NOT NULL no schema atual
                 executed_at: new Date().toISOString(),
             })
             .select();
@@ -70,6 +71,7 @@ describe("RLS · task_executions", () => {
                 checklist_id: fx.restaurantA.checklistId,
                 restaurant_id: fx.restaurantA.id,
                 user_id: fx.managerA.id, // tentando atribuir a outro user
+                status: "done",
                 executed_at: new Date().toISOString(),
             })
             .select();
@@ -85,6 +87,7 @@ describe("RLS · task_executions", () => {
                 checklist_id: fx.restaurantB.checklistId,
                 restaurant_id: fx.restaurantB.id,
                 user_id: fx.staffA.id,
+                status: "done",
                 executed_at: new Date().toISOString(),
             })
             .select();
@@ -94,13 +97,15 @@ describe("RLS · task_executions", () => {
     it("staffA só vê suas próprias execuções (não as de managerA)", async () => {
         const admin = createServiceClient();
         // managerA executa via service role para criar evidência
-        await admin.from("task_executions").insert({
+        const seed = await admin.from("task_executions").insert({
             task_id: taskA,
             checklist_id: fx.restaurantA.checklistId,
             restaurant_id: fx.restaurantA.id,
             user_id: fx.managerA.id,
+            status: "done",
             executed_at: new Date().toISOString(),
         });
+        if (seed.error) throw new Error(`seed managerA falhou: ${seed.error.message}`);
 
         const sb = clientFor(fx.staffA);
         const r = await sb
