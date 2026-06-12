@@ -1,0 +1,84 @@
+name: security-tests
+
+on:
+  pull_request:
+    paths:
+      - 'tests/security/**'
+      - 'scripts/security-audit.ts'
+      - 'supabase/migrations/**'
+      - '.github/workflows/security-tests.yml'
+      - 'package.json'
+      - 'vitest.config.ts'
+      - 'vitest.security.config.ts'
+  push:
+    branches:
+      - develop
+    paths:
+      - 'tests/security/**'
+      - 'scripts/security-audit.ts'
+      - 'supabase/migrations/**'
+
+jobs:
+  audit-and-rls:
+    name: Security audit + RLS integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 22: security-audit.ts usa --experimental-strip-types (>= 22.6)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci
+
+      # Não-bloqueante até zerar os ~30 errors legados de ESLint (fase 2 da
+      # auditoria) — o sinal continua visível no log sem travar os testes de RLS.
+      - name: Lint (informativo)
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Materializar .env.nonprod a partir de secrets
+        env:
+          NONPROD_URL: ${{ secrets.NONPROD_SUPABASE_URL }}
+          NONPROD_ANON: ${{ secrets.NONPROD_SUPABASE_ANON_KEY }}
+          NONPROD_SR: ${{ secrets.NONPROD_SUPABASE_SERVICE_ROLE_KEY }}
+          SB_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          if [ -z "${NONPROD_URL:-}" ] || [ -z "${NONPROD_ANON:-}" ] || [ -z "${NONPROD_SR:-}" ]; then
+            echo "::warning::Secrets NONPROD_SUPABASE_URL / _ANON_KEY / _SERVICE_ROLE_KEY ausentes — pulando RLS tests."
+            echo "SKIP_TESTS=1" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=${NONPROD_URL}"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=${NONPROD_ANON}"
+            echo "SUPABASE_SERVICE_ROLE_KEY=${NONPROD_SR}"
+            if [ -n "${SB_ACCESS_TOKEN:-}" ]; then
+              echo "SUPABASE_ACCESS_TOKEN=${SB_ACCESS_TOKEN}"
+            fi
+          } > .env.nonprod
+          echo "TEST_ENV_FILE=.env.nonprod" >> "$GITHUB_ENV"
+
+      - name: Auditoria estática (security-audit)
+        if: env.SKIP_TESTS != '1'
+        run: npm run security:audit
+
+      - name: Testes de RLS / multi-tenant
+        if: env.SKIP_TESTS != '1'
+        run: npm run test:security
+
+      - name: Mensagem caso secrets ausentes
+        if: env.SKIP_TESTS == '1'
+        run: |
+          echo "Configure os secrets a seguir em Settings → Secrets and variables → Actions:"
+          echo "  - NONPROD_SUPABASE_URL"
+          echo "  - NONPROD_SUPABASE_ANON_KEY"
+          echo "  - NONPROD_SUPABASE_SERVICE_ROLE_KEY"

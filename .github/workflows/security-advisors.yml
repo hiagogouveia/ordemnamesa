@@ -1,0 +1,122 @@
+name: security-advisors
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+      - '.github/workflows/security-advisors.yml'
+  push:
+    branches:
+      - develop
+    paths:
+      - 'supabase/migrations/**'
+      - '.github/workflows/security-advisors.yml'
+
+# Bloqueia merge somente em ERRORs. WARN/INFO são tolerados (adoção gradual).
+jobs:
+  migration-lint:
+    name: Lint migrations (regex)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verificar que toda nova tabela em public habilita RLS na mesma migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          status=0
+          # Em PR, comparamos só os arquivos alterados; em push, varremos todos.
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            git fetch origin "${GITHUB_BASE_REF}" --depth=1
+            mapfile -t files < <(git diff --name-only --diff-filter=AM "origin/${GITHUB_BASE_REF}...HEAD" -- 'supabase/migrations/*.sql' || true)
+          else
+            mapfile -t files < <(ls -1 supabase/migrations/*.sql 2>/dev/null || true)
+          fi
+
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "Nenhuma migration nova/modificada — pulando lint."
+            exit 0
+          fi
+
+          for f in "${files[@]}"; do
+            [ -f "$f" ] || continue
+            echo "::group::Lint $f"
+
+            # 1) Procurar `CREATE TABLE public.<x>` ou `CREATE TABLE <x>` (no schema default)
+            #    e exigir um `ENABLE ROW LEVEL SECURITY` na MESMA migration para a mesma tabela.
+            mapfile -t created < <(grep -oEi 'create[[:space:]]+table[[:space:]]+(if[[:space:]]+not[[:space:]]+exists[[:space:]]+)?(public\.)?[a-z_][a-z0-9_]*' "$f" \
+              | sed -E 's/.*(create[[:space:]]+table[[:space:]]+(if[[:space:]]+not[[:space:]]+exists[[:space:]]+)?(public\.)?)//i' || true)
+
+            for tbl in "${created[@]:-}"; do
+              tbl_short="${tbl#public.}"
+              # Pular tabelas em schemas internos (auth., storage., realtime., etc.)
+              if [[ "$tbl" == *"."* && "$tbl" != public.* ]]; then
+                continue
+              fi
+              if ! grep -Eiq "alter[[:space:]]+table[[:space:]]+(public\.)?${tbl_short}[[:space:]]+enable[[:space:]]+row[[:space:]]+level[[:space:]]+security" "$f"; then
+                echo "::error file=$f::Tabela '$tbl' criada em public sem ENABLE ROW LEVEL SECURITY na mesma migration."
+                status=1
+              fi
+            done
+
+            # 2) Bloquear policies obviamente inseguras
+            if grep -Eniq 'with[[:space:]]+check[[:space:]]*\([[:space:]]*true[[:space:]]*\)' "$f"; then
+              echo "::error file=$f::Policy com WITH CHECK (true) detectada — abre INSERT/UPDATE para qualquer usuário."
+              grep -Eni 'with[[:space:]]+check[[:space:]]*\([[:space:]]*true[[:space:]]*\)' "$f" || true
+              status=1
+            fi
+
+            # 3) Bloquear o bug histórico ru.restaurant_id = ru.restaurant_id
+            if grep -Eniq 'ru\.restaurant_id[[:space:]]*=[[:space:]]*ru\.restaurant_id' "$f"; then
+              echo "::error file=$f::Comparação ru.restaurant_id = ru.restaurant_id (sempre true) — vazamento cross-tenant."
+              status=1
+            fi
+
+            # 4) Bloquear SECURITY DEFINER sem search_path fixo
+            if grep -Eiq 'security[[:space:]]+definer' "$f"; then
+              if ! grep -Eiq 'set[[:space:]]+search_path[[:space:]]*(=|to)[[:space:]]*[a-z_,'\''[:space:]]*public' "$f"; then
+                echo "::error file=$f::Função SECURITY DEFINER sem SET search_path = public, pg_temp."
+                status=1
+              fi
+            fi
+
+            echo "::endgroup::"
+          done
+          exit "$status"
+
+  supabase-advisors:
+    name: Supabase security advisors (NONPROD)
+    needs: migration-lint
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Consultar Management API
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_REF: ${{ secrets.SUPABASE_NONPROD_PROJECT_REF }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_ACCESS_TOKEN:-}" ] || [ -z "${PROJECT_REF:-}" ]; then
+            echo "::warning::SUPABASE_ACCESS_TOKEN ou SUPABASE_NONPROD_PROJECT_REF não configurados — pulando advisors."
+            echo "Configure em Settings → Secrets and variables → Actions:"
+            echo "  - SUPABASE_ACCESS_TOKEN  (PAT criado em supabase.com/dashboard/account/tokens)"
+            echo "  - SUPABASE_NONPROD_PROJECT_REF  (ex: mkwxulikizrfdupqpyrn)"
+            exit 0
+          fi
+
+          response=$(curl -sS \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            "https://api.supabase.com/v1/projects/${PROJECT_REF}/advisors/security")
+
+          echo "$response" | jq .
+
+          # Falha apenas em ERROR (adoção gradual: WARN/INFO ainda não bloqueiam).
+          errors=$(echo "$response" | jq '[.lints[]? | select(.level == "ERROR")] | length')
+          if [ "$errors" -gt 0 ]; then
+            echo "::error::$errors advisor(s) ERROR encontrado(s) em NONPROD. Revise antes do deploy."
+            echo "$response" | jq '.lints[] | select(.level == "ERROR")'
+            exit 1
+          fi
+
+          echo "OK: nenhum advisor ERROR em NONPROD."
