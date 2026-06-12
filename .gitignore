@@ -24,6 +24,10 @@
 .DS_Store
 *.pem
 
+# cópias acidentais do Finder ("arquivo 2.tsx")
+* 2.*
+* 2/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
