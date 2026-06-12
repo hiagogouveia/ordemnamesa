@@ -24,6 +24,7 @@ export type AdminEventName =
     | 'plan_changed'
     | 'vip_toggled'
     | 'manual_password_reset'
+    | 'manual_password_set'
     | 'lead_approved'
     | 'lead_rejected'
 

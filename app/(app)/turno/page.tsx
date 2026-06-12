@@ -49,7 +49,7 @@ export default function KanbanPage() {
         return undefined;
     }, [isGlobal, accountId, restaurantId]);
 
-    const { data: kanbanData, isLoading: loadingKanban } = useKanbanTasks(scope, userId);
+    const { data: kanbanData, isLoading: loadingKanban } = useKanbanTasks(scope, userId ?? undefined);
     const { data: shifts = [] } = useShifts(restaurantId || undefined);
     // Turnos vinculados ao usuário (fonte da verdade do cabeçalho). Em modo
     // global (gestão) não há vínculo por unidade → não consultar.
@@ -57,7 +57,7 @@ export default function KanbanPage() {
         isGlobal ? undefined : (restaurantId || undefined),
         userId ?? undefined,
     );
-    const { data: myAreaAssignments = [], isLoading: loadingMyAreas } = useMyAreas(restaurantId || undefined, userId);
+    const { data: myAreaAssignments = [], isLoading: loadingMyAreas } = useMyAreas(restaurantId || undefined, userId ?? undefined);
     const { data: availableMeta } = useReceivingTemplatesAvailableMeta(
         isGlobal ? undefined : restaurantId || undefined,
     );

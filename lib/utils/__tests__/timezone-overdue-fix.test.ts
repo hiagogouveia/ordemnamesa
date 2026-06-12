@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import type { RecurrenceConfig, RecurrenceV2 } from "@/lib/types";
 import { getNowInTz } from "@/lib/utils/brazil-date";
 import { shouldChecklistAppearToday } from "@/lib/utils/should-checklist-appear-today";
 import { getOperationalStatus } from "@/lib/utils/get-operational-status";
@@ -14,9 +15,14 @@ const MANAUS = "America/Manaus";
 const SAO_PAULO = "America/Sao_Paulo";
 
 // Rotina de segunda-feira (weekday 1). Cobre v2 e v1-custom e v1-weekly.
-const mondayV2 = { recurrence: "weekly", recurrence_config: { version: 2, type: "weekly", weekdays: [1] } as const };
-const mondayV1custom = { recurrence: "custom", recurrence_config: { frequency: "weekly", days_of_week: [1] } as const };
-const mondayV1weekly = { recurrence: "weekly", recurrence_config: { days_of_week: [1] } as const };
+const mondayV2: { recurrence: string; recurrence_config: RecurrenceV2 } =
+    { recurrence: "weekly", recurrence_config: { version: 2, type: "weekly", weekdays: [1] } };
+// Casts: payloads v1 legados reais não têm interval/end_type — o teste simula
+// exatamente o que existe no banco, não o shape completo do tipo.
+const mondayV1custom: { recurrence: string; recurrence_config: RecurrenceConfig } =
+    { recurrence: "custom", recurrence_config: { frequency: "weekly", days_of_week: [1] } as RecurrenceConfig };
+const mondayV1weekly: { recurrence: string; recurrence_config: RecurrenceConfig } =
+    { recurrence: "weekly", recurrence_config: { days_of_week: [1] } as RecurrenceConfig };
 
 describe("Sprint 73 — fuso por restaurante (GMT-4) na janela de virada", () => {
     it("Manaus ainda é DOMINGO; São Paulo já virou SEGUNDA (a raiz do bug)", () => {
