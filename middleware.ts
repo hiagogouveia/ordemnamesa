@@ -113,8 +113,30 @@ export async function middleware(request: NextRequest) {
     const isAdminRoute = adminRoutes.some(route => pathname === route || pathname.startsWith(route + '/'))
 
     if (user && isAdminRoute) {
-        const userRole = request.cookies.get('x-restaurant-role')?.value
-        if (userRole === 'staff') {
+        // Autorização server-side: a role NÃO vem mais do cookie x-restaurant-role
+        // (que o cliente podia forjar via document.cookie). Resolvemos a role real
+        // a partir de restaurant_users para o usuário autenticado. RLS garante que
+        // ele só enxerga os próprios vínculos (policy user_id = auth.uid()).
+        const restaurantId = request.cookies.get('x-restaurant-id')?.value
+        const restaurantMode = request.cookies.get('x-restaurant-mode')?.value
+
+        let roleQuery = supabase
+            .from('restaurant_users')
+            .select('role')
+            .eq('user_id', user.id)
+            .eq('active', true)
+            .neq('role', 'staff')
+            .limit(1)
+
+        // Em modo single, exige owner/manager no restaurante ativo; em modo global,
+        // basta ser owner/manager em alguma unidade (o escopo fino é validado nas APIs).
+        if (restaurantMode !== 'global' && restaurantId) {
+            roleQuery = roleQuery.eq('restaurant_id', restaurantId)
+        }
+
+        const { data: adminMembership } = await roleQuery.maybeSingle()
+
+        if (!adminMembership) {
             const url = request.nextUrl.clone()
             url.pathname = '/turno'
             return NextResponse.redirect(url)

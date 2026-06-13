@@ -57,7 +57,7 @@ export async function POST(request: Request) {
         // Verificar que o target_user pertence ao mesmo restaurante (multi-tenant) e está ativo
         const { data: targetMembership } = await adminSupabase
             .from('restaurant_users')
-            .select('id')
+            .select('id, role')
             .eq('restaurant_id', restaurant_id)
             .eq('user_id', target_user_id)
             .eq('active', true)
@@ -65,6 +65,12 @@ export async function POST(request: Request) {
 
         if (!targetMembership) {
             return NextResponse.json({ error: 'USER_INACTIVE' }, { status: 403 });
+        }
+
+        // Um owner não pode resetar a senha de outro owner (evita takeover entre owners).
+        // Resetar a própria senha continua permitido.
+        if (targetMembership.role === 'owner' && target_user_id !== caller.id) {
+            return NextResponse.json({ error: 'FORBIDDEN' }, { status: 403 });
         }
 
         // Alterar a senha via Admin API (service role)

@@ -95,6 +95,28 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Permissão negada' }, { status: 403 });
         }
 
+        // Anti cross-tenant: role e usuário-alvo precisam pertencer a este restaurante
+        const { data: roleRow } = await adminSupabase
+            .from('roles')
+            .select('id')
+            .eq('id', role_id)
+            .eq('restaurant_id', restaurant_id)
+            .maybeSingle();
+        if (!roleRow) {
+            return NextResponse.json({ error: 'Função inválida para este restaurante.' }, { status: 400 });
+        }
+
+        const { data: targetMember } = await adminSupabase
+            .from('restaurant_users')
+            .select('id')
+            .eq('restaurant_id', restaurant_id)
+            .eq('user_id', user_id)
+            .eq('active', true)
+            .maybeSingle();
+        if (!targetMember) {
+            return NextResponse.json({ error: 'Usuário não pertence a este restaurante.' }, { status: 400 });
+        }
+
         // Verificar UNIQUE antes de inserir
         const { data: existing } = await adminSupabase
             .from('user_roles')

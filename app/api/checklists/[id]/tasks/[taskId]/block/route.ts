@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getNowInTz } from '@/lib/utils/brazil-date';
 import { getRestaurantTimezone } from '@/lib/utils/restaurant-time';
+import { verifyMembership } from '@/lib/api/auth';
 
 const getAdminSupabase = () =>
     createClient(
@@ -36,6 +37,10 @@ export async function POST(
         if (userError || !user) {
             return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
         }
+
+        // Isolamento multi-tenant: só membro ativo do restaurante (service-role bypassa RLS)
+        const membership = await verifyMembership(adminSupabase, user.id, restaurant_id);
+        if (membership instanceof NextResponse) return membership;
 
         // Buscar assumption ativa de hoje para este checklist
         const todayKey = getNowInTz(await getRestaurantTimezone(adminSupabase, restaurant_id)).dateKey;

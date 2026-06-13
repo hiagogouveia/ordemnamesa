@@ -44,7 +44,12 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+      # IMPORTANTE: secrets (service-role NONPROD) só são materializados em `push`
+      # para develop — NUNCA em `pull_request`. Isso impede que código de um PR
+      # (lifecycle scripts do npm ci, testes) exfiltre o service-role. Em PRs o job
+      # ainda roda lint + typecheck (sinal de qualidade sem expor credenciais).
       - name: Materializar .env.nonprod a partir de secrets
+        if: github.event_name == 'push'
         env:
           NONPROD_URL: ${{ secrets.NONPROD_SUPABASE_URL }}
           NONPROD_ANON: ${{ secrets.NONPROD_SUPABASE_ANON_KEY }}
@@ -68,11 +73,11 @@ jobs:
           echo "TEST_ENV_FILE=.env.nonprod" >> "$GITHUB_ENV"
 
       - name: Auditoria estática (security-audit)
-        if: env.SKIP_TESTS != '1'
+        if: github.event_name == 'push' && env.SKIP_TESTS != '1'
         run: npm run security:audit
 
       - name: Testes de RLS / multi-tenant
-        if: env.SKIP_TESTS != '1'
+        if: github.event_name == 'push' && env.SKIP_TESTS != '1'
         run: npm run test:security
 
       - name: Mensagem caso secrets ausentes

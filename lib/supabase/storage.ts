@@ -1,5 +1,7 @@
 import { createClient } from './client';
 
+const STORAGE_BUCKET = 'photos';
+
 // Gated por env var. Sem importar lib/photo-trace.ts (mantém boundary
 // limpa entre storage e instrumentação). Build-time inlined → quando OFF,
 // minifier elimina os blocos abaixo.
@@ -26,7 +28,7 @@ function inflightClear(): void {
  */
 export function getPhotoPublicUrl(filePath: string): string {
     const supabase = createClient();
-    const { data } = supabase.storage.from('photos').getPublicUrl(filePath);
+    const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filePath);
     return data.publicUrl;
 }
 
@@ -34,7 +36,7 @@ export function getPhotoPublicUrl(filePath: string): string {
 export async function getPhotoSignedUrl(filePath: string): Promise<string | null> {
     const supabase = createClient();
     const { data, error } = await supabase.storage
-        .from('photos')
+        .from(STORAGE_BUCKET)
         .createSignedUrl(filePath, 60 * 60); // 1h
 
     if (error) {
@@ -52,8 +54,12 @@ export async function uploadEvidencePhoto(
 ): Promise<string> {
     const supabase = createClient();
 
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
-    if (!validTypes.includes(file.type)) {
+    const extByMime: Record<string, string> = {
+        'image/jpeg': 'jpg',
+        'image/jpg': 'jpg',
+        'image/png': 'png',
+    };
+    if (!extByMime[file.type]) {
         throw new Error('Apenas imagens em formato JPG ou PNG são aceitas.');
     }
 
@@ -62,7 +68,9 @@ export async function uploadEvidencePhoto(
     }
 
     const timestamp = new Date().getTime();
-    const extension = file.name.split('.').pop() || 'jpg';
+    // Extensão derivada do MIME validado (NÃO de file.name, que é controlável e
+    // poderia conter '/' e escapar o prefixo restaurant_id do path).
+    const extension = extByMime[file.type];
     const filename = `${timestamp}.${extension}`;
     const filePath = `${restaurantId}/${executionId}/${filename}`;
 
@@ -70,7 +78,7 @@ export async function uploadEvidencePhoto(
     let uploadResult;
     try {
         uploadResult = await supabase.storage
-            .from('photos')
+            .from(STORAGE_BUCKET)
             .upload(filePath, file, {
                 cacheControl: '3600',
                 upsert: false
