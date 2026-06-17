@@ -65,6 +65,7 @@ export type RecurrenceV2 =
     | { version: 2; type: 'weekly'; weekdays: number[] }
     | { version: 2; type: 'shift_days' }
     | { version: 2; type: 'monthly'; mode: 'day_of_month'; day: number }
+    | { version: 2; type: 'monthly'; mode: 'days_of_month'; days: number[] } // 1..31; -1 = último dia do mês
     | { version: 2; type: 'monthly'; mode: 'weekday_position'; weekday: number; weekOfMonth: WeekOfMonth }
     | { version: 2; type: 'yearly'; mode: 'date'; day: number; month: number }
     | { version: 2; type: 'yearly'; mode: 'weekday_position'; weekday: number; weekOfMonth: WeekOfMonth; month: number }
@@ -450,6 +451,32 @@ export interface Notification {
     created_at: string
     metadata?: Record<string, unknown> | null
     related_id?: string | null
+}
+
+// ============================================================
+// Sprint 77 — Canais de notificação (Telegram fase 1)
+// ============================================================
+
+export type NotificationChannelType = 'telegram' | 'whatsapp' | 'email'
+
+export interface NotificationChannel {
+    id: string
+    user_id: string
+    restaurant_id: string | null
+    channel_type: NotificationChannelType
+    external_id: string
+    is_active: boolean
+    created_at: string
+    updated_at: string
+}
+
+export interface TelegramLinkToken {
+    id: string
+    user_id: string
+    token: string
+    expires_at: string
+    used_at: string | null
+    created_at: string
 }
 
 // ============================================================

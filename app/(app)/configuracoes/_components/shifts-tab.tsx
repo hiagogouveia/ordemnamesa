@@ -10,7 +10,7 @@ const SHIFT_TYPES = [
     { value: 'morning', label: 'Manhã' },
     { value: 'afternoon', label: 'Tarde' },
     { value: 'evening', label: 'Noite' },
-];
+] as const;
 const SHIFT_TYPE_LABELS: Record<string, string> = { morning: 'Manhã', afternoon: 'Tarde', evening: 'Noite' };
 
 export function ShiftsTab({ overrideRestaurantId }: { overrideRestaurantId?: string } = {}) {
@@ -27,7 +27,7 @@ export function ShiftsTab({ overrideRestaurantId }: { overrideRestaurantId?: str
     const [formStart, setFormStart] = useState("");
     const [formEnd, setFormEnd] = useState("");
     const [formDays, setFormDays] = useState<number[]>([]);
-    const [formShiftType, setFormShiftType] = useState<string>("");
+    const [formShiftType, setFormShiftType] = useState<'' | 'morning' | 'afternoon' | 'evening'>("");
 
     const activeShifts = shifts.filter(s => s.active);
 

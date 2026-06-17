@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifyMembership } from '@/lib/api/auth';
 
 const getAdminSupabase = () => {
     return createClient(
@@ -30,6 +31,10 @@ export async function GET(request: Request) {
         if (userError || !user) {
             return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
         }
+
+        // Isolamento multi-tenant: só membro ativo do restaurante (service-role bypassa RLS)
+        const membership = await verifyMembership(adminSupabase, user.id, restaurant_id);
+        if (membership instanceof NextResponse) return membership;
 
         // 1. Get all active checklists
         const { data: checklists } = await adminSupabase

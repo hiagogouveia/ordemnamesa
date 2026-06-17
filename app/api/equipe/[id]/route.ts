@@ -52,10 +52,10 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
             return NextResponse.json({ error: 'Você não pode alterar seu próprio cargo.' }, { status: 403 });
         }
 
-        // Buscar role atual do target para validações de privilégio
+        // Buscar role/active atuais do target para validações de privilégio
         const { data: targetMember } = await adminSupabase
             .from('restaurant_users')
-            .select('role')
+            .select('role, active')
             .eq('user_id', userId)
             .eq('restaurant_id', restaurant_id)
             .single();
@@ -96,18 +96,25 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
             }
         }
 
-        // --- VALIDAÇÃO DE LIMITE EM PROMOÇÃO ---
-        if (role !== undefined && role !== targetMember.role) {
+        // --- VALIDAÇÃO DE LIMITE EM PROMOÇÃO / REATIVAÇÃO ---
+        // Promoção (troca de cargo) ou reativação (inativo→ativo) consome cota do
+        // plano. owner é tratado como assento de admin (≥ manager) para não permitir
+        // burlar o limite de managers promovendo a owner. Reativar membro desligado
+        // sem rechecar cota também era um bypass.
+        const isPromotion = role !== undefined && role !== targetMember.role;
+        const isReactivation = active === true && targetMember.active === false;
+        if (isPromotion || isReactivation) {
+            const effectiveRole = role ?? targetMember.role;
             const accountId = await getAccountIdForRestaurant(adminSupabase, restaurant_id);
             if (!accountId) {
                 return NextResponse.json({ error: 'Unidade não pertence a nenhuma account.' }, { status: 404 });
             }
-            if (role === 'manager') {
+            if (effectiveRole === 'manager' || effectiveRole === 'owner') {
                 const check = await canAddManager(adminSupabase, accountId, {
                     userIdBeingAdded: userId,
                 });
                 if (!check.allowed) return buildAccessDeniedResponse(check);
-            } else if (role === 'staff') {
+            } else if (effectiveRole === 'staff') {
                 const check = await canAddStaff(adminSupabase, restaurant_id);
                 if (!check.allowed) return buildAccessDeniedResponse(check);
             }

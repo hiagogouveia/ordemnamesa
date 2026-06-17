@@ -51,6 +51,8 @@ export function useInstantiateReceiving() {
             queryClient.invalidateQueries({ queryKey: ["kanban", vars.restaurant_id] });
             queryClient.invalidateQueries({ queryKey: ["my-activities", vars.restaurant_id] });
             queryClient.invalidateQueries({ queryKey: ["my-activities-badge", vars.restaurant_id] });
+            // E na aba Execuções do módulo de Recebimentos.
+            queryClient.invalidateQueries({ queryKey: ["receiving-executions", vars.restaurant_id] });
             // Fornecedor pode ter sido criado inline.
             if (vars.supplier_new) {
                 queryClient.invalidateQueries({ queryKey: ["suppliers", vars.restaurant_id] });

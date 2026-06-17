@@ -8,13 +8,14 @@ import { UnidadesTab } from "./_components/unidades-tab";
 import { ContaTab } from "./_components/conta-tab";
 import { PlanoTab } from "./_components/plano-tab";
 import { FornecedoresTab } from "./_components/fornecedores-tab";
+import { NotificacoesTab } from "./_components/notificacoes-tab";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useAccountSessionStore } from "@/lib/store/account-session-store";
 import { useAccountUnits } from "@/lib/hooks/use-account-units";
 import { useAccountAccess } from "@/lib/hooks/use-account-access";
 
-type TabId = "unidades" | "turnos" | "funcoes" | "fornecedores" | "conta" | "plano";
-const VALID_TABS: TabId[] = ["unidades", "turnos", "funcoes", "fornecedores", "conta", "plano"];
+type TabId = "unidades" | "turnos" | "funcoes" | "fornecedores" | "notificacoes" | "conta" | "plano";
+const VALID_TABS: TabId[] = ["unidades", "turnos", "funcoes", "fornecedores", "notificacoes", "conta", "plano"];
 
 export default function ConfiguracoesPage() {
     // Persistência da aba via querystring (?tab=...). Init lê da URL; troca usa
@@ -42,6 +43,8 @@ export default function ConfiguracoesPage() {
     // exclusiva do owner — fonte de verdade é o AU role do endpoint /access.
     const { data: accountAccess } = useAccountAccess(accountId);
     const isOwner = userRole === "owner" || isGlobal;
+    // Notificações: owner/manager gerenciam o próprio canal (Telegram).
+    const canSeeNotificacoes = userRole === "owner" || userRole === "manager" || isGlobal;
     // Plano: owner do restaurante já é owner da account (signup garante).
     // Em global, account_users.role decide. Aceitar ambos evita o tab sumir
     // enquanto useAccountAccess ainda não resolveu.
@@ -103,6 +106,14 @@ export default function ConfiguracoesPage() {
                     >
                         Fornecedores
                     </button>
+                    {canSeeNotificacoes && (
+                        <button
+                            onClick={() => setActiveTab("notificacoes")}
+                            className={`pb-4 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeTab === "notificacoes" ? "border-[#13b6ec] text-[#13b6ec]" : "border-transparent text-[#92bbc9] hover:text-white"}`}
+                        >
+                            Notificações
+                        </button>
+                    )}
                     {isOwner && (
                         <button
                             onClick={() => setActiveTab("conta")}
@@ -179,6 +190,7 @@ export default function ConfiguracoesPage() {
                         <FornecedoresTab overrideRestaurantId={effectiveRestaurantId} />
                     )
                 )}
+                {activeTab === "notificacoes" && <NotificacoesTab />}
                 {activeTab === "conta" && <ContaTab />}
                 {activeTab === "plano" && <PlanoTab />}
             </div>

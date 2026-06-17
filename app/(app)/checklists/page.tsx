@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, Suspense, useEffect } from "react";
+import { useState, useMemo, useCallback, Suspense, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
@@ -80,6 +80,8 @@ function ChecklistsContent() {
     }, [deleteToast]);
 
     const focusIssueId = searchParams.get("issue");
+    // Deep-link do Dashboard: abre o preview da rotina informada em ?openId=<checklist_id>.
+    const deepLinkChecklistId = searchParams.get("openId");
     const selectedShift = searchParams.get("shift") ?? "";
     const selectedAreaId = searchParams.get("area_id") ?? "";
     // Compat: URLs antigos com ?availability=draft caem em "active" (sem-op)
@@ -128,6 +130,21 @@ function ChecklistsContent() {
     );
     const { data: issueCounts = {} } = useIssueCountsByChecklist(restaurantId ?? undefined, tzDateKey);
     const { data: units = [] } = useUnits(isGlobal ? accountId : null);
+
+    // Deep-link: ao chegar do Dashboard com ?openId, abre o painel de preview da
+    // rotina assim que a lista carrega. Guard por ref evita reabrir e o param é
+    // removido da URL para não reaparecer quando o usuário fechar o painel.
+    const didOpenDeepLinkRef = useRef(false);
+    useEffect(() => {
+        if (!deepLinkChecklistId || didOpenDeepLinkRef.current || checklists.length === 0) return;
+        didOpenDeepLinkRef.current = true;
+        const target = checklists.find((c) => c.id === deepLinkChecklistId);
+        if (target) setEditorState({ checklist: target, mode: "view" });
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete("openId");
+        const queryString = params.toString();
+        router.replace(`/checklists${queryString ? `?${queryString}` : ""}`, { scroll: false });
+    }, [deepLinkChecklistId, checklists, searchParams, router]);
 
     // Mutations
     const { mutate: toggleStatus } = useToggleChecklistStatus();

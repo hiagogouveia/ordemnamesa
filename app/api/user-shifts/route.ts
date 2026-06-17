@@ -93,6 +93,28 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Permissão negada' }, { status: 403 });
         }
 
+        // Anti cross-tenant: turno e usuário-alvo precisam pertencer a este restaurante
+        const { data: shiftRow } = await adminSupabase
+            .from('shifts')
+            .select('id')
+            .eq('id', shift_id)
+            .eq('restaurant_id', restaurant_id)
+            .maybeSingle();
+        if (!shiftRow) {
+            return NextResponse.json({ error: 'Turno inválido para este restaurante.' }, { status: 400 });
+        }
+
+        const { data: targetMember } = await adminSupabase
+            .from('restaurant_users')
+            .select('id')
+            .eq('restaurant_id', restaurant_id)
+            .eq('user_id', user_id)
+            .eq('active', true)
+            .maybeSingle();
+        if (!targetMember) {
+            return NextResponse.json({ error: 'Usuário não pertence a este restaurante.' }, { status: 400 });
+        }
+
         const { data, error } = await adminSupabase
             .from('user_shifts')
             .insert({ restaurant_id, user_id, shift_id })

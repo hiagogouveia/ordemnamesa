@@ -95,7 +95,7 @@ export async function getRestaurantNamesByIds(
         .from('restaurants')
         .select('id, name, accounts(name)')
         .in('id', filtered)
-    const rows = (data ?? []) as Array<{
+    const rows = (data ?? []) as unknown as Array<{
         id: string
         name: string
         accounts: { name: string } | null

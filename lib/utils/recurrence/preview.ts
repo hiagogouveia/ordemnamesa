@@ -1,5 +1,5 @@
 import type { RecurrenceV2 } from "@/lib/types"
-import { findWeekdayPositionInMonth } from "./weekday-position"
+import { daysInMonth, findWeekdayPositionInMonth } from "./weekday-position"
 
 /**
  * Calcula as próximas N ocorrências de uma recorrência v2 a partir de uma
@@ -116,6 +116,10 @@ function matches(
         case "monthly":
             if (config.mode === "day_of_month") {
                 return day === config.day
+            }
+            if (config.mode === "days_of_month") {
+                const lastDay = daysInMonth(year, month)
+                return config.days.some((d) => (d === -1 ? day === lastDay : day === d))
             }
             // weekday_position
             const expectedMonthly = findWeekdayPositionInMonth(

@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
 import { getAccountBilling, canExecuteTasks } from '@/lib/billing/subscription-access';
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
+import { verifyMembership } from '@/lib/api/auth';
 
 const getAdminSupabase = () =>
     createClient(
@@ -34,6 +35,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         }
 
         const adminSupabase = getAdminSupabase();
+
+        // Isolamento multi-tenant: só membro ativo do restaurante (service-role bypassa RLS)
+        const membership = await verifyMembership(adminSupabase, user.id, restaurant_id);
+        if (membership instanceof NextResponse) return membership;
 
         // Enforcement billing
         const accountId = await getAccountIdForRestaurant(adminSupabase, restaurant_id);

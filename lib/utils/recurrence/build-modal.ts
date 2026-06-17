@@ -31,6 +31,10 @@ export function buildMonthlyDayOfMonth(day: number): RecurrenceV2 {
     return { version: 2, type: "monthly", mode: "day_of_month", day }
 }
 
+export function buildMonthlyDaysOfMonth(days: number[]): RecurrenceV2 {
+    return { version: 2, type: "monthly", mode: "days_of_month", days }
+}
+
 export function buildMonthlyWeekdayPosition(
     weekday: number,
     weekOfMonth: WeekOfMonth,

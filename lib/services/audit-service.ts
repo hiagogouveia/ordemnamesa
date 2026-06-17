@@ -30,7 +30,9 @@ import type {
     UnitInfo,
 } from '@/lib/types/audit';
 import { AUDIT_STATUS_LABEL, SHIFT_LABEL } from '@/lib/types/audit';
+import type { TaskType } from '@/lib/types';
 import { OPERATIONAL_PREDICATE } from '@/lib/utils/operational-activity';
+import { getNowInTz, DEFAULT_TZ } from '@/lib/utils/brazil-date';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
@@ -86,26 +88,33 @@ function resolvePeriod(
     preset: PeriodPreset,
     explicitStart: string | null,
     explicitEnd: string | null,
+    tz: string,
 ): { start_date: string; end_date: string } {
     if (preset === 'custom' && explicitStart && explicitEnd) {
         return { start_date: explicitStart, end_date: explicitEnd };
     }
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayStr = toDateKey(today);
+    // "Hoje" no fuso do restaurante (s73): execuções noturnas (ex: 21h UTC-3)
+    // não devem cair no dia seguinte por causa do offset UTC do servidor.
+    const todayStr = getNowInTz(tz).dateKey;
 
     if (preset === 'today') {
         return { start_date: todayStr, end_date: todayStr };
     }
-    if (preset === '7days') {
-        const d = new Date(today); d.setDate(d.getDate() - 6);
-        return { start_date: toDateKey(d), end_date: todayStr };
-    }
-    const d = new Date(today); d.setDate(d.getDate() - 29);
-    return { start_date: toDateKey(d), end_date: todayStr };
+    const daysBack = preset === '7days' ? 6 : 29;
+    return { start_date: subtractDaysFromDateKey(todayStr, daysBack), end_date: todayStr };
 }
 
-export function parseFiltersFromSearchParams(sp: URLSearchParams): AuditFilters {
+/** Subtrai `days` de um dateKey YYYY-MM-DD em UTC e devolve outro dateKey. */
+function subtractDaysFromDateKey(dateKey: string, days: number): string {
+    const d = new Date(`${dateKey}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - days);
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
+export function parseFiltersFromSearchParams(sp: URLSearchParams, tz: string = DEFAULT_TZ): AuditFilters {
     const presetRaw = sp.get('preset') as PeriodPreset | null;
     const preset: PeriodPreset = (presetRaw && VALID_PRESETS.has(presetRaw)) ? presetRaw : '30days';
 
@@ -113,6 +122,7 @@ export function parseFiltersFromSearchParams(sp: URLSearchParams): AuditFilters 
         preset,
         sp.get('start_date'),
         sp.get('end_date'),
+        tz,
     );
 
     const statuses = parseList(sp, 'statuses').filter((s): s is AuditStatus =>
@@ -246,6 +256,8 @@ interface RawTaskExec {
     photo_url: string | null;
     photos: unknown; // JSONB array
     blocked_reason: string | null;
+    type_snapshot: string | null;
+    value_rating: number | null;
 }
 
 interface RawTaskIssue {
@@ -403,7 +415,7 @@ export async function fetchAuditList(
 
     const { data: execsRaw, error: execErr } = await admin
         .from('task_executions')
-        .select('id, task_id, checklist_id, user_id, status, executed_at, started_at, notes, observation, photo_url, photos, blocked_reason')
+        .select('id, task_id, checklist_id, user_id, status, executed_at, started_at, notes, observation, photo_url, photos, blocked_reason, type_snapshot, value_rating')
         .in('checklist_id', checklistIds)
         .in('user_id', userIds)
         .gte('executed_at', new Date(minAssumedAt).toISOString())
@@ -649,7 +661,7 @@ export async function fetchAuditDetail(
     const { startMs, endMs } = assumptionWindow(a);
     const { data: execsRaw, error: eErr } = await admin
         .from('task_executions')
-        .select('id, task_id, checklist_id, user_id, status, executed_at, started_at, notes, observation, photo_url, photos, blocked_reason')
+        .select('id, task_id, checklist_id, user_id, status, executed_at, started_at, notes, observation, photo_url, photos, blocked_reason, type_snapshot, value_rating')
         .eq('checklist_id', a.checklist_id)
         .eq('user_id', a.user_id)
         .gte('executed_at', new Date(startMs).toISOString())
@@ -766,6 +778,8 @@ export async function fetchAuditDetail(
                 impediment_reason: pendingIssue?.description ?? null,
                 executed_at: ex?.executed_at ?? null,
                 started_at: ex?.started_at ?? null,
+                task_type: (ex?.type_snapshot as TaskType | null) ?? null,
+                value_rating: ex?.value_rating ?? null,
                 evidences,
             };
         }),

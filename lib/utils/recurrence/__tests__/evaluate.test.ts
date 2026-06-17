@@ -162,6 +162,99 @@ describe("evaluateV2 — monthly day_of_month", () => {
     })
 })
 
+describe("evaluateV2 — monthly days_of_month", () => {
+    it("aparece nos dias selecionados (15 e 30)", () => {
+        const config = {
+            version: 2 as const,
+            type: "monthly" as const,
+            mode: "days_of_month" as const,
+            days: [15, 30],
+        }
+        expect(evaluateV2(config, ctx(WED, "2026-04-15"))).toBe(true)
+        expect(evaluateV2(config, ctx(THU, "2026-04-30"))).toBe(true)
+    })
+
+    it("não aparece nos demais dias", () => {
+        const config = {
+            version: 2 as const,
+            type: "monthly" as const,
+            mode: "days_of_month" as const,
+            days: [15, 30],
+        }
+        expect(evaluateV2(config, ctx(MON, "2026-04-27"))).toBe(false)
+        expect(evaluateV2(config, ctx(WED, "2026-04-01"))).toBe(false)
+    })
+
+    it("dia 31 selecionado não aparece em mês de 30 dias", () => {
+        const config = {
+            version: 2 as const,
+            type: "monthly" as const,
+            mode: "days_of_month" as const,
+            days: [31],
+        }
+        for (let d = 1; d <= 30; d++) {
+            const dateKey = `2026-04-${String(d).padStart(2, "0")}`
+            expect(evaluateV2(config, ctx(0, dateKey))).toBe(false)
+        }
+    })
+
+    it("sentinela -1 = último dia do mês (31 em maio)", () => {
+        const config = {
+            version: 2 as const,
+            type: "monthly" as const,
+            mode: "days_of_month" as const,
+            days: [-1],
+        }
+        expect(evaluateV2(config, ctx(SUN, "2026-05-31"))).toBe(true)
+        expect(evaluateV2(config, ctx(SAT, "2026-05-30"))).toBe(false)
+    })
+
+    it("sentinela -1 = último dia em fevereiro não bissexto (28)", () => {
+        const config = {
+            version: 2 as const,
+            type: "monthly" as const,
+            mode: "days_of_month" as const,
+            days: [-1],
+        }
+        expect(evaluateV2(config, ctx(SAT, "2026-02-28"))).toBe(true)
+        expect(evaluateV2(config, ctx(0, "2026-02-27"))).toBe(false)
+    })
+
+    it("sentinela -1 = último dia em fevereiro bissexto (29)", () => {
+        const config = {
+            version: 2 as const,
+            type: "monthly" as const,
+            mode: "days_of_month" as const,
+            days: [-1],
+        }
+        expect(evaluateV2(config, ctx(THU, "2024-02-29"))).toBe(true)
+        expect(evaluateV2(config, ctx(WED, "2024-02-28"))).toBe(false)
+    })
+
+    it("sentinela -1 = último dia em mês de 30 dias (abril)", () => {
+        const config = {
+            version: 2 as const,
+            type: "monthly" as const,
+            mode: "days_of_month" as const,
+            days: [-1],
+        }
+        expect(evaluateV2(config, ctx(THU, "2026-04-30"))).toBe(true)
+        expect(evaluateV2(config, ctx(WED, "2026-04-29"))).toBe(false)
+    })
+
+    it("combina dias fixos com último dia do mês", () => {
+        const config = {
+            version: 2 as const,
+            type: "monthly" as const,
+            mode: "days_of_month" as const,
+            days: [1, -1],
+        }
+        expect(evaluateV2(config, ctx(WED, "2026-04-01"))).toBe(true)
+        expect(evaluateV2(config, ctx(THU, "2026-04-30"))).toBe(true)
+        expect(evaluateV2(config, ctx(WED, "2026-04-15"))).toBe(false)
+    })
+})
+
 describe("evaluateV2 — monthly weekday_position", () => {
     it("4ª segunda de abril/2026 = 27", () => {
         const config = {

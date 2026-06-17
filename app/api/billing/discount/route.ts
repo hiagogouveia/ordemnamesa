@@ -51,6 +51,20 @@ export async function GET(request: Request) {
             accountId = requested
         }
 
+        // Guard owner-only: apenas owner ativo da account pode ler dados de billing (desconto).
+        const { data: ownerCheck } = await admin
+            .from("account_users")
+            .select("role, active")
+            .eq("account_id", accountId)
+            .eq("user_id", user.id)
+            .maybeSingle<{ role: string; active: boolean }>()
+        if (!ownerCheck || !ownerCheck.active || ownerCheck.role !== "owner") {
+            return NextResponse.json(
+                { error: "Apenas o proprietário da conta pode gerenciar billing.", code: "forbidden_billing" },
+                { status: 403 }
+            )
+        }
+
         const { data: sub } = await admin
             .from("subscriptions")
             .select("stripe_subscription_id")

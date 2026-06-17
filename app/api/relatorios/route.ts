@@ -19,6 +19,8 @@ import {
     parseFiltersFromSearchParams,
 } from '@/lib/services/audit-service';
 import type { UnitInfo } from '@/lib/types/audit';
+import { getRestaurantTimezone } from '@/lib/utils/restaurant-time';
+import { DEFAULT_TZ } from '@/lib/utils/brazil-date';
 
 const getAdminSupabase = () => createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -100,7 +102,12 @@ export async function GET(request: Request) {
         if (scope instanceof NextResponse) return scope;
 
         const { searchParams } = new URL(request.url);
-        const filters = parseFiltersFromSearchParams(searchParams);
+        // Presets de período ("Hoje", "Últimos 7/30 dias") são resolvidos no fuso
+        // do restaurante para não excluir execuções noturnas por causa do offset UTC.
+        const tz = scope.restaurantIds[0]
+            ? await getRestaurantTimezone(admin, scope.restaurantIds[0])
+            : DEFAULT_TZ;
+        const filters = parseFiltersFromSearchParams(searchParams, tz);
 
         const list = await fetchAuditList(
             admin,
