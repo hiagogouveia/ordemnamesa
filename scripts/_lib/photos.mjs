@@ -18,15 +18,28 @@ export function toStoragePath(ref) {
  * Enumera TODOS os objetos do bucket via Storage API, recursivamente.
  * Estrutura esperada: restaurant_id/execution_id/arquivo. Retorna [{path, size}].
  */
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Lista uma página com retry/backoff — Storage API ocasionalmente devolve Gateway Timeout. */
+async function listPageWithRetry(admin, prefix, offset, pageSize, attempts = 4) {
+    let lastErr;
+    for (let i = 0; i < attempts; i++) {
+        const { data, error } = await admin.storage
+            .from(BUCKET)
+            .list(prefix, { limit: pageSize, offset, sortBy: { column: 'name', order: 'asc' } });
+        if (!error) return data;
+        lastErr = error;
+        await sleep(500 * (i + 1));
+    }
+    throw new Error(`list("${prefix}") após ${attempts} tentativas: ${lastErr?.message}`);
+}
+
 export async function listAllObjects(admin, prefix = '') {
     const out = [];
     const pageSize = 100;
     let offset = 0;
     for (;;) {
-        const { data, error } = await admin.storage
-            .from(BUCKET)
-            .list(prefix, { limit: pageSize, offset, sortBy: { column: 'name', order: 'asc' } });
-        if (error) throw new Error(`list("${prefix}"): ${error.message}`);
+        const data = await listPageWithRetry(admin, prefix, offset, pageSize);
         if (!data || data.length === 0) break;
         for (const entry of data) {
             const full = prefix ? `${prefix}/${entry.name}` : entry.name;
