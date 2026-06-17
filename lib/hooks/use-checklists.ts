@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Checklist } from "../types";
 
 interface TaskOrderEntry {
@@ -68,6 +68,7 @@ export function useChecklists(arg: string | undefined | ChecklistsScope) {
         enabled,
         staleTime: 5 * 60 * 1000,
         refetchOnWindowFocus: false,
+        placeholderData: keepPreviousData,
     });
 
     // Realtime: atualizar quando assumptions mudam (alguém assumiu/completou)

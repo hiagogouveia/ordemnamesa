@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { ChecklistAssumption } from '@/lib/types';
 import type { Scope } from '@/lib/types/scope';
@@ -92,6 +92,7 @@ export const useKanbanTasks = (arg: string | undefined | Scope, userId?: string)
         },
         enabled,
         staleTime: 2 * 60 * 1000,
+        placeholderData: keepPreviousData,
     });
 
     // Realtime: atualizar ao mudar assumptions ou execuções de tarefas

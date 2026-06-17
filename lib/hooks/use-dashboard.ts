@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import type { Scope } from '@/lib/types/scope';
 
@@ -136,5 +136,6 @@ export const useDashboard = (scope: Scope | null) => {
         },
         enabled,
         staleTime: 2 * 60 * 1000,
+        placeholderData: keepPreviousData,
     });
 };
