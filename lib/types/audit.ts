@@ -6,6 +6,7 @@
  * (task_executions.status, checklist_assumptions.execution_status) NUNCA
  * vazam para a UI: sempre mapeados pelo audit-service.
  */
+import type { TaskType } from './index';
 
 /**
  * Status FINAL da execução exibido na tela (resultado da rotina).
@@ -139,6 +140,10 @@ export interface AuditTaskDetail {
     impediment_reason: string | null; // blocked_reason quando aplicável
     executed_at: string | null;
     started_at: string | null;
+    /** Tipo da tarefa no momento da execução (type_snapshot). */
+    task_type: TaskType | null;
+    /** Nota 1..5 quando task_type === 'rating'. */
+    value_rating: number | null;
     evidences: AuditEvidence[];     // pode ter 0, 1 ou N fotos
 }
 

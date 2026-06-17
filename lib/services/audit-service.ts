@@ -30,6 +30,7 @@ import type {
     UnitInfo,
 } from '@/lib/types/audit';
 import { AUDIT_STATUS_LABEL, SHIFT_LABEL } from '@/lib/types/audit';
+import type { TaskType } from '@/lib/types';
 import { OPERATIONAL_PREDICATE } from '@/lib/utils/operational-activity';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
@@ -246,6 +247,8 @@ interface RawTaskExec {
     photo_url: string | null;
     photos: unknown; // JSONB array
     blocked_reason: string | null;
+    type_snapshot: string | null;
+    value_rating: number | null;
 }
 
 interface RawTaskIssue {
@@ -403,7 +406,7 @@ export async function fetchAuditList(
 
     const { data: execsRaw, error: execErr } = await admin
         .from('task_executions')
-        .select('id, task_id, checklist_id, user_id, status, executed_at, started_at, notes, observation, photo_url, photos, blocked_reason')
+        .select('id, task_id, checklist_id, user_id, status, executed_at, started_at, notes, observation, photo_url, photos, blocked_reason, type_snapshot, value_rating')
         .in('checklist_id', checklistIds)
         .in('user_id', userIds)
         .gte('executed_at', new Date(minAssumedAt).toISOString())
@@ -649,7 +652,7 @@ export async function fetchAuditDetail(
     const { startMs, endMs } = assumptionWindow(a);
     const { data: execsRaw, error: eErr } = await admin
         .from('task_executions')
-        .select('id, task_id, checklist_id, user_id, status, executed_at, started_at, notes, observation, photo_url, photos, blocked_reason')
+        .select('id, task_id, checklist_id, user_id, status, executed_at, started_at, notes, observation, photo_url, photos, blocked_reason, type_snapshot, value_rating')
         .eq('checklist_id', a.checklist_id)
         .eq('user_id', a.user_id)
         .gte('executed_at', new Date(startMs).toISOString())
@@ -766,6 +769,8 @@ export async function fetchAuditDetail(
                 impediment_reason: pendingIssue?.description ?? null,
                 executed_at: ex?.executed_at ?? null,
                 started_at: ex?.started_at ?? null,
+                task_type: (ex?.type_snapshot as TaskType | null) ?? null,
+                value_rating: ex?.value_rating ?? null,
                 evidences,
             };
         }),

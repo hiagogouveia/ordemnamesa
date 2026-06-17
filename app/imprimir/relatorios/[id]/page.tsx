@@ -260,6 +260,12 @@ function PrintLayout({ detail }: { detail: AuditExecutionDetail }) {
                                         {t.executed_at ? formatTime(t.executed_at) : '—'}
                                     </td>
                                     <td className="border border-slate-300 px-3 py-2 text-xs">
+                                        {t.task_type === 'rating' && t.value_rating != null && (
+                                            <p className="text-slate-900 font-medium">
+                                                <span style={{ color: '#0f172a', letterSpacing: '1px' }}>{formatStars(t.value_rating)}</span>
+                                                <span className="text-slate-500 ml-1">({t.value_rating}/5)</span>
+                                            </p>
+                                        )}
                                         {t.observation && (
                                             <p className="text-slate-700 whitespace-pre-wrap">{t.observation}</p>
                                         )}
@@ -268,7 +274,7 @@ function PrintLayout({ detail }: { detail: AuditExecutionDetail }) {
                                                 <span className="font-semibold">Impedimento:</span> {t.impediment_reason}
                                             </p>
                                         )}
-                                        {!t.observation && !t.impediment_reason && (
+                                        {!t.observation && !t.impediment_reason && !(t.task_type === 'rating' && t.value_rating != null) && (
                                             <span className="text-slate-400">—</span>
                                         )}
                                     </td>
@@ -387,6 +393,10 @@ function formatDateTime(iso: string): string {
         day: '2-digit', month: '2-digit', year: 'numeric',
         hour: '2-digit', minute: '2-digit',
     });
+}
+function formatStars(rating: number): string {
+    const filled = Math.max(0, Math.min(5, Math.round(rating)));
+    return '★'.repeat(filled) + '☆'.repeat(5 - filled);
 }
 function formatDuration(seconds: number | null): string {
     if (seconds === null) return '—';
