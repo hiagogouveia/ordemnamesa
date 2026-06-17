@@ -146,6 +146,7 @@ export function useCreateReceivingTemplate() {
         onSuccess: (_d, vars) => {
             queryClient.invalidateQueries({ queryKey: ["receiving-templates", vars.restaurant_id] });
             queryClient.invalidateQueries({ queryKey: ["receiving-templates-available", vars.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["receiving-templates-available-meta", vars.restaurant_id] });
         },
     });
 }
@@ -187,6 +188,7 @@ export function useUpdateReceivingTemplate() {
             queryClient.invalidateQueries({ queryKey: ["receiving-templates", vars.restaurant_id] });
             queryClient.invalidateQueries({ queryKey: ["receiving-template", vars.restaurant_id, vars.id] });
             queryClient.invalidateQueries({ queryKey: ["receiving-templates-available", vars.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["receiving-templates-available-meta", vars.restaurant_id] });
         },
     });
 }
@@ -209,6 +211,7 @@ export function useArchiveReceivingTemplate() {
         onSuccess: (_d, vars) => {
             queryClient.invalidateQueries({ queryKey: ["receiving-templates", vars.restaurant_id] });
             queryClient.invalidateQueries({ queryKey: ["receiving-templates-available", vars.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["receiving-templates-available-meta", vars.restaurant_id] });
         },
     });
 }

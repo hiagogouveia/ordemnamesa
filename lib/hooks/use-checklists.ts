@@ -147,6 +147,7 @@ export function useCreateChecklist() {
         },
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ["checklists", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["kanban", variables.restaurant_id] });
             queryClient.invalidateQueries({ queryKey: ["my-activities", variables.restaurant_id] });
             queryClient.invalidateQueries({ queryKey: ["my-activities-badge", variables.restaurant_id] });
             queryClient.invalidateQueries({ queryKey: ["admin_checklists_status", variables.restaurant_id] });
@@ -187,6 +188,7 @@ export function useUpdateChecklist() {
             );
             if (!variables.skipInvalidation) {
                 queryClient.invalidateQueries({ queryKey: ["checklists", variables.restaurant_id] });
+                queryClient.invalidateQueries({ queryKey: ["kanban", variables.restaurant_id] });
                 queryClient.invalidateQueries({ queryKey: ["my-activities", variables.restaurant_id] });
                 queryClient.invalidateQueries({ queryKey: ["my-activities-badge", variables.restaurant_id] });
                 queryClient.invalidateQueries({ queryKey: ["admin_checklists_status", variables.restaurant_id] });
