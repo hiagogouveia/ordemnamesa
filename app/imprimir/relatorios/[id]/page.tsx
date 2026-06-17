@@ -93,7 +93,9 @@ function PrintLayout({ detail }: { detail: AuditExecutionDetail }) {
                 <header className="flex items-start justify-between gap-6 pb-5 border-b-2 border-slate-900">
                     <div className="flex items-center gap-3">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src="/logo-icon.png" alt="Ordem na Mesa" width={48} height={48} className="shrink-0" />
+                        {/* ?v= força cache-bust: este <img> cru (não next/image) era servido
+                            do cache do navegador com o logo antigo. Bump ao trocar o logo. */}
+                        <img src="/logo-icon.png?v=20260617" alt="Ordem na Mesa" width={48} height={48} className="shrink-0" />
                         <div>
                             <p className="text-xs uppercase tracking-[0.2em] text-slate-500 font-bold mb-1">
                                 Ordem na Mesa
