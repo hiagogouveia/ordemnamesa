@@ -91,14 +91,18 @@ function PrintLayout({ detail }: { detail: AuditExecutionDetail }) {
             <article className="max-w-[820px] mx-auto px-8 py-10 print:px-0 print:py-0 print:max-w-none">
                 {/* Cabeçalho */}
                 <header className="flex items-start justify-between gap-6 pb-5 border-b-2 border-slate-900">
-                    <div>
-                        <p className="text-xs uppercase tracking-[0.2em] text-slate-500 font-bold mb-1">
-                            Ordem na Mesa
-                        </p>
-                        <h1 className="text-2xl font-black text-slate-900 leading-tight">
-                            Relatório oficial de auditoria
-                        </h1>
-                        <p className="text-sm text-slate-600 mt-1">{detail.checklist.name}</p>
+                    <div className="flex items-center gap-3">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src="/logo-icon.png" alt="Ordem na Mesa" width={48} height={48} className="shrink-0" />
+                        <div>
+                            <p className="text-xs uppercase tracking-[0.2em] text-slate-500 font-bold mb-1">
+                                Ordem na Mesa
+                            </p>
+                            <h1 className="text-2xl font-black text-slate-900 leading-tight">
+                                Relatório oficial de auditoria
+                            </h1>
+                            <p className="text-sm text-slate-600 mt-1">{detail.checklist.name}</p>
+                        </div>
                     </div>
                     <div className="text-right text-sm">
                         <p className="text-slate-500">
