@@ -165,6 +165,59 @@ describe("validateV2 — monthly day_of_month", () => {
     })
 })
 
+describe("validateV2 — monthly days_of_month", () => {
+    it("aceita dias [15, 30]", () => {
+        expect(
+            validateV2({ version: 2, type: "monthly", mode: "days_of_month", days: [15, 30] }),
+        ).toEqual({ version: 2, type: "monthly", mode: "days_of_month", days: [15, 30] })
+    })
+
+    it("aceita sentinela -1 (último dia do mês)", () => {
+        expect(
+            validateV2({ version: 2, type: "monthly", mode: "days_of_month", days: [-1] }),
+        ).toEqual({ version: 2, type: "monthly", mode: "days_of_month", days: [-1] })
+    })
+
+    it("dedup e ordena os dias (mantendo -1 ao final)", () => {
+        expect(
+            validateV2({ version: 2, type: "monthly", mode: "days_of_month", days: [30, 15, 30, -1] }),
+        ).toEqual({ version: 2, type: "monthly", mode: "days_of_month", days: [15, 30, -1] })
+    })
+
+    it("rejeita array vazio", () => {
+        expect(() =>
+            validateV2({ version: 2, type: "monthly", mode: "days_of_month", days: [] }),
+        ).toThrow(RecurrenceValidationError)
+    })
+
+    it("rejeita days ausente / não-array", () => {
+        expect(() =>
+            validateV2({ version: 2, type: "monthly", mode: "days_of_month" }),
+        ).toThrow(RecurrenceValidationError)
+        expect(() =>
+            validateV2({ version: 2, type: "monthly", mode: "days_of_month", days: "15,30" }),
+        ).toThrow(RecurrenceValidationError)
+    })
+
+    it("rejeita dia fora de 1..31 (exceto -1)", () => {
+        expect(() =>
+            validateV2({ version: 2, type: "monthly", mode: "days_of_month", days: [0] }),
+        ).toThrow(RecurrenceValidationError)
+        expect(() =>
+            validateV2({ version: 2, type: "monthly", mode: "days_of_month", days: [32] }),
+        ).toThrow(RecurrenceValidationError)
+        expect(() =>
+            validateV2({ version: 2, type: "monthly", mode: "days_of_month", days: [-2] }),
+        ).toThrow(RecurrenceValidationError)
+    })
+
+    it("rejeita dia não inteiro", () => {
+        expect(() =>
+            validateV2({ version: 2, type: "monthly", mode: "days_of_month", days: [1.5] }),
+        ).toThrow(RecurrenceValidationError)
+    })
+})
+
 describe("validateV2 — monthly weekday_position", () => {
     it("aceita 2ª segunda do mês", () => {
         expect(

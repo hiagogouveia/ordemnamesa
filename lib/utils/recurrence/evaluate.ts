@@ -1,6 +1,6 @@
 import { RRule } from "rrule"
 import type { RecurrenceV2 } from "@/lib/types"
-import { findWeekdayPositionInMonth, parseDateKey } from "./weekday-position"
+import { daysInMonth, findWeekdayPositionInMonth, parseDateKey } from "./weekday-position"
 
 export interface ShiftForRecurrence {
     id?: string
@@ -101,6 +101,12 @@ function evaluateMonthly(
     if (config.mode === "day_of_month") {
         // F.2: dia 31 em mês com 30/28/29 dias → não aparece (pula o mês)
         return parsed.day === config.day
+    }
+
+    if (config.mode === "days_of_month") {
+        // -1 = último dia do mês; demais comparam direto (dias inexistentes pulam).
+        const lastDay = daysInMonth(parsed.year, parsed.month)
+        return config.days.some((d) => (d === -1 ? parsed.day === lastDay : parsed.day === d))
     }
 
     // weekday_position

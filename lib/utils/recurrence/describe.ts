@@ -70,6 +70,9 @@ function describeV2(config: RecurrenceV2): string {
             if (config.mode === "day_of_month") {
                 return `Mensal: dia ${config.day}`
             }
+            if (config.mode === "days_of_month") {
+                return `Mensal: ${formatMonthDays(config.days)}`
+            }
             return `Mensal: ${POSITION_LABELS[String(config.weekOfMonth)] ?? "?"} ${
                 WEEKDAY_NAMES[config.weekday] ?? "?"
             } do mês`
@@ -107,6 +110,14 @@ function describeV1(recurrence: string | null, config: RecurrenceConfig | null):
         default:
             return "Sem recorrência"
     }
+}
+
+function formatMonthDays(days: number[]): string {
+    const fixed = days.filter((d) => d !== -1).map((d) => `dia ${d}`)
+    const parts = days.includes(-1) ? [...fixed, "último dia do mês"] : fixed
+    if (parts.length === 0) return "—"
+    if (parts.length === 1) return parts[0]
+    return `${parts.slice(0, -1).join(", ")} e ${parts[parts.length - 1]}`
 }
 
 function formatWeeklyDays(weekdays: number[]): string {

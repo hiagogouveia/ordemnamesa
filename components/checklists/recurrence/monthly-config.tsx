@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { RecurrenceV2, WeekOfMonth } from "@/lib/types";
 import {
-    buildMonthlyDayOfMonth,
+    buildMonthlyDaysOfMonth,
     buildMonthlyWeekdayPosition,
 } from "@/lib/utils/recurrence/build-modal";
 import { RecurrenceModal } from "./recurrence-modal";
@@ -43,11 +43,13 @@ export function MonthlyConfig({
     shiftLabel,
 }: MonthlyConfigProps) {
     const [mode, setMode] = useState<"day_of_month" | "weekday_position">(
-        initial?.mode ?? "day_of_month",
+        initial?.mode === "weekday_position" ? "weekday_position" : "day_of_month",
     );
-    const [day, setDay] = useState<number>(
-        initial?.mode === "day_of_month" ? initial.day : 1,
-    );
+    const [selectedDays, setSelectedDays] = useState<number[]>(() => {
+        if (initial?.mode === "days_of_month") return initial.days;
+        if (initial?.mode === "day_of_month") return [initial.day];
+        return [1];
+    });
     const [weekday, setWeekday] = useState<number>(
         initial?.mode === "weekday_position" ? initial.weekday : 1,
     );
@@ -55,21 +57,25 @@ export function MonthlyConfig({
         initial?.mode === "weekday_position" ? initial.weekOfMonth : 1,
     );
 
+    const toggleDay = (value: number) => {
+        setSelectedDays((prev) =>
+            prev.includes(value) ? prev.filter((d) => d !== value) : [...prev, value],
+        );
+    };
+
     const config: RecurrenceV2 =
         mode === "day_of_month"
-            ? buildMonthlyDayOfMonth(day)
+            ? buildMonthlyDaysOfMonth(selectedDays)
             : buildMonthlyWeekdayPosition(weekday, weekOfMonth);
 
     const canConfirm =
-        mode === "day_of_month"
-            ? Number.isInteger(day) && day >= 1 && day <= 31
-            : true;
+        mode === "day_of_month" ? selectedDays.length > 0 : true;
 
     return (
         <RecurrenceModal
             title="Mensal"
             canConfirm={canConfirm}
-            invalidHint="Dia deve estar entre 1 e 31."
+            invalidHint="Selecione ao menos um dia."
             onConfirm={() => onConfirm(config)}
             onCancel={onCancel}
         >
@@ -105,20 +111,37 @@ export function MonthlyConfig({
             {mode === "day_of_month" ? (
                 <div className="flex flex-col gap-2">
                     <label className="text-xs font-bold text-[#92bbc9] uppercase tracking-wider">
-                        Dia do mês
+                        Nos dias
                     </label>
-                    <input
-                        type="number"
-                        min={1}
-                        max={31}
-                        value={day}
-                        onChange={(e) =>
-                            setDay(Math.max(1, Math.min(31, parseInt(e.target.value) || 1)))
-                        }
-                        className="w-24 bg-[#101d22] border border-[#233f48] rounded-lg px-3 py-2.5 text-white text-center font-bold focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all"
-                    />
+                    <div className="grid grid-cols-7 gap-1.5">
+                        {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                            <button
+                                key={d}
+                                type="button"
+                                onClick={() => toggleDay(d)}
+                                className={`h-9 rounded-lg text-xs font-bold transition-all ${
+                                    selectedDays.includes(d)
+                                        ? 'bg-[#13b6ec] text-[#0a1215]'
+                                        : 'bg-[#101d22] text-[#92bbc9] border border-[#233f48] hover:border-[#325a67]'
+                                }`}
+                            >
+                                {d}
+                            </button>
+                        ))}
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => toggleDay(-1)}
+                        className={`mt-1 self-start px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                            selectedDays.includes(-1)
+                                ? 'bg-[#13b6ec] text-[#0a1215]'
+                                : 'bg-[#101d22] text-[#92bbc9] border border-[#233f48] hover:border-[#325a67]'
+                        }`}
+                    >
+                        Último dia do mês
+                    </button>
                     <p className="text-[#92bbc9] text-xs">
-                        Em meses com menos dias, a rotina é pulada (ex: dia 31 em fevereiro).
+                        Em meses com menos dias, os dias inexistentes são pulados (ex: dia 31 em fevereiro).
                     </p>
                 </div>
             ) : (

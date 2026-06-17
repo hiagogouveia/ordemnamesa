@@ -65,6 +65,7 @@ export type RecurrenceV2 =
     | { version: 2; type: 'weekly'; weekdays: number[] }
     | { version: 2; type: 'shift_days' }
     | { version: 2; type: 'monthly'; mode: 'day_of_month'; day: number }
+    | { version: 2; type: 'monthly'; mode: 'days_of_month'; days: number[] } // 1..31; -1 = último dia do mês
     | { version: 2; type: 'monthly'; mode: 'weekday_position'; weekday: number; weekOfMonth: WeekOfMonth }
     | { version: 2; type: 'yearly'; mode: 'date'; day: number; month: number }
     | { version: 2; type: 'yearly'; mode: 'weekday_position'; weekday: number; weekOfMonth: WeekOfMonth; month: number }

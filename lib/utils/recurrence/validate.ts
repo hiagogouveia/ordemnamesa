@@ -69,6 +69,24 @@ export function validateV2(input: unknown): RecurrenceV2 {
                 }
                 return { version: 2, type: "monthly", mode: "day_of_month", day }
             }
+            if (mode === "days_of_month") {
+                const days = obj.days
+                if (!Array.isArray(days)) {
+                    throw new RecurrenceValidationError("monthly.days deve ser array")
+                }
+                if (days.length === 0) {
+                    throw new RecurrenceValidationError("monthly.days não pode ser vazio")
+                }
+                for (const d of days) {
+                    if (!isMonthDay(d)) {
+                        throw new RecurrenceValidationError(
+                            `monthly.days contém valor inválido: ${String(d)} (esperado 1-31 ou -1)`,
+                        )
+                    }
+                }
+                const sorted = sortMonthDays(days as number[])
+                return { version: 2, type: "monthly", mode: "days_of_month", days: sorted }
+            }
             if (mode === "weekday_position") {
                 const weekday = obj.weekday
                 const weekOfMonth = obj.weekOfMonth
@@ -91,7 +109,7 @@ export function validateV2(input: unknown): RecurrenceV2 {
                 }
             }
             throw new RecurrenceValidationError(
-                "monthly.mode deve ser 'day_of_month' ou 'weekday_position'",
+                "monthly.mode deve ser 'day_of_month', 'days_of_month' ou 'weekday_position'",
             )
         }
 
@@ -172,6 +190,18 @@ function isInt(v: unknown): v is number {
 
 function isWeekday(v: unknown): v is number {
     return isInt(v) && v >= 0 && v <= 6
+}
+
+/** Dia do mês válido: 1..31 ou o sentinela -1 ("último dia do mês"). */
+function isMonthDay(v: unknown): v is number {
+    return isInt(v) && ((v >= 1 && v <= 31) || v === -1)
+}
+
+/** Dedup + ordena crescente, mantendo o sentinela -1 sempre ao final. */
+function sortMonthDays(days: number[]): number[] {
+    const unique = Array.from(new Set(days))
+    const fixed = unique.filter((d) => d !== -1).sort((a, b) => a - b)
+    return unique.includes(-1) ? [...fixed, -1] : fixed
 }
 
 function isWeekOfMonth(v: unknown): v is WeekOfMonth {
