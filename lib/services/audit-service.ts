@@ -32,6 +32,7 @@ import type {
 import { AUDIT_STATUS_LABEL, SHIFT_LABEL } from '@/lib/types/audit';
 import type { TaskType } from '@/lib/types';
 import { OPERATIONAL_PREDICATE } from '@/lib/utils/operational-activity';
+import { getNowInTz, DEFAULT_TZ } from '@/lib/utils/brazil-date';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
@@ -87,26 +88,33 @@ function resolvePeriod(
     preset: PeriodPreset,
     explicitStart: string | null,
     explicitEnd: string | null,
+    tz: string,
 ): { start_date: string; end_date: string } {
     if (preset === 'custom' && explicitStart && explicitEnd) {
         return { start_date: explicitStart, end_date: explicitEnd };
     }
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayStr = toDateKey(today);
+    // "Hoje" no fuso do restaurante (s73): execuções noturnas (ex: 21h UTC-3)
+    // não devem cair no dia seguinte por causa do offset UTC do servidor.
+    const todayStr = getNowInTz(tz).dateKey;
 
     if (preset === 'today') {
         return { start_date: todayStr, end_date: todayStr };
     }
-    if (preset === '7days') {
-        const d = new Date(today); d.setDate(d.getDate() - 6);
-        return { start_date: toDateKey(d), end_date: todayStr };
-    }
-    const d = new Date(today); d.setDate(d.getDate() - 29);
-    return { start_date: toDateKey(d), end_date: todayStr };
+    const daysBack = preset === '7days' ? 6 : 29;
+    return { start_date: subtractDaysFromDateKey(todayStr, daysBack), end_date: todayStr };
 }
 
-export function parseFiltersFromSearchParams(sp: URLSearchParams): AuditFilters {
+/** Subtrai `days` de um dateKey YYYY-MM-DD em UTC e devolve outro dateKey. */
+function subtractDaysFromDateKey(dateKey: string, days: number): string {
+    const d = new Date(`${dateKey}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - days);
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
+export function parseFiltersFromSearchParams(sp: URLSearchParams, tz: string = DEFAULT_TZ): AuditFilters {
     const presetRaw = sp.get('preset') as PeriodPreset | null;
     const preset: PeriodPreset = (presetRaw && VALID_PRESETS.has(presetRaw)) ? presetRaw : '30days';
 
@@ -114,6 +122,7 @@ export function parseFiltersFromSearchParams(sp: URLSearchParams): AuditFilters 
         preset,
         sp.get('start_date'),
         sp.get('end_date'),
+        tz,
     );
 
     const statuses = parseList(sp, 'statuses').filter((s): s is AuditStatus =>
