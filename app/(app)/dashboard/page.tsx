@@ -235,7 +235,7 @@ export default function DashboardPage() {
                                 {tarefas_criticas.slice(0, 5).map(item => (
                                     <Link
                                         key={item.id}
-                                        href={`/checklists?assumption_id=${item.id}&status=${item.tipo}`}
+                                        href={`/checklists?openId=${item.checklist_id}`}
                                         className="flex items-center gap-3 p-2 hover:bg-red-500/10 rounded-lg transition-colors group"
                                     >
                                         <TipoBadge tipo={item.tipo} />
