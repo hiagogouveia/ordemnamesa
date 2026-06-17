@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, Suspense, useEffect, useRef } from "react";
+import dynamic from "next/dynamic";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
@@ -11,7 +12,11 @@ import { useShifts } from "@/lib/hooks/use-shifts";
 import { shouldChecklistAppearToday } from "@/lib/utils/should-checklist-appear-today";
 import { useRestaurantNow } from "@/lib/hooks/use-restaurant-now";
 import { BulkActionBar } from "@/components/checklists/management/BulkActionBar";
-import { CopyChecklistModal } from "@/components/checklists/management/CopyChecklistModal";
+// Code-splitting: modal só é montado quando aberto.
+const CopyChecklistModal = dynamic(
+    () => import("@/components/checklists/management/CopyChecklistModal").then((m) => ({ default: m.CopyChecklistModal })),
+    { loading: () => null }
+);
 import { useChecklistOrders, useUpdateChecklistOrders } from "@/lib/hooks/use-checklist-orders";
 import { createClient } from "@/lib/supabase/client";
 import { useAllAreas } from "@/lib/hooks/use-areas";
@@ -22,11 +27,26 @@ import { useBilling } from "@/lib/hooks/use-billing";
 import { ChecklistHeader } from "@/components/checklists/management/ChecklistHeader";
 import { ChecklistFilters } from "@/components/checklists/management/ChecklistFilters";
 import { ChecklistListView } from "@/components/checklists/management/ChecklistListView";
-import { ChecklistBoardView } from "@/components/checklists/management/ChecklistBoardView";
-import { ChecklistEditorPanel } from "@/components/checklists/management/ChecklistEditorPanel";
-import { ChecklistPreviewView } from "@/components/checklists/management/ChecklistPreviewView";
-import { ChecklistForm } from "@/components/checklists/checklist-form";
-import { TemplatesBrowserModal } from "@/components/checklists/templates/TemplatesBrowserModal";
+// Code-splitting: views não-default (board/preview), painel e modais não entram
+// no bundle inicial — só carregam quando realmente usados. Board e Form puxam
+// libs pesadas (dnd-kit / lodash) que não são necessárias no primeiro paint.
+const ChecklistBoardView = dynamic(
+    () => import("@/components/checklists/management/ChecklistBoardView").then((m) => ({ default: m.ChecklistBoardView }))
+);
+const ChecklistEditorPanel = dynamic(
+    () => import("@/components/checklists/management/ChecklistEditorPanel").then((m) => ({ default: m.ChecklistEditorPanel }))
+);
+const ChecklistPreviewView = dynamic(
+    () => import("@/components/checklists/management/ChecklistPreviewView").then((m) => ({ default: m.ChecklistPreviewView }))
+);
+const ChecklistForm = dynamic(
+    () => import("@/components/checklists/checklist-form").then((m) => ({ default: m.ChecklistForm })),
+    { loading: () => null }
+);
+const TemplatesBrowserModal = dynamic(
+    () => import("@/components/checklists/templates/TemplatesBrowserModal").then((m) => ({ default: m.TemplatesBrowserModal })),
+    { loading: () => null }
+);
 import { Modal } from "@/components/ui/modal";
 import { filterChecklistsByCollaborator } from "@/lib/utils/filter-checklists-by-collaborator";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";

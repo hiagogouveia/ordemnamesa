@@ -233,6 +233,8 @@ export async function GET(request: Request) {
         const startOfMonth = new Date(todayLocal.getFullYear(), todayLocal.getMonth(), 1);
         const startOfYear = new Date(todayLocal.getFullYear(), 0, 1);
 
+        // Determina quais checklists precisam resetar (sem I/O dentro do loop).
+        const resets: Array<{ id: string; restaurantId: string; periodStartISO: string }> = [];
         for (const cl of (activeChecklists || [])) {
             if (!cl.recurrence) continue;
             // Sprint 65: execução one-shot não é recorrente — nunca resetar suas
@@ -254,18 +256,57 @@ export async function GET(request: Request) {
 
             if (periodStart && (!lastReset || lastReset < periodStart)) {
                 const clRestaurantId = (cl as { restaurant_id?: string }).restaurant_id || restaurantIds[0];
-                await adminSupabase
-                    .from('task_executions')
-                    .delete()
-                    .eq('restaurant_id', clRestaurantId)
-                    .lt('executed_at', periodStart.toISOString())
-                    .in('task_id', (await adminSupabase.from('checklist_tasks').select('id').eq('checklist_id', cl.id)).data?.map(t => t.id) || []);
-
-                await adminSupabase
-                    .from('checklists')
-                    .update({ last_reset_at: new Date().toISOString() })
-                    .eq('id', cl.id);
+                resets.push({ id: cl.id, restaurantId: clRestaurantId, periodStartISO: periodStart.toISOString() });
             }
+        }
+
+        // Reset em lote — substitui o antigo N+1 (3 queries sequenciais por checklist).
+        // Semântica idêntica: agrupa os deletes por (restaurant_id, início do período),
+        // o que equivale a deletar por checklist, pois cada grupo compartilha o mesmo
+        // restaurant_id e o mesmo limiar de executed_at; e mantém o delete por task_id.
+        if (resets.length > 0) {
+            const resetChecklistIds = resets.map(r => r.id);
+
+            // 1 query: task_ids de todos os checklists a resetar.
+            const { data: resetTasks } = await adminSupabase
+                .from('checklist_tasks')
+                .select('id, checklist_id')
+                .in('checklist_id', resetChecklistIds);
+            const taskIdsByChecklist = new Map<string, string[]>();
+            for (const t of (resetTasks ?? []) as Array<{ id: string; checklist_id: string }>) {
+                const arr = taskIdsByChecklist.get(t.checklist_id) ?? [];
+                arr.push(t.id);
+                taskIdsByChecklist.set(t.checklist_id, arr);
+            }
+
+            // Agrupa por (restaurant_id, periodStart) → tipicamente ≤ 4 grupos distintos.
+            const deleteGroups = new Map<string, { restaurantId: string; periodStartISO: string; taskIds: string[] }>();
+            for (const r of resets) {
+                const taskIds = taskIdsByChecklist.get(r.id);
+                if (!taskIds || taskIds.length === 0) continue;
+                const key = `${r.restaurantId}|${r.periodStartISO}`;
+                const group = deleteGroups.get(key) ?? { restaurantId: r.restaurantId, periodStartISO: r.periodStartISO, taskIds: [] };
+                group.taskIds.push(...taskIds);
+                deleteGroups.set(key, group);
+            }
+
+            // Deletes em lote (1 por grupo) em paralelo — grupos não se sobrepõem.
+            await Promise.all(
+                Array.from(deleteGroups.values()).map(g =>
+                    adminSupabase
+                        .from('task_executions')
+                        .delete()
+                        .eq('restaurant_id', g.restaurantId)
+                        .lt('executed_at', g.periodStartISO)
+                        .in('task_id', g.taskIds)
+                )
+            );
+
+            // 1 update em lote de last_reset_at (inclui checklists sem tasks, como antes).
+            await adminSupabase
+                .from('checklists')
+                .update({ last_reset_at: new Date().toISOString() })
+                .in('id', resetChecklistIds);
         }
 
         let tasksData: Record<string, unknown>[] = [];

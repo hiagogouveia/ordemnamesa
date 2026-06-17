@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Checklist } from "../types";
 
 interface TaskOrderEntry {
@@ -68,6 +68,7 @@ export function useChecklists(arg: string | undefined | ChecklistsScope) {
         enabled,
         staleTime: 5 * 60 * 1000,
         refetchOnWindowFocus: false,
+        placeholderData: keepPreviousData,
     });
 
     // Realtime: atualizar quando assumptions mudam (alguém assumiu/completou)
@@ -78,6 +79,15 @@ export function useChecklists(arg: string | undefined | ChecklistsScope) {
         const restaurantId = scope.restaurantId;
 
         const supabase = createClient();
+        // Coalescing: agrupa rajadas de mudanças em assumptions numa única invalidação.
+        let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+        const scheduleInvalidate = () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                queryClient.invalidateQueries({ queryKey: ["checklists", restaurantId] });
+            }, 800);
+        };
+
         const channel = supabase
             .channel(`checklists-rt-${restaurantId}`)
             .on(
@@ -88,13 +98,12 @@ export function useChecklists(arg: string | undefined | ChecklistsScope) {
                     table: 'checklist_assumptions',
                     filter: `restaurant_id=eq.${restaurantId}`,
                 },
-                () => {
-                    queryClient.invalidateQueries({ queryKey: ["checklists", restaurantId] });
-                }
+                scheduleInvalidate
             )
             .subscribe();
 
         return () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
             supabase.removeChannel(channel);
         };
     }, [isGlobal, scope.restaurantId, queryClient]);

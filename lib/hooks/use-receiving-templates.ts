@@ -76,7 +76,9 @@ export function useReceivingTemplatesAvailable(
             return res.json();
         },
         enabled: !!restaurantId,
-        staleTime: 30 * 1000,
+        // 5 min: a agenda do dia muda pouco e toda mutation de template/área
+        // invalida esta key — evita refetch a cada 30s no Turno.
+        staleTime: 5 * 60 * 1000,
     });
 }
 
@@ -109,7 +111,9 @@ export function useReceivingTemplatesAvailableMeta(
             return res.json();
         },
         enabled: !!restaurantId,
-        staleTime: 30 * 1000,
+        // 5 min: a agenda do dia muda pouco e toda mutation de template/área
+        // invalida esta key — evita refetch a cada 30s no Turno.
+        staleTime: 5 * 60 * 1000,
     });
 }
 

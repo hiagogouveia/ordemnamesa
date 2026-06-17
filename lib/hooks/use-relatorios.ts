@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { filtersToSearchParams } from '@/lib/services/audit-service';
 import type { AuditFilters, AuditListResponse } from '@/lib/types/audit';
@@ -60,6 +60,7 @@ export function useRelatorios(scope: Scope | null, filters: AuditFilters) {
         },
         enabled,
         staleTime: 60 * 1000, // 1 min — dados de auditoria mudam pouco mas não congelar
+        placeholderData: keepPreviousData, // mantém a lista visível ao paginar/filtrar
     });
 }
 
