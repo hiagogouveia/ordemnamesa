@@ -102,6 +102,18 @@ export const useKanbanTasks = (arg: string | undefined | Scope, userId?: string)
         if (!singleRestaurantId || isGlobal) return;
 
         const supabase = createClient();
+        // Coalescing: com vários colaboradores ativos, mudanças em assumptions/executions
+        // chegam em rajada. Agrupa numa única invalidação por janela para evitar refetch
+        // storm do endpoint pesado de kanban.
+        let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+        const scheduleInvalidate = () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                queryClient.invalidateQueries({ queryKey: ['kanban', singleRestaurantId] });
+                queryClient.invalidateQueries({ queryKey: ['my-activities-badge', singleRestaurantId] });
+            }, 800);
+        };
+
         const channel = supabase
             .channel(`kanban-rt-${singleRestaurantId}`)
             .on(
@@ -112,10 +124,7 @@ export const useKanbanTasks = (arg: string | undefined | Scope, userId?: string)
                     table: 'checklist_assumptions',
                     filter: `restaurant_id=eq.${singleRestaurantId}`,
                 },
-                () => {
-                    queryClient.invalidateQueries({ queryKey: ['kanban', singleRestaurantId] });
-                    queryClient.invalidateQueries({ queryKey: ['my-activities-badge', singleRestaurantId] });
-                }
+                scheduleInvalidate
             )
             .on(
                 'postgres_changes',
@@ -125,14 +134,12 @@ export const useKanbanTasks = (arg: string | undefined | Scope, userId?: string)
                     table: 'task_executions',
                     filter: `restaurant_id=eq.${singleRestaurantId}`,
                 },
-                () => {
-                    queryClient.invalidateQueries({ queryKey: ['kanban', singleRestaurantId] });
-                    queryClient.invalidateQueries({ queryKey: ['my-activities-badge', singleRestaurantId] });
-                }
+                scheduleInvalidate
             )
             .subscribe();
 
         return () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
             supabase.removeChannel(channel);
         };
     }, [singleRestaurantId, isGlobal, queryClient]);
