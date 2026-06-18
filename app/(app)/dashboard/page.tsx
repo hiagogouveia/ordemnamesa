@@ -182,6 +182,13 @@ export default function DashboardPage() {
     const todayDateStr = new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', timeZone: restaurantNow.tz }).format(new Date());
     const formattedDate = todayDateStr.charAt(0).toUpperCase() + todayDateStr.slice(1);
 
+    // Tendências: deriva isToday/belowMeta uma vez para reaproveitar nas barras e nos rótulos.
+    const tendenciasView = tendencias.map((t, i) => ({
+        ...t,
+        isToday: i === tendencias.length - 1,
+        belowMeta: t.percent < 90 && t.percent > 0,
+    }));
+
     return (
         <div className="flex-1 flex flex-col min-w-0 bg-background-light dark:bg-background-dark">
             {/* ── Header ────────────────────────────────────────────────── */}
@@ -439,45 +446,51 @@ export default function DashboardPage() {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="relative h-64 w-full flex items-end justify-between gap-2 sm:gap-4 px-2">
-                                    {/* Linha de meta 90% */}
-                                    <div
-                                        className="absolute left-0 right-0 border-t border-dashed border-yellow-500/40 pointer-events-none"
-                                        style={{ bottom: '90%' }}
-                                    >
-                                        <span className="absolute right-0 -top-4 text-yellow-500/60 text-[10px] font-medium">90%</span>
-                                    </div>
-                                    {tendencias.length > 0 ? tendencias.map((tendencia, i) => {
-                                        const isToday = i === tendencias.length - 1;
-                                        const belowMeta = tendencia.percent < 90 && tendencia.percent > 0;
-                                        return (
-                                            <div key={i} className="flex flex-col items-center gap-2 flex-1 h-full justify-end group cursor-pointer">
-                                                <div
-                                                    className={`relative w-full max-w-[40px] rounded-t-lg transition-all ${
-                                                        isToday
-                                                            ? 'bg-primary shadow-[0_0_15px_rgba(19,182,236,0.3)]'
-                                                            : belowMeta
-                                                                ? 'bg-red-500/60 group-hover:bg-red-500/80'
-                                                                : 'bg-[#233f48] group-hover:bg-primary/50'
-                                                    }`}
-                                                    style={{ height: `${tendencia.percent > 0 ? tendencia.percent : 4}%` }}
-                                                >
-                                                    {/* Tooltip */}
-                                                    <div className={`absolute -top-8 left-1/2 -translate-x-1/2 bg-[#111e22] text-white text-xs px-2 py-1 rounded whitespace-nowrap border border-[#233f48] z-10 transition-opacity ${isToday ? 'opacity-100 font-bold' : 'opacity-0 group-hover:opacity-100'}`}>
-                                                        {tendencia.percent}%
+                                {tendenciasView.length > 0 ? (
+                                    <>
+                                        {/* Área de plotagem: barras e linha de meta compartilham o mesmo referencial vertical */}
+                                        <div className="relative h-64 w-full flex items-end justify-between gap-2 sm:gap-4 px-2">
+                                            {/* Linha de meta 90% */}
+                                            <div
+                                                className="absolute left-0 right-0 border-t border-dashed border-yellow-500/40 pointer-events-none"
+                                                style={{ bottom: '90%' }}
+                                            >
+                                                <span className="absolute right-0 -top-4 text-yellow-500/60 text-[10px] font-medium">90%</span>
+                                            </div>
+                                            {tendenciasView.map((tendencia, i) => (
+                                                <div key={i} className="flex-1 h-full flex items-end justify-center group cursor-pointer">
+                                                    <div
+                                                        className={`relative w-full max-w-[40px] rounded-t-lg transition-all ${
+                                                            tendencia.isToday
+                                                                ? 'bg-primary shadow-[0_0_15px_rgba(19,182,236,0.3)]'
+                                                                : tendencia.belowMeta
+                                                                    ? 'bg-red-500/60 group-hover:bg-red-500/80'
+                                                                    : 'bg-[#233f48] group-hover:bg-primary/50'
+                                                        }`}
+                                                        style={{ height: `${tendencia.percent > 0 ? tendencia.percent : 4}%` }}
+                                                    >
+                                                        {/* Tooltip */}
+                                                        <div className={`absolute -top-8 left-1/2 -translate-x-1/2 bg-[#111e22] text-white text-xs px-2 py-1 rounded whitespace-nowrap border border-[#233f48] z-10 transition-opacity ${tendencia.isToday ? 'opacity-100 font-bold' : 'opacity-0 group-hover:opacity-100'}`}>
+                                                            {tendencia.percent}%
+                                                        </div>
                                                     </div>
                                                 </div>
-                                                <span className={`text-xs ${isToday ? 'text-white font-bold' : belowMeta ? 'text-red-400' : 'text-[#92bbc9]'}`}>
+                                            ))}
+                                        </div>
+                                        {/* Rótulos dos dias: fora da área de plotagem para não deslocar as barras */}
+                                        <div className="flex justify-between gap-2 sm:gap-4 px-2 mt-2">
+                                            {tendenciasView.map((tendencia, i) => (
+                                                <span key={i} className={`flex-1 text-center text-xs ${tendencia.isToday ? 'text-white font-bold' : tendencia.belowMeta ? 'text-red-400' : 'text-[#92bbc9]'}`}>
                                                     {tendencia.date_label}
                                                 </span>
-                                            </div>
-                                        );
-                                    }) : (
-                                        <div className="flex items-center justify-center w-full h-full text-[#92bbc9]">
-                                            <p>Carregando gráfico...</p>
+                                            ))}
                                         </div>
-                                    )}
-                                </div>
+                                    </>
+                                ) : (
+                                    <div className="relative h-64 w-full flex items-center justify-center text-[#92bbc9]">
+                                        <p>Carregando gráfico...</p>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Progresso por Área */}
