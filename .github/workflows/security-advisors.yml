@@ -42,44 +42,54 @@ jobs:
             [ -f "$f" ] || continue
             echo "::group::Lint $f"
 
+            # Versão sem comentários de linha (-- ...) para os checks não casarem padrões
+            # dentro de comentários (ex.: a descrição do bug numa migration que o corrige).
+            # LC_ALL=C evita "illegal byte sequence" do sed em arquivos com acentos.
+            cf="$(mktemp)"
+            LC_ALL=C sed -E 's/--.*$//' "$f" > "$cf"
+
             # 1) Procurar `CREATE TABLE public.<x>` ou `CREATE TABLE <x>` (no schema default)
             #    e exigir um `ENABLE ROW LEVEL SECURITY` na MESMA migration para a mesma tabela.
-            mapfile -t created < <(grep -oEi 'create[[:space:]]+table[[:space:]]+(if[[:space:]]+not[[:space:]]+exists[[:space:]]+)?(public\.)?[a-z_][a-z0-9_]*' "$f" \
+            mapfile -t created < <(grep -oEi 'create[[:space:]]+table[[:space:]]+(if[[:space:]]+not[[:space:]]+exists[[:space:]]+)?(public\.)?[a-z_][a-z0-9_]*' "$cf" \
               | sed -E 's/.*(create[[:space:]]+table[[:space:]]+(if[[:space:]]+not[[:space:]]+exists[[:space:]]+)?(public\.)?)//i' || true)
 
             for tbl in "${created[@]:-}"; do
+              # Migration sem CREATE TABLE: o array vazio expande para "" — pular
+              # para não emitir falso "Tabela '' sem RLS".
+              [ -n "$tbl" ] || continue
               tbl_short="${tbl#public.}"
               # Pular tabelas em schemas internos (auth., storage., realtime., etc.)
               if [[ "$tbl" == *"."* && "$tbl" != public.* ]]; then
                 continue
               fi
-              if ! grep -Eiq "alter[[:space:]]+table[[:space:]]+(public\.)?${tbl_short}[[:space:]]+enable[[:space:]]+row[[:space:]]+level[[:space:]]+security" "$f"; then
+              if ! grep -Eiq "alter[[:space:]]+table[[:space:]]+(public\.)?${tbl_short}[[:space:]]+enable[[:space:]]+row[[:space:]]+level[[:space:]]+security" "$cf"; then
                 echo "::error file=$f::Tabela '$tbl' criada em public sem ENABLE ROW LEVEL SECURITY na mesma migration."
                 status=1
               fi
             done
 
             # 2) Bloquear policies obviamente inseguras
-            if grep -Eniq 'with[[:space:]]+check[[:space:]]*\([[:space:]]*true[[:space:]]*\)' "$f"; then
+            if grep -Eniq 'with[[:space:]]+check[[:space:]]*\([[:space:]]*true[[:space:]]*\)' "$cf"; then
               echo "::error file=$f::Policy com WITH CHECK (true) detectada — abre INSERT/UPDATE para qualquer usuário."
-              grep -Eni 'with[[:space:]]+check[[:space:]]*\([[:space:]]*true[[:space:]]*\)' "$f" || true
+              grep -Eni 'with[[:space:]]+check[[:space:]]*\([[:space:]]*true[[:space:]]*\)' "$cf" || true
               status=1
             fi
 
             # 3) Bloquear o bug histórico ru.restaurant_id = ru.restaurant_id
-            if grep -Eniq 'ru\.restaurant_id[[:space:]]*=[[:space:]]*ru\.restaurant_id' "$f"; then
+            if grep -Eniq 'ru\.restaurant_id[[:space:]]*=[[:space:]]*ru\.restaurant_id' "$cf"; then
               echo "::error file=$f::Comparação ru.restaurant_id = ru.restaurant_id (sempre true) — vazamento cross-tenant."
               status=1
             fi
 
             # 4) Bloquear SECURITY DEFINER sem search_path fixo
-            if grep -Eiq 'security[[:space:]]+definer' "$f"; then
-              if ! grep -Eiq 'set[[:space:]]+search_path[[:space:]]*(=|to)[[:space:]]*[a-z_,'\''[:space:]]*public' "$f"; then
+            if grep -Eiq 'security[[:space:]]+definer' "$cf"; then
+              if ! grep -Eiq 'set[[:space:]]+search_path[[:space:]]*(=|to)[[:space:]]*[a-z_,'\''[:space:]]*public' "$cf"; then
                 echo "::error file=$f::Função SECURITY DEFINER sem SET search_path = public, pg_temp."
                 status=1
               fi
             fi
 
+            rm -f "$cf"
             echo "::endgroup::"
           done
           exit "$status"
