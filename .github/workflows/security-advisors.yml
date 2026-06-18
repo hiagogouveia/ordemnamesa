@@ -48,6 +48,9 @@ jobs:
               | sed -E 's/.*(create[[:space:]]+table[[:space:]]+(if[[:space:]]+not[[:space:]]+exists[[:space:]]+)?(public\.)?)//i' || true)
 
             for tbl in "${created[@]:-}"; do
+              # Migration sem CREATE TABLE: o array vazio expande para "" — pular
+              # para não emitir falso "Tabela '' sem RLS".
+              [ -n "$tbl" ] || continue
               tbl_short="${tbl#public.}"
               # Pular tabelas em schemas internos (auth., storage., realtime., etc.)
               if [[ "$tbl" == *"."* && "$tbl" != public.* ]]; then
