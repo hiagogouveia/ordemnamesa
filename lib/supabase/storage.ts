@@ -1,6 +1,24 @@
+import imageCompression from 'browser-image-compression';
 import { createClient } from './client';
 
 const STORAGE_BUCKET = 'photos';
+
+/**
+ * Parâmetros de compressão client-side aplicados antes do upload.
+ * Objetivo: gravar evidências em ~150–300 KB (em vez de ~2 MB do celular),
+ * sem perda de utilidade como prova operacional. Saída sempre JPEG —
+ * o bucket só aceita jpeg/png e isso evita mexer no allowed_mime_types.
+ */
+export const PHOTO_COMPRESSION = {
+    maxSizeMB: 0.3,
+    maxWidthOrHeight: 1280,
+    initialQuality: 0.75,
+    useWebWorker: true,
+    fileType: 'image/jpeg' as const,
+};
+
+/** Teto de entrada (antes da compressão) — rejeita arquivos absurdos. */
+const MAX_INPUT_BYTES = 10 * 1024 * 1024;
 
 // Gated por env var. Sem importar lib/photo-trace.ts (mantém boundary
 // limpa entre storage e instrumentação). Build-time inlined → quando OFF,
@@ -63,24 +81,39 @@ export async function uploadEvidencePhoto(
         throw new Error('Apenas imagens em formato JPG ou PNG são aceitas.');
     }
 
-    if (file.size > 10 * 1024 * 1024) {
+    if (file.size > MAX_INPUT_BYTES) {
         throw new Error('A imagem não pode exceder 10MB.');
     }
 
+    // Compressão client-side antes do upload. A lib trata orientação EXIF e roda
+    // em Web Worker (não trava a UI no celular). Fail-safe: se falhar, segue com o
+    // original — não bloquear a conclusão da tarefa por causa da compressão.
+    let uploadFile: File = file;
+    let uploadMime = file.type;
+    try {
+        const compressed = await imageCompression(file, PHOTO_COMPRESSION);
+        // imageCompression devolve um File com type image/jpeg quando fileType é setado.
+        uploadFile = compressed;
+        uploadMime = compressed.type || PHOTO_COMPRESSION.fileType;
+    } catch (compressErr) {
+        console.warn('[Storage Compress Warn] usando original', compressErr);
+    }
+
     const timestamp = new Date().getTime();
-    // Extensão derivada do MIME validado (NÃO de file.name, que é controlável e
-    // poderia conter '/' e escapar o prefixo restaurant_id do path).
-    const extension = extByMime[file.type];
+    // Extensão derivada do MIME do arquivo realmente enviado (NÃO de file.name, que é
+    // controlável e poderia conter '/' e escapar o prefixo restaurant_id do path).
+    const extension = extByMime[uploadMime] ?? extByMime[file.type];
     const filename = `${timestamp}.${extension}`;
     const filePath = `${restaurantId}/${executionId}/${filename}`;
 
-    inflightSet(file);
+    inflightSet(uploadFile);
     let uploadResult;
     try {
         uploadResult = await supabase.storage
             .from(STORAGE_BUCKET)
-            .upload(filePath, file, {
+            .upload(filePath, uploadFile, {
                 cacheControl: '3600',
+                contentType: uploadMime,
                 upsert: false
             });
     } finally {

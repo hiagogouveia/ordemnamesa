@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { collectExecutionPhotoPaths, removePhotosBestEffort } from '@/lib/supabase/storage-cleanup';
 
 const getAdminSupabase = () => {
     return createClient(
@@ -35,7 +36,7 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
         // 1. Validar se a execução pertence de fato ao usuário que tenta estornar e está vinculada ao restaurante.
         const { data: execucao, error: fetchError } = await adminSupabase
             .from('task_executions')
-            .select('user_id, executed_at')
+            .select('user_id, executed_at, photo_url, photos')
             .eq('id', id)
             .eq('restaurant_id', restaurant_id)
             .single();
@@ -67,6 +68,9 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
             console.error('[DELETE /api/execucoes/[id]] Erro ao estornar execucao:', deleteError);
             return NextResponse.json({ error: deleteError.message }, { status: 500 });
         }
+
+        // Limpa a evidência do Storage (best-effort, nunca derruba a request).
+        await removePhotosBestEffort(adminSupabase, collectExecutionPhotoPaths([execucao]));
 
         return NextResponse.json({ success: true });
     } catch (error: unknown) {

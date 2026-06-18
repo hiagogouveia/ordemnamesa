@@ -1,0 +1,46 @@
+name: photo-retention
+
+# Retenção de fotos de evidência: remove do Storage as fotos com mais de
+# PHOTO_RETENTION_DAYS dias (preservando o registro de execução).
+# Chama a rota protegida /api/cron/photo-retention com o CRON_SECRET.
+#
+# Secrets necessários no repositório:
+#   PHOTO_RETENTION_URL  -> ex.: https://app.ordemnamesa.com/api/cron/photo-retention
+#   CRON_SECRET          -> mesmo valor do env CRON_SECRET do app (PROD)
+
+on:
+  schedule:
+    - cron: "0 4 * * 1" # toda segunda 04:00 UTC
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: "Rodar em modo dry-run (não apaga nada)"
+        type: boolean
+        default: true
+
+jobs:
+  run-retention:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chamar rotina de retenção
+        run: |
+          # Agendado = execução real; dispatch manual respeita o input (default dry-run).
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            DRY_RUN="false"
+          else
+            DRY_RUN="${{ github.event.inputs.dryRun }}"
+          fi
+          echo "dryRun=$DRY_RUN"
+
+          HTTP_CODE=$(curl -sS -o response.json -w "%{http_code}" \
+            -X POST "${{ secrets.PHOTO_RETENTION_URL }}?dryRun=$DRY_RUN" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+
+          echo "HTTP $HTTP_CODE"
+          cat response.json
+          echo ""
+
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            echo "::error::Rotina de retenção falhou (HTTP $HTTP_CODE)"
+            exit 1
+          fi

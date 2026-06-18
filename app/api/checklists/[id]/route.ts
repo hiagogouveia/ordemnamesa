@@ -8,6 +8,7 @@ import { normalizeShiftIds, shiftIdShadow, replaceChecklistShifts, fetchShiftIds
 import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
 import { getAccountBilling, canManageChecklists, canDeleteChecklists } from '@/lib/billing/subscription-access';
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
+import { collectExecutionPhotoPaths, collectIssuePhotoPaths, removePhotosBestEffort } from '@/lib/supabase/storage-cleanup';
 
 const getAdminSupabase = () => {
     return createClient(
@@ -437,6 +438,25 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
         const delAccess = canDeleteChecklists(delBilling);
         if (!delAccess.allowed) return buildAccessDeniedResponse(delAccess);
 
+        // Coletar paths das fotos ANTES do delete (a cascata s75 apaga as linhas,
+        // mas não os arquivos no Storage — sem isto eles virariam órfãos).
+        const [execRows, issueRows] = await Promise.all([
+            adminSupabase
+                .from('task_executions')
+                .select('photo_url, photos')
+                .eq('checklist_id', id)
+                .eq('restaurant_id', restaurant_id),
+            adminSupabase
+                .from('task_issues')
+                .select('photos')
+                .eq('checklist_id', id)
+                .eq('restaurant_id', restaurant_id),
+        ]);
+        const photoPaths = [
+            ...collectExecutionPhotoPaths(execRows.data ?? []),
+            ...collectIssuePhotoPaths(issueRows.data ?? []),
+        ];
+
         // Hard delete. A cascata no banco (s75) remove todos os dados derivados:
         // checklist_tasks, checklist_assumptions, checklist_orders, checklist_shifts,
         // task_executions e task_issues/task_issue_events. Não é mais necessário
@@ -451,6 +471,9 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
             console.error('[DELETE /api/checklists/[id]] Erro ao deletar checklist:', error);
             return NextResponse.json({ error: error.message }, { status: 500 });
         }
+
+        // Remove as evidências do Storage (best-effort, nunca derruba a request).
+        await removePhotosBestEffort(adminSupabase, photoPaths);
 
         return NextResponse.json({ success: true });
     } catch (error: unknown) {
