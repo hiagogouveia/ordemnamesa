@@ -148,7 +148,9 @@ export const useKanbanTasks = (arg: string | undefined | Scope, userId?: string)
 };
 
 export const useChecklistAssumption = (restaurantId: string | undefined, checklistId: string | undefined) => {
-    return useQuery({
+    const queryClient = useQueryClient();
+
+    const query = useQuery({
         queryKey: ['assumption', restaurantId, checklistId],
         queryFn: async () => {
             if (!restaurantId || !checklistId) return null;
@@ -166,6 +168,45 @@ export const useChecklistAssumption = (restaurantId: string | undefined, checkli
         enabled: !!restaurantId && !!checklistId,
         staleTime: 30 * 1000,        // assumption de turno pode mudar entre colaboradores
     });
+
+    // Realtime (Fase 1): a assunção/finalização (completed_at) pode mudar por outro
+    // colaborador. Reusa o mesmo padrão de debounce (800ms) do kanban/my-activities.
+    // checklist_assumptions só faz INSERT (assumir) + UPDATE (finalizar), sem DELETE,
+    // então REPLICA IDENTITY DEFAULT entrega o NEW completo e o filtro por checklist_id
+    // funciona. A propagação cross-tenant é barrada pela RLS, que o Realtime aplica.
+    useEffect(() => {
+        if (!restaurantId || !checklistId) return;
+
+        const supabase = createClient();
+        let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+        const scheduleInvalidate = () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                queryClient.invalidateQueries({ queryKey: ['assumption', restaurantId, checklistId] });
+            }, 800);
+        };
+
+        const channel = supabase
+            .channel(`assumption-rt-${checklistId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'checklist_assumptions',
+                    filter: `checklist_id=eq.${checklistId}`,
+                },
+                scheduleInvalidate
+            )
+            .subscribe();
+
+        return () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            supabase.removeChannel(channel);
+        };
+    }, [restaurantId, checklistId, queryClient]);
+
+    return query;
 };
 
 export interface AssumeChecklistError {
