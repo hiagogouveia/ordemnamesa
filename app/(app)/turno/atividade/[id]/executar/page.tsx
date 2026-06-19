@@ -4,6 +4,7 @@ import React, { useMemo, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useSession } from '@/lib/providers/use-session';
 import { useActivityData, useToggleActivityTask, useSkipTask, useUnskipTask } from '@/lib/hooks/use-activity-execution';
+import { useActivityRefresh } from '@/lib/hooks/use-activity-refresh';
 import { useChecklistAssumption, useCompleteChecklist } from '@/lib/hooks/use-tasks';
 import { useTaskIssues } from '@/lib/hooks/use-task-issues';
 import { useSuppliers } from '@/lib/hooks/use-suppliers';
@@ -28,6 +29,7 @@ export default function ActivityExecutionPage() {
     const [reportModalTaskId, setReportModalTaskId] = useState<string | null>(null);
     const [editingIssue, setEditingIssue] = useState<TaskIssue | null>(null);
     const [issueFlash, setIssueFlash] = useState<{ kind: 'created' | 'updated' } | null>(null);
+    const [refreshFlash, setRefreshFlash] = useState<{ kind: 'success' | 'error' } | null>(null);
 
     const { data: activityData, isLoading, isError, isFetched } = useActivityData(restaurantId || undefined, checklistId);
     const { data: assumption } = useChecklistAssumption(restaurantId || undefined, checklistId);
@@ -36,6 +38,7 @@ export default function ActivityExecutionPage() {
     const skipTask = useSkipTask();
     const unskipTask = useUnskipTask();
     const completeMutation = useCompleteChecklist();
+    const { isRefreshing, refresh } = useActivityRefresh(restaurantId || undefined, checklistId);
 
     const { checklist, tasks, executions } = activityData || {};
 
@@ -74,6 +77,18 @@ export default function ActivityExecutionPage() {
         const t = setTimeout(() => setIssueFlash(null), 3500);
         return () => clearTimeout(t);
     }, [issueFlash]);
+
+    // Auto-dismiss toast de atualização manual
+    React.useEffect(() => {
+        if (!refreshFlash) return;
+        const t = setTimeout(() => setRefreshFlash(null), 3000);
+        return () => clearTimeout(t);
+    }, [refreshFlash]);
+
+    const handleRefresh = async () => {
+        const ok = await refresh();
+        setRefreshFlash({ kind: ok ? 'success' : 'error' });
+    };
 
     const { progress, doneCount, skippedCount } = useMemo(() => {
         if (!tasks || tasks.length === 0) return { progress: 0, doneCount: 0, skippedCount: 0 };
@@ -243,6 +258,27 @@ export default function ActivityExecutionPage() {
                 </div>
             )}
 
+            {/* Toast discreto de atualização manual */}
+            {refreshFlash && (
+                <div
+                    className={`fixed top-3 left-1/2 -translate-x-1/2 z-[60] max-w-[440px] w-[calc(100%-1.5rem)] rounded-xl shadow-2xl px-4 py-3 flex items-center gap-2.5 text-sm font-semibold animate-in fade-in slide-in-from-top-4 duration-300 ${
+                        refreshFlash.kind === 'success'
+                            ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                            : 'bg-red-500/15 text-red-300 border border-red-500/30'
+                    }`}
+                    role="status"
+                >
+                    <span className="material-symbols-outlined text-[20px] shrink-0">
+                        {refreshFlash.kind === 'success' ? 'check_circle' : 'error'}
+                    </span>
+                    <span className="flex-1 leading-tight">
+                        {refreshFlash.kind === 'success'
+                            ? 'Dados atualizados.'
+                            : 'Não foi possível atualizar. Tente novamente.'}
+                    </span>
+                </div>
+            )}
+
             {/* Header Sticky */}
             <header className="sticky top-0 z-30 bg-[#101d22]/95 backdrop-blur-md border-b border-[#233f48] px-4 py-4">
                 <div className="max-w-[480px] mx-auto w-full flex items-center gap-3">
@@ -280,6 +316,17 @@ export default function ActivityExecutionPage() {
                             </p>
                         )}
                     </div>
+                    <button
+                        onClick={handleRefresh}
+                        disabled={isRefreshing}
+                        title="Atualizar dados"
+                        aria-label="Atualizar dados"
+                        className="w-10 h-10 shrink-0 flex items-center justify-center bg-[#1a2c32] border border-[#233f48] rounded-full text-white active:bg-[#233f48] transition-colors disabled:opacity-50 disabled:pointer-events-none"
+                    >
+                        <span className={`material-symbols-outlined ${isRefreshing ? 'animate-spin' : ''}`}>
+                            {isRefreshing ? 'progress_activity' : 'refresh'}
+                        </span>
+                    </button>
                     {isCompleted && (
                         <span className="shrink-0 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1">
                             <span className="material-symbols-outlined text-[12px]">task_alt</span>
