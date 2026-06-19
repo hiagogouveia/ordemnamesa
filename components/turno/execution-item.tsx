@@ -41,9 +41,35 @@ interface ExecutionItemProps {
     skipPending?: boolean;
     /** Mutation de toggle (concluir/desfazer) desta task está pendente. */
     togglePending?: boolean;
+    /** A2: destaca temporariamente a task quando navegada a partir do erro de finalização. */
+    highlight?: boolean;
 }
 
-export function ExecutionItem({ task, execution, onToggle, onReportProblem, onEditIssue, onSkipTask, onUnskipTask, locked = false, isBlockedSequential = false, restaurantId, hasOpenIssue = false, myOpenIssue = null, skipPending = false, togglePending = false }: ExecutionItemProps) {
+/** Vibração tátil curta (A6) — degrada silenciosamente onde não há suporte. */
+function triggerHaptic() {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        try { navigator.vibrate(15); } catch { /* no-op */ }
+    }
+}
+
+/**
+ * Wrapper que aplica `id` (para scroll/navegação A2) e o anel de destaque.
+ * Mantém um único ponto de ancoragem independente do branch de render interno.
+ */
+export function ExecutionItem(props: ExecutionItemProps) {
+    return (
+        <div
+            id={`exec-task-${props.task.id}`}
+            className={`scroll-mt-24 rounded-2xl transition-shadow duration-300 ${
+                props.highlight ? 'ring-2 ring-red-500/70 ring-offset-2 ring-offset-[#101d22]' : ''
+            }`}
+        >
+            <ExecutionItemContent {...props} />
+        </div>
+    );
+}
+
+function ExecutionItemContent({ task, execution, onToggle, onReportProblem, onEditIssue, onSkipTask, onUnskipTask, locked = false, isBlockedSequential = false, restaurantId, hasOpenIssue = false, myOpenIssue = null, skipPending = false, togglePending = false }: ExecutionItemProps) {
     const isDone = Boolean(execution && execution.status === 'done');
     const isSkipped = Boolean(execution && execution.status === 'skipped');
     const [isAnimating, setIsAnimating] = useState(false);
@@ -159,6 +185,7 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onEd
     const handleSimpleToggle = () => {
         if (locked) return;
         // Bool simples sem foto/observação/etc — fluxo legado intacto
+        if (!isDone) triggerHaptic(); // A6: feedback tátil apenas ao concluir
         animateToggle();
         onToggle(task.id, execution?.id, buildToggleInput({ isDone: !isDone }));
     };
@@ -170,6 +197,7 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onEd
             return;
         }
         setValidationError(null);
+        triggerHaptic(); // A6: feedback tátil ao concluir
         animateToggle();
         onToggle(task.id, execution?.id, buildToggleInput());
     };
@@ -301,7 +329,8 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onEd
             <div className={`
                 w-full flex flex-col gap-0 rounded-2xl border text-left
                 bg-[#1a2c32]/40 border-[#13b6ec]/30 shadow-[0_4px_12px_rgba(19,182,236,0.05)]
-                overflow-hidden relative
+                overflow-hidden relative transition-shadow duration-300
+                ${isAnimating ? 'ring-2 ring-[#13b6ec]/60 shadow-[0_0_20px_rgba(19,182,236,0.35)]' : ''}
             `}>
                 <div className="absolute inset-0 bg-gradient-to-r from-[#13b6ec]/10 to-transparent pointer-events-none" />
 
@@ -310,9 +339,9 @@ export function ExecutionItem({ task, execution, onToggle, onReportProblem, onEd
                         <div className={`
                             w-7 h-7 rounded-full border-[2px] flex items-center justify-center
                             bg-[#13b6ec] border-[#13b6ec] text-[#0a1215]
-                            ${isAnimating ? 'scale-110' : 'scale-100'} transition-transform duration-200
+                            ${isAnimating ? 'scale-125' : 'scale-100'} transition-transform duration-200
                         `}>
-                            <span className="material-symbols-outlined text-[16px] font-bold">check</span>
+                            <span className={`material-symbols-outlined text-[16px] font-bold ${isAnimating ? 'animate-in zoom-in duration-200' : ''}`}>check</span>
                         </div>
                     </div>
 

@@ -23,7 +23,11 @@ export default function ActivityExecutionPage() {
     const [showFinalizeModal, setShowFinalizeModal] = useState(false);
     const [finalizing, setFinalizing] = useState(false);
     const [observation, setObservation] = useState("");
-    const [photoValidationError, setPhotoValidationError] = useState<string | null>(null);
+    // A2: tarefas que impedem a finalização, com o motivo de cada pendência.
+    const [pendingValidations, setPendingValidations] = useState<{ id: string; title: string; reason: string }[]>([]);
+    const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
+    // A3: overlay de sucesso + volta automática para Meu Turno.
+    const [showSuccess, setShowSuccess] = useState(false);
 
     // Modal de ocorrência (substitui o antigo "reportar problema")
     const [reportModalTaskId, setReportModalTaskId] = useState<string | null>(null);
@@ -176,33 +180,61 @@ export default function ActivityExecutionPage() {
         // Validação de segurança: tasks que exigem foto e não têm foto na execução
         // Skipped bypassa a regra (não foi possível concluir → sem foto faz sentido).
         // Compat: leitura considera photos[] (Sprint 35) OU photo_url (legado)
-        const missingPhotoTasks = (tasks ?? []).filter(t => {
-            if (!t.requires_photo) return false;
-            const exec = executions?.find(e => e.task_id === t.id);
-            if (!exec) return true;
-            if (exec.status === 'skipped') return false;
-            if (exec.status !== 'done') return true;
-            const hasPhoto = (Array.isArray(exec.photos) && exec.photos.length > 0) || !!exec.photo_url;
-            return !hasPhoto;
-        });
-        if (missingPhotoTasks.length > 0) {
-            setPhotoValidationError(
-                `${missingPhotoTasks.length === 1 ? '1 tarefa exige' : `${missingPhotoTasks.length} tarefas exigem`} foto e ainda não ${missingPhotoTasks.length === 1 ? 'foi registrada' : 'foram registradas'}.`
-            );
+        const missing = (tasks ?? [])
+            .filter(t => {
+                if (!t.requires_photo) return false;
+                const exec = executions?.find(e => e.task_id === t.id);
+                if (!exec) return true;
+                if (exec.status === 'skipped') return false;
+                if (exec.status !== 'done') return true;
+                const hasPhoto = (Array.isArray(exec.photos) && exec.photos.length > 0) || !!exec.photo_url;
+                return !hasPhoto;
+            })
+            .map(t => ({ id: t.id, title: t.title, reason: 'Foto obrigatória não enviada' }));
+        if (missing.length > 0) {
+            setPendingValidations(missing);
             return;
         }
 
-        setPhotoValidationError(null);
+        setPendingValidations([]);
         setFinalizing(true);
         try {
             await completeMutation.mutateAsync({ restaurantId, checklistId, observation: observation || undefined });
             setShowFinalizeModal(false);
+            setShowSuccess(true);
         } catch (e) {
             console.error('Erro ao finalizar atividade:', e);
         } finally {
             setFinalizing(false);
         }
     };
+
+    // A2: leva o colaborador direto até a tarefa pendente e a destaca.
+    const handleNavigateToPending = (taskId: string) => {
+        setShowFinalizeModal(false);
+        setHighlightedTaskId(taskId);
+        // Aguarda o modal desmontar antes de rolar.
+        setTimeout(() => {
+            document.getElementById(`exec-task-${taskId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 50);
+    };
+
+    // A2: limpa o destaque após alguns segundos.
+    React.useEffect(() => {
+        if (!highlightedTaskId) return;
+        const t = setTimeout(() => setHighlightedTaskId(null), 2500);
+        return () => clearTimeout(t);
+    }, [highlightedTaskId]);
+
+    // A3: após o overlay de sucesso, volta automaticamente para Meu Turno.
+    React.useEffect(() => {
+        if (!showSuccess) return;
+        if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+            try { navigator.vibrate([15, 40, 15]); } catch { /* no-op */ }
+        }
+        const t = setTimeout(() => router.push('/turno'), 1800);
+        return () => clearTimeout(t);
+    }, [showSuccess, router]);
 
     if (sessionLoading || !restaurantId || isLoading || !isFetched) {
         return (
@@ -446,6 +478,7 @@ export default function ActivityExecutionPage() {
                                     myOpenIssue={myOpenIssueByTaskId.get(task.id) ?? null}
                                     skipPending={isSkipPending}
                                     togglePending={isTogglePending}
+                                    highlight={highlightedTaskId === task.id}
                                 />
                             );
                         })}
@@ -501,7 +534,7 @@ export default function ActivityExecutionPage() {
                         </button>
                     ) : isAllDone ? (
                         <button
-                            onClick={() => setShowFinalizeModal(true)}
+                            onClick={() => { setPendingValidations([]); setShowFinalizeModal(true); }}
                             className="w-full bg-[#13b6ec] hover:bg-[#10a1d4] text-[#0a1215] font-bold text-base py-4 rounded-xl shadow-[0_8px_20px_rgba(19,182,236,0.3)] active:scale-95 transition-all flex items-center justify-center gap-2"
                         >
                             <span className="material-symbols-outlined text-[20px]">check_circle</span>
@@ -536,10 +569,35 @@ export default function ActivityExecutionPage() {
                                     </p>
                                 </div>
                             )}
-                            {photoValidationError && (
-                                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 flex items-start gap-2">
-                                    <span className="material-symbols-outlined text-red-400 text-[16px] shrink-0 mt-0.5">error</span>
-                                    <p className="text-red-400 text-xs font-semibold leading-snug">{photoValidationError}</p>
+                            {pendingValidations.length > 0 && (
+                                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 flex flex-col gap-2">
+                                    <div className="flex items-start gap-2">
+                                        <span className="material-symbols-outlined text-red-400 text-[16px] shrink-0 mt-0.5">error</span>
+                                        <p className="text-red-400 text-xs font-semibold leading-snug">
+                                            {pendingValidations.length === 1
+                                                ? '1 tarefa ainda precisa ser ajustada antes de finalizar:'
+                                                : `${pendingValidations.length} tarefas ainda precisam ser ajustadas antes de finalizar:`}
+                                        </p>
+                                    </div>
+                                    <ul className="flex flex-col gap-1.5 max-h-[35vh] overflow-y-auto -mr-1 pr-1">
+                                        {pendingValidations.map(p => (
+                                            <li key={p.id}>
+                                                <button
+                                                    onClick={() => handleNavigateToPending(p.id)}
+                                                    className="w-full text-left bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg px-3 py-2 flex items-center gap-2 transition-colors group"
+                                                >
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-white text-xs font-semibold leading-tight truncate">{p.title}</p>
+                                                        <p className="text-red-400/80 text-[11px] leading-tight mt-0.5 flex items-center gap-1">
+                                                            <span className="material-symbols-outlined text-[12px]">photo_camera</span>
+                                                            {p.reason}
+                                                        </p>
+                                                    </div>
+                                                    <span className="material-symbols-outlined text-red-400/70 text-[16px] shrink-0 group-hover:translate-x-0.5 transition-transform">arrow_forward</span>
+                                                </button>
+                                            </li>
+                                        ))}
+                                    </ul>
                                 </div>
                             )}
                         </div>
@@ -566,6 +624,31 @@ export default function ActivityExecutionPage() {
                                 )}
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* A3: Overlay de sucesso ao finalizar — volta automática para Meu Turno */}
+            {showSuccess && (
+                <div className="fixed inset-0 z-[80] flex items-center justify-center p-6 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="flex flex-col items-center text-center max-w-[320px]">
+                        <div className="w-24 h-24 bg-emerald-500 rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(16,185,129,0.5)] animate-in zoom-in duration-300">
+                            <span className="material-symbols-outlined text-white text-5xl font-bold">check</span>
+                        </div>
+                        <h2 className="text-white text-2xl font-bold mt-6 animate-in fade-in slide-in-from-bottom-3 duration-300">
+                            Rotina finalizada!
+                        </h2>
+                        <p className="text-[#92bbc9] text-sm mt-2 flex items-center gap-1.5 animate-in fade-in slide-in-from-bottom-3 duration-500">
+                            <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+                            Voltando para Meu Turno...
+                        </p>
+                        <button
+                            onClick={() => router.push('/turno')}
+                            className="mt-6 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm px-6 py-3 rounded-xl active:scale-95 transition-all flex items-center gap-2"
+                        >
+                            <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+                            Voltar agora
+                        </button>
                     </div>
                 </div>
             )}
