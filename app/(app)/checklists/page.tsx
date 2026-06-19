@@ -89,6 +89,8 @@ function ChecklistsContent() {
     const [pendingTemplate, setPendingTemplate] = useState<ChecklistTemplate | null>(null);
     // Sprint 75 — feedback transitório da exclusão (sucesso/erro)
     const [deleteToast, setDeleteToast] = useState<{ kind: "success" | "error"; message: string } | null>(null);
+    // Atualização manual da tela (refresh sem reload da página)
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
     useEffect(() => { setMounted(true); }, []);
 
@@ -561,6 +563,29 @@ function ChecklistsContent() {
         setPendingTemplate(null);
     };
 
+    // Atualização manual: revalida o cache das queries que alimentam esta tela
+    // (lista de rotinas, ordenação, áreas e contadores de ocorrência) sem recarregar
+    // a página. invalidateQueries (refetchType 'active') evita requisições duplicadas.
+    const handleRefresh = async () => {
+        if (isRefreshing) return;
+        setIsRefreshing(true);
+        try {
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ["checklists"] }),
+                queryClient.invalidateQueries({ queryKey: ["checklist-orders", restaurantId] }),
+                queryClient.invalidateQueries({ queryKey: ["areas-all", restaurantId] }),
+                queryClient.invalidateQueries({ queryKey: ["task-issues"] }),
+                queryClient.invalidateQueries({ queryKey: ["admin_checklists_status", restaurantId] }),
+            ]);
+            setDeleteToast({ kind: "success", message: "Lista atualizada." });
+        } catch (e) {
+            console.error("Erro ao atualizar a lista de rotinas:", e);
+            setDeleteToast({ kind: "error", message: "Não foi possível atualizar. Tente novamente." });
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
+
     // Sprint 70 — abrir nova rotina vazia (limpa qualquer modelo pendente).
     const handleNewChecklist = () => {
         setPendingTemplate(null);
@@ -634,6 +659,8 @@ function ChecklistsContent() {
                 onNewChecklist={handleNewChecklist}
                 onExploreTemplates={() => setTemplatesBrowserOpen(true)}
                 canCreate={billing?.access.can_create_resources ?? true}
+                onRefresh={handleRefresh}
+                isRefreshing={isRefreshing}
             />
 
             <ChecklistFilters

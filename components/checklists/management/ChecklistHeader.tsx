@@ -8,6 +8,8 @@ interface ChecklistHeaderProps {
     onNewChecklist: () => void;
     onExploreTemplates?: () => void;
     canCreate?: boolean;
+    onRefresh?: () => void;
+    isRefreshing?: boolean;
 }
 
 export function ChecklistHeader({
@@ -18,6 +20,8 @@ export function ChecklistHeader({
     onNewChecklist,
     onExploreTemplates,
     canCreate = true,
+    onRefresh,
+    isRefreshing = false,
 }: ChecklistHeaderProps) {
     return (
         <div className="shrink-0 px-4 pt-4 pb-3 border-b border-[#233f48] bg-[#0a1215]">
@@ -84,6 +88,22 @@ export function ChecklistHeader({
                         <span className="hidden sm:inline">Preview</span>
                     </button>
                 </div>
+
+                {/* Atualizar dados da tela */}
+                {onRefresh && (
+                    <button
+                        onClick={onRefresh}
+                        disabled={isRefreshing}
+                        title="Atualizar dados"
+                        aria-label="Atualizar dados"
+                        className="flex items-center gap-1.5 bg-[#16262c] border border-[#233f48] text-[#92bbc9] hover:text-white hover:border-[#325a67] font-bold text-xs px-3 py-2 rounded-lg transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                        <span className={`material-symbols-outlined text-[16px] ${isRefreshing ? "animate-spin" : ""}`}>
+                            {isRefreshing ? "progress_activity" : "refresh"}
+                        </span>
+                        <span className="hidden sm:inline">Atualizar</span>
+                    </button>
+                )}
 
                 {/* Explorar Modelos Prontos */}
                 {onExploreTemplates && (
