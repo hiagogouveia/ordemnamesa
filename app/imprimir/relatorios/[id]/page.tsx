@@ -129,7 +129,7 @@ function PrintLayout({ detail }: { detail: AuditExecutionDetail }) {
                     </div>
                 </header>
 
-                <section className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                <section className="print-grid-meta mt-5 grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
                     <Meta label="Área" value={detail.area?.name ?? '—'} />
                     <Meta label="Turno" value={detail.checklist.shift ? SHIFT_LABEL[detail.checklist.shift] : '—'} />
                     <Meta label="Responsável" value={detail.user.name} />
@@ -181,7 +181,7 @@ function PrintLayout({ detail }: { detail: AuditExecutionDetail }) {
                                 ))}
                             </ul>
                             {detail.issues.some(i => i.photos.length > 0) && (
-                                <div className="mt-3 grid grid-cols-3 sm:grid-cols-4 gap-2">
+                                <div className="print-grid-issue-photos mt-3 grid grid-cols-3 sm:grid-cols-4 gap-2">
                                     {detail.issues.flatMap(issue =>
                                         issue.photos
                                             .filter(p => !!p.signed_url)
@@ -303,6 +303,41 @@ function PrintLayout({ detail }: { detail: AuditExecutionDetail }) {
                     @page { size: A4; margin: 14mm; }
                     body { background: white !important; }
                     .print\\:hidden { display: none !important; }
+
+                    /* Cores fiéis em qualquer engine (Chrome/Safari): garante que
+                       backgrounds dos badges de status e blocos coloridos imprimam. */
+                    * {
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
+
+                    /* Largura útil FIXA de referência: A4 (210mm) − 14mm de margem
+                       de cada lado = 182mm. Independe do viewport do dispositivo,
+                       então o documento é idêntico em iPhone/Android/tablet/desktop. */
+                    article {
+                        width: 182mm !important;
+                        max-width: 182mm !important;
+                        margin: 0 auto !important;
+                    }
+
+                    /* Colunas determinísticas: anulam os breakpoints sm: do Tailwind,
+                       que de outra forma seriam avaliados contra a largura da tela
+                       (e não da página A4) durante window.print(). */
+                    .print-grid-meta         { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+                    .print-grid-issue-photos { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+                    .print-grid-evidences    { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+
+                    /* Quebras de página previsíveis (sintaxe legada + moderna p/ Safari). */
+                    table { page-break-inside: auto; break-inside: auto; }
+                    tr, figure {
+                        page-break-inside: avoid;
+                        break-inside: avoid;
+                    }
+                    thead { display: table-header-group; }
+                    h2 {
+                        page-break-after: avoid;
+                        break-after: avoid;
+                    }
                 }
             `}</style>
         </div>
@@ -364,7 +399,7 @@ function Evidences({ tasks }: { tasks: AuditTaskDetail[] }) {
             <h2 className="text-base font-bold text-slate-900 mb-3 pb-1 border-b border-slate-300">
                 Evidências fotográficas
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <div className="print-grid-evidences grid grid-cols-2 sm:grid-cols-3 gap-4">
                 {items.map((it, idx) => (
                     <figure key={`${it.task_id}-${idx}`} className="border border-slate-300 rounded p-2">
                         <div className="aspect-square bg-slate-100 overflow-hidden flex items-center justify-center">
