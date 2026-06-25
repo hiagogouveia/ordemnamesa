@@ -51,6 +51,8 @@ export interface RoutineSectionData {
 export interface RotinasDocumentData {
     restaurantName: string;
     logoDataUrl?: string;
+    /** Logo do Ordem na Mesa (rodapé) — marca do produto no documento. */
+    brandLogoDataUrl?: string;
     exportedBy: string;
     generatedAt: string;
     routineCount: number;
@@ -171,6 +173,7 @@ export interface BuildDocumentParams {
     exportedBy: string;
     generatedAt: string;
     logoDataUrl?: string;
+    brandLogoDataUrl?: string;
 }
 
 export function buildDocumentData(
@@ -179,6 +182,7 @@ export function buildDocumentData(
     return {
         restaurantName: params.restaurantName,
         logoDataUrl: params.logoDataUrl,
+        brandLogoDataUrl: params.brandLogoDataUrl,
         exportedBy: params.exportedBy,
         generatedAt: params.generatedAt,
         routineCount: params.checklists.length,

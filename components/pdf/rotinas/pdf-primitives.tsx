@@ -36,7 +36,9 @@ export const styles = StyleSheet.create({
         fontFamily: "Helvetica",
         fontSize: 9.5,
         color: theme.text,
-        lineHeight: 1.4,
+        // NÃO definir `lineHeight` aqui: herdado pela `Text fixed` do número de
+        // página, ele desloca/clipa o `render` dinâmico. Aplicamos lineHeight
+        // apenas nos textos de fluxo que precisam (descrição/etapas).
     },
     // Cabeçalho
     header: {
@@ -115,6 +117,7 @@ export const styles = StyleSheet.create({
         fontSize: 9.5,
         color: theme.text,
         marginBottom: 10,
+        lineHeight: 1.4,
     },
     // Grade de campos
     fieldGrid: { flexDirection: "row", flexWrap: "wrap" },
@@ -164,20 +167,42 @@ export const styles = StyleSheet.create({
         paddingVertical: 1,
         marginLeft: 5,
     },
-    // Rodapé
-    footer: {
+    // Rodapé — três elementos `fixed` independentes: a linha (rule), o bloco
+    // esquerdo (logo + texto) e o número de página à direita. O número usa
+    // `Text fixed` direto com `render` (ver footerPageText) e depende de a Page
+    // NÃO herdar `lineHeight` (senão o `render` é deslocado para fora da página).
+    footerRule: {
         position: "absolute",
-        bottom: 24,
+        bottom: 34,
         left: 40,
         right: 40,
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
+        height: 0,
         borderTopWidth: 1,
         borderTopColor: theme.hair,
-        paddingTop: 6,
     },
+    footerLeft: {
+        position: "absolute",
+        bottom: 20,
+        left: 40,
+        flexDirection: "row",
+        alignItems: "center",
+    },
+    footerLogo: { width: 10, height: 10, marginRight: 5, objectFit: "contain" },
     footerText: { fontSize: 7.5, color: theme.faint },
+    // Número de página: `Text` `fixed` DIRETO (sem wrapper View) com left/right:0
+    // e SEM width — único formato em que o `render` dinâmico posiciona certo
+    // junto com conteúdo de múltiplos filhos. `paddingRight` alinha à direita
+    // junto da margem do rodapé.
+    footerPageText: {
+        position: "absolute",
+        bottom: 20,
+        left: 0,
+        right: 0,
+        paddingRight: 40,
+        textAlign: "right",
+        fontSize: 7.5,
+        color: theme.faint,
+    },
 });
 
 /** Ícones vetoriais minimalistas (12×12, stroke fino) — discretos por design. */
@@ -344,4 +369,9 @@ export function StepItem({ step }: { step: RoutineStep }) {
 export function PdfLogo({ src }: { src: string }) {
     // eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf Image não suporta alt
     return <Image src={src} style={styles.logo} />;
+}
+
+export function PdfFooterLogo({ src }: { src: string }) {
+    // eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf Image não suporta alt
+    return <Image src={src} style={styles.footerLogo} />;
 }

@@ -1,6 +1,6 @@
 import { Document, Page, Text, View } from "@react-pdf/renderer";
 import type { RotinasDocumentData } from "@/lib/pdf/rotinas/format";
-import { PdfLogo, styles } from "./pdf-primitives";
+import { PdfFooterLogo, PdfLogo, styles } from "./pdf-primitives";
 import { RoutineSection } from "./RoutineSection";
 
 /**
@@ -8,23 +8,12 @@ import { RoutineSection } from "./RoutineSection";
  * - Cabeçalho fixo no topo do fluxo (logo + nome + título + metadados).
  * - Cada rotina é uma seção com quebra automática de página.
  * - Rodapé `fixed` repetido em todas as páginas com "Página X de Y".
+ *
+ * O rodapé é renderizado INLINE (não como subcomponente): o `render` dinâmico
+ * de `pageNumber` só é reavaliado por página quando o nó `fixed` é descendente
+ * direto da `<Page>` — através de uma fronteira de componente o callback não
+ * dispara e o número de página some.
  */
-function DocumentFooter() {
-    return (
-        <View style={styles.footer} fixed>
-            <Text style={styles.footerText}>
-                Documento gerado automaticamente pelo Ordem na Mesa
-            </Text>
-            <Text
-                style={styles.footerText}
-                render={({ pageNumber, totalPages }) =>
-                    `Página ${pageNumber} de ${totalPages}`
-                }
-            />
-        </View>
-    );
-}
-
 export function RotinasDocument({ data }: { data: RotinasDocumentData }) {
     const routineLabel =
         data.routineCount === 1 ? "1 rotina" : `${data.routineCount} rotinas`;
@@ -66,7 +55,23 @@ export function RotinasDocument({ data }: { data: RotinasDocumentData }) {
                     <RoutineSection key={`${routine.name}-${i}`} routine={routine} />
                 ))}
 
-                <DocumentFooter />
+                {/* Rodapé fixo (inline — ver nota acima) */}
+                <View style={styles.footerRule} fixed />
+                <View style={styles.footerLeft} fixed>
+                    {data.brandLogoDataUrl ? (
+                        <PdfFooterLogo src={data.brandLogoDataUrl} />
+                    ) : null}
+                    <Text style={styles.footerText}>
+                        Documento gerado automaticamente pelo Ordem na Mesa
+                    </Text>
+                </View>
+                <Text
+                    style={styles.footerPageText}
+                    fixed
+                    render={({ pageNumber, totalPages }) =>
+                        `Página ${pageNumber} de ${totalPages}`
+                    }
+                />
             </Page>
         </Document>
     );

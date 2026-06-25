@@ -10,6 +10,9 @@ import { buildPdfFilename } from "./filename";
  * mantendo o JS inicial da tela de checklists leve.
  */
 
+/** Logo do Ordem na Mesa servido como asset estático (public/). */
+const BRAND_LOGO_URL = "/logo-icon.png";
+
 /** Baixa uma imagem e a converte em data URL (para embutir no PDF de forma
  *  determinística). Retorna `undefined` em qualquer falha (CORS, 404, etc.). */
 export async function loadImageAsDataUrl(
@@ -33,16 +36,21 @@ export async function loadImageAsDataUrl(
     }
 }
 
+/** Caminho de download único para todos os dispositivos (desktop e mobile).
+ *  O blob é gerado pelo mesmo motor (@react-pdf) independente do aparelho, então
+ *  o conteúdo é idêntico; aqui só garantimos um disparo de download robusto. */
 function triggerDownload(blob: Blob, filename: string): void {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = filename;
+    a.rel = "noopener";
     document.body.appendChild(a);
     a.click();
     a.remove();
-    // Revoga no próximo tick para garantir que o download iniciou.
-    setTimeout(() => URL.revokeObjectURL(url), 0);
+    // Revogação adiada: alguns navegadores mobile (iOS Safari) abortam o
+    // download se a object URL for liberada cedo demais. 10s é folga suficiente.
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 /** Data/hora legível em pt-BR no fuso do navegador. */
@@ -71,11 +79,14 @@ export async function generateRotinasPdf(
     }
 
     const now = new Date();
-    const [{ pdf }, { RotinasDocument }, logoDataUrl] = await Promise.all([
-        import("@react-pdf/renderer"),
-        import("@/components/pdf/rotinas/RotinasDocument"),
-        loadImageAsDataUrl(params.logoUrl),
-    ]);
+    const [{ pdf }, { RotinasDocument }, logoDataUrl, brandLogoDataUrl] =
+        await Promise.all([
+            import("@react-pdf/renderer"),
+            import("@/components/pdf/rotinas/RotinasDocument"),
+            loadImageAsDataUrl(params.logoUrl),
+            // Logo do Ordem na Mesa: asset estático same-origin (sem CORS).
+            loadImageAsDataUrl(BRAND_LOGO_URL),
+        ]);
 
     const data = buildDocumentData({
         checklists: params.checklists,
@@ -83,6 +94,7 @@ export async function generateRotinasPdf(
         exportedBy: params.exportedBy,
         generatedAt: formatNow(now),
         logoDataUrl,
+        brandLogoDataUrl,
     });
 
     const blob = await pdf(<RotinasDocument data={data} />).toBlob();
