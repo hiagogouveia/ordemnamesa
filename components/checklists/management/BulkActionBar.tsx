@@ -1,29 +1,62 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 interface BulkActionBarProps {
     selectedCount: number;
-    onCopyToUnit: () => void;
+    onExportPdf: () => void;
     onClearSelection: () => void;
+    /** Exportação em andamento — desabilita o botão e mostra spinner. */
+    isExporting?: boolean;
+    /** Copiar entre unidades só faz sentido na visão global. */
+    canCopy?: boolean;
+    onCopyToUnit?: () => void;
 }
 
 export function BulkActionBar({
     selectedCount,
-    onCopyToUnit,
+    onExportPdf,
     onClearSelection,
+    isExporting = false,
+    canCopy = false,
+    onCopyToUnit,
 }: BulkActionBarProps) {
     const [mounted, setMounted] = useState(false);
+    const barRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
         setMounted(true);
     }, []);
 
+    // Publica altura real da barra como CSS var no <body>,
+    // para que containers scrolláveis reservem padding-bottom sem magic numbers.
+    useEffect(() => {
+        const el = barRef.current;
+        if (!el) return;
+
+        const setVar = () => {
+            const h = selectedCount > 0 ? el.getBoundingClientRect().height : 0;
+            document.body.style.setProperty("--bulk-action-bar-h", `${Math.ceil(h)}px`);
+        };
+
+        setVar();
+        const ro = new ResizeObserver(setVar);
+        ro.observe(el);
+        window.addEventListener("resize", setVar);
+
+        return () => {
+            ro.disconnect();
+            window.removeEventListener("resize", setVar);
+            document.body.style.setProperty("--bulk-action-bar-h", "0px");
+        };
+    }, [selectedCount]);
+
     if (!mounted) return null;
 
     return createPortal(
         <div
+            ref={barRef}
             className={`fixed bottom-0 left-0 right-0 z-50 transition-transform duration-200 ${
                 selectedCount > 0 ? "translate-y-0" : "translate-y-full"
             }`}
@@ -46,14 +79,32 @@ export function BulkActionBar({
                         </button>
                     </div>
 
-                    {/* Direita: ação */}
-                    <button
-                        onClick={onCopyToUnit}
-                        className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-[#13b6ec] hover:bg-[#0ea5d4] text-[#0a1215] rounded-lg transition-colors active:scale-95"
-                    >
-                        <span className="material-symbols-outlined text-[18px]">content_copy</span>
-                        Copiar para outra unidade
-                    </button>
+                    {/* Direita: ações */}
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={onExportPdf}
+                            disabled={isExporting}
+                            className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-[#13b6ec] hover:bg-[#0ea5d4] text-[#0a1215] rounded-lg transition-colors active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                            <span
+                                className={`material-symbols-outlined text-[18px] ${
+                                    isExporting ? "animate-spin" : ""
+                                }`}
+                            >
+                                {isExporting ? "progress_activity" : "picture_as_pdf"}
+                            </span>
+                            {isExporting ? "Gerando PDF…" : "Exportar PDF"}
+                        </button>
+                        {canCopy && onCopyToUnit && (
+                            <button
+                                onClick={onCopyToUnit}
+                                className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-transparent border border-[#233f48] hover:bg-[#16262c] text-white rounded-lg transition-colors active:scale-95"
+                            >
+                                <span className="material-symbols-outlined text-[18px]">content_copy</span>
+                                Copiar para outra unidade
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>,

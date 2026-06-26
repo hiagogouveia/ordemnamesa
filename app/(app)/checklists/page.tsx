@@ -24,6 +24,8 @@ import { useEquipe } from "@/lib/hooks/use-equipe";
 import { useUnits } from "@/lib/hooks/use-units";
 import { useAccountAccess } from "@/lib/hooks/use-account-access";
 import { useBilling } from "@/lib/hooks/use-billing";
+import { useExportRotinasPdf } from "@/lib/hooks/use-export-rotinas-pdf";
+import { useSession } from "@/lib/providers/use-session";
 import { ChecklistHeader } from "@/components/checklists/management/ChecklistHeader";
 import { ChecklistFilters } from "@/components/checklists/management/ChecklistFilters";
 import { ChecklistListView } from "@/components/checklists/management/ChecklistListView";
@@ -125,6 +127,8 @@ function ChecklistsContent() {
     // Store
     const restaurantId = useRestaurantStore((state) => state.restaurantId);
     const userRole = useRestaurantStore((state) => state.userRole);
+    const restaurantName = useRestaurantStore((state) => state.restaurantName);
+    const session = useSession();
     const accountId = useAccountSessionStore((state) => state.accountId);
     const accountMode = useAccountSessionStore((state) => state.mode);
     const isGlobal = accountMode === "global";
@@ -276,12 +280,40 @@ function ChecklistsContent() {
 
     // No modo global, userRole (restaurant-store) é null — usar role da account
     const effectiveRole = isGlobal ? accountAccess?.role : userRole;
-    const canBulkAction = isGlobal && (effectiveRole === "owner" || effectiveRole === "manager");
+    const isManagerOrOwner = effectiveRole === "owner" || effectiveRole === "manager";
+    // Seleção disponível para owner/manager em qualquer visão (única ou global).
+    const canSelect = isManagerOrOwner;
+    // Copiar entre unidades só faz sentido (e só é permitido) na visão global.
+    const canBulkAction = isGlobal && isManagerOrOwner;
 
     const selectedChecklists = useMemo(
         () => filtered.filter((c) => selectedIds.has(c.id)),
         [filtered, selectedIds]
     );
+
+    // ─── EXPORTAÇÃO PARA PDF ────────────────────────────────────────────────────
+    const { exportPdf, isExporting } = useExportRotinasPdf({
+        onSuccess: (count) =>
+            setDeleteToast({
+                kind: "success",
+                message:
+                    count === 1
+                        ? "PDF da rotina gerado com sucesso."
+                        : `PDF com ${count} rotinas gerado com sucesso.`,
+            }),
+        onError: (message) => setDeleteToast({ kind: "error", message }),
+    });
+
+    const handleExportPdf = useCallback(() => {
+        const exportName =
+            session.restaurant?.name ?? restaurantName ?? session.account?.name ?? "Restaurante";
+        void exportPdf({
+            checklists: selectedChecklists,
+            restaurantName: exportName,
+            exportedBy: session.userName ?? "—",
+            restaurantId: isGlobal ? null : restaurantId,
+        });
+    }, [exportPdf, selectedChecklists, session, restaurantName, isGlobal, restaurantId]);
 
     const sourceRestaurantIds = useMemo(
         () => [...new Set(selectedChecklists.map((c) => c.restaurant_id))],
@@ -750,7 +782,7 @@ function ChecklistsContent() {
                             statusCtx={statusCtx}
                             priorityMode={selectedAreaPriorityMode}
                             isGlobal={isGlobal}
-                            selectable={canBulkAction}
+                            selectable={canSelect}
                             selectedIds={selectedIds}
                             onSelectionChange={handleSelectionChange}
                             onSelectAll={handleSelectAll}
@@ -765,7 +797,7 @@ function ChecklistsContent() {
                             onSelect={handleSelect}
                             onStatusToggle={handleStatusToggle}
                             isGlobal={isGlobal}
-                            selectable={canBulkAction}
+                            selectable={canSelect}
                             selectedIds={selectedIds}
                             onSelectionChange={handleSelectionChange}
                             issueCounts={issueCounts}
@@ -813,10 +845,13 @@ function ChecklistsContent() {
                 />
             )}
 
-            {/* Bulk actions (visão global) */}
-            {canBulkAction && selectedIds.size > 0 && (
+            {/* Ações em massa: exportar PDF (qualquer visão) + copiar (só global) */}
+            {canSelect && selectedIds.size > 0 && (
                 <BulkActionBar
                     selectedCount={selectedIds.size}
+                    onExportPdf={handleExportPdf}
+                    isExporting={isExporting}
+                    canCopy={canBulkAction}
                     onCopyToUnit={() => setCopyModalOpen(true)}
                     onClearSelection={() => setSelectedIds(new Set())}
                 />
