@@ -12,6 +12,11 @@ interface BulkActionBarProps {
     /** Copiar entre unidades só faz sentido na visão global. */
     canCopy?: boolean;
     onCopyToUnit?: () => void;
+    /** Transferir responsável — só na visão de unidade única. */
+    canTransfer?: boolean;
+    onTransfer?: () => void;
+    transferDisabled?: boolean;
+    transferDisabledReason?: string;
 }
 
 export function BulkActionBar({
@@ -21,6 +26,10 @@ export function BulkActionBar({
     isExporting = false,
     canCopy = false,
     onCopyToUnit,
+    canTransfer = false,
+    onTransfer,
+    transferDisabled = false,
+    transferDisabledReason,
 }: BulkActionBarProps) {
     const [mounted, setMounted] = useState(false);
     const barRef = useRef<HTMLDivElement | null>(null);
@@ -95,6 +104,17 @@ export function BulkActionBar({
                             </span>
                             {isExporting ? "Gerando PDF…" : "Exportar PDF"}
                         </button>
+                        {canTransfer && onTransfer && (
+                            <button
+                                onClick={onTransfer}
+                                disabled={transferDisabled}
+                                title={transferDisabled ? transferDisabledReason : undefined}
+                                className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-transparent border border-[#233f48] hover:bg-[#16262c] text-white rounded-lg transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                            >
+                                <span className="material-symbols-outlined text-[18px]">swap_horiz</span>
+                                Transferir responsável
+                            </button>
+                        )}
                         {canCopy && onCopyToUnit && (
                             <button
                                 onClick={onCopyToUnit}
