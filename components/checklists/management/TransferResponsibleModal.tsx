@@ -39,6 +39,9 @@ export function TransferResponsibleModal({
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [blockedRoutines, setBlockedRoutines] = useState<string[]>([]);
     const [transferredCount, setTransferredCount] = useState(0);
+    // Nome do destino capturado no momento da transferência — a lista é
+    // invalidada no sucesso e o `targetName` derivado deixaria de resolver.
+    const [resultTargetName, setResultTargetName] = useState<string | null>(null);
 
     const { mutateAsync: transfer, isPending } = useTransferChecklistResponsible();
 
@@ -52,6 +55,7 @@ export function TransferResponsibleModal({
             setErrorMessage(null);
             setBlockedRoutines([]);
             setTransferredCount(0);
+            setResultTargetName(null);
             return;
         }
         const handleKey = (e: KeyboardEvent) => {
@@ -98,6 +102,9 @@ export function TransferResponsibleModal({
         if (!group.ok || !targetId) return;
         setErrorMessage(null);
         setBlockedRoutines([]);
+        // Captura o nome do destino antes do sucesso (a lista é invalidada e o
+        // `targetName` derivado deixaria de resolver no passo de resultado).
+        const destName = targetName;
         try {
             const result = await transfer({
                 restaurant_id: restaurantId,
@@ -105,6 +112,7 @@ export function TransferResponsibleModal({
                 to_user_id: targetId,
             });
             setTransferredCount(result.transferred_count);
+            setResultTargetName(destName);
             setStep("result");
             onSuccess(result.transferred_count);
         } catch (err) {
@@ -234,7 +242,7 @@ export function TransferResponsibleModal({
                             <p className="text-sm text-white">
                                 <span className="font-bold">{transferredCount}</span>{" "}
                                 rotina{transferredCount !== 1 ? "s" : ""} transferida{transferredCount !== 1 ? "s" : ""}{" "}
-                                para <span className="font-bold">{targetName ?? "o colaborador"}</span>.
+                                para <span className="font-bold">{resultTargetName ?? "o colaborador"}</span>.
                             </p>
                         </div>
                     )}

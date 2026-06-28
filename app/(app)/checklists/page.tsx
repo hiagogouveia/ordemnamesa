@@ -917,7 +917,7 @@ function ChecklistsContent() {
                 />
             )}
 
-            {mounted && !isGlobal && restaurantId && (
+            {mounted && transferModalOpen && restaurantId && (
                 <TransferResponsibleModal
                     isOpen={transferModalOpen}
                     onClose={() => {
