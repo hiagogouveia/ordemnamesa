@@ -15,6 +15,14 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Largura atual da sidebar no painel (lg+). Atualizada pelo AppLayout conforme o
+   estado de colapso. Usada por barras fixas (ex.: BulkActionBar) para não cobrir
+   a sidebar. Default = expandida (16rem). Abaixo de lg a sidebar é um drawer e a
+   var é ignorada (as barras usam left-0 full-width). */
+:root {
+  --app-sidebar-w: 16rem;
+}
+
 /* Custom Scrollbar for dark mode feeling */
 ::-webkit-scrollbar {
   width: 8px;

@@ -27,6 +27,7 @@ export type AdminEventName =
     | 'manual_password_set'
     | 'lead_approved'
     | 'lead_rejected'
+    | 'checklist_responsible_transferred'
 
 export type EventName = AuthEventName | OnboardingEventName | UsageEventName | AdminEventName
 

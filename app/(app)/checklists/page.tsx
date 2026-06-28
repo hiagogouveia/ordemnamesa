@@ -17,6 +17,10 @@ const CopyChecklistModal = dynamic(
     () => import("@/components/checklists/management/CopyChecklistModal").then((m) => ({ default: m.CopyChecklistModal })),
     { loading: () => null }
 );
+const TransferResponsibleModal = dynamic(
+    () => import("@/components/checklists/management/TransferResponsibleModal").then((m) => ({ default: m.TransferResponsibleModal })),
+    { loading: () => null }
+);
 import { useChecklistOrders, useUpdateChecklistOrders } from "@/lib/hooks/use-checklist-orders";
 import { createClient } from "@/lib/supabase/client";
 import { useAllAreas } from "@/lib/hooks/use-areas";
@@ -51,6 +55,7 @@ const TemplatesBrowserModal = dynamic(
 );
 import { Modal } from "@/components/ui/modal";
 import { filterChecklistsByCollaborator, type AssignmentOrigin } from "@/lib/utils/filter-checklists-by-collaborator";
+import { getDirectAssignmentGroup, getEligibleTransferTargets } from "@/lib/utils/transfer-responsible";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
 import { getOperationalStatus } from "@/lib/utils/get-operational-status";
 import type { ChecklistOrder, ChecklistTemplate, ExecutionStatus, PriorityMode } from "@/lib/types";
@@ -86,6 +91,7 @@ function ChecklistsContent() {
     const [editorState, setEditorState] = useState<EditorState>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [copyModalOpen, setCopyModalOpen] = useState(false);
+    const [transferModalOpen, setTransferModalOpen] = useState(false);
     // Sprint 70 — Modelos de Rotinas Prontas
     const [templatesBrowserOpen, setTemplatesBrowserOpen] = useState(false);
     const [pendingTemplate, setPendingTemplate] = useState<ChecklistTemplate | null>(null);
@@ -297,6 +303,27 @@ function ChecklistsContent() {
         () => filtered.filter((c) => selectedIds.has(c.id)),
         [filtered, selectedIds]
     );
+
+    // ─── TRANSFERIR RESPONSÁVEL ─────────────────────────────────────────────────
+    // Só na visão de unidade única (mesma área/colaboradores são por restaurante).
+    const canTransfer = !isGlobal && isManagerOrOwner && selectedChecklists.length > 0;
+    const transferGroup = useMemo(
+        () => getDirectAssignmentGroup(selectedChecklists),
+        [selectedChecklists]
+    );
+    const transferEligibleTargets = useMemo(() => {
+        if (!transferGroup.ok || !transferGroup.areaId || !transferGroup.sourceUserId) return [];
+        return getEligibleTransferTargets(
+            equipeData?.equipe ?? [],
+            transferGroup.areaId,
+            transferGroup.sourceUserId
+        );
+    }, [transferGroup, equipeData]);
+    const transferDisabledReason = !transferGroup.ok
+        ? transferGroup.reason
+        : transferEligibleTargets.length === 0
+            ? "Não há outro colaborador ativo nesta área."
+            : undefined;
 
     // ─── EXPORTAÇÃO PARA PDF ────────────────────────────────────────────────────
     const { exportPdf, isExporting } = useExportRotinasPdf({
@@ -872,6 +899,10 @@ function ChecklistsContent() {
                     isExporting={isExporting}
                     canCopy={canBulkAction}
                     onCopyToUnit={() => setCopyModalOpen(true)}
+                    canTransfer={canTransfer}
+                    onTransfer={() => setTransferModalOpen(true)}
+                    transferDisabled={!!transferDisabledReason}
+                    transferDisabledReason={transferDisabledReason}
                     onClearSelection={() => setSelectedIds(new Set())}
                 />
             )}
@@ -883,6 +914,27 @@ function ChecklistsContent() {
                     selectedChecklists={selectedChecklists}
                     accountId={accountId}
                     sourceRestaurantIds={sourceRestaurantIds}
+                />
+            )}
+
+            {mounted && transferModalOpen && restaurantId && (
+                <TransferResponsibleModal
+                    isOpen={transferModalOpen}
+                    onClose={() => {
+                        setTransferModalOpen(false);
+                        setSelectedIds(new Set());
+                    }}
+                    selectedChecklists={selectedChecklists}
+                    restaurantId={restaurantId}
+                    collaborators={equipeData?.equipe ?? []}
+                    onSuccess={(count) => {
+                        setDeleteToast({
+                            kind: "success",
+                            message: count === 1
+                                ? "1 rotina transferida com sucesso."
+                                : `${count} rotinas transferidas com sucesso.`,
+                        });
+                    }}
                 />
             )}
         </div>

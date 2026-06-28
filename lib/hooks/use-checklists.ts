@@ -206,6 +206,72 @@ export function useUpdateChecklist() {
     });
 }
 
+// ─── TRANSFERIR RESPONSÁVEL (em lote) ───────────────────────────────────────
+
+export interface TransferResponsibleVariables {
+    restaurant_id: string;
+    checklist_ids: string[];
+    to_user_id: string;
+}
+
+export interface TransferResponsibleResponse {
+    transferred_count: number;
+    checklist_ids: string[];
+    from_user_id: string;
+    to_user_id: string;
+}
+
+/** Erro de transferência que preserva a lista de rotinas bloqueadas por turno. */
+export class TransferResponsibleError extends Error {
+    code?: string;
+    blockedRoutines?: string[];
+    constructor(message: string, code?: string, blockedRoutines?: string[]) {
+        super(message);
+        this.name = "TransferResponsibleError";
+        this.code = code;
+        this.blockedRoutines = blockedRoutines;
+    }
+}
+
+/**
+ * Transfere o responsável direto de várias rotinas para outro colaborador da
+ * mesma área. A operação é atômica no backend (UPDATE em lote) e altera apenas
+ * `assigned_to_user_id`.
+ */
+export function useTransferChecklistResponsible() {
+    const queryClient = useQueryClient();
+
+    return useMutation<TransferResponsibleResponse, Error, TransferResponsibleVariables>({
+        mutationFn: async (data) => {
+            const headers = await getAuthHeaders();
+            const res = await fetch("/api/checklists/transfer-responsible", {
+                method: "POST",
+                headers,
+                body: JSON.stringify(data),
+            });
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                if (res.status === 402 && errData?.reason) {
+                    throw new BillingError(errData.error ?? "Acesso bloqueado pelo plano.", res.status, errData.reason);
+                }
+                throw new TransferResponsibleError(
+                    errData.error || "Erro ao transferir responsável",
+                    errData.code,
+                    errData.blocked_routines
+                );
+            }
+            return res.json();
+        },
+        onSuccess: (_data, variables) => {
+            queryClient.invalidateQueries({ queryKey: ["checklists", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["kanban", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["my-activities", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["my-activities-badge", variables.restaurant_id] });
+            queryClient.invalidateQueries({ queryKey: ["admin_checklists_status", variables.restaurant_id] });
+        },
+    });
+}
+
 // Reordenar Tarefas de um Checklist
 export function useReorderTasks() {
     const queryClient = useQueryClient();

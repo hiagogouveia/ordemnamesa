@@ -1,5 +1,38 @@
 import { createServerClient } from '@supabase/ssr'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
+
+/**
+ * Resolve o usuário autenticado de forma resiliente a falhas TRANSITÓRIAS do
+ * endpoint de Auth do Supabase.
+ *
+ * `supabase.auth.getUser()` faz um round-trip ao GoTrue e parseia a resposta como
+ * JSON. Quando essa resposta vem vazia (hiccup de rede / 5xx do Auth), o parse
+ * lança `SyntaxError: Unexpected end of JSON input` e — sem tratamento — o
+ * middleware respondia 500 na rota inteira (no Safari isso surge como "Load
+ * failed", inclusive em requisições RSC/prefetch).
+ *
+ * Estratégia: pequena tentativa adicional para absorver o transitório. Se ainda
+ * assim não resolver, retorna `null` (fail-closed) — rotas protegidas redirecionam
+ * para /login, NUNCA 500. O erro é logado (não mascarado silenciosamente).
+ */
+async function resolveUser(supabase: SupabaseClient) {
+    const MAX_ATTEMPTS = 3
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        try {
+            const { data: { user } } = await supabase.auth.getUser()
+            return user
+        } catch (err) {
+            if (attempt === MAX_ATTEMPTS) {
+                console.error('[middleware] getUser falhou após retries (fail-closed):', err)
+                return null
+            }
+            // Backoff curto antes de tentar de novo (absorve resposta vazia transitória).
+            await new Promise((resolve) => setTimeout(resolve, 120))
+        }
+    }
+    return null
+}
 
 export async function middleware(request: NextRequest) {
     let supabaseResponse = NextResponse.next({
@@ -27,9 +60,7 @@ export async function middleware(request: NextRequest) {
         }
     )
 
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
+    const user = await resolveUser(supabase)
 
     // ===== admin-leads-control-hub: painel isolado =====
     const PANEL_BASE_PATH = '/control-hub-admin'

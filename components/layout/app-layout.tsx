@@ -60,6 +60,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         localStorage.setItem("sidebar-collapsed", String(collapsed));
     }, [collapsed]);
 
+    // Publica a largura da sidebar (lg+) como CSS var no root, para que barras
+    // fixas portaladas no body (ex.: BulkActionBar) deixem de cobrir a sidebar.
+    // w-20 = 5rem (colapsada) | w-64 = 16rem (expandida).
+    useEffect(() => {
+        document.documentElement.style.setProperty("--app-sidebar-w", collapsed ? "5rem" : "16rem");
+    }, [collapsed]);
+
     // Rotas que não devem exibir o layout do painel interno
     const isNoLayoutRoute =
         pathname === "/selecionar-restaurante" ||
