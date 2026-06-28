@@ -18,6 +18,7 @@ import {
     verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { ChecklistRow } from "./ChecklistRow";
+import { Checkbox } from "@/components/ui/checkbox";
 import { SortableChecklistRow } from "./SortableChecklistRow";
 import { detectReorderConflict } from "@/lib/utils/auto-prioritize";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
@@ -97,6 +98,7 @@ interface ChecklistListViewProps {
     onSelectionChange?: (id: string, checked: boolean) => void;
     onSelectAll?: (checked: boolean) => void;
     issueCounts?: Record<string, number>;
+    onExploreTemplates?: () => void;
 }
 
 export function ChecklistListView({
@@ -106,6 +108,7 @@ export function ChecklistListView({
     sortField,
     sortOrder,
     onSortChange,
+    onExploreTemplates,
     onSelect,
     onEdit,
     onStatusToggle,
@@ -222,8 +225,17 @@ export function ChecklistListView({
                 <span className="material-symbols-outlined text-[#325a67] text-5xl">search_off</span>
                 <p className="text-white font-semibold">Nenhuma lista encontrada</p>
                 <p className="text-[#92bbc9] text-sm max-w-xs">
-                    Tente ajustar os filtros ou criar uma nova lista.
+                    Tente ajustar os filtros ou comece com um modelo pronto.
                 </p>
+                {onExploreTemplates && (
+                    <button
+                        onClick={onExploreTemplates}
+                        className="mt-1 inline-flex items-center gap-1.5 bg-[#13b6ec] hover:bg-[#0ea5d4] text-[#0a1215] font-bold text-sm px-4 py-2.5 rounded-lg transition-colors"
+                    >
+                        <span className="material-symbols-outlined text-[18px]">library_add</span>
+                        Explorar Modelos Prontos
+                    </button>
+                )}
             </div>
         );
     }
@@ -381,11 +393,11 @@ export function ChecklistListView({
                             {reorderMode && <th className="pl-4 pr-2 py-2 w-8" />}
                             {selectable && !reorderMode && (
                                 <th className="pl-3 pr-1 py-2 w-10">
-                                    <input
-                                        type="checkbox"
+                                    <Checkbox
                                         checked={checklists.length > 0 && selectedIds?.size === checklists.length}
+                                        indeterminate={(selectedIds?.size ?? 0) > 0 && (selectedIds?.size ?? 0) < checklists.length}
                                         onChange={(e) => onSelectAll?.(e.target.checked)}
-                                        className="size-4 accent-[#13b6ec] cursor-pointer"
+                                        aria-label="Selecionar todos"
                                     />
                                 </th>
                             )}
