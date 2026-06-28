@@ -4,6 +4,7 @@ import { FilterDropdown } from "@/components/ui/filter-dropdown";
 import type { Area } from "@/lib/types";
 import type { EquipeMember } from "@/lib/hooks/use-equipe";
 import type { Unit } from "@/lib/hooks/use-units";
+import type { AssignmentOrigin } from "@/lib/utils/filter-checklists-by-collaborator";
 
 const SHIFT_OPTIONS = [
     { value: "", label: "Todos" },
@@ -27,6 +28,14 @@ const TYPE_OPTIONS = [
     { value: "regular",  label: "Regular" },
     { value: "opening",  label: "Abertura" },
     { value: "closing",  label: "Fechamento" },
+];
+
+// Origem da atribuição — só relevante quando um Colaborador está selecionado.
+// Permite diferenciar responsabilidades individuais das herdadas da área.
+const ASSIGNMENT_ORIGIN_OPTIONS = [
+    { value: "all",    label: "Todas" },
+    { value: "direct", label: "Apenas atribuídas ao colaborador" },
+    { value: "area",   label: "Apenas atribuídas à área" },
 ];
 
 const EXEC_STATUS_OPTIONS = [
@@ -55,6 +64,8 @@ interface ChecklistFiltersProps {
     collaborators: EquipeMember[];
     selectedCollaboratorId: string;
     onCollaboratorChange: (userId: string) => void;
+    selectedAssignmentOrigin: AssignmentOrigin;
+    onAssignmentOriginChange: (value: AssignmentOrigin) => void;
     /** Lista de unidades disponíveis — passar somente em visão global. */
     units?: Unit[];
     selectedUnitId?: string;
@@ -78,6 +89,8 @@ export function ChecklistFilters({
     collaborators,
     selectedCollaboratorId,
     onCollaboratorChange,
+    selectedAssignmentOrigin,
+    onAssignmentOriginChange,
     units,
     selectedUnitId,
     onUnitChange,
@@ -141,6 +154,14 @@ export function ChecklistFilters({
                 value={selectedCollaboratorId}
                 onChange={onCollaboratorChange}
             />
+            {selectedCollaboratorId && (
+                <FilterDropdown
+                    label="Origem"
+                    options={ASSIGNMENT_ORIGIN_OPTIONS}
+                    value={selectedAssignmentOrigin}
+                    onChange={(v) => onAssignmentOriginChange(v as AssignmentOrigin)}
+                />
+            )}
             {showUnitFilter && onUnitChange && (
                 <FilterDropdown
                     label="Unidade"

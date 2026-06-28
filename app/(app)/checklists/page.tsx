@@ -50,7 +50,7 @@ const TemplatesBrowserModal = dynamic(
     { loading: () => null }
 );
 import { Modal } from "@/components/ui/modal";
-import { filterChecklistsByCollaborator } from "@/lib/utils/filter-checklists-by-collaborator";
+import { filterChecklistsByCollaborator, type AssignmentOrigin } from "@/lib/utils/filter-checklists-by-collaborator";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
 import { getOperationalStatus } from "@/lib/utils/get-operational-status";
 import type { ChecklistOrder, ChecklistTemplate, ExecutionStatus, PriorityMode } from "@/lib/types";
@@ -119,6 +119,12 @@ function ChecklistsContent() {
         rawType === "regular" || rawType === "opening" || rawType === "closing"
             ? rawType : "all";
     const selectedCollaboratorId = searchParams.get("collaborator_id") ?? "";
+    // Origem da atribuição — só tem efeito quando há colaborador selecionado.
+    // Valores inválidos (URLs antigas/manuais) caem em "all" graciosamente.
+    const rawAssignmentOrigin = searchParams.get("assignment_origin") ?? "all";
+    const selectedAssignmentOrigin: AssignmentOrigin =
+        rawAssignmentOrigin === "direct" || rawAssignmentOrigin === "area"
+            ? rawAssignmentOrigin : "all";
     const selectedUnitId = searchParams.get("unit_id") ?? "";
     const sortField = (searchParams.get("sort") as SortField | null) ?? null;
     const sortOrder = (searchParams.get("order") as SortOrder | null) ?? "asc";
@@ -194,7 +200,8 @@ function ChecklistsContent() {
             ? filterChecklistsByCollaborator(
                 checklists as ExtendedChecklist[],
                 selectedCollaboratorId,
-                equipeData?.equipe ?? []
+                equipeData?.equipe ?? [],
+                selectedAssignmentOrigin
             ) as ExtendedChecklist[]
             : checklists as ExtendedChecklist[];
 
@@ -274,7 +281,7 @@ function ChecklistsContent() {
         });
         
         return sortedResult;
-    }, [checklists, searchQuery, selectedShift, selectedAreaId, selectedAvailability, selectedExecStatus, selectedType, selectedCollaboratorId, selectedUnitId, isGlobal, equipeData, shifts, currentMinutes, tzDayOfWeek, tzDateKey, statusCtx, sortField, sortOrder]);
+    }, [checklists, searchQuery, selectedShift, selectedAreaId, selectedAvailability, selectedExecStatus, selectedType, selectedCollaboratorId, selectedAssignmentOrigin, selectedUnitId, isGlobal, equipeData, shifts, currentMinutes, tzDayOfWeek, tzDateKey, statusCtx, sortField, sortOrder]);
 
     // ─── BULK SELECTION (visão global) ─────────────────────────────────────────
 
@@ -323,7 +330,7 @@ function ChecklistsContent() {
     // Limpar seleção quando filtros mudam
     useEffect(() => {
         setSelectedIds(new Set());
-    }, [selectedShift, selectedAreaId, selectedAvailability, selectedExecStatus, selectedType, selectedCollaboratorId, selectedUnitId, searchQuery]);
+    }, [selectedShift, selectedAreaId, selectedAvailability, selectedExecStatus, selectedType, selectedCollaboratorId, selectedAssignmentOrigin, selectedUnitId, searchQuery]);
 
     const handleSelectionChange = (id: string, checked: boolean) => {
         setSelectedIds((prev) => {
@@ -384,6 +391,16 @@ function ChecklistsContent() {
         const params = new URLSearchParams(searchParams.toString());
         if (value) params.set("collaborator_id", value);
         else params.delete("collaborator_id");
+        // Sem colaborador, a origem da atribuição é inerte — limpar para evitar
+        // estado órfão na URL.
+        if (!value) params.delete("assignment_origin");
+        router.replace(`/checklists?${params.toString()}`);
+    };
+
+    const setAssignmentOriginFilter = (value: AssignmentOrigin) => {
+        const params = new URLSearchParams(searchParams.toString());
+        if (value && value !== "all") params.set("assignment_origin", value);
+        else params.delete("assignment_origin");
         router.replace(`/checklists?${params.toString()}`);
     };
 
@@ -711,6 +728,8 @@ function ChecklistsContent() {
                 collaborators={equipeData?.equipe ?? []}
                 selectedCollaboratorId={selectedCollaboratorId}
                 onCollaboratorChange={setCollaboratorFilter}
+                selectedAssignmentOrigin={selectedAssignmentOrigin}
+                onAssignmentOriginChange={setAssignmentOriginFilter}
                 showUnitFilter={isGlobal}
                 units={units}
                 selectedUnitId={selectedUnitId}
