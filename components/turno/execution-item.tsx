@@ -296,7 +296,7 @@ function ExecutionItemContent({ task, execution, onToggle, onReportProblem, onEd
                             </span>
                         </div>
                         {task.description && (
-                            <p className="text-sm mt-1 text-[#92bbc9]/70">{task.description}</p>
+                            <p className="text-sm mt-1 text-[#92bbc9]/70 whitespace-pre-wrap">{task.description}</p>
                         )}
                         {myEditableIssue && (
                             <p className="text-[11px] mt-2 text-amber-400/80 flex items-center gap-1">
@@ -361,7 +361,7 @@ function ExecutionItemContent({ task, execution, onToggle, onReportProblem, onEd
                             </div>
                         </div>
                         {task.description && (
-                            <p className="text-sm mt-1 text-[#92bbc9]/70">{task.description}</p>
+                            <p className="text-sm mt-1 text-[#92bbc9]/70 whitespace-pre-wrap">{task.description}</p>
                         )}
                         {/* Valor registrado por tipo */}
                         {execution?.value_date && (
@@ -467,7 +467,7 @@ function ExecutionItemContent({ task, execution, onToggle, onReportProblem, onEd
                             </div>
                         </div>
                         {task.description && (
-                            <p className="text-sm mt-1 text-[#92bbc9]">{task.description}</p>
+                            <p className="text-sm mt-1 text-[#92bbc9] whitespace-pre-wrap">{task.description}</p>
                         )}
                         {isBlockedSequential && (
                             <div className="flex items-center gap-1 mt-2 text-[#92bbc9]/70 text-xs font-semibold">
@@ -500,7 +500,7 @@ function ExecutionItemContent({ task, execution, onToggle, onReportProblem, onEd
             <div className="w-full flex flex-col rounded-2xl border text-left bg-[#16262c] border-[#233f48] shadow-sm overflow-hidden p-4">
                 <span className="text-base font-semibold leading-snug text-[#92bbc9]">{task.title}</span>
                 {task.description && (
-                    <p className="text-sm mt-1 text-[#92bbc9]/60">{task.description}</p>
+                    <p className="text-sm mt-1 text-[#92bbc9]/60 whitespace-pre-wrap">{task.description}</p>
                 )}
             </div>
         );
@@ -543,7 +543,7 @@ function ExecutionItemContent({ task, execution, onToggle, onReportProblem, onEd
                         </div>
                     </div>
                     {task.description && (
-                        <p className="text-[13px] leading-relaxed mt-1 text-[#92bbc9]/85">{task.description}</p>
+                        <p className="text-[13px] leading-relaxed mt-1 text-[#92bbc9]/85 whitespace-pre-wrap">{task.description}</p>
                     )}
                     {isBlockedSequential && (
                         <div className="flex items-center gap-1 mt-2 text-[#92bbc9]/70 text-xs font-semibold">

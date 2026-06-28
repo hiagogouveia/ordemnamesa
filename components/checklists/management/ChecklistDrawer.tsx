@@ -107,7 +107,7 @@ export function ChecklistDrawer({ checklist, open, onClose, onEdit }: ChecklistD
                                                         {task.title}
                                                     </p>
                                                     {task.description && (
-                                                        <p className="text-[#92bbc9] text-xs mt-0.5">
+                                                        <p className="text-[#92bbc9] text-xs mt-0.5 whitespace-pre-wrap">
                                                             {task.description}
                                                         </p>
                                                     )}

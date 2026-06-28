@@ -557,7 +557,7 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose, focusIss
                                                     </p>
                                                 )}
                                                 {task.description && (
-                                                    <p className="text-[#92bbc9] text-xs mt-0.5">{task.description}</p>
+                                                    <p className="text-[#92bbc9] text-xs mt-0.5 whitespace-pre-wrap">{task.description}</p>
                                                 )}
                                                 {isBlocked && execution?.blocked_reason && (
                                                     <div className="mt-1.5 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2">
