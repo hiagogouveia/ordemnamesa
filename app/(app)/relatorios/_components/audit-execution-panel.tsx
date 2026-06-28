@@ -449,7 +449,7 @@ function TaskRow({
                         )}
                     </p>
                     {task.description && (
-                        <p className="text-[#92bbc9] text-xs mt-0.5">{task.description}</p>
+                        <p className="text-[#92bbc9] text-xs mt-0.5 whitespace-pre-wrap">{task.description}</p>
                     )}
                 </div>
                 {wasExecuted && task.executed_at && (
