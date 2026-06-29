@@ -290,13 +290,21 @@ export async function GET(request: Request) {
                 deleteGroups.set(key, group);
             }
 
-            // Deletes em lote (1 por grupo) em paralelo — grupos não se sobrepõem.
+            // Limpeza em lote (1 por grupo) em paralelo — grupos não se sobrepõem.
+            // IMPORTANTE: só remove execuções AINDA EM ANDAMENTO (status='doing') de períodos
+            // anteriores. Execuções concluídas (done/skipped/flagged/blocked) são PRESERVADAS —
+            // elas são a única fonte do detalhamento histórico usado pela Auditoria/PDF/relatórios.
+            // O delete antigo apagava `executed_at < periodStart` sem filtro de status, destruindo
+            // todo o histórico de dias anteriores das rotinas recorrentes.
+            // Manter a limpeza de `doing` órfão evita que o contador de tarefas simultâneas
+            // (POST /api/task-executions/[id]/assume) acumule linhas abandonadas.
             await Promise.all(
                 Array.from(deleteGroups.values()).map(g =>
                     adminSupabase
                         .from('task_executions')
                         .delete()
                         .eq('restaurant_id', g.restaurantId)
+                        .eq('status', 'doing')
                         .lt('executed_at', g.periodStartISO)
                         .in('task_id', g.taskIds)
                 )

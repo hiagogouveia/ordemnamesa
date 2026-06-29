@@ -4,6 +4,7 @@ import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
 import { getAccountBilling, canExecuteTasks } from '@/lib/billing/subscription-access';
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
 import { verifyMembership } from '@/lib/api/auth';
+import { resolveAssumptionId } from '@/lib/api/assumption-link';
 
 const getAdminSupabase = () => {
     return createClient(
@@ -50,12 +51,19 @@ export async function POST(request: Request) {
             .eq('restaurant_id', restaurant_id)
             .single();
 
+        // Vincula a execução à sessão (assumption) do dia — fonte canônica da Auditoria.
+        const assumptionId = await resolveAssumptionId(adminSupabase, {
+            checklistId: checklist_id,
+            restaurantId: restaurant_id,
+        });
+
         const { data: newExecution, error: execError } = await adminSupabase
             .from('task_executions')
             .insert({
                 restaurant_id,
                 task_id,
                 checklist_id,
+                checklist_assumption_id: assumptionId,
                 user_id: user.id,
                 status: 'doing',
                 executed_at: new Date().toISOString(),

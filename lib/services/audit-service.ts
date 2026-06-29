@@ -258,7 +258,12 @@ interface RawTaskExec {
     blocked_reason: string | null;
     type_snapshot: string | null;
     value_rating: number | null;
+    checklist_assumption_id: string | null;
 }
+
+// Colunas lidas de task_executions para a Auditoria (inclui o vínculo canônico).
+const EXEC_SELECT_COLS =
+    'id, task_id, checklist_id, user_id, status, executed_at, started_at, notes, observation, photo_url, photos, blocked_reason, type_snapshot, value_rating, checklist_assumption_id';
 
 interface RawTaskIssue {
     id: string;
@@ -284,13 +289,36 @@ function normalizePhotoArray(raw: unknown): string[] {
     return [];
 }
 
-/** Window de tempo em que uma task_execution conta como pertencente à assumption. */
-function assumptionWindow(a: RawAssumption): { startMs: number; endMs: number } {
+/** Window de tempo em que uma task_execution conta como pertencente à assumption (fallback legado). */
+function assumptionWindow(a: { assumed_at: string; completed_at: string | null }): { startMs: number; endMs: number } {
     const startMs = new Date(a.assumed_at).getTime();
     const endMs = a.completed_at
         ? new Date(a.completed_at).getTime()
         : startMs + ASSUMPTION_WINDOW_BUFFER_MS;
     return { startMs, endMs };
+}
+
+/**
+ * Decide se uma task_execution pertence a uma assumption.
+ *
+ * Regra (Fase A da canonicalização):
+ *  - Se a execução tem `checklist_assumption_id` (vínculo canônico), ela pertence SOMENTE àquela
+ *    assumption — precedência absoluta, mesmo que `executed_at` esteja fora da janela.
+ *  - Se a coluna é null (linha legada), cai para a janela temporal
+ *    (executed_at ∈ [assumed_at, completed_at + 48h]).
+ *
+ * Isso garante que execuções vinculadas a OUTRA assumption nunca "vazem" para esta por proximidade
+ * temporal, e que o histórico preservado continue visível.
+ */
+export function execMatchesAssumption(
+    e: { checklist_assumption_id: string | null; executed_at: string | null },
+    a: { id: string; assumed_at: string; completed_at: string | null },
+): boolean {
+    if (e.checklist_assumption_id) return e.checklist_assumption_id === a.id;
+    if (!e.executed_at) return false;
+    const { startMs, endMs } = assumptionWindow(a);
+    const t = new Date(e.executed_at).getTime();
+    return t >= startMs && t <= endMs;
 }
 
 /**
@@ -413,15 +441,33 @@ export async function fetchAuditList(
         0,
     );
 
-    const { data: execsRaw, error: execErr } = await admin
-        .from('task_executions')
-        .select('id, task_id, checklist_id, user_id, status, executed_at, started_at, notes, observation, photo_url, photos, blocked_reason, type_snapshot, value_rating')
-        .in('checklist_id', checklistIds)
-        .in('user_id', userIds)
-        .gte('executed_at', new Date(minAssumedAt).toISOString())
-        .lte('executed_at', new Date(maxEndAt).toISOString());
-    if (execErr) throw execErr;
-    const allExecs = (execsRaw ?? []) as RawTaskExec[];
+    const pageAssumptionIds = rawAssumptions.map(a => a.id);
+    const [windowExecsRes, linkedExecsRes] = await Promise.all([
+        // Linhas legadas (sem vínculo) cobrindo a janela global da página.
+        admin
+            .from('task_executions')
+            .select(EXEC_SELECT_COLS)
+            .in('checklist_id', checklistIds)
+            .in('user_id', userIds)
+            .gte('executed_at', new Date(minAssumedAt).toISOString())
+            .lte('executed_at', new Date(maxEndAt).toISOString()),
+        // Linhas com vínculo canônico às assumptions desta página (qualquer horário).
+        admin
+            .from('task_executions')
+            .select(EXEC_SELECT_COLS)
+            .in('checklist_assumption_id', pageAssumptionIds),
+    ]);
+    if (windowExecsRes.error) throw windowExecsRes.error;
+    if (linkedExecsRes.error) throw linkedExecsRes.error;
+    // Merge com dedup por id (uma linha vinculada também cai na janela global).
+    const execById = new Map<string, RawTaskExec>();
+    for (const e of [
+        ...((windowExecsRes.data ?? []) as RawTaskExec[]),
+        ...((linkedExecsRes.data ?? []) as RawTaskExec[]),
+    ]) {
+        execById.set(e.id, e);
+    }
+    const allExecs = Array.from(execById.values());
 
     // ── Ocorrências (task_issues) por assumption ────────────────────────────
     const assumptionIds = rawAssumptions.map(a => a.id);
@@ -498,12 +544,8 @@ export async function fetchAuditList(
     const todayKey = toDateKey(new Date());
 
     let entries: AuditExecution[] = rawAssumptions.map(a => {
-        const { startMs, endMs } = assumptionWindow(a);
         const execsForA = (execsByKey[`${a.checklist_id}|${a.user_id}`] ?? [])
-            .filter(e => {
-                const t = new Date(e.executed_at!).getTime();
-                return t >= startMs && t <= endMs;
-            });
+            .filter(e => execMatchesAssumption(e, a));
 
         // Dedup por task_id — mantemos a execução mais recente por task
         const lastByTask: Record<string, RawTaskExec> = {};
@@ -657,17 +699,30 @@ export async function fetchAuditDetail(
     };
     const taskList = (tasksRaw ?? []) as RawTask[];
 
-    // Task executions na janela desta assumption
+    // Task executions desta assumption.
+    // Vínculo canônico: `checklist_assumption_id`. Para linhas legadas (coluna ainda null),
+    // caímos para a janela temporal — match por (checklist_id, user_id, executed_at ∈ janela).
     const { startMs, endMs } = assumptionWindow(a);
-    const { data: execsRaw, error: eErr } = await admin
-        .from('task_executions')
-        .select('id, task_id, checklist_id, user_id, status, executed_at, started_at, notes, observation, photo_url, photos, blocked_reason, type_snapshot, value_rating')
-        .eq('checklist_id', a.checklist_id)
-        .eq('user_id', a.user_id)
-        .gte('executed_at', new Date(startMs).toISOString())
-        .lte('executed_at', new Date(endMs).toISOString());
-    if (eErr) throw eErr;
-    const execList = (execsRaw ?? []) as RawTaskExec[];
+    const [byLinkRes, byWindowRes] = await Promise.all([
+        admin
+            .from('task_executions')
+            .select(EXEC_SELECT_COLS)
+            .eq('checklist_assumption_id', assumptionId),
+        admin
+            .from('task_executions')
+            .select(EXEC_SELECT_COLS)
+            .eq('checklist_id', a.checklist_id)
+            .eq('user_id', a.user_id)
+            .is('checklist_assumption_id', null)
+            .gte('executed_at', new Date(startMs).toISOString())
+            .lte('executed_at', new Date(endMs).toISOString()),
+    ]);
+    if (byLinkRes.error) throw byLinkRes.error;
+    if (byWindowRes.error) throw byWindowRes.error;
+    const execList = [
+        ...((byLinkRes.data ?? []) as RawTaskExec[]),
+        ...((byWindowRes.data ?? []) as RawTaskExec[]),
+    ];
 
     // Dedup por task_id: manter a mais recente
     const lastByTask: Record<string, RawTaskExec> = {};

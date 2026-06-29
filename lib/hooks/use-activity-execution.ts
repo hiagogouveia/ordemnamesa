@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
+import { resolveAssumptionId } from '@/lib/api/assumption-link';
 import { KanbanTask, KanbanExecution, KanbanChecklist } from './use-tasks';
 
 const getAuthToken = async () => {
@@ -203,12 +204,19 @@ export const useToggleActivityTask = () => {
                     const { data: { user } } = await supabase.auth.getUser();
                     if (!user) throw new Error("Usuário não logado");
 
+                    // Vincula a execução à sessão (assumption) do dia — fonte canônica da Auditoria.
+                    const assumptionId = await resolveAssumptionId(supabase, {
+                        checklistId,
+                        restaurantId,
+                    });
+
                     const { data, error } = await supabase
                         .from('task_executions')
                         .insert({
                             restaurant_id: restaurantId,
                             task_id: taskId,
                             checklist_id: checklistId,
+                            checklist_assumption_id: assumptionId,
                             user_id: user.id,
                             status: 'done',
                             executed_at: new Date().toISOString(),

@@ -4,6 +4,8 @@ import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
 import { getAccountBilling, canExecuteTasks } from '@/lib/billing/subscription-access';
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
 import { verifyMembership } from '@/lib/api/auth';
+import { getRestaurantTimezone } from '@/lib/utils/restaurant-time';
+import { getNowInTz, getStartOfDayIsoInTz } from '@/lib/utils/brazil-date';
 
 const getAdminSupabase = () =>
     createClient(
@@ -85,13 +87,18 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
             }
         }
 
-        // 4. Contar tarefas em andamento do usuário
+        // 4. Contar tarefas em andamento do usuário (apenas as de HOJE).
+        // O escopo por dia torna o contador imune a linhas `doing` órfãs de dias anteriores
+        // (que deixaram de ser apagadas em massa para preservar o histórico de execução).
+        const tz = await getRestaurantTimezone(adminSupabase, restaurant_id);
+        const startOfTodayIso = getStartOfDayIsoInTz(tz, getNowInTz(tz).dateKey);
         const { count, error: countErr } = await adminSupabase
             .from('task_executions')
             .select('id', { count: 'exact', head: true })
             .eq('restaurant_id', restaurant_id)
             .eq('user_id', user.id)
-            .eq('status', 'doing');
+            .eq('status', 'doing')
+            .gte('executed_at', startOfTodayIso);
 
         if (countErr) {
             console.error('[POST /api/task-executions/[id]/assume] Erro ao contar tarefas:', countErr);
