@@ -112,6 +112,13 @@ export async function POST(
 
             return NextResponse.json({ execution: updated });
         } else {
+            // Sprint 84 — snapshot da identidade da tarefa (fidelidade histórica da Auditoria)
+            const { data: taskDef } = await adminSupabase
+                .from('checklist_tasks')
+                .select('title, description, is_critical')
+                .eq('id', taskId)
+                .maybeSingle();
+
             // Criar nova execução com status blocked
             const { data: created, error: insertError } = await adminSupabase
                 .from('task_executions')
@@ -126,6 +133,9 @@ export async function POST(
                     blocked_at: now,
                     blocked_by_user_id: user.id,
                     executed_at: now,
+                    task_title_snapshot: taskDef?.title ?? null,
+                    task_description_snapshot: taskDef?.description ?? null,
+                    is_critical_snapshot: taskDef?.is_critical ?? null,
                 })
                 .select()
                 .single();

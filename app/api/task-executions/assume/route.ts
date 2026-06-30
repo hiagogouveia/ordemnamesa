@@ -44,9 +44,10 @@ export async function POST(request: Request) {
         if (!accessCheck.allowed) return buildAccessDeniedResponse(accessCheck);
 
         // Sprint 35 — buscar snapshot da task antes de criar a execução
+        // Sprint 84 — inclui identidade legível (title/description/is_critical) p/ fidelidade histórica
         const { data: taskRow } = await adminSupabase
             .from('checklist_tasks')
-            .select('type, requires_photo, requires_observation, max_photos, task_config')
+            .select('type, requires_photo, requires_observation, max_photos, task_config, title, description, is_critical')
             .eq('id', task_id)
             .eq('restaurant_id', restaurant_id)
             .single();
@@ -73,6 +74,9 @@ export async function POST(request: Request) {
                 requires_observation_snapshot: taskRow?.requires_observation ?? false,
                 max_photos_snapshot: taskRow?.max_photos ?? null,
                 task_config_snapshot: taskRow?.task_config ?? null,
+                task_title_snapshot: taskRow?.title ?? null,
+                task_description_snapshot: taskRow?.description ?? null,
+                is_critical_snapshot: taskRow?.is_critical ?? null,
             })
             .select()
             .single();

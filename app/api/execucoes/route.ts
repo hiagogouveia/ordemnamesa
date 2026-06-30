@@ -140,6 +140,13 @@ export async function POST(request: Request) {
             restaurantId: restaurant_id,
         });
 
+        // Sprint 84 — snapshot da identidade da tarefa (fidelidade histórica da Auditoria)
+        const { data: taskDef } = await adminSupabase
+            .from('checklist_tasks')
+            .select('title, description, is_critical')
+            .eq('id', task_id)
+            .maybeSingle();
+
         // Criar o log
         const { data: newExecution, error: execError } = await adminSupabase
             .from('task_executions')
@@ -152,7 +159,10 @@ export async function POST(request: Request) {
                 status,
                 notes,
                 photo_url,
-                executed_at: new Date().toISOString()
+                executed_at: new Date().toISOString(),
+                task_title_snapshot: taskDef?.title ?? null,
+                task_description_snapshot: taskDef?.description ?? null,
+                is_critical_snapshot: taskDef?.is_critical ?? null,
             })
             .select()
             .single();

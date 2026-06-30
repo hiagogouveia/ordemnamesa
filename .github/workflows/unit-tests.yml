@@ -1,0 +1,31 @@
+name: unit-tests
+
+# Testes unitários puros (vitest, sem banco). Barram regressões em PR e push.
+# Cobrem, entre outros, a imutabilidade/fidelidade do histórico auditável:
+#   - lib/services/__tests__/audit-grouping.test.ts (vínculo execução↔assumption)
+#   - lib/api/__tests__/checklist-reset.test.ts      (reset só remove 'doing')
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+      - main
+
+jobs:
+  unit:
+    name: Unit tests (vitest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Rodar testes unitários
+        run: npm run test

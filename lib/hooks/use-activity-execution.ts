@@ -210,6 +210,13 @@ export const useToggleActivityTask = () => {
                         restaurantId,
                     });
 
+                    // Sprint 84 — snapshot da identidade da tarefa (fidelidade histórica da Auditoria)
+                    const { data: taskDef } = await supabase
+                        .from('checklist_tasks')
+                        .select('title, description, is_critical')
+                        .eq('id', taskId)
+                        .maybeSingle();
+
                     const { data, error } = await supabase
                         .from('task_executions')
                         .insert({
@@ -222,6 +229,9 @@ export const useToggleActivityTask = () => {
                             executed_at: new Date().toISOString(),
                             photo_url: photoUrl ?? null,
                             requires_photo_snapshot: requiresPhoto ?? false,
+                            task_title_snapshot: taskDef?.title ?? null,
+                            task_description_snapshot: taskDef?.description ?? null,
+                            is_critical_snapshot: taskDef?.is_critical ?? null,
                             ...sharedFields,
                         })
                         .select()
@@ -233,13 +243,17 @@ export const useToggleActivityTask = () => {
                 // To uncheck: delete the execution record (no record = task not done)
                 let realExecutionId = executionId;
                 if (!realExecutionId || String(realExecutionId).startsWith('optimistic-')) {
-                    // Look up the real execution from the DB
+                    // Look up the real execution from the DB — só a de HOJE (guarda defensiva:
+                    // nunca alvejar histórico de dias anteriores; o trigger s85 é o backstop).
+                    const startOfDay = new Date();
+                    startOfDay.setHours(0, 0, 0, 0);
                     const { data: exec } = await supabase
                         .from('task_executions')
                         .select('id')
                         .eq('task_id', taskId)
                         .eq('checklist_id', checklistId)
                         .eq('status', 'done')
+                        .gte('executed_at', startOfDay.toISOString())
                         .maybeSingle();
                     realExecutionId = exec?.id;
                 }
@@ -375,6 +389,13 @@ export const useSkipTask = () => {
                     .limit(1)
                     .maybeSingle();
 
+                // Sprint 84 — snapshot da identidade da tarefa (fidelidade histórica)
+                const { data: taskDef } = await supabase
+                    .from('checklist_tasks')
+                    .select('title, description, is_critical')
+                    .eq('id', taskId)
+                    .maybeSingle();
+
                 const { data, error } = await supabase
                     .from('task_executions')
                     .insert({
@@ -385,6 +406,9 @@ export const useSkipTask = () => {
                         user_id: user.id,
                         status: 'skipped',
                         executed_at: now,
+                        task_title_snapshot: taskDef?.title ?? null,
+                        task_description_snapshot: taskDef?.description ?? null,
+                        is_critical_snapshot: taskDef?.is_critical ?? null,
                     })
                     .select()
                     .single();
@@ -593,12 +617,15 @@ export const useResumeTask = () => {
             // Buscar ID real se for otimista
             let realId = executionId;
             if (realId.startsWith('optimistic-')) {
+                const startOfDay = new Date();
+                startOfDay.setHours(0, 0, 0, 0);
                 const { data: exec } = await supabase
                     .from('task_executions')
                     .select('id')
                     .eq('task_id', taskId)
                     .eq('checklist_id', checklistId)
                     .eq('status', 'blocked')
+                    .gte('executed_at', startOfDay.toISOString())
                     .maybeSingle();
                 realId = exec?.id;
             }

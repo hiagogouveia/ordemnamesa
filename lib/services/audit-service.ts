@@ -259,11 +259,14 @@ interface RawTaskExec {
     type_snapshot: string | null;
     value_rating: number | null;
     checklist_assumption_id: string | null;
+    task_title_snapshot: string | null;
+    task_description_snapshot: string | null;
+    is_critical_snapshot: boolean | null;
 }
 
-// Colunas lidas de task_executions para a Auditoria (inclui o vínculo canônico).
+// Colunas lidas de task_executions para a Auditoria (inclui vínculo canônico e snapshots de identidade).
 const EXEC_SELECT_COLS =
-    'id, task_id, checklist_id, user_id, status, executed_at, started_at, notes, observation, photo_url, photos, blocked_reason, type_snapshot, value_rating, checklist_assumption_id';
+    'id, task_id, checklist_id, user_id, status, executed_at, started_at, notes, observation, photo_url, photos, blocked_reason, type_snapshot, value_rating, checklist_assumption_id, task_title_snapshot, task_description_snapshot, is_critical_snapshot';
 
 interface RawTaskIssue {
     id: string;
@@ -759,8 +762,9 @@ export async function fetchAuditDetail(
         }
     }
 
+    // Fidelidade histórica (s84): prefere o título capturado no snapshot da execução; fallback p/ atual.
     const taskTitleById: Record<string, string> = {};
-    for (const t of taskList) taskTitleById[t.id] = t.title;
+    for (const t of taskList) taskTitleById[t.id] = lastByTask[t.id]?.task_title_snapshot ?? t.title;
 
     // Monta AuditIssue[] com signed URLs das fotos da ocorrência
     const auditIssues: AuditIssue[] = await Promise.all(
@@ -823,9 +827,10 @@ export async function fetchAuditDetail(
                 : mapTaskExecutionStatus(ex?.status);
             return {
                 task_id: t.id,
-                title: t.title,
-                description: t.description,
-                is_critical: !!t.is_critical,
+                // Fidelidade histórica (s84): snapshot da execução tem precedência sobre a definição atual.
+                title: ex?.task_title_snapshot ?? t.title,
+                description: ex?.task_description_snapshot ?? t.description,
+                is_critical: ex?.is_critical_snapshot ?? !!t.is_critical,
                 order: idx,
                 execution_id: ex?.id ?? null,
                 status,

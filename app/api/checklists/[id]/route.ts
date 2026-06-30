@@ -438,6 +438,39 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
         const delAccess = canDeleteChecklists(delBilling);
         if (!delAccess.allowed) return buildAccessDeniedResponse(delAccess);
 
+        // Imutabilidade do histórico (s85): se o checklist já tem QUALQUER histórico auditável
+        // (execuções ou sessões/assumptions), ele NÃO pode sofrer hard-delete — o CASCADE apagaria
+        // o histórico. Nesse caso, arquivamos (active=false): some das listas operacionais e não
+        // pode mais ser executado, mas a Auditoria/PDF continuam exibindo o histórico.
+        const [execCount, assumptionCount] = await Promise.all([
+            adminSupabase
+                .from('task_executions')
+                .select('id', { count: 'exact', head: true })
+                .eq('checklist_id', id)
+                .eq('restaurant_id', restaurant_id),
+            adminSupabase
+                .from('checklist_assumptions')
+                .select('id', { count: 'exact', head: true })
+                .eq('checklist_id', id)
+                .eq('restaurant_id', restaurant_id),
+        ]);
+        const hasHistory = (execCount.count ?? 0) > 0 || (assumptionCount.count ?? 0) > 0;
+
+        if (hasHistory) {
+            const { error: archiveError } = await adminSupabase
+                .from('checklists')
+                .update({ active: false })
+                .eq('id', id)
+                .eq('restaurant_id', restaurant_id);
+            if (archiveError) {
+                console.error('[DELETE /api/checklists/[id]] Erro ao arquivar checklist:', archiveError);
+                return NextResponse.json({ error: archiveError.message }, { status: 500 });
+            }
+            // Histórico (incl. fotos) é preservado — não removemos evidências aqui.
+            return NextResponse.json({ success: true, archived: true });
+        }
+
+        // Sem histórico: hard-delete permitido (rascunho/nunca executado).
         // Coletar paths das fotos ANTES do delete (a cascata s75 apaga as linhas,
         // mas não os arquivos no Storage — sem isto eles virariam órfãos).
         const [execRows, issueRows] = await Promise.all([
