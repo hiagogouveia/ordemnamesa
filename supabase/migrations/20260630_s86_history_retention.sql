@@ -43,15 +43,18 @@ begin
             'cutoff', v_cutoff,
             'issues', (select count(*) from task_issues where created_at < v_cutoff),
             'executions', (select count(*) from task_executions where executed_at < v_cutoff),
-            'assumptions', (select count(*) from checklist_assumptions
-                             where coalesce(completed_at, assumed_at) < v_cutoff)
+            'assumptions', (select count(*) from checklist_assumptions a
+                             where coalesce(a.completed_at, a.assumed_at) < v_cutoff
+                               and not exists (select 1 from task_executions te
+                                                where te.checklist_assumption_id = a.id
+                                                  and te.executed_at >= v_cutoff))
         );
     end if;
 
     -- Processo oficial de retenção: libera os triggers de imutabilidade nesta transação.
     perform set_config('app.allow_history_mutation', 'on', true);
 
-    -- Coleta os paths de foto das linhas que serão apagadas (para o route remover do Storage).
+    -- Coleta os paths de foto das linhas antigas que serão apagadas (para o route remover do Storage).
     select coalesce(array_agg(distinct p), '{}') into v_photo_paths
     from (
         select photo_url as p from task_executions
@@ -65,14 +68,22 @@ begin
     ) s
     where p is not null and p <> '';
 
-    -- Deleção na ordem segura (task_issue_events cai por CASCADE de task_issues).
+    -- Deleção conservadora — NUNCA remove nada recente:
+    --  • issues/executions apagados só pela PRÓPRIA data (< cutoff);
+    --  • uma assumption antiga só é apagada se NÃO tiver mais nenhuma execução (todas já eram
+    --    antigas e foram apagadas). Assim, sessão antiga que ainda tenha execução recente é
+    --    PRESERVADA — e o FK NO ACTION (task_executions -> checklist_assumptions, PROD) nunca
+    --    é violado, pois a assumption só some quando não há execução a referenciá-la.
+    -- (task_issue_events cai por CASCADE de task_issues.)
     delete from task_issues where created_at < v_cutoff;
     get diagnostics v_issues = row_count;
 
     delete from task_executions where executed_at < v_cutoff;
     get diagnostics v_execs = row_count;
 
-    delete from checklist_assumptions where coalesce(completed_at, assumed_at) < v_cutoff;
+    delete from checklist_assumptions a
+     where coalesce(a.completed_at, a.assumed_at) < v_cutoff
+       and not exists (select 1 from task_executions te where te.checklist_assumption_id = a.id);
     get diagnostics v_assumptions = row_count;
 
     return jsonb_build_object(

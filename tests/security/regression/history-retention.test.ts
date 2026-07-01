@@ -23,6 +23,9 @@ describe("Regressão · retenção de histórico (60 dias)", () => {
     let oldExecutionId: string;
     let recentAssumptionId: string;
     let recentExecutionId: string;
+    // Edge: sessão ANTIGA (90d) que ainda tem execução RECENTE (10d) — deve ser PRESERVADA.
+    let edgeAssumptionId: string;
+    let edgeRecentExecutionId: string;
 
     beforeAll(async () => {
         fx = await getSharedFixtures();
@@ -89,6 +92,23 @@ describe("Regressão · retenção de histórico (60 dias)", () => {
         }).select("id").single();
         if (recE.error) throw new Error(`recent execution: ${recE.error.message}`);
         recentExecutionId = recE.data.id;
+
+        // Edge: assumption ANTIGA (90d) com execução RECENTE (10d) vinculada.
+        const edgeA = await admin.from("checklist_assumptions").insert({
+            checklist_id: receivingChecklistId, restaurant_id: fx.restaurantA.id,
+            user_id: fx.staffA.id, user_name: "Staff A", date_key: "2026-04-02",
+            assumed_at: daysAgo(90), completed_at: null, execution_status: "in_progress",
+        }).select("id").single();
+        if (edgeA.error) throw new Error(`edge assumption: ${edgeA.error.message}`);
+        edgeAssumptionId = edgeA.data.id;
+
+        const edgeE = await admin.from("task_executions").insert({
+            restaurant_id: fx.restaurantA.id, task_id: oldTaskId, checklist_id: receivingChecklistId,
+            checklist_assumption_id: edgeAssumptionId, user_id: fx.staffA.id,
+            status: "done", executed_at: daysAgo(10),
+        }).select("id").single();
+        if (edgeE.error) throw new Error(`edge recent execution: ${edgeE.error.message}`);
+        edgeRecentExecutionId = edgeE.data.id;
     });
 
     afterAll(async () => {
@@ -133,5 +153,14 @@ describe("Regressão · retenção de histórico (60 dias)", () => {
         expect(cl.data?.checklist_type).toBe("receiving");
         const task = await admin.from("checklist_tasks").select("id").eq("id", oldTaskId).maybeSingle();
         expect(task.data?.id).toBe(oldTaskId);
+    });
+
+    it("edge: sessão antiga com execução recente é PRESERVADA (nunca apaga nada recente; FK-safe)", async () => {
+        // Após o purge do teste anterior: a execução recente (10d) sobrevive, e a assumption antiga
+        // não é apagada porque ainda tem execução recente vinculada.
+        const edgeExec = await admin.from("task_executions").select("id").eq("id", edgeRecentExecutionId).maybeSingle();
+        const edgeAss = await admin.from("checklist_assumptions").select("id").eq("id", edgeAssumptionId).maybeSingle();
+        expect(edgeExec.data?.id).toBe(edgeRecentExecutionId);
+        expect(edgeAss.data?.id).toBe(edgeAssumptionId);
     });
 });
