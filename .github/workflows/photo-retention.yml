@@ -1,12 +1,15 @@
-name: photo-retention
+name: data-retention
 
-# Retenção de fotos de evidência: remove do Storage as fotos com mais de
-# PHOTO_RETENTION_DAYS dias (preservando o registro de execução).
-# Chama a rota protegida /api/cron/photo-retention com o CRON_SECRET.
+# Retenção de dados:
+#  1) Fotos de evidência > PHOTO_RETENTION_DAYS (preserva o registro de execução).
+#  2) Histórico de execução > HISTORY_RETENTION_DAYS (apaga task_executions/
+#     checklist_assumptions/task_issues; NUNCA definições de rotina nem recebimentos).
+# Chama as rotas protegidas /api/cron/{photo,history}-retention com o CRON_SECRET.
 #
 # Secrets necessários no repositório:
 #   PHOTO_RETENTION_URL  -> ex.: https://app.ordemnamesa.com/api/cron/photo-retention
 #   CRON_SECRET          -> mesmo valor do env CRON_SECRET do app (PROD)
+# A URL de histórico é derivada da PHOTO_RETENTION_URL (mesmo host) — sem novo secret.
 
 on:
   schedule:
@@ -41,6 +44,36 @@ jobs:
           echo ""
 
           if [ "$HTTP_CODE" -ne 200 ]; then
-            echo "::error::Rotina de retenção falhou (HTTP $HTTP_CODE)"
+            echo "::error::Rotina de retenção de fotos falhou (HTTP $HTTP_CODE)"
             exit 1
           fi
+
+      # Retenção de HISTÓRICO de execução (deleção irreversível).
+      # Agendado (segunda) = execução real; dispatch manual respeita o input dryRun (default true).
+      - name: Chamar rotina de retenção de histórico
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            DRY_RUN="false"
+          else
+            DRY_RUN="${{ github.event.inputs.dryRun }}"
+          fi
+          echo "dryRun=$DRY_RUN"
+
+          # Deriva a URL de histórico da URL de fotos (mesmo host) — sem novo secret.
+          HISTORY_URL="${PHOTO_URL/photo-retention/history-retention}"
+          echo "endpoint=$HISTORY_URL"
+
+          HTTP_CODE=$(curl -sS -o response.json -w "%{http_code}" \
+            -X POST "$HISTORY_URL?dryRun=$DRY_RUN" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+
+          echo "HTTP $HTTP_CODE"
+          cat response.json
+          echo ""
+
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            echo "::error::Rotina de retenção de histórico falhou (HTTP $HTTP_CODE)"
+            exit 1
+          fi
+        env:
+          PHOTO_URL: ${{ secrets.PHOTO_RETENTION_URL }}

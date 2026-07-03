@@ -6,6 +6,7 @@ import { filterChecklistsByRecurrence } from '@/lib/utils/should-checklist-appea
 import { resolveGlobalScope, isGlobalScopeResult } from '@/lib/api/global-scope';
 import { fetchArchivedQuickIdsForToday } from '@/lib/utils/operational-activity';
 import { fetchShiftIdsByChecklist, isVisibleByShiftIntersection } from '@/lib/api/shift-links';
+import { determineChecklistResets, RESET_DELETABLE_STATUS, type ResettableChecklist } from '@/lib/api/checklist-reset';
 
 const getAdminSupabase = () => {
     return createClient(
@@ -224,48 +225,23 @@ export async function GET(request: Request) {
         const checklistIds = visibleChecklists.map(c => c.id);
         const checklistMeta = new Map(visibleChecklists.map(c => [c.id, { is_required: c.is_required, recurrence: c.recurrence, last_reset_at: c.last_reset_at }]));
 
-        // Reset de recorrência: apagar execuções antigas conforme o ciclo do checklist
-        // (opera sobre TODOS os checklists, não apenas visíveis — reset é manutenção)
+        // Reset de recorrência: limpar execuções EM ANDAMENTO órfãs conforme o ciclo do checklist
+        // (opera sobre TODOS os checklists, não apenas visíveis — reset é manutenção).
+        // A decisão de quais checklists resetar é pura e testada em lib/api/checklist-reset.ts.
         const [yearStr, monthStr, dayStr] = brazil.dateKey.split('-');
         const todayLocal = new Date(Number(yearStr), Number(monthStr) - 1, Number(dayStr));
-        const startOfWeek = new Date(todayLocal);
-        startOfWeek.setDate(todayLocal.getDate() - todayLocal.getDay());
-        const startOfMonth = new Date(todayLocal.getFullYear(), todayLocal.getMonth(), 1);
-        const startOfYear = new Date(todayLocal.getFullYear(), 0, 1);
-
-        // Determina quais checklists precisam resetar (sem I/O dentro do loop).
-        const resets: Array<{ id: string; restaurantId: string; periodStartISO: string }> = [];
-        for (const cl of (activeChecklists || [])) {
-            if (!cl.recurrence) continue;
-            // Sprint 65: execução one-shot não é recorrente — nunca resetar suas
-            // tarefas (protege execuções legadas com recurrence='daily').
-            if (cl.is_one_shot) continue;
-
-            let periodStart: Date | null = null;
-            const lastReset = cl.last_reset_at ? new Date(cl.last_reset_at) : null;
-
-            if (cl.recurrence === 'daily' || cl.recurrence === 'weekdays') {
-                periodStart = todayLocal;
-            } else if (cl.recurrence === 'weekly') {
-                periodStart = startOfWeek;
-            } else if (cl.recurrence === 'monthly') {
-                periodStart = startOfMonth;
-            } else if (cl.recurrence === 'yearly') {
-                periodStart = startOfYear;
-            }
-
-            if (periodStart && (!lastReset || lastReset < periodStart)) {
-                const clRestaurantId = (cl as { restaurant_id?: string }).restaurant_id || restaurantIds[0];
-                resets.push({ id: cl.id, restaurantId: clRestaurantId, periodStartISO: periodStart.toISOString() });
-            }
-        }
+        const resets = determineChecklistResets(
+            (activeChecklists || []) as ResettableChecklist[],
+            todayLocal,
+            restaurantIds[0],
+        );
 
         // Reset em lote — substitui o antigo N+1 (3 queries sequenciais por checklist).
         // Semântica idêntica: agrupa os deletes por (restaurant_id, início do período),
         // o que equivale a deletar por checklist, pois cada grupo compartilha o mesmo
         // restaurant_id e o mesmo limiar de executed_at; e mantém o delete por task_id.
         if (resets.length > 0) {
-            const resetChecklistIds = resets.map(r => r.id);
+            const resetChecklistIds = resets.map(r => r.checklistId);
 
             // 1 query: task_ids de todos os checklists a resetar.
             const { data: resetTasks } = await adminSupabase
@@ -282,10 +258,11 @@ export async function GET(request: Request) {
             // Agrupa por (restaurant_id, periodStart) → tipicamente ≤ 4 grupos distintos.
             const deleteGroups = new Map<string, { restaurantId: string; periodStartISO: string; taskIds: string[] }>();
             for (const r of resets) {
-                const taskIds = taskIdsByChecklist.get(r.id);
+                const taskIds = taskIdsByChecklist.get(r.checklistId);
                 if (!taskIds || taskIds.length === 0) continue;
-                const key = `${r.restaurantId}|${r.periodStartISO}`;
-                const group = deleteGroups.get(key) ?? { restaurantId: r.restaurantId, periodStartISO: r.periodStartISO, taskIds: [] };
+                const rid = r.restaurantId ?? restaurantIds[0];
+                const key = `${rid}|${r.periodStartISO}`;
+                const group = deleteGroups.get(key) ?? { restaurantId: rid, periodStartISO: r.periodStartISO, taskIds: [] as string[] };
                 group.taskIds.push(...taskIds);
                 deleteGroups.set(key, group);
             }
@@ -304,7 +281,7 @@ export async function GET(request: Request) {
                         .from('task_executions')
                         .delete()
                         .eq('restaurant_id', g.restaurantId)
-                        .eq('status', 'doing')
+                        .eq('status', RESET_DELETABLE_STATUS)
                         .lt('executed_at', g.periodStartISO)
                         .in('task_id', g.taskIds)
                 )
