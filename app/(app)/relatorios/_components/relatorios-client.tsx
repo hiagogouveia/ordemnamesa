@@ -9,6 +9,7 @@ import type { Scope } from '@/lib/types/scope';
 import { AuditFiltersBar } from './audit-filters';
 import { AuditExecutionList } from './audit-execution-list';
 import { AuditExecutionPanel } from './audit-execution-panel';
+import { BatchExportModal } from './batch-export-modal';
 
 const PRESET_LABEL: Record<PeriodPreset, string> = {
     today: 'Hoje',
@@ -29,12 +30,53 @@ export function RelatoriosClient({ scope, isGlobal, accountName }: Props) {
     const [csvLoading, setCsvLoading] = useState(false);
     const [csvError, setCsvError] = useState<string | null>(null);
 
+    // ── Seleção em lote ──
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+    // Mudança de filtro/página pendente de confirmação (quando há seleção ativa).
+    const [pendingFilters, setPendingFilters] = useState<AuditFilters | null>(null);
+    const [exportOpen, setExportOpen] = useState(false);
+
     const { data, isLoading, isFetching, error } = useRelatorios(scope, filters);
 
     const entries = data?.entries ?? [];
     const total = data?.total ?? 0;
 
     const activeChips = useMemo(() => buildActiveChips(filters), [filters]);
+
+    /** Aplica a mudança de filtros e descarta a seleção (fora da página/escopo atual). */
+    function applyFilters(next: AuditFilters) {
+        setFilters(next);
+        setSelectedIds(new Set());
+    }
+
+    /** Trocar filtro/página limpa a seleção — pede confirmação se houver itens marcados (§6). */
+    function requestFilters(next: AuditFilters) {
+        if (selectedIds.size > 0) {
+            setPendingFilters(next);
+            return;
+        }
+        setFilters(next);
+    }
+
+    function toggleOne(id: string) {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    }
+
+    function togglePage(ids: string[], select: boolean) {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            for (const id of ids) {
+                if (select) next.add(id);
+                else next.delete(id);
+            }
+            return next;
+        });
+    }
 
     async function handleExportCsv() {
         setCsvLoading(true);
@@ -51,7 +93,7 @@ export function RelatoriosClient({ scope, isGlobal, accountName }: Props) {
     return (
         <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#101d22]">
             <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-10">
-                <div className="max-w-[1400px] mx-auto flex flex-col gap-6">
+                <div className={`max-w-[1400px] mx-auto flex flex-col gap-6 ${selectedIds.size > 0 ? 'pb-28' : ''}`}>
 
                     {/* ── Cabeçalho ── */}
                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -84,7 +126,7 @@ export function RelatoriosClient({ scope, isGlobal, accountName }: Props) {
                     </div>
 
                     {/* ── Filtros ── */}
-                    <AuditFiltersBar scope={scope} filters={filters} onChange={setFilters} />
+                    <AuditFiltersBar scope={scope} filters={filters} onChange={requestFilters} />
 
                     {/* ── Resumo leve ── */}
                     <div className="flex flex-wrap items-center justify-between gap-3 px-1">
@@ -116,7 +158,7 @@ export function RelatoriosClient({ scope, isGlobal, accountName }: Props) {
                                 ))}
                                 <button
                                     type="button"
-                                    onClick={() => setFilters(DEFAULT_FILTERS)}
+                                    onClick={() => requestFilters(DEFAULT_FILTERS)}
                                     className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full text-[#92bbc9] hover:text-white"
                                 >
                                     Limpar
@@ -144,6 +186,9 @@ export function RelatoriosClient({ scope, isGlobal, accountName }: Props) {
                         isLoading={isLoading}
                         isGlobal={isGlobal}
                         onSelect={setSelectedId}
+                        selectedIds={selectedIds}
+                        onToggle={toggleOne}
+                        onTogglePage={togglePage}
                     />
 
                     {/* ── Paginação ── */}
@@ -152,16 +197,136 @@ export function RelatoriosClient({ scope, isGlobal, accountName }: Props) {
                         limit={filters.limit}
                         total={total}
                         currentCount={entries.length}
-                        onChange={page => setFilters({ ...filters, page })}
+                        onChange={page => requestFilters({ ...filters, page })}
                     />
                 </div>
             </div>
+
+            {/* ── Barra de ação da seleção em lote ── */}
+            <BatchSelectionBar
+                count={selectedIds.size}
+                onClear={() => setSelectedIds(new Set())}
+                onExport={() => setExportOpen(true)}
+            />
+
+            {/* ── Confirmação ao perder seleção (§6) ── */}
+            <ConfirmLoseSelectionDialog
+                open={pendingFilters !== null}
+                count={selectedIds.size}
+                onCancel={() => setPendingFilters(null)}
+                onConfirm={() => {
+                    if (pendingFilters) applyFilters(pendingFilters);
+                    setPendingFilters(null);
+                }}
+            />
+
+            {/* ── Exportação em lote ── */}
+            {exportOpen && (
+                <BatchExportModal
+                    scope={scope}
+                    isGlobal={isGlobal}
+                    accountName={accountName}
+                    filters={filters}
+                    assumptionIds={Array.from(selectedIds)}
+                    onClose={() => setExportOpen(false)}
+                />
+            )}
 
             <AuditExecutionPanel
                 scope={scope}
                 assumptionId={selectedId}
                 onClose={() => setSelectedId(null)}
             />
+        </div>
+    );
+}
+
+// ─── Barra de ação da seleção ────────────────────────────────────────────────
+
+interface BatchSelectionBarProps {
+    count: number;
+    onClear: () => void;
+    onExport: () => void;
+}
+
+/** Barra flutuante inferior — aparece só quando há ≥1 registro selecionado. */
+function BatchSelectionBar({ count, onClear, onExport }: BatchSelectionBarProps) {
+    if (count === 0) return null;
+    return (
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-4 pb-4">
+            <div className="pointer-events-auto flex items-center gap-3 bg-[#16262c] border border-[#325a67] shadow-2xl rounded-2xl px-4 py-3">
+                <span className="material-symbols-outlined text-[#13b6ec]">checklist</span>
+                <span className="text-sm text-white font-semibold whitespace-nowrap">
+                    {count} {count === 1 ? 'selecionado' : 'selecionados'}
+                </span>
+                <button
+                    type="button"
+                    onClick={onClear}
+                    className="text-xs uppercase tracking-wider font-bold px-3 py-1.5 rounded-lg text-[#92bbc9] hover:text-white transition-colors"
+                >
+                    Limpar
+                </button>
+                <button
+                    type="button"
+                    onClick={onExport}
+                    className="inline-flex items-center gap-2 bg-[#13b6ec] hover:bg-[#0fa3d4] text-white font-bold py-2 px-4 rounded-lg transition-colors active:scale-[0.99]"
+                >
+                    <span className="material-symbols-outlined" style={{ fontSize: 18 }}>picture_as_pdf</span>
+                    Exportar selecionados
+                </button>
+            </div>
+        </div>
+    );
+}
+
+// ─── Confirmação ao perder seleção ───────────────────────────────────────────
+
+interface ConfirmLoseSelectionDialogProps {
+    open: boolean;
+    count: number;
+    onCancel: () => void;
+    onConfirm: () => void;
+}
+
+function ConfirmLoseSelectionDialog({ open, count, onCancel, onConfirm }: ConfirmLoseSelectionDialogProps) {
+    if (!open) return null;
+    return (
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={onCancel}
+        >
+            <div
+                className="w-full max-w-md bg-[#101d22] rounded-xl border border-[#325a67] shadow-2xl p-6"
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="flex items-start gap-3">
+                    <span className="material-symbols-outlined text-amber-400 mt-0.5">warning</span>
+                    <div className="flex-1">
+                        <h3 className="text-white font-bold text-lg">Descartar seleção?</h3>
+                        <p className="text-[#92bbc9] text-sm mt-1">
+                            Você tem <span className="text-white font-semibold">{count}</span>{' '}
+                            {count === 1 ? 'relatório selecionado' : 'relatórios selecionados'}. Alterar os
+                            filtros ou a página vai limpar essa seleção.
+                        </p>
+                    </div>
+                </div>
+                <div className="flex justify-end gap-2 mt-6">
+                    <button
+                        type="button"
+                        onClick={onCancel}
+                        className="px-4 py-2 rounded-lg text-sm font-semibold text-[#92bbc9] hover:text-white transition-colors"
+                    >
+                        Manter seleção
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onConfirm}
+                        className="px-4 py-2 rounded-lg text-sm font-bold text-white bg-amber-600 hover:bg-amber-500 transition-colors"
+                    >
+                        Continuar e limpar
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }
