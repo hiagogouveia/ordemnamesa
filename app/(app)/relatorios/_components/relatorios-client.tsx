@@ -93,7 +93,7 @@ export function RelatoriosClient({ scope, isGlobal, accountName }: Props) {
     return (
         <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#101d22]">
             <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-10">
-                <div className="max-w-[1400px] mx-auto flex flex-col gap-6">
+                <div className={`max-w-[1400px] mx-auto flex flex-col gap-6 ${selectedIds.size > 0 ? 'pb-28' : ''}`}>
 
                     {/* ── Cabeçalho ── */}
                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">

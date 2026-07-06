@@ -4,7 +4,7 @@ import { useState } from 'react';
 import type { AuditFilters } from '@/lib/types/audit';
 import type { Scope } from '@/lib/types/scope';
 import type { ReportMode } from '@/lib/pdf/auditoria/format';
-import { useExportRelatoriosLote } from '@/lib/hooks/use-export-relatorios-lote';
+import { useExportRelatoriosLote, type ExportFormat } from '@/lib/hooks/use-export-relatorios-lote';
 
 interface Props {
     scope: Scope;
@@ -23,6 +23,7 @@ interface Props {
 export function BatchExportModal({ scope, isGlobal, accountName, filters, assumptionIds, onClose }: Props) {
     const { state, start, cancel, reset } = useExportRelatoriosLote();
     const [mode, setMode] = useState<ReportMode>('full');
+    const [format, setFormat] = useState<ExportFormat>('pdf_combined');
 
     const isRunning = state.status === 'preparing' || state.status === 'processing' || state.status === 'rendering';
     const isConfig = state.status === 'idle';
@@ -30,7 +31,7 @@ export function BatchExportModal({ scope, isGlobal, accountName, filters, assump
     const pct = state.total > 0 ? Math.round((state.completed / state.total) * 100) : 0;
 
     function run(ids: string[]) {
-        start({ scope, assumptionIds: ids, filters, mode, isGlobal, accountName });
+        start({ scope, assumptionIds: ids, filters, mode, format, isGlobal, accountName });
     }
 
     const failedIds = state.errors.map(e => e.assumptionId);
@@ -53,9 +54,24 @@ export function BatchExportModal({ scope, isGlobal, accountName, filters, assump
                 {/* ── Configuração (escolha de modo) ── */}
                 {isConfig && (
                     <>
-                        <p className="text-[#92bbc9] text-sm mb-3">
-                            Um único PDF com todos os relatórios selecionados (cada um em nova página).
-                        </p>
+                        <p className="text-[10px] uppercase tracking-wider font-bold text-[#557682] mb-2">Formato</p>
+                        <div className="flex flex-col gap-2 mb-4">
+                            <ModeOption
+                                active={format === 'pdf_combined'}
+                                onClick={() => setFormat('pdf_combined')}
+                                icon="picture_as_pdf"
+                                title="PDF único"
+                                desc="Um só arquivo com todos os relatórios (cada um em nova página)."
+                            />
+                            <ModeOption
+                                active={format === 'zip'}
+                                onClick={() => setFormat('zip')}
+                                icon="folder_zip"
+                                title="ZIP (1 PDF por relatório)"
+                                desc="Um arquivo .zip com um PDF separado para cada relatório."
+                            />
+                        </div>
+                        <p className="text-[10px] uppercase tracking-wider font-bold text-[#557682] mb-2">Conteúdo</p>
                         <div className="flex flex-col gap-2 mb-5">
                             <ModeOption
                                 active={mode === 'full'}
@@ -86,7 +102,7 @@ export function BatchExportModal({ scope, isGlobal, accountName, filters, assump
                                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold text-white bg-[#13b6ec] hover:bg-[#0fa3d4] transition-colors"
                             >
                                 <span className="material-symbols-outlined" style={{ fontSize: 18 }}>download</span>
-                                Gerar PDF
+                                {format === 'zip' ? 'Gerar ZIP' : 'Gerar PDF'}
                             </button>
                         </div>
                     </>
@@ -98,7 +114,7 @@ export function BatchExportModal({ scope, isGlobal, accountName, filters, assump
                         <p className="text-[#92bbc9] text-sm mb-3">
                             {state.status === 'preparing' && 'Preparando exportação…'}
                             {state.status === 'processing' && `Processando relatórios… (${state.completed}/${state.total})`}
-                            {state.status === 'rendering' && 'Montando o PDF final…'}
+                            {state.status === 'rendering' && (format === 'zip' ? 'Compactando o ZIP…' : 'Montando o PDF final…')}
                         </p>
                         <div className="h-2.5 rounded-full bg-[#233f48] overflow-hidden">
                             <div

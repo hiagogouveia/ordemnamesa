@@ -41,11 +41,14 @@ export interface ExportState {
     message: string | null;
 }
 
+export type ExportFormat = 'pdf_combined' | 'zip';
+
 export interface StartParams {
     scope: Scope;
     assumptionIds: string[];
     filters: AuditFilters;
     mode: ReportMode;
+    format: ExportFormat;
     isGlobal: boolean;
     accountName: string | null;
 }
@@ -125,7 +128,7 @@ export function useExportRelatoriosLote() {
                 body: JSON.stringify({
                     assumptionIds: params.assumptionIds,
                     filters: params.filters,
-                    format: 'pdf_combined',
+                    format: params.format,
                     reportMode: params.mode,
                 }),
             });
@@ -168,13 +171,25 @@ export function useExportRelatoriosLote() {
             }
 
             // Logo da marca + carregador de imagens (import dinâmico do gerador)
-            const { loadImagesForDetail, renderAuditoriaPdfBlob, buildAuditBatchFilename, BRAND_LOGO_URL } =
-                await import('@/lib/pdf/auditoria/generate');
+            const {
+                loadImagesForDetail, renderAuditoriaPdfBlob,
+                buildAuditBatchFilename, buildAuditZipFilename, buildReportEntryFilename,
+                BRAND_LOGO_URL,
+            } = await import('@/lib/pdf/auditoria/generate');
             const { loadImageAsDataUrl } = await import('@/lib/pdf/shared');
             const brandLogoDataUrl = await loadImageAsDataUrl(BRAND_LOGO_URL);
 
-            // 3) Streaming: detalhe por relatório
+            const generatedAt = formatNowBR();
+            const docBase = { restaurantName, exportedBy, generatedAt, mode: params.mode, logoDataUrl, brandLogoDataUrl };
+            const isZip = params.format === 'zip';
+
+            // ZIP: empacota 1 PDF por relatório, renderizando e liberando dentro do loop
+            // (memória ~constante — §9). PDF combinado: acumula os dados e renderiza no fim.
             const reports: AuditReportData[] = [];
+            const zip = isZip ? new (await import('jszip')).default() : null;
+            let zipCount = 0;
+
+            // 3) Streaming: detalhe por relatório
             for (const item of manifest.items) {
                 if (cancelRef.current) break;
                 try {
@@ -190,7 +205,16 @@ export function useExportRelatoriosLote() {
                     const images = params.mode === 'full'
                         ? await loadImagesForDetail(detail)
                         : new Map<string, string>();
-                    reports.push(buildReportData(detail, item.document_uuid, params.mode, images));
+                    const report = buildReportData(detail, item.document_uuid, params.mode, images);
+
+                    if (zip) {
+                        const blob = await renderAuditoriaPdfBlob({ ...docBase, reports: [report] });
+                        zip.file(buildReportEntryFilename(report.checklistName, report.dateLabel, report.documentUuid), blob);
+                        zipCount++;
+                        // report/images saem de escopo aqui → elegíveis a GC antes do próximo
+                    } else {
+                        reports.push(report);
+                    }
                 } catch (e) {
                     errors.push({
                         assumptionId: item.assumption_id,
@@ -200,6 +224,8 @@ export function useExportRelatoriosLote() {
                 setState(prev => ({ ...prev, completed: prev.completed + 1, errors: [...errors] }));
             }
 
+            const generatedCount = isZip ? zipCount : reports.length;
+
             // 4) Cancelamento
             if (cancelRef.current) {
                 await patchOutcome('cancelled');
@@ -208,32 +234,29 @@ export function useExportRelatoriosLote() {
             }
 
             // 5) Todos falharam
-            if (reports.length === 0) {
+            if (generatedCount === 0) {
                 await patchOutcome('failed');
                 setState(prev => ({ ...prev, status: 'error', message: 'Nenhum relatório pôde ser gerado.' }));
                 return;
             }
 
-            // 6) Render + download (PDF combinado)
+            // 6) Empacota / renderiza + download
             setState(prev => ({ ...prev, status: 'rendering' }));
-            const blob = await renderAuditoriaPdfBlob({
-                restaurantName,
-                exportedBy,
-                generatedAt: formatNowBR(),
-                mode: params.mode,
-                logoDataUrl,
-                brandLogoDataUrl,
-                reports,
-            });
-            triggerDownload(blob, buildAuditBatchFilename(reports.length));
+            if (zip) {
+                const zipBlob = await zip.generateAsync({ type: 'blob' });
+                triggerDownload(zipBlob, buildAuditZipFilename(generatedCount));
+            } else {
+                const blob = await renderAuditoriaPdfBlob({ ...docBase, reports });
+                triggerDownload(blob, buildAuditBatchFilename(generatedCount));
+            }
 
             await patchOutcome('completed');
             setState(prev => ({
                 ...prev,
                 status: 'done',
                 message: errors.length > 0
-                    ? `${reports.length} gerado(s), ${errors.length} com falha.`
-                    : `${reports.length} relatório(s) exportado(s).`,
+                    ? `${generatedCount} gerado(s), ${errors.length} com falha.`
+                    : `${generatedCount} relatório(s) exportado(s).`,
             }));
         } catch (e) {
             await patchOutcome('failed');

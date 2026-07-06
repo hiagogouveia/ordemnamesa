@@ -42,9 +42,30 @@ export async function renderAuditoriaPdfBlob(data: AuditDocumentData): Promise<B
     return pdf(<AuditoriaDocument data={data} />).toBlob();
 }
 
-/** Nome do arquivo do lote. */
+/** Nome do arquivo do lote (PDF combinado). */
 export function buildAuditBatchFilename(count: number, date: Date = new Date()): string {
     const stamp = date.toISOString().slice(0, 10);
     const suffix = count === 1 ? "relatorio" : "relatorios";
     return `auditoria_${count}_${suffix}_${stamp}.pdf`;
+}
+
+/** Nome do arquivo ZIP do lote. */
+export function buildAuditZipFilename(count: number, date: Date = new Date()): string {
+    const stamp = date.toISOString().slice(0, 10);
+    const suffix = count === 1 ? "relatorio" : "relatorios";
+    return `auditoria_${count}_${suffix}_${stamp}.zip`;
+}
+
+/** Nome de um PDF individual dentro do ZIP: slug do checklist + data + sufixo único. */
+export function buildReportEntryFilename(
+    checklistName: string,
+    dateLabel: string,
+    documentUuid: string,
+): string {
+    const slug = checklistName
+        .normalize("NFD").replace(/[̀-ͯ]/g, "")
+        .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+        .slice(0, 48) || "relatorio";
+    const day = dateLabel.replace(/\//g, "-");
+    return `${slug}_${day}_${documentUuid.slice(0, 8)}.pdf`;
 }
