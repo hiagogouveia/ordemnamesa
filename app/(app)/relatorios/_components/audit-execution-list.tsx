@@ -2,6 +2,7 @@
 
 import type { AuditExecution } from '@/lib/types/audit';
 import { Avatar } from '@/components/ui/avatar';
+import { Checkbox } from '@/components/ui/checkbox';
 import { UnitBadge } from '@/components/ui/unit-badge';
 import { StatusBadge } from './status-badge';
 import { formatDate, formatDuration, formatShift, formatTime } from './format';
@@ -11,6 +12,12 @@ interface Props {
     isLoading: boolean;
     onSelect: (assumptionId: string) => void;
     isGlobal: boolean;
+    /** Seleção em lote — ids marcados para exportação. */
+    selectedIds: Set<string>;
+    /** Alterna a seleção de um único registro. */
+    onToggle: (assumptionId: string) => void;
+    /** Marca/desmarca todos os registros visíveis da página atual. */
+    onTogglePage: (ids: string[], select: boolean) => void;
 }
 
 /**
@@ -31,7 +38,8 @@ function ImpedimentMarker() {
 }
 
 function SkeletonRow({ isGlobal }: { isGlobal: boolean }) {
-    const cols = isGlobal ? 9 : 8;
+    // +1 coluna do checkbox de seleção
+    const cols = (isGlobal ? 9 : 8) + 1;
     return (
         <tr>
             {Array.from({ length: cols }).map((_, i) => (
@@ -53,7 +61,14 @@ function SkeletonCard() {
     );
 }
 
-export function AuditExecutionList({ entries, isLoading, onSelect, isGlobal }: Props) {
+export function AuditExecutionList({ entries, isLoading, onSelect, isGlobal, selectedIds, onToggle, onTogglePage }: Props) {
+    const pageIds = entries.map(e => e.assumption_id);
+    const pageSelectedCount = pageIds.reduce((n, id) => n + (selectedIds.has(id) ? 1 : 0), 0);
+    const allPageSelected = pageIds.length > 0 && pageSelectedCount === pageIds.length;
+    const somePageSelected = pageSelectedCount > 0 && !allPageSelected;
+    // colunas de dados (8/9) + 1 do checkbox
+    const emptyColSpan = (isGlobal ? 9 : 8) + 1;
+
     return (
         <>
             {/* ── Desktop table ── */}
@@ -62,6 +77,15 @@ export function AuditExecutionList({ entries, isLoading, onSelect, isGlobal }: P
                     <table className="w-full text-left text-sm">
                         <thead className="bg-[#192d33] text-xs uppercase tracking-wider text-[#92bbc9] font-bold">
                             <tr>
+                                <th className="px-4 py-3.5 w-10">
+                                    <Checkbox
+                                        aria-label="Selecionar todos desta página"
+                                        checked={allPageSelected}
+                                        indeterminate={somePageSelected}
+                                        disabled={pageIds.length === 0}
+                                        onChange={() => onTogglePage(pageIds, !allPageSelected)}
+                                    />
+                                </th>
                                 <th className="px-4 py-3.5">Data / Hora</th>
                                 <th className="px-4 py-3.5">Checklist</th>
                                 <th className="px-4 py-3.5">Área</th>
@@ -80,7 +104,7 @@ export function AuditExecutionList({ entries, isLoading, onSelect, isGlobal }: P
 
                             {!isLoading && entries.length === 0 && (
                                 <tr>
-                                    <td colSpan={isGlobal ? 9 : 8} className="px-4 py-16 text-center">
+                                    <td colSpan={emptyColSpan} className="px-4 py-16 text-center">
                                         <div className="flex flex-col items-center gap-2 text-[#92bbc9]">
                                             <span className="material-symbols-outlined text-5xl text-[#325a67]">
                                                 history_toggle_off
@@ -92,12 +116,21 @@ export function AuditExecutionList({ entries, isLoading, onSelect, isGlobal }: P
                                 </tr>
                             )}
 
-                            {!isLoading && entries.map(e => (
+                            {!isLoading && entries.map(e => {
+                                const isChecked = selectedIds.has(e.assumption_id);
+                                return (
                                 <tr
                                     key={e.assumption_id}
                                     onClick={() => onSelect(e.assumption_id)}
-                                    className="hover:bg-[#101d22]/50 cursor-pointer transition-colors"
+                                    className={`cursor-pointer transition-colors ${isChecked ? 'bg-[#13b6ec]/10 hover:bg-[#13b6ec]/15' : 'hover:bg-[#101d22]/50'}`}
                                 >
+                                    <td className="px-4 py-3.5 w-10" onClick={ev => ev.stopPropagation()}>
+                                        <Checkbox
+                                            aria-label={`Selecionar execução de ${e.checklist.name}`}
+                                            checked={isChecked}
+                                            onChange={() => onToggle(e.assumption_id)}
+                                        />
+                                    </td>
                                     <td className="px-4 py-3.5 whitespace-nowrap">
                                         <div className="flex flex-col">
                                             <span className="text-white font-medium">{formatDate(e.assumed_at)}</span>
@@ -169,7 +202,8 @@ export function AuditExecutionList({ entries, isLoading, onSelect, isGlobal }: P
                                         </td>
                                     )}
                                 </tr>
-                            ))}
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
@@ -186,13 +220,25 @@ export function AuditExecutionList({ entries, isLoading, onSelect, isGlobal }: P
                     </div>
                 )}
 
-                {!isLoading && entries.map(e => (
-                    <button
+                {!isLoading && entries.map(e => {
+                    const isChecked = selectedIds.has(e.assumption_id);
+                    return (
+                    <div
                         key={e.assumption_id}
                         onClick={() => onSelect(e.assumption_id)}
-                        className="text-left bg-[#16262c] border border-[#325a67] rounded-xl p-4 hover:border-[#13b6ec]/40 active:scale-[0.99] transition-all"
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); onSelect(e.assumption_id); } }}
+                        className={`text-left border rounded-xl p-4 active:scale-[0.99] transition-all cursor-pointer ${isChecked ? 'bg-[#13b6ec]/10 border-[#13b6ec]/50' : 'bg-[#16262c] border-[#325a67] hover:border-[#13b6ec]/40'}`}
                     >
                         <div className="flex items-start justify-between gap-3 mb-2">
+                            <div className="pt-0.5 shrink-0" onClick={ev => ev.stopPropagation()}>
+                                <Checkbox
+                                    aria-label={`Selecionar execução de ${e.checklist.name}`}
+                                    checked={isChecked}
+                                    onChange={() => onToggle(e.assumption_id)}
+                                />
+                            </div>
                             <div className="min-w-0 flex-1">
                                 <p className="text-white font-bold truncate">{e.checklist.name}</p>
                                 {e.supplier && (
@@ -242,8 +288,9 @@ export function AuditExecutionList({ entries, isLoading, onSelect, isGlobal }: P
                             )}
                             {e.unit && <UnitBadge name={e.unit.name} />}
                         </div>
-                    </button>
-                ))}
+                    </div>
+                    );
+                })}
             </div>
         </>
     );
