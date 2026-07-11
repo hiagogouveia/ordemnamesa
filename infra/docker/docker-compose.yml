@@ -60,7 +60,9 @@ services:
     networks:
       - proxy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      # 127.0.0.1 (IPv4) em vez de localhost: evita resolução para ::1 (IPv6),
+      # que o Next.js standalone não escuta → corrige falso-negativo "unhealthy".
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3

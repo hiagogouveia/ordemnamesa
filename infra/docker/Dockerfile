@@ -60,7 +60,10 @@ USER nextjs
 
 EXPOSE 3000
 
+# Usa 127.0.0.1 (IPv4) em vez de localhost: no Alpine, localhost pode resolver
+# para ::1 (IPv6), mas o Next.js standalone escuta apenas IPv4 (HOSTNAME=0.0.0.0),
+# gerando falso-negativo "unhealthy". 127.0.0.1 força IPv4 e reflete a saúde real.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD wget -qO- http://localhost:3000/api/health || exit 1
+  CMD wget -qO- http://127.0.0.1:3000/api/health || exit 1
 
 CMD ["node", "server.js"]
