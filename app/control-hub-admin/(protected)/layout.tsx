@@ -37,6 +37,7 @@ export default async function ControlHubAdminProtectedLayout({
                             <NavLink href={`${config.panelBasePath}/leads`}>Leads</NavLink>
                             <NavLink href={`${config.panelBasePath}/restaurants`}>Restaurantes</NavLink>
                             <NavLink href={`${config.panelBasePath}/alerts`}>Alertas</NavLink>
+                            <NavLink href={`${config.panelBasePath}/notificacoes`}>Notificações</NavLink>
                             <NavLink href={`${config.panelBasePath}/staff`}>Staff</NavLink>
                             <NavLink href={`${config.panelBasePath}/logs`}>Logs</NavLink>
                         </nav>
@@ -53,6 +54,7 @@ export default async function ControlHubAdminProtectedLayout({
                     <NavLink href={`${config.panelBasePath}/leads`}>Leads</NavLink>
                     <NavLink href={`${config.panelBasePath}/restaurants`}>Restaurantes</NavLink>
                     <NavLink href={`${config.panelBasePath}/alerts`}>Alertas</NavLink>
+                    <NavLink href={`${config.panelBasePath}/notificacoes`}>Notificações</NavLink>
                     <NavLink href={`${config.panelBasePath}/staff`}>Staff</NavLink>
                     <NavLink href={`${config.panelBasePath}/logs`}>Logs</NavLink>
                 </nav>
