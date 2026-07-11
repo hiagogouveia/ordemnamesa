@@ -27,6 +27,12 @@ permissions:
   contents: read
   packages: write
 
+# Serializa deploys do mesmo ambiente: nunca dois workflows NONPROD ao mesmo tempo.
+# cancel-in-progress: false → um deploy em andamento sempre conclui; o próximo aguarda na fila.
+concurrency:
+  group: deploy-nonprod
+  cancel-in-progress: false
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/ordem-na-mesa-web
@@ -135,6 +141,13 @@ jobs:
             # Pull da nova imagem e restart idempotente
             docker compose pull nextjs
             docker compose up -d --remove-orphans
+
+            # Limpeza pós-deploy: remove SOMENTE imagens dangling (sem tag), que são
+            # as versões antigas desreferenciadas a cada deploy. Executa apenas após
+            # o 'up -d' ter sucesso (set -e aborta antes daqui em caso de falha).
+            # Nunca remove imagem em uso, Traefik, volumes ou networks.
+            # Resiliente: uma falha na limpeza jamais marca um deploy OK como falho.
+            docker image prune -f || echo "AVISO: prune pós-deploy falhou (não crítico), seguindo."
 
             # Verificar status
             echo "=== Status dos containers ==="

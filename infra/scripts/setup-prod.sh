@@ -70,6 +70,34 @@ mkdir -p "${APP_DIR}/data"
 touch "${APP_DIR}/traefik/acme.json"
 chmod 600 "${APP_DIR}/traefik/acme.json"
 
+# --- Timer de limpeza periódica de imagens dangling (PROD: semanal) ---
+# Defesa em profundidade além do prune inline no deploy. Remove SOMENTE imagens
+# dangling — nunca imagem em uso, Traefik, volumes ou networks. Idempotente.
+echo "[$(date)] Instalando systemd timer de prune de imagens dangling..."
+cat > /etc/systemd/system/docker-image-prune.service <<'UNIT'
+[Unit]
+Description=Prune de imagens Docker dangling (sem tag)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker image prune -f
+UNIT
+cat > /etc/systemd/system/docker-image-prune.timer <<'UNIT'
+[Unit]
+Description=Executa prune de imagens dangling periodicamente
+
+[Timer]
+OnCalendar=weekly
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now docker-image-prune.timer
+
 echo "[$(date)] Configuração concluída com sucesso."
 echo "[$(date)] Docker versão: $(docker --version)"
 echo "[$(date)] Docker Compose versão: $(docker compose version)"
