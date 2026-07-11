@@ -1,8 +1,12 @@
 'use server'
 
+import { after } from 'next/server'
 import { supabaseAdmin } from '@/lib/admin-leads-control-hub/supabase-admin'
 import { config } from '@/lead-control-hub.config'
 import { buildLeadInboundWhatsappLink } from '@/lib/admin-leads-control-hub/whatsapp-link'
+import { enqueueAdminNotification } from '@/lib/admin-notifications/enqueue'
+import { processAdminNotificationOutbox } from '@/lib/admin-notifications/process'
+import type { Lead } from '@/lib/admin-leads-control-hub/types'
 
 export interface SubmitLeadResult {
     ok?: boolean
@@ -86,13 +90,38 @@ export async function submitLeadAction(
             custom_fields,
             status: 'new',
         })
-        .select('id, name, organization_name, custom_fields')
-        .single<{ id: string; name: string; organization_name: string; custom_fields: Record<string, unknown> }>()
+        .select('id, name, organization_name, custom_fields, created_at')
+        .single<{ id: string; name: string; organization_name: string; custom_fields: Record<string, unknown>; created_at: string }>()
 
     if (error || !lead) {
         console.error('[submitLeadAction] insert error', error)
         return { error: 'Não foi possível registrar sua solicitação. Tente novamente.' }
     }
+
+    // Notifica os destinatários administrativos inscritos em "new_lead" (fire-safe:
+    // enqueue nunca lança; envio real roda em after(), pós-resposta, sem bloquear o lead).
+    const scoringLead = { custom_fields: lead.custom_fields } as Lead
+    const score: 'quente' | 'frio' | 'neutro' = config.leadScoring?.hot?.(scoringLead)
+        ? 'quente'
+        : config.leadScoring?.cold?.(scoringLead)
+            ? 'frio'
+            : 'neutro'
+
+    await enqueueAdminNotification('new_lead', lead.id, {
+        leadId: lead.id,
+        name,
+        organizationName,
+        email,
+        phone: fullPhone,
+        city: city || null,
+        state: state || null,
+        cnpj: cnpjDigits || null,
+        leadSource,
+        score,
+        customFields: lead.custom_fields ?? {},
+        createdAt: lead.created_at,
+    })
+    after(() => processAdminNotificationOutbox({ limit: 20 }))
 
     const whatsappUrl = buildLeadInboundWhatsappLink(config, {
         lead: {

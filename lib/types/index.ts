@@ -480,6 +480,50 @@ export interface TelegramLinkToken {
 }
 
 // ============================================================
+// Sprint 87 — Notificações administrativas por e-mail (novos leads)
+// Global (não tenant-scoped): destinatários geridos pelo Control Hub,
+// inscritos em eventos administrativos; entrega via outbox com retry.
+// ============================================================
+
+export type AdminNotificationEventType = 'new_lead'
+
+export type AdminNotificationOutboxStatus = 'pending' | 'sent' | 'failed'
+
+export interface AdminNotificationRecipient {
+    id: string
+    email: string
+    label: string | null
+    active: boolean
+    created_by: string | null
+    created_at: string
+    updated_at: string
+}
+
+export interface AdminNotificationSubscription {
+    id: string
+    recipient_id: string
+    event_type: AdminNotificationEventType
+    created_at: string
+}
+
+export interface AdminNotificationOutboxRow {
+    id: string
+    event_type: AdminNotificationEventType
+    dedup_key: string
+    recipient_email: string
+    payload: Record<string, unknown>
+    status: AdminNotificationOutboxStatus
+    attempts: number
+    max_attempts: number
+    next_attempt_at: string
+    last_error: string | null
+    provider_message_id: string | null
+    sent_at: string | null
+    created_at: string
+    updated_at: string
+}
+
+// ============================================================
 // Sprint 45 — Ocorrências operacionais (task_issues)
 // Desacoplado de task_executions: a task pode ser concluída normalmente
 // mesmo com ocorrência aberta. Gestor/owner trata via status + comentário.
