@@ -110,11 +110,15 @@ jobs:
         env:
           APP_ENV: ${{ secrets.NONPROD_APP_ENV }}
           IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+          # SHA do commit servido. Reportado por /api/health.
+          # NAO reutilizar IMAGE_TAG: o docker/metadata resolve `version` para a tag
+          # `*-latest`, que nao identifica o commit — perdendo o proposito.
+          APP_VERSION: ${{ github.sha }}
         with:
           host: ${{ secrets.VM_HOST }}
           username: ubuntu
           key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
-          envs: APP_ENV,IMAGE_TAG
+          envs: APP_ENV,IMAGE_TAG,APP_VERSION
           script: |
             set -euo pipefail
 
@@ -128,6 +132,7 @@ jobs:
             {
               printf '%s\n' "$APP_ENV" | grep -E '^(NEXT_PUBLIC_SUPABASE_URL|NEXT_PUBLIC_SUPABASE_ANON_KEY|NEXT_PUBLIC_SITE_URL|SUPABASE_SERVICE_ROLE_KEY|RESEND_API_KEY|RESEND_FROM|WHATSAPP_ADMIN_NUMBER|STRIPE_SECRET_KEY|STRIPE_WEBHOOK_SECRET|CRON_SECRET|PHOTO_RETENTION_DAYS)=' || true
               printf 'IMAGE_TAG=%s\n' "$IMAGE_TAG"
+              printf 'APP_VERSION=%s\n' "$APP_VERSION"
             } > .env
 
             # Mover traefik.yml para o diretório correto
