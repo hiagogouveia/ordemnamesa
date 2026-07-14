@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { Logo } from "@/components/ui/Logo";
 import { createClient } from "@/lib/supabase/client";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
-import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from "@/lib/hooks/use-notifications";
+import { useNotifications, useMarkAllNotificationsRead } from "@/lib/hooks/use-notifications";
 import { NotificationDropdown } from "./notification-dropdown";
 
 const TITLES: Record<string, string> = {
@@ -17,6 +17,7 @@ const TITLES: Record<string, string> = {
     "/configuracoes": "Configurações do Sistema",
     "/turno": "Meu Turno",
     "/historico": "Histórico de Tarefas",
+    "/notificacoes": "Notificações",
 };
 
 export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
@@ -25,12 +26,19 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
     const restaurantId = useRestaurantStore((s) => s.restaurantId);
-    const { data: notifData } = useNotifications(restaurantId || undefined);
-    const markReadMutation = useMarkNotificationRead();
+    const { data: notifData, isLoading } = useNotifications(restaurantId || undefined);
     const markAllReadMutation = useMarkAllNotificationsRead();
 
     const unreadCount = notifData?.unread_count ?? 0;
     const notifications = notifData?.notifications ?? [];
+
+    // a11y: ao fechar o dropdown (Esc, clique fora, navegação), o foco volta ao sino.
+    // Sem isso, o usuário de teclado é jogado no início do documento.
+    const bellRef = useRef<HTMLButtonElement>(null);
+    const closeDropdown = useCallback(() => {
+        setIsDropdownOpen(false);
+        bellRef.current?.focus();
+    }, []);
 
     useEffect(() => {
         async function getUser() {
@@ -48,11 +56,8 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
         return TITLES[baseRoute] || "Ordem na Mesa";
     };
 
-    const handleMarkRead = useCallback((id: string) => {
-        if (!restaurantId) return;
-        markReadMutation.mutate({ notificationId: id, restaurantId });
-    }, [restaurantId, markReadMutation]);
-
+    // s90 — a marcação individual saiu daqui: quem a dispara é o NotificationNavigator,
+    // e SOMENTE depois que a página de destino confirma que reconstruiu o contexto.
     const handleMarkAllRead = useCallback(() => {
         if (!restaurantId) return;
         markAllReadMutation.mutate({ restaurantId });
@@ -81,16 +86,30 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
                 {/* Sino de notificações */}
                 <div className="relative">
                     <button
-                        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                        className={`relative p-2 rounded-full transition-colors ${
+                        ref={bellRef}
+                        type="button"
+                        onClick={() => setIsDropdownOpen((v) => !v)}
+                        aria-haspopup="menu"
+                        aria-expanded={isDropdownOpen}
+                        aria-label={
+                            unreadCount > 0
+                                ? `Notificações, ${unreadCount} não lidas`
+                                : "Notificações"
+                        }
+                        className={`relative p-2 rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#13b6ec] ${
                             isDropdownOpen
                                 ? "text-white bg-[#1a2c32]"
                                 : "text-[#92bbc9] hover:text-white hover:bg-[#1a2c32]"
                         }`}
                     >
-                        <span className="material-symbols-outlined">notifications</span>
+                        <span className="material-symbols-outlined" aria-hidden="true">
+                            notifications
+                        </span>
                         {unreadCount > 0 && (
-                            <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 text-white text-[10px] font-black rounded-full px-1 border-2 border-[#111e22] animate-in zoom-in duration-200">
+                            <span
+                                aria-hidden="true"
+                                className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 text-white text-[10px] font-black rounded-full px-1 border-2 border-[#111e22] animate-in zoom-in duration-200"
+                            >
                                 {unreadCount > 99 ? "99+" : unreadCount}
                             </span>
                         )}
@@ -100,7 +119,8 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
                         <NotificationDropdown
                             notifications={notifications}
                             unreadCount={unreadCount}
-                            onClose={() => setIsDropdownOpen(false)}
+                            isLoading={isLoading}
+                            onClose={closeDropdown}
                             onMarkAllRead={handleMarkAllRead}
                         />
                     )}

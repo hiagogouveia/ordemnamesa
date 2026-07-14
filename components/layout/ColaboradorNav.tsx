@@ -66,10 +66,8 @@ export function ColaboradorNav() {
                     <Logo width={24} height={24} />
                     <span className="font-bold text-slate-900 dark:text-white">Ordem na Mesa</span>
                 </div>
-                <button className="relative w-8 h-8 flex items-center justify-center text-slate-500 dark:text-[#93adc8]">
-                    <span className="material-symbols-outlined">notifications</span>
-                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 border border-white dark:border-[#111e22]"></span>
-                </button>
+                {/* s90 — sino DECORATIVO removido: <button> sem onClick e bolinha vermelha
+                    hardcoded, sinalizando permanentemente notificações que não existiam. */}
             </header>
 
             {/* Mobile Bottom Navigation */}

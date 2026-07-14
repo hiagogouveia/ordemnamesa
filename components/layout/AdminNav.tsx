@@ -82,10 +82,10 @@ export function AdminNav() {
 
                 {/* Header Right */}
                 <div className="flex items-center gap-3 sm:gap-5">
-                    <button className="relative w-10 h-10 flex items-center justify-center rounded-lg text-slate-500 dark:text-[#93adc8] hover:bg-slate-100 dark:hover:bg-[#1a2c32] transition-colors">
-                        <span className="material-symbols-outlined">notifications</span>
-                        <span className="absolute top-2 right-2.5 w-2 h-2 rounded-full bg-red-500 border border-white dark:border-[#111e22]"></span>
-                    </button>
+                    {/* s90 — sino DECORATIVO removido: era um <button> sem onClick, com uma
+                        bolinha vermelha HARDCODED. Sinalizava permanentemente "há notificações
+                        não lidas" sem ler nada, e não fazia nada ao ser clicado. O sino real
+                        (funcional, com contagem verdadeira) vive no Header. */}
                     <div className="h-8 w-px bg-slate-200 dark:bg-[#233f48]"></div>
                     <button className="flex items-center gap-3 hover:opacity-80 transition-opacity text-left">
                         <div className="hidden sm:flex flex-col items-end">
