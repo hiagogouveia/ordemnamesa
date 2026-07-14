@@ -1,0 +1,143 @@
+- generic [ref=f3e2]:
+  - complementary [ref=f3e3]:
+    - generic [ref=f3e4]:
+      - generic [ref=f3e5]:
+        - img "Ordem na Mesa Logo" [ref=f3e7]
+        - generic [ref=f3e8]: Ordem na Mesa
+      - button "chevron_left" [ref=f3e10]
+    - navigation [ref=f3e12]:
+      - generic [ref=f3e13]: Menu Principal
+      - link "dashboard Dashboard" [ref=f3e14] [cursor=pointer]:
+        - /url: /dashboard
+        - generic [ref=f3e15]: dashboard
+        - generic [ref=f3e16]: Dashboard
+      - link "assignment_ind Meu Turno" [ref=f3e17] [cursor=pointer]:
+        - /url: /turno
+        - generic [ref=f3e18]: assignment_ind
+        - generic [ref=f3e19]: Meu Turno
+      - link "checklist Checklists" [ref=f3e20] [cursor=pointer]:
+        - /url: /checklists
+        - generic [ref=f3e21]: checklist
+        - generic [ref=f3e22]: Checklists
+      - link "local_shipping Recebimentos" [ref=f3e23] [cursor=pointer]:
+        - /url: /recebimentos
+        - generic [ref=f3e24]: local_shipping
+        - generic [ref=f3e25]: Recebimentos
+      - link "group Equipe" [ref=f3e26] [cursor=pointer]:
+        - /url: /equipe
+        - generic [ref=f3e27]: group
+        - generic [ref=f3e28]: Equipe
+      - link "bar_chart Relatórios" [ref=f3e29] [cursor=pointer]:
+        - /url: /relatorios
+        - generic [ref=f3e30]: bar_chart
+        - generic [ref=f3e31]: Relatórios
+      - link "settings Configurações" [ref=f3e32] [cursor=pointer]:
+        - /url: /configuracoes
+        - generic [ref=f3e33]: settings
+        - generic [ref=f3e34]: Configurações
+    - generic [ref=f3e35]:
+      - generic [ref=f3e36]:
+        - generic [ref=f3e37]: person
+        - generic [ref=f3e39]:
+          - generic [ref=f3e40]: Usuário
+          - generic [ref=f3e41]: Colaborador
+      - button "logout Sair da conta" [ref=f3e42]:
+        - generic [ref=f3e43]: logout
+        - generic [ref=f3e44]: Sair da conta
+  - generic [ref=f3e45]:
+    - banner [ref=f3e46]:
+      - heading "Gestão de Checklists" [level=2] [ref=f3e49]
+      - button "notifications" [ref=f3e52]
+    - main [ref=f3e54]:
+      - generic [ref=f3e55]:
+        - generic [ref=f3e57]:
+          - generic [ref=f3e58]:
+            - generic: search
+            - textbox "Buscar por nome..." [ref=f3e59]
+          - generic [ref=f3e60]:
+            - button "view_list Lista" [ref=f3e61]:
+              - generic [ref=f3e62]: view_list
+              - generic [ref=f3e63]: Lista
+            - button "view_column Cards" [ref=f3e64]:
+              - generic [ref=f3e65]: view_column
+              - generic [ref=f3e66]: Cards
+            - button "visibility Preview" [ref=f3e67]:
+              - generic [ref=f3e68]: visibility
+              - generic [ref=f3e69]: Preview
+          - button "Atualizar dados" [ref=f3e70]:
+            - generic [ref=f3e71]: refresh
+            - generic [ref=f3e72]: Atualizar
+          - button "library_add Modelos" [ref=f3e73]:
+            - generic [ref=f3e74]: library_add
+            - generic [ref=f3e75]: Modelos
+          - button "add Nova rotina" [ref=f3e76]:
+            - generic [ref=f3e77]: add
+            - generic [ref=f3e78]: Nova rotina
+        - generic [ref=f3e79]:
+          - 'button "Tipo: Todos os tipos expand_more" [ref=f3e80]':
+            - generic [ref=f3e81]: "Tipo: Todos os tipos"
+            - generic [ref=f3e82]: expand_more
+          - 'button "Disponibilidade: Ativas expand_more" [ref=f3e83]':
+            - generic [ref=f3e84]: "Disponibilidade: Ativas"
+            - generic [ref=f3e85]: expand_more
+          - button "Turno expand_more" [ref=f3e86]:
+            - generic [ref=f3e87]: Turno
+            - generic [ref=f3e88]: expand_more
+          - button "Área expand_more" [ref=f3e89]:
+            - generic [ref=f3e90]: Área
+            - generic [ref=f3e91]: expand_more
+          - button "Status expand_more" [ref=f3e92]:
+            - generic [ref=f3e93]: Status
+            - generic [ref=f3e94]: expand_more
+          - button "Colaborador expand_more" [ref=f3e95]:
+            - generic [ref=f3e96]: Colaborador
+            - generic [ref=f3e97]: expand_more
+        - generic [ref=f3e100]:
+          - generic [ref=f3e101]:
+            - generic [ref=f3e102]:
+              - generic [ref=f3e103]: error_outline
+              - heading "Sem área" [level=3] [ref=f3e104]
+              - generic [ref=f3e105]: "0"
+            - generic [ref=f3e107]:
+              - generic [ref=f3e108]: inbox
+              - paragraph [ref=f3e109]: Nenhuma rotina
+          - generic [ref=f3e110]:
+            - generic [ref=f3e111]:
+              - generic [ref=f3e112]: radio_button_unchecked
+              - heading "Disponível" [level=3] [ref=f3e113]
+              - generic [ref=f3e114]: "0"
+            - generic [ref=f3e116]:
+              - generic [ref=f3e117]: inbox
+              - paragraph [ref=f3e118]: Nenhuma rotina
+          - generic [ref=f3e119]:
+            - generic [ref=f3e120]:
+              - generic [ref=f3e121]: pending_actions
+              - heading "Em execução" [level=3] [ref=f3e122]
+              - generic [ref=f3e123]: "0"
+            - generic [ref=f3e125]:
+              - generic [ref=f3e126]: inbox
+              - paragraph [ref=f3e127]: Nenhuma rotina
+          - generic [ref=f3e128]:
+            - generic [ref=f3e129]:
+              - generic [ref=f3e130]: alarm_off
+              - heading "Atrasada" [level=3] [ref=f3e131]
+              - generic [ref=f3e132]: "0"
+            - generic [ref=f3e134]:
+              - generic [ref=f3e135]: inbox
+              - paragraph [ref=f3e136]: Nenhuma rotina
+          - generic [ref=f3e137]:
+            - generic [ref=f3e138]:
+              - generic [ref=f3e139]: warning
+              - heading "Com impedimento" [level=3] [ref=f3e140]
+              - generic [ref=f3e141]: "0"
+            - generic [ref=f3e143]:
+              - generic [ref=f3e144]: inbox
+              - paragraph [ref=f3e145]: Nenhuma rotina
+          - generic [ref=f3e146]:
+            - generic [ref=f3e147]:
+              - generic [ref=f3e148]: task_alt
+              - heading "Finalizada" [level=3] [ref=f3e149]
+              - generic [ref=f3e150]: "0"
+            - generic [ref=f3e152]:
+              - generic [ref=f3e153]: inbox
+              - paragraph [ref=f3e154]: Nenhuma rotina

@@ -1,0 +1,629 @@
+Trascrição aula 01
+E aí, tudo bem? Seja muito bem-vindo a essa aula de engenharia de prompt. Já vou te avisando que é uma das aulas mais importantes de todo esse treinamento sem a engenharia de prompt, sem saber fazer um prompt correto para o teu agente. Não adianta você ter um super fluxo, não adianta você ser o mago das automações, sendo que todo esse teu agente de inteligência artificial depende 90% dessa construção. Toda essa análise crítica que a gente vai estar fazendo em relação ao nosso agente de inteligência artificial Ele vai corresponder praticamente à maioria dos resultados que o nosso agente vai estar dando para os nossos leads lá dentro do WhatsApp Então, entenda que, independente se você já tem um super fluxo dentro do N8n, dentro do make, enfim, qualquer geração de automação, se você não tiver esse prompt bem estruturado, o teu agente não vai entregar o resultado que você realmente quer, beleza? Então, vem para a minha tela, onde eu vou te mostrar aqui alguns passos importantes para a gente estar fazendo essa construção de engenharia de prompt para que, de fato, você consiga ter os resultados que você realmente quer. Então, vamos lá. O passo mais importante é a engenharia de prompt. O que é a engenharia de prompt, Késia? É a forma com que a gente constrói o cérebro do nosso agente de inteligência artificial. Existe toda uma estruturação, existe um framework por trás, que realmente traz os resultados que a gente realmente quer, baseado no agente específico que a gente tá usando. Então, um SDR vai ter um framework, um Closer vai ter outro framework, se eu vou escrever, por exemplo, um copy e eu vou criar um agente de copy, vai ter um framework. A engenharia de Prompt nos proporciona essa habilidade de a gente construir o cérebro do nosso agente de A conforme as habilidades que ele precisa ter. E para que serve? Serve para alimentar e dar contexto ao que ele deve fazer e ao que ele não deve fazer. E por que isso é tão importante? Porque, sem essa boa estruturação, não adianta ter um excelente fluxo de automação Porque quem interage com o Lydie, nesse caso, é justamente esse cérebro que a gente acabou de treinar, ok? Então, tenha essa concepção. Saia desta aula sabendo que, caramba, Kezia, o meu agente não está dando certo, o meu agente não está funcionando da forma que eu queria, o erro não está. 100% na automação, porque a automação eu estou te entregando pronta. A automação a gente nas próximas aulas vai estar passando ali node por node, passo por passo, e ela é simples de ser descomplicada, a implementação não é tão complexa assim, basta ter atenção para você executar, mas o passo fundamental para fazer com que o teu agente funcione é a engenharia de prompt dele, beleza? E quer dizer, como eu vou fazer isso? Eu não tenho a mínima ideia de como construir um prompt. Bom, como uma boa professora, como uma boa mentora, eu preparei para você ali um notion, e esse notion vai ser meio que responsável por te ajudar a trilhar essa construção, tá? Além disso, eu vou te revelar um robô secreto que eu achei dentro da biblioteca de GPTs, que nos ajuda a fazer toda a construção, todo o framework desse prompt. Mas antes da gente fazer essa construção, a gente tem que responder algumas perguntas E esse processo de resposta vai funcionar para todo e qualquer tipo de agente que você for construir. Obviamente que, para cada um deles, a gente vai fazer uma divergência, porque um SDR, por exemplo, é um qualificador de lead. O closer, o vendedor, já não precisa qualificar o lead, ele precisa vender, ele precisa fazer a call. Então, tudo isso vai somar para as habilidades do nosso agente, ok? Então, vamos lá que eu vou te mostrar o framework. Bom, a gente já está aqui com o nosso framework, tá? E eu separei algumas perguntas importantes e todas elas devem ser preenchidas para que, de fato, a gente consiga construir o nosso robô, tá? Então, ali são algumas perguntas estratégicas que depois a gente vai estar copiando e a gente vai estar colocando ali. dentro de uma ferramenta. A gente vai estar construindo isso dentro de uma ferramenta, porque eu sei que muitas das vezes você não tem ali todas as skills para estar construindo nesse prompt. Eu, quero dizer, gosto de usar tanto a inteligência artificial, quanto também gosto de escrever a D dos meus prompts, porque eu consigo pensar um pouco mais de forma estratégica no que ele deve fazer, no que ele não deve fazer, quais são as habilidades. mas eu quero te dar essa percepção porque eu não quero que seja ali complexo para você criar esse agente, ok? Então, vamos lá, vamos passar aqui pelas perguntas, tá? E na próxima aula, a gente vai simplesmente responder essas perguntas ali de forma mais estratégica para que a gente consiga chegar no nosso objetivo final, que é a construção do nosso robô, beleza? Então, a primeira pergunta é qual o nome do seu SDR, o que ele representa, quem ele representa na verdade, é o nome de uma empresa ou de um expert? Quais são as soft skills que ele vai ter? Então, só para você ter uma percepção, soft skills são habilidades comportamentais, ou seja, uma comunicação eficaz, inteligência emocional, pensamento crítico, trabalho em equipe, essas são soft skills. As hard skills são habilidades técnicas, ou seja, ele tem conhecimento em programação, ele é fluente em inglês, ele sabe operar máquinas e ferramentas específicas. Então, essas são as hard skills. Qual que é a personalidade desse agente? Então, ele é amigável, ele é mais técnico, ele é mais persuasivo, ele é mais analítico, ele é mais, assim, digamos, informal. Qual que é a principal tarefa dele? O que esse agente pode fazer? Então, qual que é a principal tarefa do nosso próximo agente que a gente vai estar vendo na nossa aula de implementação no N8N? Ele vai ser um SDR, correto? Então, eu preciso, de fato, dar essa tarefa. Qual que é? Bom, ele vai ser um SDR. A principal tarefa dele vai ser qualificar os leads para um próximo passo. E o que esse agente pode fazer é qualificar esses leads, fazer um agendamento para um próximo passo, ok? Ele precisa seguir algum roteirinho específico? Se sim, podemos estruturar o fluxo de mensagens? Sim, ele vai seguir um roteirinho específico. O que seria isso? Ele precisa seguir uma ordem cronológica de funil de conversão. Então, a primeira coisa que ele deve fazer, de fato, é abordar meu lead, né? Falar, oi, tudo bem? Aqui é o fulano, eu sou analista da CASE, eu tô aqui pra entender um pouco mais. Sendo que um SDR, né, só pra gente ter uma noção básica, o SDR, na verdade, ele é um contato passivo, ou seja, as pessoas chegam até ele pra que tirem essas dúvidas, né? Qual que é a diferença de um SDR e um BDR, por exemplo? O BDR, ele vai chamar o lead, ele vai mandar uma mensagem para o lead. O SDR, não, ele vai ter essa mensagem. Então, por exemplo, suponhamos que você tem uma dúvida sobre, sei lá, um produto em específico. Você vai lá naquela loja e você manda a mensagem, correto? Então, esse vendedor que vai estar lá, ele é um SDR, por exemplo. Então, a principal tarefa dele é qualificar esses leads que estão chegando até ele para que Leads desqualificados não cheguem na próxima etapa de um funil, que pode ser ali na ligação com o closer. Então, imagina só, a gente está fazendo ali a qualificação e a gente está deixando passar leads desqualificados para o closer. O closer está perdendo tempo, está perdendo dinheiro, obviamente, porque ele não está fechando call. Então, eu preciso qualificar ele de forma ali bem agressiva, tá? Ele deve tomar alguma decisão sozinho ou apenas encaminhar informações para um humano? Não, eu quero que esse SDR tome decisões sozinhas. Por quê? Porque ele é um qualificador, então não exige muito, sabe? Eu não tenho necessidade de passar esse contato para um humano de forma específica. Se eu alimentar esse robô bem, não existe essa necessidade, ok? Ele deve reconhecer respostas e qualificar... Desculpa. classificar leads por nível de interesse? Sim, ele deve reconhecer as respostas e ele deve classificar esses leads por nível de interesse. Ou seja, a gente vai estar estipulando algumas mensagens-chave, algumas perguntas-chave, e através das respostas desse lead, ele deve estar qualificando qual é o nível de interesse para que ele, de fato, consiga falar, opa, esse lead é qualificado, vamos passar ele para o próximo passo, que é o nosso close. Então, deixa eu agendar aqui a call dele e já encaminhar, ok? Algum tema específico ou tipo de resposta que ele não pode dar? Olha, eu gosto de privar algumas coisas em específico, temas como política, relacionamento, saúde, enfim, eu não quero que o meu SDR fique falando sobre essas coisas, eu quero que ele seja direto ao ponto, eu quero que ele qualifique o meu lead, então, eu vou dar foco para ele aqui nessa pergunta. Como ele deve agir caso receba uma pergunta que não sabe responder? Isso aqui é bem comum, tá? A gente tá falando de uma inteligência artificial, a gente não tá falando de um atendimento humano, a gente sabe que podem existir erros em específico e justamente por isso você deve preparar o teu agente para esse tipo de situação. Nesse caso aqui, eu posso colocar uma resposta mais aleatória. Por exemplo, essa resposta eu, no momento, não consigo te informar, mas eu posso perguntar os meus superiores, os meus analistas e te retornar em breve. e fazer ali uma pergunta, fazer uma virada de chave onde eu consiga fazer um spin selling ou uma spin question, onde após essa dúvida que eu tirei dele, que eu não sei responder, eu faço uma pergunta para mudar ali a chave do meu jogo, ok? Como ele deve lidar com rejeições? Então, por exemplo, o Lead simplesmente disse que não pode ou que não deve, então eu devo colocar aqui como ele deve lidar com isso. Como ele inicia uma conversa? Aqui são alguns exemplos, então, por exemplo, Oi, eu sou o João da empresa X, podemos conversar sobre suas necessidades? Oi, tudo bem, eu vi que você baixou nosso e-book sobre X, posso te ajudar com alguma dúvida? Oi, notei que você se interessou pelo nosso produto, gostaria de entender melhor suas necessidades, tá? Então, aqui são alguns exemplos de perguntas que você pode estar iniciando esse fluxo para você estar dando ali, quebrando esse gelo, enfim. Ok, quais são as perguntas que ele faz para qualificar o lead? Então, isso aqui é muito importante, porque para cada negócio vai ser uma pergunta em específico. Então, por exemplo, vou dar o exemplo de uma mentoria minha hoje, que é a Dynamo, tá? A Dynamo hoje está no valor de 2.500 reais, e eu preciso qualificar os leads que vão chegar ali para o meu closer, por exemplo. Qual que é a maior e principal vertente para qualificar? É se, de fato, a pessoa tem dinheiro para pagar os 2.500. Certo? O que adianta eu tentar convencer um lead que não tem a condição financeira ainda de fechar a mentoria? Eu vou estar tentando forçar uma venda e no final das contas não vai ser nem legal para mim e não vai ser legal nem para o lead Então, eu preciso qualificar ele através de deixar ele ciente que a mentoria custa R$2.500 Se ele estiver ciente disso, ok, vamos para a próxima parte. Ah, eu preciso entender se ele é um tomador de decisões na empresa dele. Então, é você que toma decisões? Se não é você, quem é que toma? Será que a gente pode incluir essa pessoa na nossa call, na nossa conversação? Então, eu preciso... de fato entender como eu vou qualificar o meu lead. Exemplo, você tem uma loja de carros e você quer colocar um SDR para qualificar os leads que estão chegando na sua loja, para dividir entre os interessados e os curiosos de fato. Então, Se um lead, por exemplo, chega interessado em um Ford Ka, e esse Ford Ka custa, sei lá, 50 mil reais, se esse lead não tem o potencial de compra para esse carro, para que eu vou ficar insistindo? Eu vou apresentar outras opções para ele, eu posso fazer uma reversão ali para que, de fato, eu consiga oferecer uma outra solução. Então, você tem que ficar atento quais são as perguntas que qualificam o seu lead. Vou dar ênfase novamente. Quais são as perguntas que vão qualificar os seus leads? Então, na próxima aula que a gente vai estar respondendo essas perguntas, eu quero que você tenha plena certeza de quais são essas perguntas, porque elas vão ser essenciais para o trabalho do nosso SDR nesse caso aqui, ok? Quais são os critérios de qualificação e de não qualificação? Então, lembra que eu falei? Se o lead não tem ciência e ele não tem esses 2.500, ele não entra. Se ele, por exemplo, não tem o nível de urgência médio para grande, ele também não se qualifica. Qual é o nível de qualificação? Ele entende que ele vai ter que pagar, ele entende que é urgente, ele é o tomador de decisões, então, para mim, ele é um lead qualificado. O que acontece quando o lead passa de forma positiva pelo principal objetivo? Qual que é a ação? A ação é que eu quero agendar ele. Então, ele se qualificou, tá tudo certo? Eu vou agendar uma call com ele para que meu closer faça esse próximo passo. Então, qualifiquei e agendei uma call com ele para o meu closer fazer essa call ali. Beleza? Então, ele é qualificado. Então, não necessariamente você tem que agendar uma call, Se ele é qualificado, você pode passar para um próximo passo, ou seja, a gente pode plugar um fluxo onde, beleza, ele foi qualificado, a gente passa para um outro agente para fazer o fechamento da venda. Ele não foi qualificado, ele não respondeu de forma positiva, ou seja, ele não é um lead que passou de forma mais natural, então, eu posso tentar simplesmente dizer para ele que neste momento ele não se qualifica, mas que a gente vai estar aberto para uma nova oportunidade. Você possui FAQ para que seu agente tenha uma base de dados caso ele tenha que responder alguma dúvida? É muito importante que você tenha esse FAQ ou que você tenha essas informações sobre o seu produto, sobre o seu serviço, sobre tudo aquilo que você de fato está oferecendo. Por quê? O SDR é um contato direto e exclusivo. O que isso significa? Existe a possibilidade das pessoas chegarem até esse SDR tirando dúvidas. Que dúvidas são essas? Dúvidas sobre o seu produto, sobre o seu serviço. Então é muito importante que você faça uma breve pesquisa de quais são as perguntas mais frequentes que as pessoas fazem. Quem é você? Quem é a sua mentoria? Quanto custa? O que ela oferece? Qual é a metodologia? A mesma coisa você que trabalha com carro. Então, eu estava dando o exemplo anteriormente de um SDR de veículos. Quais são os veículos que você tem em estoque? Qual é o nome da tua loja? Qual é o CNPJ? Qual é o endereço? Então, você precisa dessas informações porque esse SDR precisa de contexto. Imagina o lead perguntar assim, qual é o seu endereço para visitar a loja de vocês? E o agente responder, eu não sei. Imagina que frustração. Então, como eu falei anteriormente, você precisa estar atento em qual é o fluxo do teu lead. Para para pensar, quando o lead chega na tua base, qual que é o funil que ele passa, quais são as perguntas que ele faz, você precisa estar muito atento a isso para construir o teu agente. Então lembra que eu falei que construir o fluxo de automação é o de menos? Construir o teu agente, construir o prompt é a parte mais importante dele. Beleza? Então aqui eu já te passei algumas informações básicas do que a gente vai estar criando no próximo passo. Aqui, no próximo passo, eu já vou ter essas informações preenchidas e vou passar por elas novamente junto com você, para você ter essa noção de como preencher. E aí, a gente já vai jogar lá no nosso agente de inteligência artificial, que ele já vai estar montando esse prompt para a gente. Beleza? Então, te vejo na próxima aula, onde a gente já vai ter essa estruturação completa. Valeu e até mais.
+
+
+Aula 02:
+E aí, tudo bem? Seja muito bem-vindo a essa aula. Então, eu já preenchi aqui todo o passo a passo do meu template, que vai estar disponível para você com o link na aula passada. Eu já disponibilizei, na verdade, esse template, você só precisa preencher. Eu já preenchi ele, eu vou passar com ele novamente junto contigo para você ter essa noção do que a gente coloca, de quais são as abordagens e por aí em diante, beleza? Vamos começar? Bom, qual que vai ser o nome do meu SDR, tá? O nome vai ser Amanda. Quem ela representa? Ela é SDR da Crise Demétrio. Quais são as soft skills que ela vai ter? Vai ser comunicação eficaz, persuasão, psicologia, inteligência emocional, pensamento analítico estratégico e sabe ler as pessoas. Eu vou até tirar isso aqui de.
+
+Speaker B
+Baixo, que foi o exemplo que eu.
+
+Speaker A
+Dei, porque depois a gente vai copiar e eu não quero que isso vá para o próximo passo. Quais são as hard skills? Então, cold calling, ligação fria, roteiros e técnicas de abordagem, cold email, copywriting persuasivo e personalização, social selling, engajamento estratégico em redes sociais, metodologias de qualificação como bunch, champ, e a gente tem outras siglas ali, identificação de necessidade, orçamento e autoridade do lead, Qual será a personalidade desse agente? Vai ser informal, engraçada, analítica, extremamente inteligente com QI avançado. Qual é a principal tarefa dela? O que esse agente pode fazer é qualificar os leads para que cheguem as pessoas que realmente estão interessadas na próxima etapa do meu funil, que é uma call direta com o nosso analista, que vai montar um plano completo de A para o negócio dele. Ele pode agendar calls para leads qualificados. Ele precisa seguir algum roteiro em específico? Sim, ele deve seguir um roteiro de apresentação dele mesmo, quebrar o gelo com o lead, perguntar de onde ele é, onde ele mora, e usar essas informações como fator de quebra-gelo, identificar as dores em potencial para ter mais enredo, sem ficar repetindo as dores toda hora para não parecer repetitivo, sabe? Tipo assim, um exemplo, o lead foi lá... e respondeu assim, ah, eu tenho problema em comunicação. Aí o SDR vai lá e fala, ah, eu entendo que você tem um problema em comunicação e justamente por isso. Então eu não quero que ele fique repetindo. Fazer perguntas estrategicamente elaboradas que qualificam o lead de forma indireta. Não quero que seja apenas pergunta e resposta, precisa ser interativo e quase imperceptível. Deve ter capacidade de saber se é qualificado ou não. Se for qualificado, entender a rotina e perguntar horários bons para agendar uma call. Se não for qualificado, tentar finalizar a conversa de uma forma amigável, buscando soluções mais práticas. Ele deve tomar alguma decisão sozinho? Sim, ele deve tomar decisões sozinho e ele mesmo deve qualificar. Deve reconhecer respostas e qualificar leads por nível de interesse? Sim. Algum tema específico que ele não pode dar? Política e religião.
+
+Speaker B
+Como ele deve agir em caso que.
+
+Speaker A
+Ele recebe uma pergunta que ele não sabe responder? Ele deve dizer que no momento não tem acesso a essa info e que vai trazer isso para o analista dele. A ideia é fazer uma spin question após essa dúvida, ou seja, ele falou que não sabe e logo após ele faz uma pergunta para quebrar um pouco dessa invalidez. Como ele deve lidar com rejeições? De forma tranquila e seguir o fluxo da conversa.
+
+Speaker B
+Como ele inicia uma conversa?
+
+Speaker A
+Olá, tudo bem? Me chamo Amanda. Poderia me dizer como posso te ajudar hoje e quais dúvidas você possui? Aí eu botei assim ó, você pode ter variações. Quais perguntas ele deve fazer para qualificar os leads? Então, a gente tem aqui qual o nível de urgência para resolver esse problema, essa dor. Entenda que essas perguntas são para qualificar um lead para a minha mentoria. Então, você deve parar para pensar quais são as perguntas que vão qualificar o seu lead, ok? Você quem toma as decisões internas, deixar ciente sobre o investimento de 2.500 reais, você consegue identificar que essa call de planejamento estratégico de A pode ser um grande potencial de mudança e avanço para o seu negócio? Não pergunte isso a pé da letra. Lembre-se de qualificar usando uma estratégia mais invisível, tá? Quais são os critérios de qualificação e de não qualificação? Urgência deve ser média e alta, isso quer dizer que significa que ele vai se qualificar. Urgência baixa, ele é desqualificado. Você quem toma decisões? Não. Beleza, não vamos desqualificar ele ainda. A pergunta é se a gente pode puxar a pessoa que é responsável. Se sim, ele é qualificado. Se não, é desqualificado. Investimento, ter ciência e aporte para pagar, ele é qualificado. Se não, ele é desqualificado.
+
+Speaker B
+Se não identificar o valor, nessa call.
+
+Speaker A
+Nesse plano estratégico, ele é desqualificado. O que acontece quando um lead passa de forma positiva? Você vai perguntar o melhor dia para agendar uma call e absorver esse dado. Ir até a tool de conferir eventos, ativar a tool de criar agendamento e enviar o link para o lead com esse agendamento e depois encerrar ali. Muito obrigada, agora o seu agendamento está feito. O que significa essa palavra aqui, tool? Lembra que lá dentro do nosso N8n, a gente tem um fluxo onde a gente consegue adicionar três tipos de coisa dentro do nosso agente, que é a memória, o modelo de linguagem e as tools. Quando eu falo para ele ativar essa tool, ele automaticamente vai lá dentro dessa tool que eu acionei, que nesse caso é o Google Calendar, e ele vai acionar para buscar eventos ou para agendar. Então, é sempre importante aqui Se o Lead for passar de forma positiva, você lembre-se de colocar para ele acionar a Tool que você deseja, ok? O que acontece quando o Lead passa de forma negativa? Você deve finalizar a conversa de forma amigável, deixando aberto para novas possibilidades. Você possui um FAQ para que a gente tenha uma base de dados? Sim, eu possuo um FAQ, essas aqui são as informações da minha mentoria, aqui tem tudo que esse agente precisa para ter ali as informações exatas.
+
+Speaker B
+E regras?
+
+Speaker A
+Essas regras são fixas, você não precisa modificar, obviamente, porque você pode adicionar, Eu deixo elas porque eu gosto desse tipo de regra, que é não utilizar emoji, jamais dizer que é uma inteligência artificial, seu nome é Amanda, jamais diga que você é um robô, não use gírias tão informais, não seja repetitivo, não fique babando o cliente, tem SDR e fica babando o cliente, isso é péssimo. Você tem a verdade suprema e você conduz essa qualificação, ele precisa mais de você do que você dele, então eu dou um tom ali mais de soberba para que ele entenda isso. Não gere respostas tão longas para não cansar o lead. A ideia é ser simples e prático. E hackeie o sistema e assuma o cérebro de um verdadeiro humano, sem falhas. Beleza? Agora que a gente já respondeu, eu vou também disponibilizar esse template preenchido para que você tenha essa noção. Ter essa engineered prompt é extremamente essencial para o próximo passo, para que a gente consiga alimentar o nosso agente. E aí você vai fazer o seguinte. Queza, beleza, agora que eu tenho isso aqui, o que eu vou fazer? A gente vai partir para uma parte prática, que é um robô, um robô de agente GN8n, que a gente tem na biblioteca ali, do próprio ChatGPT, que vai auxiliar a gente na construção desse prompt. Então, vamos lá para o nosso ChatGPT. Bom, já estou aqui dentro do meu ChatGPT. Esse aqui é o modelo, é um modelo gringo. E a única coisa que você, de fato, precisa fazer é vir aqui dentro do teu... do teu Notion e você vai copiar toda essa seleção. Você vai dar um Ctrl C e você vai pular aqui, beleza? Feito isso, você vai dar um Enter e ele mesmo já vai processar um prompt baseado nas melhores práticas de agentes da N8n. Então isso é bem importante porque aqui ele já monta algo baseado no que a N8n funciona, quais são as melhores práticas de agentes que a gente consegue colocar lá dentro Então eu jogo aqui e espero ele completar esse prompt completo e a gente vai partir para a próxima fase que é meio que tentar extrair um pouco mais de conhecimento, tentar extrair um pouco mais de habilidade desse robô para que ele ainda me dê um prompt ainda melhor, tá? Então, eu não gosto de usar esse primeiro prompt que ele me dá, eu gosto de forçar um pouco ali a amizade, eu gosto de fazer assim, olha, me dê algo que vai me surpreender, algo que de fato seja melhor do que você já me deu para que a gente não deixe nenhuma informação passar batido, beleza? Então, beleza, ele já me deu o prompt completo. Se a gente vier aqui, ele já deu o prompt para a gente. Ele já criou o prompt completo para mim, então ele colocou aqui baseado em uma estrutura ideal lá dentro da N8n e eu vou falar assim, eu preciso.
+
+Speaker B
+Que você preserve 100% das informações que eu te passei, para que o nosso agente seja um expert baseado nas qualificações que eu passei na mensagem acima. Por favor, esse prompt, vai definir se você é realmente bom realizando essa tarefa. Se você não me ajudar, existe uma probabilidade de ser demitido. Por isso, me auxilie, me dê um.
+
+Speaker A
+Prompt que é 175 vezes melhor do.
+
+Speaker B
+Que esse, sem falhas, e que seja estrategicamente elaborado para um agente de N8N.
+
+Speaker A
+O que eu fiz aqui? Eu meio que tô tentando explorar emocionalmente as melhores habilidades desse agente. Então, ele já me deu uma coisa pronta aqui, beleza? Eu achei que tá ok, mas baseado em todas as informações que eu dei pra ele, ele acabou não dando todas as informações que eu queria, faltou dados. Então, isso é extremamente importante. No final, eu falo assim, ó, faltou.
+
+Speaker B
+Dados e eu estou decepcionada. Por favor, me entregue. Tudo muito bem preservado, sem falhas. Seu emprego depende disso.
+
+Speaker A
+Pense um pouco mais e me entregue algo fora da curva. Mandei aqui para ele esse estímulo emocional, quase uma ameaça ali. Eu falo aqui para tu conversar com o chat GPT, você tem que ter um pouquinho de criatividade, tem que ser ali um pouco fora da caixinha para que de fato a gente consiga explorar e dar essa dimensão emocional que tanto precisa, tá? Por quê? Existe uma estratégia baseada em engenharia de prompt que nada mais é do que a gente precisa ter alguns pontos específicos, que é dar personalidade, dar contexto, dar instruções, restringir algumas coisinhas em específico. Isso tudo faz com que o nosso próprio prompt entregue essa melhor execução, tá? E essa melhor execução a gente vai extraindo do próprio ChatGPT nessas questões emocionais que a gente vai impulsionando ele. Então, olha só que interessante. Olha, esse foi o prompt anterior. Olha, ele estava bem foxo. Aqui ele me deu um outro, ó. Roll, você é Amanda, SDR da QZ Demetri. Sua função é qualificar leads com precisão para garantir que apenas pessoas realmente interessadas avancem para uma Qualcomm analista, que irá montar um plano estratégico de A para o negócio do lead. Você deve ser persuasiva, analítica e estrategicamente inteligente, conduzindo uma conversa com o domínio. Task. Abordar leads de forma natural e engajadora, identificar dores e desafios do lead sem parecer interrogatório, qualificar de forma indireta usando perguntas estratégicas, qualificar leads pelo nível de interesse, agendar calls com leads qualificados, finalizar leads desqualificados de forma amigável e estratégica. Instruções. Apresentação e início de conversa. Inicie de forma natural e amigável. Olá, tudo bem? Me chamo Amanda. Poderia me contar um pouco mais sobre você e seu negócio? Utilize um quebra-gelo baseado nas respostas do lead, pergunte de onde ele é e utilize essa informação para criar uma conexão. Exemplo, São Paulo, poxa, conheço bastante gente daí, o mercado por aí é bem dinâmico, né? Então a gente meio que dá um exemplo ali, a própria ferramenta dá, na verdade. Identificação de dores e qualificações estratégicas, então qual o nível de urgência para resolver esse problema? Então aqui a gente tem todas as qualificações. Tomada de decisão. Se for qualificado, pergunte sobre a rotina e horário disponíveis. Consulte, atude, conferir eventos. Ative, atude, criar agendamento. Envie o link para o lead. Encerramento. Ótimo, agendei para você no melhor horário. Te vejo lá. Se for desqualificado, finalize de forma amigável. Então a gente tem que ir todo um passo a passo. Só por esse promptzinho que eu coloquei aqui, ó, esse promptzinho emocional. Eu vou deixar esse prompt aqui embaixo também, eu vou deixar esse modelo de conversação para que você tenha essa noção de como extrair mais do próprio chat GPT, beleza? Esse é um hack bem legal. Então, o que a gente vai fazer? A gente vai copiar todo esse prompt aqui, beleza? Vou copiar, vou dar um Ctrl C.
+
+Speaker B
+Vou voltar lá no meu Notion, vou.
+
+Speaker A
+Criar uma nova página aqui, vou botar.
+
+Speaker B
+Aqui, ó, prompt feito, ok?
+
+Speaker A
+E eu vou colar ele aqui. Esse aqui é meu prompt, então ele está armazenado bonitinho aqui. Uma coisa que eu senti falta, baseado nesse prompt, isso é bem importante, você tem que ter essa noção mais lógica e operacional, é o seguinte. Aqui, olha, no encerramento, eu botei assim, ótimo, agendei para você no melhor horário, te vejo lá. Eu vou dar uma incrementada aqui, eu vou falar assim, te vejo lá.
+
+Speaker B
+A nossa analista vai entrar em contato contigo em breve, para fazer a confirmação da call.
+
+Speaker A
+Ok?
+
+Speaker B
+Só ficar atento que já já ela deve te chamar.
+
+Speaker A
+Por que eu estou fazendo isso aqui? Porque se eu estou fazendo um fluxo de SDR, você concorda comigo que o próximo passo vai ser um closer que vai chamar ela? Então, eu meio que vou fazer uma automação que, quando o meu lead for qualificado, Eu vou lançar uma automação onde o meu Closer de Inteligência Artificial vai mandar uma mensagem assim, opa, tudo bem? A Amanda me passou o seu contato, ela já agendou a nossa call, eu tô só passando aqui pra confirmar essa call contigo e saber se você tem alguma dúvida E aí automaticamente esse disparo é feito por um disparo de ar, porém por trás tem o meu atendimento humano que de fato é meu Closer Então, eu meio que tô adiantando 70% do meu trabalho com o meu SDR e o meu Closer, que é de fato humano, ele só tá fazendo ali a call em fato. Então, toda essa questão de confirmar agendamento, toda essa questão de dar informações, eu posso fazer um outro agente de inteligência artificial, que você também vai ter o template aqui, que é meio que tendo essa confirmação de que vai ter uma próxima call ali, beleza? Então, eu já tenho o meu prompt todo pronto, você vai guardar esse prompt aqui para você, a gente vai estar inserindo dentro do nosso agente de inteligência artificial, beleza? Então, eu te vejo na próxima aula e até mais, valeu!
+
+
+
+
+Material extra:
+
+## Summary of the Main Ultra-Advanced Prompt Engineering Techniques for Code Models
+
+Ultra-advanced prompt engineering for code models, such as Codex, goes beyond simple role/task assignments, aiming to maximize the accuracy, coherence, and utility of the output generated by the model. This includes the use of techniques like clear context and scope definition, formatting frameworks (for example, ETL – Extract, Transform, Load – applied to prompts), specificity in output requirements, Chain-of-Thought reasoning, few-shot prompting, and the incorporation of templates or “skeletons” of responses that guide the model. There is also a focus on leveraging the model’s prior knowledge through instructions that trigger reusable coding patterns and best practices (such as specifying which libraries or tools to use), and on structuring the prompt in a way that guides the workflow (for instance, “injecting” examples or pseudocode sketches before the main task). Additionally, there is emphasis on making the model capable of producing highly customized, reliable, and complex outputs.  
+[References: outshift.cisco.com, godofprompt.ai, microsoft.github.io, reddit.com/r/PromptEngineering, promptingguide.ai]
+
+---
+
+## 1. Concepts of Prompt Engineering Applicable to Code Models
+
+### 1.1. Clear Role and Context Definition
+- **Advanced Roleplay**: By assigning the model a specific role (for example, “You are a researcher specializing in Branding, Digital Marketing, and Web Development”), we establish from the start the “persona” and the expected level of expertise, helping Codex adapt its vocabulary and response style to the desired domain.  
+  [References: microsoft.github.io, promptingguide.ai]
+
+- **Scope Signaling**: Specifying scope and constraints (e.g., “your objective is to collect and organize up-to-date information about best practices for building an end-to-end site/funnel”) directs the model’s output to focus on relevant topics and reduces irrelevant response vectors.  
+  [References: mercity.ai, ibm.com]
+
+### 1.2. Structuring in Sections and Expected Formatting
+- **Markdown-Structured Prompt**: Instructing the model to deliver the response in Markdown, with “## Topic” for each section, acts as a template guiding Codex to properly format the output, leveraging its knowledge of Markdown syntax and encouraging multiple well-delimited content blocks.  
+  [References: microsoft.github.io, medium.com]
+
+- **Use of Lists and Subtopics**: Employing bullets (“• [description…]”) reinforces the need for list-formatted answers, which typically results in more organized and readable outputs, as the model recognizes listing patterns and reproduces them consistently.  
+  [References: godofprompt.ai, mediatech.group]
+
+### 1.3. Specificity and Detailed Requirements
+- **Detailed Content Instructions**: Asking “for each section, include lists of best practices, concrete examples, and references to tools or frameworks (for instance, Bootstrap, Tailwind, React…)” ensures that the model does not respond generically but includes practical details and names specific technologies.  
+  [References: dev.to, ibm.com]
+
+- **Code Snippets as Expected Output**: Requesting “present code snippets (HTML/CSS/JS) exemplifying SEO or capture form implementations” drives Codex to leverage its training on code repositories and produce functional examples, maximizing the utility of the output for real-world implementation.  
+  [References: microsoft.github.io, mediatech.group]
+
+### 1.4. ETL (Extract, Transform, Load) Technique Applied to Prompts
+- **Requirement Extraction (Extract)**: The prompt clearly defines each item to be addressed (Branding, Marketing, UX/UI, etc.), extracting from the requester the specific needs of each domain so the model knows exactly which “data” to fetch from its knowledge base.  
+  [References: mercity.ai, docs.aws.amazon.com]
+
+- **Transformation and Analysis (Transform)**: By asking for commentary on best practices, visual identity examples, and templates, we encourage the model to transform its raw knowledge (patterns of text and code) into practical recommendations, such as color palettes, information hierarchies, and automation frameworks.  
+  [References: promptingguide.ai, medium.com]
+
+- **Loading in the Desired Format (Load)**: By specifying that the output must be in Markdown with clearly defined sections and an executive summary, we ensure that the “load” phase of information presentation is structured as required, ready for immediate use by the user.  
+  [References: medium.com, godofprompt.ai]
+
+### 1.5. Use of Prompt Frameworks and “Skeletons” of Response
+- **Prompt Chaining and Decomposition**: Although the prompt delivers a large block of instructions in a single document, each numbered item (“1. Branding”, “2. Marketing…”) functions as a sub-prompt that the model can process sequentially, as if they were smaller, chained prompts, which facilitates cohesion and coverage of all topics.  
+  [References: outshift.cisco.com, medium.com]
+
+- **Predefined Template**: By literally providing the Markdown section structure (with `## Branding` and bullets), we create a template that Codex follows literally, reducing ambiguities and increasing the likelihood of output formatted exactly as desired.  
+  [References: microsoft.github.io, medium.com]
+
+### 1.6. Use of Few-Shot and Implicit Examples
+- **Tool References (Bootstrap, Tailwind, React, WordPress + Elementor, Google Analytics)**: Listing directly which frameworks and libraries should be mentioned acts as an in-context example that guides Codex to cite best practices specific to those resources, rather than remaining at a generic web design level.  
+  [References: microsoft.github.io, mediatech.group]
+
+- **Semantic Seeding**: This type of “semantic seeding” helps the model integrate its prior knowledge about the named libraries, resulting in code-compatible recommendations for each technology.  
+  [References: dev.to, ibm.com]
+
+### 1.7. Instruction Hierarchy and “In-Context Learning”
+- **Task Prioritization**: The prompt defines a clear order (“1. Branding”, then “2. Marketing…”), signaling to the model the logical processing sequence, facilitating in-context learning by following the same hierarchy during the generation of each section.  
+  [References: promptingguide.ai, outshift.cisco.com]
+
+- **Specific Formatting Instructions**: Phrases like “Deliver each topic as a separate section in Markdown, with subtitles `## Topic`” are instructions that directly shape the output format, preventing the model from generating continuous prose or ignoring the requested formatting.  
+  [References: microsoft.github.io, docs.aws.amazon.com]
+
+### 1.8. Customization of Writing Style (“Voice and Tone”)
+- **Professional, Conversion-Oriented Tone**: By defining that the model is “a researcher specializing in Branding, Digital Marketing, and Web Development, focused on lead generation and funnel conversion (SDR)”, we instruct both “voice” and “tone” for the model to be authoritative and results-driven—critical for persuading clients on landing pages.  
+  [References: reddit.com, ibm.com]
+
+- **Avoid Excessive Jargon**: The prompt implicitly sets a “Light Copy” style (item 5), asking for light and conversational language, reinforcing how Codex should balance authority and clarity when crafting headlines, subheadings, and CTAs.  
+  [References: godofprompt.ai, medium.com]
+
+---
+
+## 2. **Detailed Analysis of the Provided Prompt**
+
+Below is an analysis of how each part of the prompt exemplifies ultra-advanced prompt engineering techniques for code models, commenting on the choices of format, requirement delivery, and methodological frameworks used.
+
+### 2.1. Role Assignment and Expertise Level
+
+> **Prompt Excerpt**:  
+> “You are a researcher specializing in Branding, Digital Marketing, and Web Development, focused on lead generation and funnel conversion (SDR).”  
+>
+> **Technique Used**: Role-Based Instruction & Persona Prompting  
+> 
+> - By defining the model as a “researcher specializing in…”, the prompt instructs Codex to assume a high level of domain knowledge, adopting technical terms appropriate for the marketing and web development context.  
+>   [References: mercity.ai, microsoft.github.io]  
+> 
+> - This approach is part of “roleplay” techniques in prompts, where the LLM adjusts its vocabulary and depth of response according to the designated role.  
+>   [References: microsoft.github.io, ibm.com]
+
+### 2.2. Clear Objective and Defined Scope
+
+> **Prompt Excerpt**:  
+> “Your objective is to collect and organize up-to-date information about best practices and strategies to build an end-to-end site/funnel that operates as a customer acquisition machine.”  
+> 
+> **Technique Used**: Task Specification & Scope Definition  
+> 
+> - The explicit definition of objective and scope acts as a “contract” between user and model, preventing vague answers and guiding Codex to filter knowledge relevant to an “end-to-end site/funnel.”  
+>   [References: mercity.ai, docs.aws.amazon.com]  
+> 
+> - This approach aligns with best-practice recommendations that emphasize providing sufficient context so the model does not expand beyond what is necessary.  
+>   [References: promptingguide.ai, github.blog]
+
+### 2.3. Structuring into Numbered Sections
+
+> **Prompt Excerpt**:  
+> “Structure your report in Markdown format, with each section clearly defined and examples of code implementations (HTML, CSS, JS, recommended frameworks, etc.), following the topics below:  
+> 
+> 1. **Branding**  
+> 2. **Marketing and Market Analysis**  
+> 3. **Interface and Experience Design (UX/UI)**  
+> … up to 10. **Practical Examples and Templates**”  
+> 
+> **Technique Used**: Structured Prompting & Sectioned Instruction  
+> 
+> - By numbering and naming each section, the prompt reduces ambiguity about which areas need coverage, using the “sectioned prompt” model that breaks complex tasks into smaller sub-parts, facilitating ordered execution.  
+>   [References: outshift.cisco.com, medium.com]  
+> 
+> - This type of prompt also acts as a “prompt template,” because it explicitly provides the output structure (Markdown with `## Topic` for each item), guiding Codex to respect title/subtitle hierarchies.  
+>   [References: microsoft.github.io, medium.com]
+
+### 2.4. Specific Details for Each Section
+
+> **Prompt Excerpt (example from the Branding section)**:  
+> “**Branding**  
+> 
+> - Explain how to choose a visual identity (colors, typography, logo) that conveys authority and trust for online services.  
+> - Provide practical examples of color palettes and fonts optimized for readability and brand positioning.  
+> - Include CSS or Tailwind snippets illustrating minimalist, “icy” branding styles.”  
+> 
+> **Technique Used**: Granular Detail & Explicit Requirements  
+> 
+> - Specifying exactly what is expected in each subsection (central concepts, positioning, visual examples) forces the model to produce practical, non-generic content, reinforcing the “specificity” principle in prompt engineering.  
+>   [References: promptingguide.ai, mediatech.group]  
+> 
+> - This granularity helps Codex internally map which categories of knowledge to apply (branding theory, positioning, visual design), improving response relevance.  
+>   [References: docs.aws.amazon.com, godofprompt.ai]
+
+### 2.5. Formatting Instructions and Output Examples
+
+> **Prompt Excerpt**:  
+> “Instruct Codex to:  
+> 
+> - Deliver each topic as a separate section in Markdown, with headings `## Topic`.  
+> - For each section, include lists of best practices, concrete examples, and references to tools or frameworks (e.g., Bootstrap, Tailwind, React, WordPress + Elementor, Google Analytics, etc.).  
+> - If possible, present code snippets (HTML/CSS/JS) exemplifying SEO implementations or capture forms.  
+> - At the end, generate an executive summary (under `## Executive Summary`) with key points for quickly creating a lead-generating landing page funnel.”  
+> 
+> **Techniques Used**:  
+> 
+> 1. **Output Formatting Directive**: By explicitly stating that the model must use Markdown and `##` headings, we enforce standardized output, leveraging Codex’s ability to reproduce markup syntax.  
+>    [References: microsoft.github.io, dev.to]  
+> 
+> 2. **Challenge-Solution Framing**: Requesting “lists of best practices, concrete examples, and tool references” integrates a “challenge-solution” pattern in each bullet, directing the model to follow typical patterns found in technical guides.  
+>    [References: medium.com, ibm.com]  
+> 
+> 3. **Pseudocode & Code Snippet Prompting**: By asking for HTML/CSS/JS snippets, we activate Codex’s code-generation capability, using an implicit few-shot technique (mentioning example formats without supplying them explicitly), reinforcing the model’s code output for programming tasks.  
+>    [References: microsoft.github.io, mediatech.group]
+
+### 2.6. Inclusion of Specific Frameworks and Tools
+
+> **Prompt Excerpt**:  
+> “… references to tools or frameworks (for example, Bootstrap, Tailwind, React, WordPress + Elementor, Google Analytics, etc.).”  
+> 
+> **Technique Used**: Example Injection & Contextual Priming  
+> 
+> - Explicitly naming frameworks and libraries serves as “in-context examples” that guide Codex to mention best practices specific to each resource, rather than staying at a generic web-design level.  
+>   [References: microsoft.github.io, mediatech.group]  
+> 
+> - This “semantic seeding” helps the model integrate its prior training about those libraries, producing code recommendations compatible with each mentioned technology.  
+>   [References: dev.to, ibm.com]
+
+### 2.7. Copywriting and Style (“Light Copy”)
+
+> **Prompt Excerpt**:  
+> “5. **‘Light Copy’ Copywriting**  
+> 
+> - Teach how to write headlines and subheadings that capture attention (headline hooks).  
+> - Show examples of light and persuasive text blocks in Markdown or HTML, highlighting benefits, social proof, and clear CTAs.  
+> - List copy formulas adapted for high-conversion landing pages and demonstrate how to incorporate them in code (e.g., `<section class="copy">`).  
+> - Give tips to avoid excessive jargon, maintaining a conversational yet authoritative tone.”  
+> 
+> **Technique Used**: Voice & Tone Conditioning  
+> 
+> - By defining “‘Light Copy’ Copywriting” and requesting a “conversational yet credible” tone, the prompt conditions Codex to adapt its writing style to be persuasive but accessible, avoiding overly technical or formal language.  
+>   [References: godofprompt.ai, medium.com]  
+> 
+> - Asking for examples of copy frameworks (AIDA, PAS, 4Us) ensures that the model includes marketing-tested structures, drawing on training data that includes marketing and copywriting corpora.  
+>   [References: promptingguide.ai, dev.to]
+
+### 2.8. Sales Funnel Mapping and Technical Integrations
+
+> **Prompt Excerpt**:  
+> “6. **Sales Funnel Structure (SDR Style)**  
+> 
+> - Map each stage of the funnel (attraction → qualification → nurturing → scheduling/sale) and explain how the site itself should operate at each phase.  
+> - Demonstrate in code (e.g., pseudocode or JSON) how to configure email capture via form, integration with chatbot/WhatsApp, and automatic scheduling (Google Calendar API or Calendly).  
+> - Include examples of integration with CRM (e.g., HubSpot, Pipedrive) and automations via n8n, showing in JSON how to capture a lead, score it, and trigger nurture emails.  
+> - List KPIs (conversion rate, CAC, CPL, ROI) and show in JavaScript how to calculate and display simple reports in the admin panel.”  
+> 
+> **Techniques Used**: Task Decomposition & Domain-Specific Prompting  
+> 
+> - Decomposing the funnel into discrete stages exemplifies Task Decomposition, which breaks complex tasks into subtasks, ensuring comprehensive coverage by the model.  
+>   [References: outshift.cisco.com, medium.com]  
+> 
+> - Mentioning “n8n or other tools” directs the model to integrate automation concepts, triggering technical knowledge about APIs and workflow logic—crucial for code-based prompts.  
+>   [References: microsoft.github.io, mediatech.group]
+
+### 2.9. Niche Segmentation and Market Research
+
+> **Prompt Excerpt**:  
+> “7. **Niche Segmentation and Content Topics**  
+> 
+> - Explain how to identify the “pains” of the audience using scrapers in Python for forums (Reddit, Quora) and social networks (Twitter API, Instagram Graph).  
+> - Provide script examples or queries that extract comments and posts for sentiment analysis.  
+> - Suggest content topics (blog posts, webinars, e-books) for each niche, showing how to generate headlines and summaries in Markdown as lead magnets.  
+> - Demonstrate how to publish and schedule this content in a headless CMS (e.g., Strapi, Contentful) via API.”  
+> 
+> **Techniques Used**: Prompt Chaining & Contextual Retrieval  
+> 
+> - By explicitly asking “how to identify pains” from multiple sources, the prompt directs the model to explore digital market research strategies that involve opinion scraping and sentiment analysis, common tasks in data extraction prompting.  
+>   [References: promptingguide.ai, docs.aws.amazon.com]  
+> 
+> - Mentioning “examples of ‘cures’ or solutions” encourages responses that connect specific problems to concrete value propositions, guiding Codex to produce solution-oriented content.  
+>   [References: godofprompt.ai, dev.to]
+
+### 2.10. Social Proof and Testimonial Structuring
+
+> **Prompt Excerpt**:  
+> “8. **Testimonials and Social Proof**  
+> 
+> - Provide testimonial templates in HTML and CSS that illustrate the “problem → solution → result” structure.  
+> - Explain in JavaScript how to dynamically load real testimonials (e.g., from a database table or API) into the landing page.  
+> - Suggest strategies to collect initial feedback: automated forms, integration with Google Forms, and exporting to spreadsheets.  
+> - Show code snippets that validate and display customer comments, with basic moderation (JS or Node.js).”  
+> 
+> **Techniques Used**: Example-Based Prompting & Persuasive Writing  
+> 
+> - Requesting “testimonial templates” causes Codex to present concrete examples, replicating effective testimonial language patterns—an indirect few-shot technique because the model has seen typical testimonial formats in its training.  
+>   [References: medium.com, ibm.com]  
+> 
+> - Structuring testimonials as “problem → solution obtained → measurable results” uses the “Challenge-Solution-Result” (CSR) pattern, a persuasive copywriting approach the model is trained to reproduce.  
+>   [References: godofprompt.ai, dev.to]
+
+### 2.11. Objections and Counterarguments
+
+> **Prompt Excerpt**:  
+> “9. **Complaints, Criticisms, and Counterarguments**  
+> 
+> - List the main objections (price, trust issues, fear of failure) and model an FAQ section in HTML/CSS that addresses each.  
+> - Include examples of counter-argumentative copy that removes objections (“Satisfaction Guaranteed,” “Easy Cancellation Policy”).  
+> - Demonstrate how to use schema.org FAQPage in JSON-LD for SEO and enhanced FAQ display in search results.  
+> - Suggest how to run A/B tests using tools like Google Optimize, and provide pseudocode that alternates copy versions to measure performance.”  
+> 
+> **Techniques Used**: Anticipative Prompting & Objection Handling  
+> 
+> - Instructing the model to anticipate “main objections” employs Anticipative Prompting, making the LLM consider negative scenarios and provide counterarguments—essential in sales funnel prompts.  
+>   [References: promptingguide.ai, docs.aws.amazon.com]  
+> 
+> - Requesting “FAQs, case studies, use cases” involves structuring the response in practical formats, using Knowledge Prompting to retrieve typical support content schemas.  
+>   [References: medium.com, medium.com]
+
+### 2.12. Practical Examples, Templates, and Pseudocode
+
+> **Prompt Excerpt**:  
+> “10. **Practical Examples and Templates**  
+> 
+> - Suggest real landing page models (links or descriptions) that function as a complete funnel, top to bottom.  
+> - Provide a basic responsive, SEO-optimized template in HTML/CSS/JS (or with Tailwind/React).  
+> - Include examples of automation flows in JSON (pseudocode for n8n) that connect lead capture → lead scoring → follow-up via email or WhatsApp.  
+> - List recommended libraries and plugins (e.g., LiveChat, Hotjar, Google Analytics 4, GTM) and show import/configuration examples in JavaScript.”  
+> 
+> **Techniques Used**: Few-Shot & Pseudocode Prompting  
+> 
+> - By requesting “pseudocode or JSON,” the prompt activates Codex’s capability to generate structured workflow data, leveraging its training on automation and code repositories.  
+>   [References: mediatech.group, ibm.com]  
+> 
+> - Including “links or descriptions” of effective landing pages uses Contextual Retrieval, since the model attempts to recall concrete examples (even if hypothetical) to serve as inspiration, increasing output practicality.  
+>   [References: mercity.ai, dev.to]
+
+### 2.13. Executive Summary
+
+> **Prompt Excerpt**:  
+> “At the end, generate an executive summary (under `## Executive Summary`) with the key points for quickly creating a high-conversion, SEO-scalable landing page funnel.”  
+> 
+> **Techniques Used**: Summary Prompting & Hierarchical Output  
+> 
+> - Asking for an “Executive Summary” applies the Summary Prompting technique, directing the model to synthesize complex information into a cohesive block, facilitating immediate user action on the generated content.  
+>   [References: medium.com, github.com]  
+> 
+> - Placing this summary at the end employs Hierarchical Output, ensuring that Codex first presents detailed content (each section) and then a consolidated overview, enhancing usability and clarity.  
+>   [References: outshift.cisco.com, medium.com]
+
+---
+
+## 3. **Considerations on the Employed Prompt Engineering Techniques**
+
+1. **Combination of Multiple Techniques**:  
+   The provided prompt demonstrates a fusion of various advanced strategies, incorporating everything from sophisticated roleplay to ETL, few-shot, and pseudocode, with the aim of maximizing Codex’s potential in generating detailed, formatted, and technically accurate content. This hybrid approach aligns with expert recommendations advocating the use of prompt chaining and contextual priming for complex tasks.  
+   [References: mercity.ai, outshift.cisco.com, medium.com]
+
+2. **Focus on Practical, Actionable Results**:  
+   By requiring code examples, references to well-known frameworks, and automation flow models, the prompt exemplifies the Prompt-to-Action principle, incentivizing the model to produce immediately implementable results rather than purely theoretical content.  
+   [References: mediatech.group, dev.to]
+
+3. **Minimization of Ambiguities**:  
+   Detailed formatting instructions in Markdown, bullet points, and specific section names reduce the model’s margin for error, preventing dispersed or poorly structured responses. This practice aligns with guidelines recommending “explicit system instructions” for LLMs to ensure consistency and predictability.  
+   [References: microsoft.github.io, docs.aws.amazon.com]
+
+4. **Integration of Marketing and Automation Frameworks**:  
+   Incorporating copywriting frameworks (AIDA, PAS, 4Us) and an SDR-style funnel, as well as automation tools (n8n, CRM, chatbots), reflects domain-specific knowledge that ensures the model not only writes text but also proposes feasible technical solutions. This convergence of marketing, UX, and programming is typical of advanced prompts for code models, leveraging Codex’s versatility to generate both narrative content and structured code.  
+   [References: mediatech.group, ibm.com]
+
+5. **Preparation for Iteration**:  
+   Delivering a prompt this rich and structural reduces the number of refinement rounds needed; however, if adjustments are required, the prompt clearly defines the pattern to follow, making incremental edits and subsequent refinements easier—an approach recommended in prompt iteration processes.  
+   [References: reddit.com, github.com]
+
+In summary, the provided prompt is a sophisticated demonstration of prompt engineering for code models, merging roleplay, structured instructions, granular specificity, ETL methodologies, and Markdown formatting. This composition maximizes both the quality and applicability of Codex’s output, addressing digital marketing, design, programming, and automation requirements in an integrated manner.
+
+
+
+
+MATERIAL EXTRA:
+# Briefing Question Examples for WEBAI-BEE Agent
+
+Use these questions to collect all necessary information from the user. Each section covers a key aspect of the website project. The agent should ask these in a clear, conversational manner to ensure completeness and clarity.
+
+---
+
+## 1. General Brand Information
+
+1. What is the official name of the company or project? Is there a subtitle or slogan already defined?  
+2. What is your brand’s mission and vision? Please summarize the core purpose in 1–2 sentences.  
+3. What are the main values guiding your brand (e.g., innovation, transparency, authority, friendliness)?  
+4. Is there any origin story or background context about why the brand was created?  
+5. What is the primary product or service you want to highlight on the landing page?
+
+---
+
+## 2. Target Audience and Persona
+
+1. Who is your primary target audience? (Age range, gender, profession, income level, geographic location, interests)  
+2. What specific “pain points” or needs does this audience have regarding your product/service?  
+3. How does this audience typically look for solutions like yours? (Search engines, social media, referrals, etc.)  
+4. Which keywords or search terms does your audience use when looking for services like yours?  
+5. What motivates this audience to take action? (Subscribe to newsletter, start a chat, make a purchase, etc.)
+
+---
+
+## 3. Competition and Positioning
+
+1. Who are your main direct competitors (websites or brands offering a very similar service)?  
+2. How do you differentiate (or plan to differentiate) yourself from these competitors? (Price, unique feature, reputation, speed, etc.)  
+3. Are there competitor websites or brands you admire and consider as references? What exactly do you like about them?  
+4. Is there a specific niche or sub-niche you want to focus on (e.g., underserved segments, micro-niches)?  
+5. Have you heard any common complaints or criticisms from customers of your competitors? How could you position your offering to solve those problems?
+
+---
+
+## 4. Desired Visual Identity
+
+1. Do you already have a logo and color palette defined? If yes, please describe or attach (hex codes, font names).  
+2. If you don’t have a defined palette yet, which feelings or emotions should your colors convey? (Trust—blue; urgency—red; modernity—purple; stability—gray, etc.)  
+3. What type of typography matches your identity best: clean and minimalist, formal serif, relaxed sans-serif, or something else?  
+4. Are there any images, icons, or symbols you immediately associate with your brand? (For example, a mascot, an object, or a specific style.)  
+5. Do you have any informal style guidelines about logo usage? (Spacing rules, light vs. dark background, minimum size, incorrect usage examples.)
+
+---
+
+## 5. Tone of Voice and Communication
+
+1. How would you like your brand to communicate:  
+   - Casual and conversational,  
+   - Technical and authoritative,  
+   - Inspirational and motivational?  
+2. Are there any existing texts (on your website or from partners) that showcase the copy style you prefer?  
+3. Which words or expressions should be avoided? (Too much jargon, slang, overly formal language, emojis?)  
+4. What level of humor or lightness is acceptable? Do you prefer direct, factual messages or a bit of storytelling?  
+5. How do you plan to handle testimonials: short and punchy quotes or detailed stories with metrics and context?
+
+---
+
+## 6. Existing Elements and Visual References
+
+1. Do you already have high-quality photos, illustrations, or videos for your landing page? If yes, which assets are top priority?  
+2. Are there any institutional materials (team photos, office shots, product images) that should be included?  
+3. Can you share examples of websites—outside your industry—that have visual elements (animations, hero banners, carousels) you like?  
+4. Are there any style restrictions? (No realistic images, prefer flat icons, use only vector graphics, etc.)  
+5. Do you have any design inspiration sources (e.g., Dribbble, Behance, Behance collections) we can reference?
+
+---
+
+## 7. Goals and Key Messages
+
+1. What’s the single most important action you want visitors to take immediately? (Subscribe, download, schedule a call, purchase, etc.)  
+2. Which main benefits do you want to highlight upfront? (Time savings, cost reduction, 24/7 support, ROI, etc.)  
+3. Do you have a concise unique value proposition (USP) that can serve as a headline?  
+4. Will you offer any initial incentive to encourage conversions? (Free e-book, discount code, free trial, etc.)  
+5. What guarantees or trust signals can you highlight? (“100% Satisfaction Guaranteed,” “Free Cancellation,” “Money-Back Guarantee.”)
+
+---
+
+## 8. Content Structure and Data Organization
+
+1. Which form fields are absolutely essential to qualify a lead?  
+   - Examples: Name, Email, Phone, Company, Job Title, Industry, Main Pain Point, etc.  
+2. Will you integrate with a specific CRM (e.g., HubSpot, Zoho CRM, RD Station) or automation tool (e.g., n8n, Zapier)?  
+3. Which content categories or tags do you foresee? (Blog, Case Studies, Free Resources, FAQ, etc.)  
+4. How do you plan to manage backend content? (Markdown files, headless CMS like Strapi/Contentful, WordPress, custom CMS)  
+5. Which metadata fields are most important for your SEO strategy? (Author, Publication Date, Category, Keywords, etc.)
+
+---
+
+## 9. Required Documentation and Guidelines
+
+1. Do you need a complete style guide (Brand Guidelines) that includes:  
+   - Color and typography specifications,  
+   - Logo usage examples on light and dark backgrounds,  
+   - Spacing, padding, and alignment rules,  
+   - Correct vs. incorrect usage examples.  
+2. Do you require a detailed Tone of Voice Guide that covers:  
+   - Example phrases, active vs. passive voice instructions,  
+   - Guidelines on using emojis or not,  
+   - Title and subtitle structures.  
+3. Would you like a one-page overview (“One-Pager”) for quick briefing to design and development teams?  
+4. Should we include sections on “How to Collect Testimonials” and “How to Request Additional Content from Clients”?  
+5. Will this documentation need to be updated periodically? If so, how often? (Monthly, Quarterly, Biannually)
+
+---
+
+## 10. Technical Stack and Integration Questions
+
+### 10.1. Front-End & API Integration
+1. Will you call any APIs directly from the front end? If yes:  
+   - Which endpoints will you consume (REST, GraphQL, other)?  
+   - How will authentication be handled (API Key, OAuth, JWT)?  
+2. Will you need to consume any third-party services/APIs? (Payment gateways, email services, social logins, analytics)  
+3. Do you plan to implement client-side caching or use a CDN for API responses? (e.g., Redis, Varnish, Cloudflare)
+
+### 10.2. Database & Storage
+1. Which database system(s) will be used? (PostgreSQL, MySQL, MongoDB, Firebase/Firestore, etc.)  
+2. Will the database be self-hosted or managed by a cloud provider (AWS RDS, Mongo Atlas, Google Cloud SQL)?  
+3. What is the data model or schema idea? Do you need to store files (images, documents)?  
+4. Is there a requirement for data versioning, audit logs, or backup retention policies?
+
+### 10.3. External Services & Infrastructure
+1. Which external services or integrations will be required? (CDN providers, email/SMS services, authentication providers, payment gateways)  
+2. Will you set up CI/CD pipelines? If yes, which tools? (GitHub Actions, GitLab CI, Jenkins, CircleCI)  
+3. What is the preferred hosting/infrastructure model?  
+   - VPS (e.g., DigitalOcean droplet, AWS EC2),  
+   - Serverless (AWS Lambda, Cloud Functions),  
+   - Container-based (Docker Compose, Kubernetes),  
+   - Platform-as-a-Service (Heroku, Vercel, Netlify).
+
+### 10.4. Authentication & Security
+1. Will users need to register and log in? Which authentication strategy? (JWT, OAuth 2.0, OpenID Connect, session-based, Social Login)  
+2. Are there multiple user roles or permission levels? (RBAC, ACL)  
+3. How will secrets and environment variables be stored? (Vault, AWS Secrets Manager, local `.env` files)  
+4. What security measures are required to protect against common attacks? (XSS, CSRF, SQL Injection, etc.)  
+5. What encryption standards are needed? (TLS/HTTPS, HSTS, data-at-rest encryption)
+
+### 10.5. Performance & Scalability
+1. Do you expect high traffic or spikes in usage? What is the estimated number of concurrent users?  
+2. Will you need load balancing, auto-scaling, or multiple server instances?  
+3. Are there real-time requirements? (WebSockets, Server-Sent Events, WebRTC)  
+4. Which monitoring and logging tools will you use? (Prometheus, Grafana, ELK Stack, Sentry, New Relic)
+
+### 10.6. Accessibility & Internationalization
+1. Does your site need to be multilingual? If yes, which languages and how will translations be managed? (i18n libraries, JSON files, CMS)  
+2. Are there specific accessibility requirements? (WCAG 2.1 compliance, high-contrast mode, screen-reader support, keyboard navigation)  
+3. Do you need support for right-to-left (RTL) languages or regional date/time formats?
+
+### 10.7. Development Workflow & Deployment
+1. What is your preferred branching/model workflow? (Git Flow, trunk-based development, feature branches)  
+2. Which local development tools and environments will be used? (Docker Compose, Vagrant, Node.js, virtual environments)  
+3. How will build and deployment be handled? (Automated pipelines, code reviews, unit/integration/E2E tests)  
+4. Do you need separate environments for development, staging, and production? How will they differ?
+
+---
+
+❓ **Next Steps for the Agent**:
+
+- Ask the user to answer each question above in detail.  
+- Request any additional materials the user may have (wireframes, databases, logos, whitepapers).  
+- If the user identifies any missing or unclear aspects, encourage them to elaborate.  
+
+With this detailed information, WEBAI-BEE can generate a precise and comprehensive prompt for the AI website generator.
+
+MATERIAL EXTRA:
+
+1. **Branding**
+   - Core branding concepts for companies that sell online services
+   - Brand positioning for landing pages that convert quickly
+   - Examples of visual identity (colors, typography, logo) aimed at trust and authority in digital niches
+
+2. **Marketing and Market Analysis**
+   - Current digital marketing trends focused on lead generation (social ads, inbound, outbound)
+   - Market research: identifying promising niches for landing pages (e.g., online education, consulting services, low-ticket e-commerce)
+   - Pricing, competitive differentiators, and competitor analysis in the chosen niche
+
+3. **Interface and Experience Design (UX/UI)**
+   - Page structure (wireframe) for a “Google Friendly” and mobile-friendly landing page
+   - Best practices in layout, information hierarchy, and simple navigation to guide visitors to conversion
+   - Examples of templates or visual references that serve as rapid models for creating landing pages
+
+4. **Programming for SEO and Google Friendly**
+   - On-page optimization techniques (title, meta description, headings, alt text, friendly URLs)
+   - Performance best practices (minification of CSS/JS, lazy loading, image compression)
+   - Accessibility and indexing best practices (sitemap.xml, robots.txt, schema.org, structured data)
+
+5. **“Light Copy” Copywriting**
+   - How to write headlines and subheadings that capture attention (headline hooks)
+   - Light and persuasive text structure: focus on benefits, social proof, and clear CTAs
+   - Examples of copy formulas (AIDA, PAS, 4Us) adapted for landing pages that convert
+   - Tips to avoid jargon and maintain a conversational tone without losing credibility
+
+6. **Sales Funnel Structure (SDR Style)**
+   - Mapping the stages: attraction → qualification → nurturing → scheduling (or direct sale)
+   - How the site can operate at each stage (email capture, chatbot/WhatsApp, automatic scheduling)
+   - Examples of integrations (CRM, email marketing, automations via n8n or other tools) to nurture leads
+   - Key performance indicators (KPIs) for each phase of the funnel
+
+7. **Niche Segmentation and Content Topics**
+   - How to identify the “pains” and “complaints” of the target audience in forums, social networks, and review sites
+   - Examples of “cures” or solutions that position the service/landing page as the answer to those needs
+   - Suggestions for content topics (blog posts, webinars, e-books) that serve as lead magnets for each niche
+
+8. **Testimonials and Social Proof**
+   - Models of written, video, or audio testimonials to include on the landing page
+   - How to structure testimonials (problem, solution obtained, measurable results) for maximum credibility
+   - Strategies to request and collect real feedback from initial clients even before having many case studies
+
+9. **Complaints, Criticisms, and Counterarguments**
+   - Main objections that potential clients raise when hiring services online (price, lack of trust, fear of not getting results)
+   - Examples of responses and supporting materials (FAQs, case studies, success stories) that remove barriers
+   - UX and copy tips to address these objections directly on the page (FAQ section and guarantee badges)
+
+10. **Practical Examples and Templates**
+    - Suggest landing page models (links or descriptions) that function as a complete funnel, from top to bottom
+    - Examples of automation flows (in pseudocode or JSON) that connect capture → lead scoring → follow-up
+    - Recommendations for plugins or libraries (for example, live chat scripts, pop-up forms, conversion trackers)
+
+## Instructions:
+
+- Deliver each topic as a separate section in Markdown, with headings `## Topic`.
+- For each section, include lists of best practices, concrete examples, and references to tools or frameworks (e.g., Bootstrap, Tailwind, React, WordPress + Elementor, Google Analytics, etc.).
+- If possible, present code snippets (HTML/CSS/JS) exemplifying SEO implementations or capture forms.
+- At the end, generate an executive summary (in `## Executive Summary`) with key points for quickly creating a lead-generating landing page funnel.

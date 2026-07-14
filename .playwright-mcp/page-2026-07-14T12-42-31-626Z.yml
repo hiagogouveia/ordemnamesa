@@ -1,0 +1,44 @@
+- generic [active] [ref=f11e1]:
+  - generic [ref=f11e2]:
+    - generic [ref=f11e3]:
+      - link "Ordem na Mesa Logo Ordem na Mesa" [ref=f11e4] [cursor=pointer]:
+        - /url: /
+        - img "Ordem na Mesa Logo" [ref=f11e6]
+        - generic [ref=f11e7]: Ordem na Mesa
+      - generic [ref=f11e8]:
+        - generic [ref=f11e9]: App de Gestão Interna
+        - heading "Controle total da operação em suas mãos." [level=1] [ref=f11e12]
+        - paragraph [ref=f11e13]: Organize tarefas, monitore a execução da equipe em tempo real e garanta a excelência no atendimento.
+    - generic [ref=f11e15]:
+      - link "Voltar ao Início" [ref=f11e17] [cursor=pointer]:
+        - /url: /
+      - generic [ref=f11e18]:
+        - generic [ref=f11e19]:
+          - heading "Bem-vindo de volta" [level=2] [ref=f11e20]
+          - paragraph [ref=f11e21]: Insira suas credenciais para acessar o painel administrativo.
+        - generic [ref=f11e22]:
+          - generic [ref=f11e23]:
+            - generic [ref=f11e24]: E-mail ou Usuário
+            - generic [ref=f11e25]:
+              - generic: person
+              - textbox "E-mail ou Usuário" [ref=f11e26]:
+                - /placeholder: "ex: gerente@restaurante.com.br"
+          - generic [ref=f11e27]:
+            - generic [ref=f11e28]:
+              - generic [ref=f11e29]: Senha
+              - link "Esqueceu a senha?" [ref=f11e30] [cursor=pointer]:
+                - /url: /forgot-password
+            - generic [ref=f11e31]:
+              - generic: lock
+              - textbox "Senha" [ref=f11e32]:
+                - /placeholder: Digite sua senha
+              - button "visibility_off" [ref=f11e33] [cursor=pointer]
+          - button "Entrar no Sistema" [ref=f11e35] [cursor=pointer]
+        - generic [ref=f11e37]:
+          - generic [ref=f11e38]: Ou
+          - paragraph [ref=f11e42]:
+            - text: Novo gerente?
+            - link "Solicite seu acesso aqui" [ref=f11e43] [cursor=pointer]:
+              - /url: "#"
+  - button "Open Next.js Dev Tools" [ref=f11e49] [cursor=pointer]
+  - alert [ref=f11e53]

@@ -1,0 +1,53 @@
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - img "Ordem na Mesa Logo" [ref=e7]
+        - generic [ref=e8]: Ordem na Mesa
+      - button "chevron_left" [ref=e10]
+    - navigation [ref=e12]:
+      - generic [ref=e13]: Menu Principal
+      - link "dashboard Dashboard" [ref=e14] [cursor=pointer]:
+        - /url: /dashboard
+        - generic [ref=e15]: dashboard
+        - generic [ref=e16]: Dashboard
+      - link "assignment_ind Meu Turno" [ref=e17] [cursor=pointer]:
+        - /url: /turno
+        - generic [ref=e18]: assignment_ind
+        - generic [ref=e19]: Meu Turno
+      - link "checklist Checklists" [ref=e20] [cursor=pointer]:
+        - /url: /checklists
+        - generic [ref=e21]: checklist
+        - generic [ref=e22]: Checklists
+      - link "local_shipping Recebimentos" [ref=e23] [cursor=pointer]:
+        - /url: /recebimentos
+        - generic [ref=e24]: local_shipping
+        - generic [ref=e25]: Recebimentos
+      - link "group Equipe" [ref=e26] [cursor=pointer]:
+        - /url: /equipe
+        - generic [ref=e27]: group
+        - generic [ref=e28]: Equipe
+      - link "bar_chart Relatórios" [ref=e29] [cursor=pointer]:
+        - /url: /relatorios
+        - generic [ref=e30]: bar_chart
+        - generic [ref=e31]: Relatórios
+      - link "settings Configurações" [ref=e32] [cursor=pointer]:
+        - /url: /configuracoes
+        - generic [ref=e33]: settings
+        - generic [ref=e34]: Configurações
+    - generic [ref=e35]:
+      - generic [ref=e36]:
+        - generic [ref=e37]: person
+        - generic [ref=e39]:
+          - generic [ref=e40]: Usuário
+          - generic [ref=e41]: Colaborador
+      - button "logout Sair da conta" [ref=e42]:
+        - generic [ref=e43]: logout
+        - generic [ref=e44]: Sair da conta
+  - generic [ref=e45]:
+    - banner [ref=e46]:
+      - heading "Dashboard Geral" [level=2] [ref=e49]
+      - button "Notificações" [ref=e52]:
+        - generic [ref=e53]: notifications
+    - main [ref=e54]:
+      - main [ref=e58]

@@ -1,0 +1,792 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - img "Ordem na Mesa Logo" [ref=e7]
+          - generic [ref=e8]:
+            - generic [ref=e9]: Ordem na Mesa
+            - generic [ref=e104]: Gouveia Pizzaria
+        - button "chevron_left" [ref=e10]:
+          - generic [ref=e11]: chevron_left
+      - button "Restaurante Atual Gouveia Pizzaria unfold_more" [ref=e106]:
+        - generic [ref=e107]:
+          - generic [ref=e108]: Restaurante Atual
+          - generic [ref=e109]: Gouveia Pizzaria
+        - generic [ref=e110]: unfold_more
+      - navigation [ref=e12]:
+        - generic [ref=e13]: Menu Principal
+        - link "dashboard Dashboard" [ref=e14] [cursor=pointer]:
+          - /url: /dashboard
+          - generic [ref=e15]: dashboard
+          - generic [ref=e16]: Dashboard
+        - link "assignment_ind Meu Turno 19" [ref=e111] [cursor=pointer]:
+          - /url: /turno
+          - generic [ref=e18]: assignment_ind
+          - generic [ref=e19]: Meu Turno
+          - generic [ref=e112]: "19"
+        - link "checklist Checklists" [ref=e20] [cursor=pointer]:
+          - /url: /checklists
+          - generic [ref=e21]: checklist
+          - generic [ref=e22]: Checklists
+        - link "local_shipping Recebimentos" [ref=e23] [cursor=pointer]:
+          - /url: /recebimentos
+          - generic [ref=e24]: local_shipping
+          - generic [ref=e25]: Recebimentos
+        - link "group Equipe" [ref=e26] [cursor=pointer]:
+          - /url: /equipe
+          - generic [ref=e27]: group
+          - generic [ref=e28]: Equipe
+        - link "bar_chart Relatórios" [ref=e29] [cursor=pointer]:
+          - /url: /relatorios
+          - generic [ref=e30]: bar_chart
+          - generic [ref=e31]: Relatórios
+        - link "settings Configurações" [ref=e32] [cursor=pointer]:
+          - /url: /configuracoes
+          - generic [ref=e33]: settings
+          - generic [ref=e34]: Configurações
+      - generic [ref=e35]:
+        - generic [ref=e36]:
+          - generic [ref=e38]: h
+          - generic [ref=e39]:
+            - generic [ref=e40]: hiago.gouveia
+            - generic [ref=e41]: Proprietário
+        - button "logout Sair da conta" [ref=e42]:
+          - generic [ref=e43]: logout
+          - generic [ref=e44]: Sair da conta
+    - generic [ref=e45]:
+      - banner [ref=e46]:
+        - heading "Gestão de Checklists" [level=2] [ref=e49]
+        - button "notifications 5" [ref=e113]:
+          - generic [ref=e53]: notifications
+          - generic [ref=e114]: "5"
+      - main [ref=e54]:
+        - generic [ref=e55]:
+          - generic [ref=e57]:
+            - generic [ref=e58]:
+              - generic: search
+              - textbox "Buscar por nome..." [ref=e59]
+            - generic [ref=e60]:
+              - button "view_list Lista" [ref=e61]:
+                - generic [ref=e62]: view_list
+                - generic [ref=e63]: Lista
+              - button "view_column Cards" [ref=e64]:
+                - generic [ref=e65]: view_column
+                - generic [ref=e66]: Cards
+              - button "visibility Preview" [ref=e67]:
+                - generic [ref=e68]: visibility
+                - generic [ref=e69]: Preview
+            - button "Atualizar dados" [ref=e70]:
+              - generic [ref=e71]: refresh
+              - generic [ref=e72]: Atualizar
+            - button "library_add Modelos" [ref=e73]:
+              - generic [ref=e74]: library_add
+              - generic [ref=e75]: Modelos
+            - button "add Nova rotina" [ref=e76]:
+              - generic [ref=e77]: add
+              - generic [ref=e78]: Nova rotina
+          - generic [ref=e79]:
+            - 'button "Tipo: Todos os tipos expand_more" [ref=e80]':
+              - generic [ref=e81]: "Tipo: Todos os tipos"
+              - generic [ref=e82]: expand_more
+            - 'button "Disponibilidade: Ativas expand_more" [ref=e83]':
+              - generic [ref=e84]: "Disponibilidade: Ativas"
+              - generic [ref=e85]: expand_more
+            - button "Turno expand_more" [ref=e86]:
+              - generic [ref=e87]: Turno
+              - generic [ref=e88]: expand_more
+            - button "Área expand_more" [ref=e89]:
+              - generic [ref=e90]: Área
+              - generic [ref=e91]: expand_more
+            - button "Status expand_more" [ref=e92]:
+              - generic [ref=e93]: Status
+              - generic [ref=e94]: expand_more
+            - button "Colaborador expand_more" [ref=e95]:
+              - generic [ref=e96]: Colaborador
+              - generic [ref=e97]: expand_more
+          - generic [ref=e100]:
+            - generic [ref=e115]:
+              - generic [ref=e117]: Para reordenar, selecione uma área e use Disponibilidade e Status como 'Todos'.
+              - button "swap_vert Reordenar" [disabled] [ref=e119]:
+                - generic [ref=e120]: swap_vert
+                - text: Reordenar
+            - table [ref=e121]:
+              - rowgroup [ref=e122]:
+                - row "Selecionar todos Título arrow_upward Turno arrow_upward Área arrow_upward Responsável arrow_upward Recorrência Disponibilidade arrow_upward Status" [ref=e123]:
+                  - columnheader "Selecionar todos" [ref=e124]:
+                    - generic [ref=e125]:
+                      - checkbox "Selecionar todos" [checked] [active] [ref=e126] [cursor=pointer]
+                      - img
+                  - columnheader "Título arrow_upward" [ref=e127] [cursor=pointer]:
+                    - generic [ref=e128]:
+                      - generic [ref=e129]: Título
+                      - generic [ref=e130]: arrow_upward
+                  - columnheader "Turno arrow_upward" [ref=e131] [cursor=pointer]:
+                    - generic [ref=e132]:
+                      - generic [ref=e133]: Turno
+                      - generic [ref=e134]: arrow_upward
+                  - columnheader "Área arrow_upward" [ref=e135] [cursor=pointer]:
+                    - generic [ref=e136]:
+                      - generic [ref=e137]: Área
+                      - generic [ref=e138]: arrow_upward
+                  - columnheader "Responsável arrow_upward" [ref=e139] [cursor=pointer]:
+                    - generic [ref=e140]:
+                      - generic [ref=e141]: Responsável
+                      - generic [ref=e142]: arrow_upward
+                  - columnheader "Recorrência" [ref=e143]
+                  - columnheader "Disponibilidade arrow_upward" [ref=e144] [cursor=pointer]:
+                    - generic [ref=e145]:
+                      - generic [ref=e146]: Disponibilidade
+                      - generic [ref=e147]: arrow_upward
+                  - columnheader "Status" [ref=e148]
+                  - columnheader [ref=e149]
+              - rowgroup [ref=e150]:
+                - row "Selecionar rotina com tempo 2 rotina com tempo 2 Manhã Administrativo Distribuído para toda a área Dias do turno Ativo Atrasada more_vert" [ref=e151] [cursor=pointer]:
+                  - cell "Selecionar rotina com tempo 2" [ref=e152]:
+                    - generic [ref=e153]:
+                      - checkbox "Selecionar rotina com tempo 2" [checked] [ref=e154]
+                      - img
+                  - cell "rotina com tempo 2" [ref=e155]:
+                    - generic [ref=e157]: rotina com tempo 2
+                  - cell "Manhã" [ref=e158]
+                  - cell "Administrativo" [ref=e159]:
+                    - generic [ref=e162]: Administrativo
+                  - cell "Distribuído para toda a área" [ref=e163]
+                  - cell "Dias do turno" [ref=e164]
+                  - cell "Ativo" [ref=e165]:
+                    - switch "Ativo" [checked] [ref=e166]: Ativo
+                  - cell "Atrasada" [ref=e168]:
+                    - generic [ref=e169]: Atrasada
+                  - cell "more_vert" [ref=e170]:
+                    - button "more_vert" [ref=e172]:
+                      - generic [ref=e173]: more_vert
+                - row "Selecionar Atividade para o adminsitrativo Noite Atividade para o adminsitrativo Noite Todos os turnos Administrativo Distribuído para toda a área Todos os dias Ativo Atrasada more_vert" [ref=e174] [cursor=pointer]:
+                  - cell "Selecionar Atividade para o adminsitrativo Noite" [ref=e175]:
+                    - generic [ref=e176]:
+                      - checkbox "Selecionar Atividade para o adminsitrativo Noite" [checked] [ref=e177]
+                      - img
+                  - cell "Atividade para o adminsitrativo Noite" [ref=e178]:
+                    - generic [ref=e180]: Atividade para o adminsitrativo Noite
+                  - cell "Todos os turnos" [ref=e181]
+                  - cell "Administrativo" [ref=e182]:
+                    - generic [ref=e185]: Administrativo
+                  - cell "Distribuído para toda a área" [ref=e186]
+                  - cell "Todos os dias" [ref=e187]
+                  - cell "Ativo" [ref=e188]:
+                    - switch "Ativo" [checked] [ref=e189]: Ativo
+                  - cell "Atrasada" [ref=e191]:
+                    - generic [ref=e192]: Atrasada
+                  - cell "more_vert" [ref=e193]:
+                    - button "more_vert" [ref=e195]:
+                      - generic [ref=e196]: more_vert
+                - row "Selecionar teste apresentação teste apresentação apresentação tarde Administrativo Distribuído para toda a área Dias do turno Ativo Disponível more_vert" [ref=e197] [cursor=pointer]:
+                  - cell "Selecionar teste apresentação" [ref=e198]:
+                    - generic [ref=e199]:
+                      - checkbox "Selecionar teste apresentação" [checked] [ref=e200]
+                      - img
+                  - cell "teste apresentação apresentação" [ref=e201]:
+                    - generic [ref=e203]: teste apresentação
+                    - paragraph [ref=e204]: apresentação
+                  - cell "tarde" [ref=e205]
+                  - cell "Administrativo" [ref=e206]:
+                    - generic [ref=e209]: Administrativo
+                  - cell "Distribuído para toda a área" [ref=e210]
+                  - cell "Dias do turno" [ref=e211]
+                  - cell "Ativo" [ref=e212]:
+                    - switch "Ativo" [checked] [ref=e213]: Ativo
+                  - cell "Disponível" [ref=e215]:
+                    - generic [ref=e216]: Disponível
+                  - cell "more_vert" [ref=e217]:
+                    - button "more_vert" [ref=e219]:
+                      - generic [ref=e220]: more_vert
+                - row "Selecionar com hora pra terminar 7:59 com hora pra terminar 7:59 Todos os turnos caixa person Yanca Gouveia Todos os dias Ativo Atrasada more_vert" [ref=e221] [cursor=pointer]:
+                  - cell "Selecionar com hora pra terminar 7:59" [ref=e222]:
+                    - generic [ref=e223]:
+                      - checkbox "Selecionar com hora pra terminar 7:59" [checked] [ref=e224]
+                      - img
+                  - cell "com hora pra terminar 7:59" [ref=e225]:
+                    - generic [ref=e227]: com hora pra terminar 7:59
+                  - cell "Todos os turnos" [ref=e228]
+                  - cell "caixa" [ref=e229]:
+                    - generic [ref=e232]: caixa
+                  - cell "person Yanca Gouveia" [ref=e233]:
+                    - generic "Colaborador atribuído à rotina" [ref=e234]:
+                      - generic [ref=e235]: person
+                      - generic [ref=e236]: Yanca Gouveia
+                  - cell "Todos os dias" [ref=e237]
+                  - cell "Ativo" [ref=e238]:
+                    - switch "Ativo" [checked] [ref=e239]: Ativo
+                  - cell "Atrasada" [ref=e241]:
+                    - generic [ref=e242]: Atrasada
+                  - cell "more_vert" [ref=e243]:
+                    - button "more_vert" [ref=e245]:
+                      - generic [ref=e246]: more_vert
+                - row "Selecionar administrativo administrativo tarde Administrativo Distribuído para toda a área Dias do turno Ativo Disponível more_vert" [ref=e247] [cursor=pointer]:
+                  - cell "Selecionar administrativo" [ref=e248]:
+                    - generic [ref=e249]:
+                      - checkbox "Selecionar administrativo" [checked] [ref=e250]
+                      - img
+                  - cell "administrativo" [ref=e251]:
+                    - generic [ref=e253]: administrativo
+                  - cell "tarde" [ref=e254]
+                  - cell "Administrativo" [ref=e255]:
+                    - generic [ref=e258]: Administrativo
+                  - cell "Distribuído para toda a área" [ref=e259]
+                  - cell "Dias do turno" [ref=e260]
+                  - cell "Ativo" [ref=e261]:
+                    - switch "Ativo" [checked] [ref=e262]: Ativo
+                  - cell "Disponível" [ref=e264]:
+                    - generic [ref=e265]: Disponível
+                  - cell "more_vert" [ref=e266]:
+                    - button "more_vert" [ref=e268]:
+                      - generic [ref=e269]: more_vert
+                - row "Selecionar Atividade COm FOTO 2 Atividade COm FOTO 2 Noite caixa person Hiago Gouveia Dias do turno Ativo Disponível more_vert" [ref=e270] [cursor=pointer]:
+                  - cell "Selecionar Atividade COm FOTO 2" [ref=e271]:
+                    - generic [ref=e272]:
+                      - checkbox "Selecionar Atividade COm FOTO 2" [checked] [ref=e273]
+                      - img
+                  - cell "Atividade COm FOTO 2" [ref=e274]:
+                    - generic [ref=e276]: Atividade COm FOTO 2
+                  - cell "Noite" [ref=e277]
+                  - cell "caixa" [ref=e278]:
+                    - generic [ref=e281]: caixa
+                  - cell "person Hiago Gouveia" [ref=e282]:
+                    - generic "Colaborador atribuído à rotina" [ref=e283]:
+                      - generic [ref=e284]: person
+                      - generic [ref=e285]: Hiago Gouveia
+                  - cell "Dias do turno" [ref=e286]
+                  - cell "Ativo" [ref=e287]:
+                    - switch "Ativo" [checked] [ref=e288]: Ativo
+                  - cell "Disponível" [ref=e290]:
+                    - generic [ref=e291]: Disponível
+                  - cell "more_vert" [ref=e292]:
+                    - button "more_vert" [ref=e294]:
+                      - generic [ref=e295]: more_vert
+                - row "Selecionar CAIXA 4 (cópia) CAIXA 4 (cópia) Manhã Administrativo Distribuído para toda a área Dias úteis (seg-sex) Ativo Disponível more_vert" [ref=e296] [cursor=pointer]:
+                  - cell "Selecionar CAIXA 4 (cópia)" [ref=e297]:
+                    - generic [ref=e298]:
+                      - checkbox "Selecionar CAIXA 4 (cópia)" [checked] [ref=e299]
+                      - img
+                  - cell "CAIXA 4 (cópia)" [ref=e300]:
+                    - generic [ref=e302]: CAIXA 4 (cópia)
+                  - cell "Manhã" [ref=e303]
+                  - cell "Administrativo" [ref=e304]:
+                    - generic [ref=e307]: Administrativo
+                  - cell "Distribuído para toda a área" [ref=e308]
+                  - cell "Dias úteis (seg-sex)" [ref=e309]
+                  - cell "Ativo" [ref=e310]:
+                    - switch "Ativo" [checked] [ref=e311]: Ativo
+                  - cell "Disponível" [ref=e313]:
+                    - generic [ref=e314]: Disponível
+                  - cell "more_vert" [ref=e315]:
+                    - button "more_vert" [ref=e317]:
+                      - generic [ref=e318]: more_vert
+                - row "Selecionar TESTE 5 TESTE 5 Todos os turnos Estoque Distribuído para toda a área Todos os dias Ativo Disponível more_vert" [ref=e319] [cursor=pointer]:
+                  - cell "Selecionar TESTE 5" [ref=e320]:
+                    - generic [ref=e321]:
+                      - checkbox "Selecionar TESTE 5" [checked] [ref=e322]
+                      - img
+                  - cell "TESTE 5" [ref=e323]:
+                    - generic [ref=e325]: TESTE 5
+                  - cell "Todos os turnos" [ref=e326]
+                  - cell "Estoque" [ref=e327]:
+                    - generic [ref=e330]: Estoque
+                  - cell "Distribuído para toda a área" [ref=e331]
+                  - cell "Todos os dias" [ref=e332]
+                  - cell "Ativo" [ref=e333]:
+                    - switch "Ativo" [checked] [ref=e334]: Ativo
+                  - cell "Disponível" [ref=e336]:
+                    - generic [ref=e337]: Disponível
+                  - cell "more_vert" [ref=e338]:
+                    - button "more_vert" [ref=e340]:
+                      - generic [ref=e341]: more_vert
+                - row "Selecionar Rotina da NOITE 1 Rotina da NOITE 1 uma descrição Todos os turnos caixa Distribuído para toda a área Dias do turno Ativo Disponível more_vert" [ref=e342] [cursor=pointer]:
+                  - cell "Selecionar Rotina da NOITE 1" [ref=e343]:
+                    - generic [ref=e344]:
+                      - checkbox "Selecionar Rotina da NOITE 1" [checked] [ref=e345]
+                      - img
+                  - cell "Rotina da NOITE 1 uma descrição" [ref=e346]:
+                    - generic [ref=e348]: Rotina da NOITE 1
+                    - paragraph [ref=e349]: uma descrição
+                  - cell "Todos os turnos" [ref=e350]
+                  - cell "caixa" [ref=e351]:
+                    - generic [ref=e354]: caixa
+                  - cell "Distribuído para toda a área" [ref=e355]
+                  - cell "Dias do turno" [ref=e356]
+                  - cell "Ativo" [ref=e357]:
+                    - switch "Ativo" [checked] [ref=e358]: Ativo
+                  - cell "Disponível" [ref=e360]:
+                    - generic [ref=e361]: Disponível
+                  - cell "more_vert" [ref=e362]:
+                    - button "more_vert" [ref=e364]:
+                      - generic [ref=e365]: more_vert
+                - row "Selecionar teste atividade com foto teste atividade com foto Noite caixa person Hiago Gouveia Dias do turno Ativo Disponível more_vert" [ref=e366] [cursor=pointer]:
+                  - cell "Selecionar teste atividade com foto" [ref=e367]:
+                    - generic [ref=e368]:
+                      - checkbox "Selecionar teste atividade com foto" [checked] [ref=e369]
+                      - img
+                  - cell "teste atividade com foto" [ref=e370]:
+                    - generic [ref=e372]: teste atividade com foto
+                  - cell "Noite" [ref=e373]
+                  - cell "caixa" [ref=e374]:
+                    - generic [ref=e377]: caixa
+                  - cell "person Hiago Gouveia" [ref=e378]:
+                    - generic "Colaborador atribuído à rotina" [ref=e379]:
+                      - generic [ref=e380]: person
+                      - generic [ref=e381]: Hiago Gouveia
+                  - cell "Dias do turno" [ref=e382]
+                  - cell "Ativo" [ref=e383]:
+                    - switch "Ativo" [checked] [ref=e384]: Ativo
+                  - cell "Disponível" [ref=e386]:
+                    - generic [ref=e387]: Disponível
+                  - cell "more_vert" [ref=e388]:
+                    - button "more_vert" [ref=e390]:
+                      - generic [ref=e391]: more_vert
+                - 'row "Selecionar Manutenção Preventiva de Equipamentos Manutenção Preventiva de Equipamentos Inspeção preventiva para evitar quebras e paradas não planejadas. Todos os turnos Administrativo Distribuído para toda a área Mensal: última segunda-feira do mês Ativo Disponível more_vert" [ref=e392] [cursor=pointer]':
+                  - cell "Selecionar Manutenção Preventiva de Equipamentos" [ref=e393]:
+                    - generic [ref=e394]:
+                      - checkbox "Selecionar Manutenção Preventiva de Equipamentos" [checked] [ref=e395]
+                      - img
+                  - cell "Manutenção Preventiva de Equipamentos Inspeção preventiva para evitar quebras e paradas não planejadas." [ref=e396]:
+                    - generic [ref=e398]: Manutenção Preventiva de Equipamentos
+                    - paragraph [ref=e399]: Inspeção preventiva para evitar quebras e paradas não planejadas.
+                  - cell "Todos os turnos" [ref=e400]
+                  - cell "Administrativo" [ref=e401]:
+                    - generic [ref=e404]: Administrativo
+                  - cell "Distribuído para toda a área" [ref=e405]
+                  - 'cell "Mensal: última segunda-feira do mês" [ref=e406]'
+                  - cell "Ativo" [ref=e407]:
+                    - switch "Ativo" [checked] [ref=e408]: Ativo
+                  - cell "Disponível" [ref=e410]:
+                    - generic [ref=e411]: Disponível
+                  - cell "more_vert" [ref=e412]:
+                    - button "more_vert" [ref=e414]:
+                      - generic [ref=e415]: more_vert
+                - row "Selecionar teste varias fotos novo teste varias fotos novo teste Todos os turnos caixa person colaborador 2 Todos os dias Ativo Disponível more_vert" [ref=e416] [cursor=pointer]:
+                  - cell "Selecionar teste varias fotos novo" [ref=e417]:
+                    - generic [ref=e418]:
+                      - checkbox "Selecionar teste varias fotos novo" [checked] [ref=e419]
+                      - img
+                  - cell "teste varias fotos novo teste" [ref=e420]:
+                    - generic [ref=e422]: teste varias fotos novo
+                    - paragraph [ref=e423]: teste
+                  - cell "Todos os turnos" [ref=e424]
+                  - cell "caixa" [ref=e425]:
+                    - generic [ref=e428]: caixa
+                  - cell "person colaborador 2" [ref=e429]:
+                    - generic "Colaborador atribuído à rotina" [ref=e430]:
+                      - generic [ref=e431]: person
+                      - generic [ref=e432]: colaborador 2
+                  - cell "Todos os dias" [ref=e433]
+                  - cell "Ativo" [ref=e434]:
+                    - switch "Ativo" [checked] [ref=e435]: Ativo
+                  - cell "Disponível" [ref=e437]:
+                    - generic [ref=e438]: Disponível
+                  - cell "more_vert" [ref=e439]:
+                    - button "more_vert" [ref=e441]:
+                      - generic [ref=e442]: more_vert
+                - 'row "Selecionar teste repetição nova teste repetição nova teste Todos os turnos caixa person Yanca Gouveia Semanal: dom, seg, ter, sex, sáb Ativo Atrasada more_vert" [ref=e443] [cursor=pointer]':
+                  - cell "Selecionar teste repetição nova" [ref=e444]:
+                    - generic [ref=e445]:
+                      - checkbox "Selecionar teste repetição nova" [checked] [ref=e446]
+                      - img
+                  - cell "teste repetição nova teste" [ref=e447]:
+                    - generic [ref=e449]: teste repetição nova
+                    - paragraph [ref=e450]: teste
+                  - cell "Todos os turnos" [ref=e451]
+                  - cell "caixa" [ref=e452]:
+                    - generic [ref=e455]: caixa
+                  - cell "person Yanca Gouveia" [ref=e456]:
+                    - generic "Colaborador atribuído à rotina" [ref=e457]:
+                      - generic [ref=e458]: person
+                      - generic [ref=e459]: Yanca Gouveia
+                  - 'cell "Semanal: dom, seg, ter, sex, sáb" [ref=e460]'
+                  - cell "Ativo" [ref=e461]:
+                    - switch "Ativo" [checked] [ref=e462]: Ativo
+                  - cell "Atrasada" [ref=e464]:
+                    - generic [ref=e465]: Atrasada
+                  - cell "more_vert" [ref=e466]:
+                    - button "more_vert" [ref=e468]:
+                      - generic [ref=e469]: more_vert
+                - row "Selecionar teste de bug 2 teste de bug 2 bug Noite Administrativo Distribuído para toda a área Dias do turno Ativo Disponível more_vert" [ref=e470] [cursor=pointer]:
+                  - cell "Selecionar teste de bug 2" [ref=e471]:
+                    - generic [ref=e472]:
+                      - checkbox "Selecionar teste de bug 2" [checked] [ref=e473]
+                      - img
+                  - cell "teste de bug 2 bug" [ref=e474]:
+                    - generic [ref=e476]: teste de bug 2
+                    - paragraph [ref=e477]: bug
+                  - cell "Noite" [ref=e478]
+                  - cell "Administrativo" [ref=e479]:
+                    - generic [ref=e482]: Administrativo
+                  - cell "Distribuído para toda a área" [ref=e483]
+                  - cell "Dias do turno" [ref=e484]
+                  - cell "Ativo" [ref=e485]:
+                    - switch "Ativo" [checked] [ref=e486]: Ativo
+                  - cell "Disponível" [ref=e488]:
+                    - generic [ref=e489]: Disponível
+                  - cell "more_vert" [ref=e490]:
+                    - button "more_vert" [ref=e492]:
+                      - generic [ref=e493]: more_vert
+                - row "Selecionar teste com foto no celular yanca teste com foto no celular yanca teste no celular Todos os turnos Estoque person Yanca Gouveia Todos os dias Ativo Disponível more_vert" [ref=e494] [cursor=pointer]:
+                  - cell "Selecionar teste com foto no celular yanca" [ref=e495]:
+                    - generic [ref=e496]:
+                      - checkbox "Selecionar teste com foto no celular yanca" [checked] [ref=e497]
+                      - img
+                  - cell "teste com foto no celular yanca teste no celular" [ref=e498]:
+                    - generic [ref=e500]: teste com foto no celular yanca
+                    - paragraph [ref=e501]: teste no celular
+                  - cell "Todos os turnos" [ref=e502]
+                  - cell "Estoque" [ref=e503]:
+                    - generic [ref=e506]: Estoque
+                  - cell "person Yanca Gouveia" [ref=e507]:
+                    - generic "Colaborador atribuído à rotina" [ref=e508]:
+                      - generic [ref=e509]: person
+                      - generic [ref=e510]: Yanca Gouveia
+                  - cell "Todos os dias" [ref=e511]
+                  - cell "Ativo" [ref=e512]:
+                    - switch "Ativo" [checked] [ref=e513]: Ativo
+                  - cell "Disponível" [ref=e515]:
+                    - generic [ref=e516]: Disponível
+                  - cell "more_vert" [ref=e517]:
+                    - button "more_vert" [ref=e519]:
+                      - generic [ref=e520]: more_vert
+                - row "Selecionar teste 4 tipos de resposta teste 4 tipos de resposta teste Todos os turnos Estoque person colaborador 2 Todos os dias Ativo Disponível more_vert" [ref=e521] [cursor=pointer]:
+                  - cell "Selecionar teste 4 tipos de resposta" [ref=e522]:
+                    - generic [ref=e523]:
+                      - checkbox "Selecionar teste 4 tipos de resposta" [checked] [ref=e524]
+                      - img
+                  - cell "teste 4 tipos de resposta teste" [ref=e525]:
+                    - generic [ref=e527]: teste 4 tipos de resposta
+                    - paragraph [ref=e528]: teste
+                  - cell "Todos os turnos" [ref=e529]
+                  - cell "Estoque" [ref=e530]:
+                    - generic [ref=e533]: Estoque
+                  - cell "person colaborador 2" [ref=e534]:
+                    - generic "Colaborador atribuído à rotina" [ref=e535]:
+                      - generic [ref=e536]: person
+                      - generic [ref=e537]: colaborador 2
+                  - cell "Todos os dias" [ref=e538]
+                  - cell "Ativo" [ref=e539]:
+                    - switch "Ativo" [checked] [ref=e540]: Ativo
+                  - cell "Disponível" [ref=e542]:
+                    - generic [ref=e543]: Disponível
+                  - cell "more_vert" [ref=e544]:
+                    - button "more_vert" [ref=e546]:
+                      - generic [ref=e547]: more_vert
+                - row "Selecionar teste critica teste critica teste Todos os turnos caixa person Yanca Gouveia Todos os dias Ativo Disponível more_vert" [ref=e548] [cursor=pointer]:
+                  - cell "Selecionar teste critica" [ref=e549]:
+                    - generic [ref=e550]:
+                      - checkbox "Selecionar teste critica" [checked] [ref=e551]
+                      - img
+                  - cell "teste critica teste" [ref=e552]:
+                    - generic [ref=e554]: teste critica
+                    - paragraph [ref=e555]: teste
+                  - cell "Todos os turnos" [ref=e556]
+                  - cell "caixa" [ref=e557]:
+                    - generic [ref=e560]: caixa
+                  - cell "person Yanca Gouveia" [ref=e561]:
+                    - generic "Colaborador atribuído à rotina" [ref=e562]:
+                      - generic [ref=e563]: person
+                      - generic [ref=e564]: Yanca Gouveia
+                  - cell "Todos os dias" [ref=e565]
+                  - cell "Ativo" [ref=e566]:
+                    - switch "Ativo" [checked] [ref=e567]: Ativo
+                  - cell "Disponível" [ref=e569]:
+                    - generic [ref=e570]: Disponível
+                  - cell "more_vert" [ref=e571]:
+                    - button "more_vert" [ref=e573]:
+                      - generic [ref=e574]: more_vert
+                - row "Selecionar Atividade COm FOTO 3 Atividade COm FOTO 3 tarde caixa person Hiago Gouveia Dias do turno Ativo Disponível more_vert" [ref=e575] [cursor=pointer]:
+                  - cell "Selecionar Atividade COm FOTO 3" [ref=e576]:
+                    - generic [ref=e577]:
+                      - checkbox "Selecionar Atividade COm FOTO 3" [checked] [ref=e578]
+                      - img
+                  - cell "Atividade COm FOTO 3" [ref=e579]:
+                    - generic [ref=e581]: Atividade COm FOTO 3
+                  - cell "tarde" [ref=e582]
+                  - cell "caixa" [ref=e583]:
+                    - generic [ref=e586]: caixa
+                  - cell "person Hiago Gouveia" [ref=e587]:
+                    - generic "Colaborador atribuído à rotina" [ref=e588]:
+                      - generic [ref=e589]: person
+                      - generic [ref=e590]: Hiago Gouveia
+                  - cell "Dias do turno" [ref=e591]
+                  - cell "Ativo" [ref=e592]:
+                    - switch "Ativo" [checked] [ref=e593]: Ativo
+                  - cell "Disponível" [ref=e595]:
+                    - generic [ref=e596]: Disponível
+                  - cell "more_vert" [ref=e597]:
+                    - button "more_vert" [ref=e599]:
+                      - generic [ref=e600]: more_vert
+                - row "Selecionar Abertura de Cozinha Abertura de Cozinha Rotina diária para ligar equipamentos e abastecer a praça antes do início do serviço. Todos os turnos Cozinha Distribuído para toda a área Todos os dias Ativo Disponível more_vert" [ref=e601] [cursor=pointer]:
+                  - cell "Selecionar Abertura de Cozinha" [ref=e602]:
+                    - generic [ref=e603]:
+                      - checkbox "Selecionar Abertura de Cozinha" [checked] [ref=e604]
+                      - img
+                  - cell "Abertura de Cozinha Rotina diária para ligar equipamentos e abastecer a praça antes do início do serviço." [ref=e605]:
+                    - generic [ref=e607]: Abertura de Cozinha
+                    - paragraph [ref=e608]: Rotina diária para ligar equipamentos e abastecer a praça antes do início do serviço.
+                  - cell "Todos os turnos" [ref=e609]
+                  - cell "Cozinha" [ref=e610]:
+                    - generic [ref=e613]: Cozinha
+                  - cell "Distribuído para toda a área" [ref=e614]
+                  - cell "Todos os dias" [ref=e615]
+                  - cell "Ativo" [ref=e616]:
+                    - switch "Ativo" [checked] [ref=e617]: Ativo
+                  - cell "Disponível" [ref=e619]:
+                    - generic [ref=e620]: Disponível
+                  - cell "more_vert" [ref=e621]:
+                    - button "more_vert" [ref=e623]:
+                      - generic [ref=e624]: more_vert
+                - row "Selecionar teste horario teste horario Todos os turnos Administrativo Distribuído para toda a área Todos os dias Ativo Atrasada more_vert" [ref=e625] [cursor=pointer]:
+                  - cell "Selecionar teste horario" [ref=e626]:
+                    - generic [ref=e627]:
+                      - checkbox "Selecionar teste horario" [checked] [ref=e628]
+                      - img
+                  - cell "teste horario" [ref=e629]:
+                    - generic [ref=e631]: teste horario
+                  - cell "Todos os turnos" [ref=e632]
+                  - cell "Administrativo" [ref=e633]:
+                    - generic [ref=e636]: Administrativo
+                  - cell "Distribuído para toda a área" [ref=e637]
+                  - cell "Todos os dias" [ref=e638]
+                  - cell "Ativo" [ref=e639]:
+                    - switch "Ativo" [checked] [ref=e640]: Ativo
+                  - cell "Atrasada" [ref=e642]:
+                    - generic [ref=e643]: Atrasada
+                  - cell "more_vert" [ref=e644]:
+                    - button "more_vert" [ref=e646]:
+                      - generic [ref=e647]: more_vert
+                - row "Selecionar atividade com avaliação atividade com avaliação Todos os turnos caixa Distribuído para toda a área Todos os dias Ativo Disponível more_vert" [ref=e648] [cursor=pointer]:
+                  - cell "Selecionar atividade com avaliação" [ref=e649]:
+                    - generic [ref=e650]:
+                      - checkbox "Selecionar atividade com avaliação" [checked] [ref=e651]
+                      - img
+                  - cell "atividade com avaliação" [ref=e652]:
+                    - generic [ref=e654]: atividade com avaliação
+                  - cell "Todos os turnos" [ref=e655]
+                  - cell "caixa" [ref=e656]:
+                    - generic [ref=e659]: caixa
+                  - cell "Distribuído para toda a área" [ref=e660]
+                  - cell "Todos os dias" [ref=e661]
+                  - cell "Ativo" [ref=e662]:
+                    - switch "Ativo" [checked] [ref=e663]: Ativo
+                  - cell "Disponível" [ref=e665]:
+                    - generic [ref=e666]: Disponível
+                  - cell "more_vert" [ref=e667]:
+                    - button "more_vert" [ref=e669]:
+                      - generic [ref=e670]: more_vert
+                - row "Selecionar Abertura de Caixa Abertura de Caixa Conferir fundo de troco e preparar o caixa/PDV antes do início das vendas. Manhã caixa Distribuído para toda a área Dias do turno Ativo Disponível more_vert" [ref=e671] [cursor=pointer]:
+                  - cell "Selecionar Abertura de Caixa" [ref=e672]:
+                    - generic [ref=e673]:
+                      - checkbox "Selecionar Abertura de Caixa" [checked] [ref=e674]
+                      - img
+                  - cell "Abertura de Caixa Conferir fundo de troco e preparar o caixa/PDV antes do início das vendas." [ref=e675]:
+                    - generic [ref=e677]: Abertura de Caixa
+                    - paragraph [ref=e678]: Conferir fundo de troco e preparar o caixa/PDV antes do início das vendas.
+                  - cell "Manhã" [ref=e679]
+                  - cell "caixa" [ref=e680]:
+                    - generic [ref=e683]: caixa
+                  - cell "Distribuído para toda a área" [ref=e684]
+                  - cell "Dias do turno" [ref=e685]
+                  - cell "Ativo" [ref=e686]:
+                    - switch "Ativo" [checked] [ref=e687]: Ativo
+                  - cell "Disponível" [ref=e689]:
+                    - generic [ref=e690]: Disponível
+                  - cell "more_vert" [ref=e691]:
+                    - button "more_vert" [ref=e693]:
+                      - generic [ref=e694]: more_vert
+                - row "Selecionar teste adm sinc teste adm sinc Manhã Administrativo person Hiago Gouveia Dias do turno Ativo Disponível more_vert" [ref=e695] [cursor=pointer]:
+                  - cell "Selecionar teste adm sinc" [ref=e696]:
+                    - generic [ref=e697]:
+                      - checkbox "Selecionar teste adm sinc" [checked] [ref=e698]
+                      - img
+                  - cell "teste adm sinc" [ref=e699]:
+                    - generic [ref=e701]: teste adm sinc
+                  - cell "Manhã" [ref=e702]
+                  - cell "Administrativo" [ref=e703]:
+                    - generic [ref=e706]: Administrativo
+                  - cell "person Hiago Gouveia" [ref=e707]:
+                    - generic "Colaborador atribuído à rotina" [ref=e708]:
+                      - generic [ref=e709]: person
+                      - generic [ref=e710]: Hiago Gouveia
+                  - cell "Dias do turno" [ref=e711]
+                  - cell "Ativo" [ref=e712]:
+                    - switch "Ativo" [checked] [ref=e713]: Ativo
+                  - cell "Disponível" [ref=e715]:
+                    - generic [ref=e716]: Disponível
+                  - cell "more_vert" [ref=e717]:
+                    - button "more_vert" [ref=e719]:
+                      - generic [ref=e720]: more_vert
+                - row "Selecionar teste final tasks novas teste final tasks novas teste final Todos os turnos caixa person Yanca Gouveia Todos os dias Ativo Disponível more_vert" [ref=e721] [cursor=pointer]:
+                  - cell "Selecionar teste final tasks novas" [ref=e722]:
+                    - generic [ref=e723]:
+                      - checkbox "Selecionar teste final tasks novas" [checked] [ref=e724]
+                      - img
+                  - cell "teste final tasks novas teste final" [ref=e725]:
+                    - generic [ref=e727]: teste final tasks novas
+                    - paragraph [ref=e728]: teste final
+                  - cell "Todos os turnos" [ref=e729]
+                  - cell "caixa" [ref=e730]:
+                    - generic [ref=e733]: caixa
+                  - cell "person Yanca Gouveia" [ref=e734]:
+                    - generic "Colaborador atribuído à rotina" [ref=e735]:
+                      - generic [ref=e736]: person
+                      - generic [ref=e737]: Yanca Gouveia
+                  - cell "Todos os dias" [ref=e738]
+                  - cell "Ativo" [ref=e739]:
+                    - switch "Ativo" [checked] [ref=e740]: Ativo
+                  - cell "Disponível" [ref=e742]:
+                    - generic [ref=e743]: Disponível
+                  - cell "more_vert" [ref=e744]:
+                    - button "more_vert" [ref=e746]:
+                      - generic [ref=e747]: more_vert
+                - row "Selecionar Teste foto obrigatória Teste foto obrigatória teste Todos os turnos Estoque person Yanca Gouveia Toda quarta-feira Ativo Disponível more_vert" [ref=e748] [cursor=pointer]:
+                  - cell "Selecionar Teste foto obrigatória" [ref=e749]:
+                    - generic [ref=e750]:
+                      - checkbox "Selecionar Teste foto obrigatória" [checked] [ref=e751]
+                      - img
+                  - cell "Teste foto obrigatória teste" [ref=e752]:
+                    - generic [ref=e754]: Teste foto obrigatória
+                    - paragraph [ref=e755]: teste
+                  - cell "Todos os turnos" [ref=e756]
+                  - cell "Estoque" [ref=e757]:
+                    - generic [ref=e760]: Estoque
+                  - cell "person Yanca Gouveia" [ref=e761]:
+                    - generic "Colaborador atribuído à rotina" [ref=e762]:
+                      - generic [ref=e763]: person
+                      - generic [ref=e764]: Yanca Gouveia
+                  - cell "Toda quarta-feira" [ref=e765]
+                  - cell "Ativo" [ref=e766]:
+                    - switch "Ativo" [checked] [ref=e767]: Ativo
+                  - cell "Disponível" [ref=e769]:
+                    - generic [ref=e770]: Disponível
+                  - cell "more_vert" [ref=e771]:
+                    - button "more_vert" [ref=e773]:
+                      - generic [ref=e774]: more_vert
+                - row "Selecionar teste atividade com foto (cópia) teste atividade com foto (cópia) tarde caixa person Hiago Gouveia Dias do turno Ativo Disponível more_vert" [ref=e775] [cursor=pointer]:
+                  - cell "Selecionar teste atividade com foto (cópia)" [ref=e776]:
+                    - generic [ref=e777]:
+                      - checkbox "Selecionar teste atividade com foto (cópia)" [checked] [ref=e778]
+                      - img
+                  - cell "teste atividade com foto (cópia)" [ref=e779]:
+                    - generic [ref=e781]: teste atividade com foto (cópia)
+                  - cell "tarde" [ref=e782]
+                  - cell "caixa" [ref=e783]:
+                    - generic [ref=e786]: caixa
+                  - cell "person Hiago Gouveia" [ref=e787]:
+                    - generic "Colaborador atribuído à rotina" [ref=e788]:
+                      - generic [ref=e789]: person
+                      - generic [ref=e790]: Hiago Gouveia
+                  - cell "Dias do turno" [ref=e791]
+                  - cell "Ativo" [ref=e792]:
+                    - switch "Ativo" [checked] [ref=e793]: Ativo
+                  - cell "Disponível" [ref=e795]:
+                    - generic [ref=e796]: Disponível
+                  - cell "more_vert" [ref=e797]:
+                    - button "more_vert" [ref=e799]:
+                      - generic [ref=e800]: more_vert
+                - row "Selecionar Atividade COm FOTO 4 Atividade COm FOTO 4 tarde caixa person Hiago Gouveia Dias do turno Ativo Disponível more_vert" [ref=e801] [cursor=pointer]:
+                  - cell "Selecionar Atividade COm FOTO 4" [ref=e802]:
+                    - generic [ref=e803]:
+                      - checkbox "Selecionar Atividade COm FOTO 4" [checked] [ref=e804]
+                      - img
+                  - cell "Atividade COm FOTO 4" [ref=e805]:
+                    - generic [ref=e807]: Atividade COm FOTO 4
+                  - cell "tarde" [ref=e808]
+                  - cell "caixa" [ref=e809]:
+                    - generic [ref=e812]: caixa
+                  - cell "person Hiago Gouveia" [ref=e813]:
+                    - generic "Colaborador atribuído à rotina" [ref=e814]:
+                      - generic [ref=e815]: person
+                      - generic [ref=e816]: Hiago Gouveia
+                  - cell "Dias do turno" [ref=e817]
+                  - cell "Ativo" [ref=e818]:
+                    - switch "Ativo" [checked] [ref=e819]: Ativo
+                  - cell "Disponível" [ref=e821]:
+                    - generic [ref=e822]: Disponível
+                  - cell "more_vert" [ref=e823]:
+                    - button "more_vert" [ref=e825]:
+                      - generic [ref=e826]: more_vert
+                - row "Selecionar rotina comum adm teste rotina comum adm teste tarde Administrativo Distribuído para toda a área Dias do turno Ativo Disponível more_vert" [ref=e827] [cursor=pointer]:
+                  - cell "Selecionar rotina comum adm teste" [ref=e828]:
+                    - generic [ref=e829]:
+                      - checkbox "Selecionar rotina comum adm teste" [checked] [ref=e830]
+                      - img
+                  - cell "rotina comum adm teste" [ref=e831]:
+                    - generic [ref=e833]: rotina comum adm teste
+                  - cell "tarde" [ref=e834]
+                  - cell "Administrativo" [ref=e835]:
+                    - generic [ref=e838]: Administrativo
+                  - cell "Distribuído para toda a área" [ref=e839]
+                  - cell "Dias do turno" [ref=e840]
+                  - cell "Ativo" [ref=e841]:
+                    - switch "Ativo" [checked] [ref=e842]: Ativo
+                  - cell "Disponível" [ref=e844]:
+                    - generic [ref=e845]: Disponível
+                  - cell "more_vert" [ref=e846]:
+                    - button "more_vert" [ref=e848]:
+                      - generic [ref=e849]: more_vert
+                - row "Selecionar teste de area estoque (cópia) teste de area estoque (cópia) Todos os turnos Estoque person Yanca Gouveia Todos os dias Ativo Disponível more_vert" [ref=e850] [cursor=pointer]:
+                  - cell "Selecionar teste de area estoque (cópia)" [ref=e851]:
+                    - generic [ref=e852]:
+                      - checkbox "Selecionar teste de area estoque (cópia)" [checked] [ref=e853]
+                      - img
+                  - cell "teste de area estoque (cópia)" [ref=e854]:
+                    - generic [ref=e856]: teste de area estoque (cópia)
+                  - cell "Todos os turnos" [ref=e857]
+                  - cell "Estoque" [ref=e858]:
+                    - generic [ref=e861]: Estoque
+                  - cell "person Yanca Gouveia" [ref=e862]:
+                    - generic "Colaborador atribuído à rotina" [ref=e863]:
+                      - generic [ref=e864]: person
+                      - generic [ref=e865]: Yanca Gouveia
+                  - cell "Todos os dias" [ref=e866]
+                  - cell "Ativo" [ref=e867]:
+                    - switch "Ativo" [checked] [ref=e868]: Ativo
+                  - cell "Disponível" [ref=e870]:
+                    - generic [ref=e871]: Disponível
+                  - cell "more_vert" [ref=e872]:
+                    - button "more_vert" [ref=e874]:
+                      - generic [ref=e875]: more_vert
+                - row "Selecionar teste nova rotina colaborador 2 teste nova rotina colaborador 2 teste Todos os turnos caixa person colaborador 2 Todos os dias Ativo Disponível more_vert" [ref=e876] [cursor=pointer]:
+                  - cell "Selecionar teste nova rotina colaborador 2" [ref=e877]:
+                    - generic [ref=e878]:
+                      - checkbox "Selecionar teste nova rotina colaborador 2" [checked] [ref=e879]
+                      - img
+                  - cell "teste nova rotina colaborador 2 teste" [ref=e880]:
+                    - generic [ref=e882]: teste nova rotina colaborador 2
+                    - paragraph [ref=e883]: teste
+                  - cell "Todos os turnos" [ref=e884]
+                  - cell "caixa" [ref=e885]:
+                    - generic [ref=e888]: caixa
+                  - cell "person colaborador 2" [ref=e889]:
+                    - generic "Colaborador atribuído à rotina" [ref=e890]:
+                      - generic [ref=e891]: person
+                      - generic [ref=e892]: colaborador 2
+                  - cell "Todos os dias" [ref=e893]
+                  - cell "Ativo" [ref=e894]:
+                    - switch "Ativo" [checked] [ref=e895]: Ativo
+                  - cell "Disponível" [ref=e897]:
+                    - generic [ref=e898]: Disponível
+                  - cell "more_vert" [ref=e899]:
+                    - button "more_vert" [ref=e901]:
+                      - generic [ref=e902]: more_vert
+            - status [ref=e903]
+  - button "Open Next.js Dev Tools" [ref=e909] [cursor=pointer]:
+    - img [ref=e910]
+  - alert [ref=e913]
+  - generic [ref=e916]:
+    - generic [ref=e917]:
+      - generic [ref=e918]:
+        - generic [ref=e919]: "30"
+        - text: rotinas selecionadas
+      - button "Limpar seleção" [ref=e920]
+    - generic [ref=e921]:
+      - button "picture_as_pdf Exportar PDF" [ref=e922]:
+        - generic [ref=e923]: picture_as_pdf
+        - text: Exportar PDF
+      - button "swap_horiz Transferir responsável" [disabled] [ref=e924]:
+        - generic [ref=e925]: swap_horiz
+        - text: Transferir responsável

@@ -1,0 +1,98 @@
+- generic [ref=f4e2]:
+  - complementary [ref=f4e3]:
+    - generic [ref=f4e4]:
+      - generic [ref=f4e5]:
+        - img "Ordem na Mesa Logo" [ref=f4e7]
+        - generic [ref=f4e8]: Ordem na Mesa
+      - button "chevron_left" [ref=f4e10]
+    - navigation [ref=f4e12]:
+      - generic [ref=f4e13]: Menu Principal
+      - link "dashboard Dashboard" [ref=f4e14] [cursor=pointer]:
+        - /url: /dashboard
+        - generic [ref=f4e15]: dashboard
+        - generic [ref=f4e16]: Dashboard
+      - link "assignment_ind Meu Turno" [ref=f4e17] [cursor=pointer]:
+        - /url: /turno
+        - generic [ref=f4e18]: assignment_ind
+        - generic [ref=f4e19]: Meu Turno
+      - link "checklist Checklists" [ref=f4e20] [cursor=pointer]:
+        - /url: /checklists
+        - generic [ref=f4e21]: checklist
+        - generic [ref=f4e22]: Checklists
+      - link "local_shipping Recebimentos" [ref=f4e23] [cursor=pointer]:
+        - /url: /recebimentos
+        - generic [ref=f4e24]: local_shipping
+        - generic [ref=f4e25]: Recebimentos
+      - link "group Equipe" [ref=f4e26] [cursor=pointer]:
+        - /url: /equipe
+        - generic [ref=f4e27]: group
+        - generic [ref=f4e28]: Equipe
+      - link "bar_chart Relatórios" [ref=f4e29] [cursor=pointer]:
+        - /url: /relatorios
+        - generic [ref=f4e30]: bar_chart
+        - generic [ref=f4e31]: Relatórios
+      - link "settings Configurações" [ref=f4e32] [cursor=pointer]:
+        - /url: /configuracoes
+        - generic [ref=f4e33]: settings
+        - generic [ref=f4e34]: Configurações
+    - generic [ref=f4e35]:
+      - generic [ref=f4e36]:
+        - generic [ref=f4e37]: person
+        - generic [ref=f4e39]:
+          - generic [ref=f4e40]: Usuário
+          - generic [ref=f4e41]: Colaborador
+      - button "logout Sair da conta" [ref=f4e42]:
+        - generic [ref=f4e43]: logout
+        - generic [ref=f4e44]: Sair da conta
+  - generic [ref=f4e45]:
+    - banner [ref=f4e46]:
+      - heading "Gestão de Checklists" [level=2] [ref=f4e49]
+      - button "notifications" [ref=f4e52]
+    - main [ref=f4e54]:
+      - generic [ref=f4e55]:
+        - generic [ref=f4e57]:
+          - generic [ref=f4e58]:
+            - generic: search
+            - textbox "Buscar por nome..." [ref=f4e59]
+          - generic [ref=f4e60]:
+            - button "view_list Lista" [ref=f4e61]:
+              - generic [ref=f4e62]: view_list
+              - generic [ref=f4e63]: Lista
+            - button "view_column Cards" [ref=f4e64]:
+              - generic [ref=f4e65]: view_column
+              - generic [ref=f4e66]: Cards
+            - button "visibility Preview" [ref=f4e67]:
+              - generic [ref=f4e68]: visibility
+              - generic [ref=f4e69]: Preview
+          - button "Atualizar dados" [ref=f4e70]:
+            - generic [ref=f4e71]: refresh
+            - generic [ref=f4e72]: Atualizar
+          - button "library_add Modelos" [ref=f4e73]:
+            - generic [ref=f4e74]: library_add
+            - generic [ref=f4e75]: Modelos
+          - button "add Nova rotina" [ref=f4e76]:
+            - generic [ref=f4e77]: add
+            - generic [ref=f4e78]: Nova rotina
+        - generic [ref=f4e79]:
+          - 'button "Tipo: Todos os tipos expand_more" [ref=f4e80]':
+            - generic [ref=f4e81]: "Tipo: Todos os tipos"
+            - generic [ref=f4e82]: expand_more
+          - 'button "Disponibilidade: Ativas expand_more" [ref=f4e83]':
+            - generic [ref=f4e84]: "Disponibilidade: Ativas"
+            - generic [ref=f4e85]: expand_more
+          - button "Turno expand_more" [ref=f4e86]:
+            - generic [ref=f4e87]: Turno
+            - generic [ref=f4e88]: expand_more
+          - button "Área expand_more" [ref=f4e89]:
+            - generic [ref=f4e90]: Área
+            - generic [ref=f4e91]: expand_more
+          - button "Status expand_more" [ref=f4e92]:
+            - generic [ref=f4e93]: Status
+            - generic [ref=f4e94]: expand_more
+          - button "Colaborador expand_more" [ref=f4e95]:
+            - generic [ref=f4e96]: Colaborador
+            - generic [ref=f4e97]: expand_more
+        - generic [ref=f4e100]:
+          - generic [ref=f4e101]: search_off
+          - paragraph [ref=f4e102]: Nenhuma lista encontrada
+          - paragraph [ref=f4e103]: Tente ajustar os filtros ou comece com um modelo pronto.

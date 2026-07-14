@@ -1,0 +1,62 @@
+- generic [ref=f15e2]:
+  - complementary [ref=f15e3]:
+    - generic [ref=f15e4]:
+      - generic [ref=f15e5]:
+        - img "Ordem na Mesa Logo" [ref=f15e7]
+        - generic [ref=f15e8]: Ordem na Mesa
+      - button "chevron_left" [ref=f15e10]
+    - navigation [ref=f15e12]:
+      - generic [ref=f15e13]: Menu Principal
+      - link "dashboard Dashboard" [ref=f15e14] [cursor=pointer]:
+        - /url: /dashboard
+        - generic [ref=f15e15]: dashboard
+        - generic [ref=f15e16]: Dashboard
+      - link "assignment_ind Meu Turno" [ref=f15e17] [cursor=pointer]:
+        - /url: /turno
+        - generic [ref=f15e18]: assignment_ind
+        - generic [ref=f15e19]: Meu Turno
+      - link "checklist Checklists" [ref=f15e20] [cursor=pointer]:
+        - /url: /checklists
+        - generic [ref=f15e21]: checklist
+        - generic [ref=f15e22]: Checklists
+      - link "local_shipping Recebimentos" [ref=f15e23] [cursor=pointer]:
+        - /url: /recebimentos
+        - generic [ref=f15e24]: local_shipping
+        - generic [ref=f15e25]: Recebimentos
+      - link "group Equipe" [ref=f15e26] [cursor=pointer]:
+        - /url: /equipe
+        - generic [ref=f15e27]: group
+        - generic [ref=f15e28]: Equipe
+      - link "bar_chart Relatórios" [ref=f15e29] [cursor=pointer]:
+        - /url: /relatorios
+        - generic [ref=f15e30]: bar_chart
+        - generic [ref=f15e31]: Relatórios
+      - link "settings Configurações" [ref=f15e32] [cursor=pointer]:
+        - /url: /configuracoes
+        - generic [ref=f15e33]: settings
+        - generic [ref=f15e34]: Configurações
+    - generic [ref=f15e35]:
+      - generic [ref=f15e36]:
+        - generic [ref=f15e37]: person
+        - generic [ref=f15e39]:
+          - generic [ref=f15e40]: Usuário
+          - generic [ref=f15e41]: Colaborador
+      - button "logout Sair da conta" [ref=f15e42]:
+        - generic [ref=f15e43]: logout
+        - generic [ref=f15e44]: Sair da conta
+  - generic [ref=f15e45]:
+    - banner [ref=f15e46]:
+      - heading "Notificações" [level=2] [ref=f15e49]
+      - button "Notificações" [ref=f15e52]:
+        - generic [ref=f15e53]: notifications
+    - main [ref=f15e54]:
+      - generic [ref=f15e55]:
+        - heading "Notificações" [level=1] [ref=f15e57]
+        - tablist "Filtrar notificações" [ref=f15e58]:
+          - tab "Todas" [selected] [ref=f15e59]
+          - tab "Não lidas" [ref=f15e60]
+          - tab "Prioritárias" [ref=f15e61]
+        - menu "Lista de notificações" [ref=f15e62]:
+          - generic [ref=f15e63]:
+            - generic [ref=f15e64]: notifications_off
+            - paragraph [ref=f15e65]: Nenhuma notificação

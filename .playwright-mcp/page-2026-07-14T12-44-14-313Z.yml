@@ -1,0 +1,185 @@
+- generic [ref=f14e1]:
+  - generic [ref=f14e2]:
+    - complementary [ref=f14e3]:
+      - generic [ref=f14e4]:
+        - generic [ref=f14e5]:
+          - img "Ordem na Mesa Logo" [ref=f14e7]
+          - generic [ref=f14e8]:
+            - generic [ref=f14e9]: Ordem na Mesa
+            - generic [ref=f14e10]: Gouveia Pizzaria
+        - button "chevron_left" [ref=f14e11]
+      - button "Restaurante Atual Gouveia Pizzaria unfold_more" [ref=f14e14]:
+        - generic [ref=f14e15]:
+          - generic [ref=f14e16]: Restaurante Atual
+          - generic [ref=f14e17]: Gouveia Pizzaria
+        - generic [ref=f14e18]: unfold_more
+      - navigation [ref=f14e19]:
+        - generic [ref=f14e20]: Menu Principal
+        - link "dashboard Dashboard" [ref=f14e21] [cursor=pointer]:
+          - /url: /dashboard
+          - generic [ref=f14e22]: dashboard
+          - generic [ref=f14e23]: Dashboard
+        - link "assignment_ind Meu Turno" [ref=f14e24] [cursor=pointer]:
+          - /url: /turno
+          - generic [ref=f14e25]: assignment_ind
+          - generic [ref=f14e26]: Meu Turno
+        - link "checklist Checklists" [ref=f14e27] [cursor=pointer]:
+          - /url: /checklists
+          - generic [ref=f14e28]: checklist
+          - generic [ref=f14e29]: Checklists
+        - link "local_shipping Recebimentos" [ref=f14e30] [cursor=pointer]:
+          - /url: /recebimentos
+          - generic [ref=f14e31]: local_shipping
+          - generic [ref=f14e32]: Recebimentos
+        - link "group Equipe" [ref=f14e33] [cursor=pointer]:
+          - /url: /equipe
+          - generic [ref=f14e34]: group
+          - generic [ref=f14e35]: Equipe
+        - link "bar_chart Relatórios" [ref=f14e36] [cursor=pointer]:
+          - /url: /relatorios
+          - generic [ref=f14e37]: bar_chart
+          - generic [ref=f14e38]: Relatórios
+        - link "settings Configurações" [ref=f14e39] [cursor=pointer]:
+          - /url: /configuracoes
+          - generic [ref=f14e40]: settings
+          - generic [ref=f14e41]: Configurações
+      - generic [ref=f14e42]:
+        - generic [ref=f14e43]:
+          - generic [ref=f14e44]: s
+          - generic [ref=f14e46]:
+            - generic [ref=f14e47]: s90-qa
+            - generic [ref=f14e48]: Gerente
+        - button "logout Sair da conta" [ref=f14e49]:
+          - generic [ref=f14e50]: logout
+          - generic [ref=f14e51]: Sair da conta
+    - generic [ref=f14e52]:
+      - banner [ref=f14e53]:
+        - heading "Dashboard Geral" [level=2] [ref=f14e56]
+        - generic [ref=f14e58]:
+          - button "Notificações, 5 não lidas" [expanded] [active] [ref=f14e59]:
+            - generic [ref=f14e60]: notifications
+            - generic [ref=f14e61]: "5"
+          - menu "Notificações" [ref=f14e278]:
+            - generic [ref=f14e279]:
+              - heading "Notificações5" [level=3] [ref=f14e280]
+              - button "Marcar todas como lidas" [ref=f14e281]
+            - generic [ref=f14e284]:
+              - menuitem [ref=f14e285]:
+                - generic [ref=f14e286]: warning
+                - generic [ref=f14e288]:
+                  - paragraph [ref=f14e290]: 5 impedimentos em Abertura de Caixa
+                  - paragraph [ref=f14e292]: "Colaborador Teste • Conferir Fundo de Troco: CAMARA FRIA PAROU DE GELAR - produtos em risco"
+                  - time [ref=f14e293]: há 8 min
+              - button "Expandir 5 notificações" [ref=f14e294]:
+                - generic [ref=f14e295]: expand_more
+            - link "Ver todas" [ref=f14e297] [cursor=pointer]:
+              - /url: /notificacoes
+      - main [ref=f14e62]:
+        - generic [ref=f14e132]:
+          - generic [ref=f14e133]:
+            - generic [ref=f14e135]:
+              - heading "Visão Geral Hoje" [level=2] [ref=f14e136]
+              - paragraph [ref=f14e137]: Ter., 14 de jul. • Gouveia Pizzaria
+            - generic [ref=f14e138]:
+              - generic [ref=f14e139]:
+                - generic [ref=f14e140]: search
+                - textbox "Buscar área..." [ref=f14e141]
+              - button "refresh" [ref=f14e142]
+          - main [ref=f14e144]:
+            - generic [ref=f14e145]:
+              - generic [ref=f14e146]:
+                - generic [ref=f14e147]:
+                  - generic [ref=f14e148]: check_circle
+                  - generic [ref=f14e150]:
+                    - paragraph [ref=f14e151]: Conclusão Diária
+                    - heading "0%" [level=3] [ref=f14e153]
+                - link "warning Alertas Abertos 0 Tudo certo no turno" [ref=f14e155] [cursor=pointer]:
+                  - /url: /checklists?status=blocked
+                  - generic [ref=f14e156]: warning
+                  - generic [ref=f14e158]:
+                    - paragraph [ref=f14e159]: Alertas Abertos
+                    - heading "0" [level=3] [ref=f14e161]
+                    - paragraph [ref=f14e162]: Tudo certo no turno
+                - link "groups Equipe Ativa 0 hoje Sem atividade hoje" [ref=f14e163] [cursor=pointer]:
+                  - /url: /equipe
+                  - generic [ref=f14e164]: groups
+                  - generic [ref=f14e166]:
+                    - paragraph [ref=f14e167]: Equipe Ativa
+                    - generic [ref=f14e168]:
+                      - heading "0" [level=3] [ref=f14e169]
+                      - generic [ref=f14e170]: hoje
+                    - generic [ref=f14e171]: Sem atividade hoje
+                - generic [ref=f14e173]:
+                  - generic [ref=f14e174]: timelapse
+                  - generic [ref=f14e176]:
+                    - paragraph [ref=f14e177]: Tempo Médio de Conclusão
+                    - heading "—" [level=3] [ref=f14e179]
+                    - paragraph [ref=f14e180]: Nenhuma rotina concluída hoje
+              - generic [ref=f14e181]:
+                - generic [ref=f14e182]:
+                  - generic [ref=f14e183]:
+                    - generic [ref=f14e184]:
+                      - generic [ref=f14e185]:
+                        - heading "Tendências de Execução" [level=3] [ref=f14e186]
+                        - paragraph [ref=f14e187]: Taxa de conclusão nos últimos 7 dias
+                      - generic [ref=f14e188]:
+                        - generic [ref=f14e189]: Meta 90%
+                        - generic [ref=f14e191]:
+                          - button "Diário" [ref=f14e192]
+                          - button "Semanal" [ref=f14e193]
+                          - button "Mensal" [ref=f14e194]
+                    - generic [ref=f14e195]:
+                      - generic: 90%
+                      - generic [ref=f14e196] [cursor=pointer]: 0%
+                      - generic [ref=f14e199] [cursor=pointer]: 0%
+                      - generic [ref=f14e202] [cursor=pointer]: 0%
+                      - generic [ref=f14e205] [cursor=pointer]: 0%
+                      - generic [ref=f14e208] [cursor=pointer]: 0%
+                      - generic [ref=f14e211] [cursor=pointer]: 0%
+                      - generic [ref=f14e214] [cursor=pointer]: 0%
+                    - generic [ref=f14e217]:
+                      - generic [ref=f14e218]: Qua
+                      - generic [ref=f14e219]: Qui
+                      - generic [ref=f14e220]: Sex
+                      - generic [ref=f14e221]: Sáb
+                      - generic [ref=f14e222]: Dom
+                      - generic [ref=f14e223]: Seg
+                      - generic [ref=f14e224]: Ter
+                  - generic [ref=f14e225]:
+                    - heading "Progresso por Área" [level=3] [ref=f14e227]
+                    - generic [ref=f14e228]:
+                      - generic [ref=f14e229]:
+                        - generic [ref=f14e230]: category
+                        - generic [ref=f14e233]:
+                          - generic [ref=f14e234]: caixa
+                          - generic [ref=f14e235]: 0/11 concluídas · 0%
+                      - generic [ref=f14e237]:
+                        - generic [ref=f14e238]: category
+                        - generic [ref=f14e241]:
+                          - generic [ref=f14e242]: Administrativo
+                          - generic [ref=f14e243]: 0/10 concluídas · 0%
+                      - generic [ref=f14e245]:
+                        - generic [ref=f14e246]: category
+                        - generic [ref=f14e249]:
+                          - generic [ref=f14e250]: Estoque
+                          - generic [ref=f14e251]: 0/4 concluídas · 0%
+                      - generic [ref=f14e253]:
+                        - generic [ref=f14e254]: category
+                        - generic [ref=f14e257]:
+                          - generic [ref=f14e258]: Cozinha
+                          - generic [ref=f14e259]: 0/1 concluída · 0%
+                - generic [ref=f14e261]:
+                  - generic [ref=f14e262]:
+                    - generic [ref=f14e264]:
+                      - generic [ref=f14e265]: notifications_active
+                      - heading "Alertas Prioritários" [level=3] [ref=f14e266]
+                    - generic [ref=f14e269]:
+                      - generic [ref=f14e270]: check_circle
+                      - paragraph [ref=f14e271]: Nenhum alerta registrado hoje.
+                  - generic [ref=f14e272]:
+                    - heading "Melhores Desempenhos Hoje" [level=3] [ref=f14e273]
+                    - paragraph [ref=f14e276]: Nenhuma execução registrada hoje ainda.
+                    - link "Ver Relatório da Equipe" [ref=f14e277] [cursor=pointer]:
+                      - /url: /relatorios
+  - button "Open Next.js Dev Tools" [ref=f14e127] [cursor=pointer]
+  - alert [ref=f14e131]

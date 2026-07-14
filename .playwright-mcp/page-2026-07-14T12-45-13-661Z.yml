@@ -1,0 +1,115 @@
+- generic [ref=f15e1]:
+  - generic [ref=f15e2]:
+    - complementary [ref=f15e3]:
+      - generic [ref=f15e4]:
+        - generic [ref=f15e5]:
+          - img "Ordem na Mesa Logo" [ref=f15e7]
+          - generic [ref=f15e8]:
+            - generic [ref=f15e9]: Ordem na Mesa
+            - generic [ref=f15e66]: Gouveia Pizzaria
+        - button "chevron_left" [ref=f15e10]
+      - button "Restaurante Atual Gouveia Pizzaria unfold_more" [ref=f15e68]:
+        - generic [ref=f15e69]:
+          - generic [ref=f15e70]: Restaurante Atual
+          - generic [ref=f15e71]: Gouveia Pizzaria
+        - generic [ref=f15e72]: unfold_more
+      - navigation [ref=f15e12]:
+        - generic [ref=f15e13]: Menu Principal
+        - link "dashboard Dashboard" [ref=f15e14] [cursor=pointer]:
+          - /url: /dashboard
+          - generic [ref=f15e15]: dashboard
+          - generic [ref=f15e16]: Dashboard
+        - link "assignment_ind Meu Turno" [ref=f15e17] [cursor=pointer]:
+          - /url: /turno
+          - generic [ref=f15e18]: assignment_ind
+          - generic [ref=f15e19]: Meu Turno
+        - link "checklist Checklists" [ref=f15e20] [cursor=pointer]:
+          - /url: /checklists
+          - generic [ref=f15e21]: checklist
+          - generic [ref=f15e22]: Checklists
+        - link "local_shipping Recebimentos" [ref=f15e23] [cursor=pointer]:
+          - /url: /recebimentos
+          - generic [ref=f15e24]: local_shipping
+          - generic [ref=f15e25]: Recebimentos
+        - link "group Equipe" [ref=f15e26] [cursor=pointer]:
+          - /url: /equipe
+          - generic [ref=f15e27]: group
+          - generic [ref=f15e28]: Equipe
+        - link "bar_chart Relatórios" [ref=f15e29] [cursor=pointer]:
+          - /url: /relatorios
+          - generic [ref=f15e30]: bar_chart
+          - generic [ref=f15e31]: Relatórios
+        - link "settings Configurações" [ref=f15e32] [cursor=pointer]:
+          - /url: /configuracoes
+          - generic [ref=f15e33]: settings
+          - generic [ref=f15e34]: Configurações
+      - generic [ref=f15e35]:
+        - generic [ref=f15e36]:
+          - generic [ref=f15e37]: s
+          - generic [ref=f15e39]:
+            - generic [ref=f15e40]: s90-qa
+            - generic [ref=f15e41]: Gerente
+        - button "logout Sair da conta" [ref=f15e42]:
+          - generic [ref=f15e43]: logout
+          - generic [ref=f15e44]: Sair da conta
+    - generic [ref=f15e45]:
+      - banner [ref=f15e46]:
+        - heading "Notificações" [level=2] [ref=f15e49]
+        - button "Notificações, 5 não lidas" [ref=f15e73]:
+          - generic [ref=f15e53]: notifications
+          - generic [ref=f15e74]: "5"
+      - main [ref=f15e54]:
+        - generic [ref=f15e55]:
+          - generic [ref=f15e56]:
+            - heading "Notificações5 não lidas" [level=1] [ref=f15e75]:
+              - text: Notificações
+              - generic [ref=f15e76]: 5 não lidas
+            - button "Marcar todas como lidas" [ref=f15e77]
+          - tablist "Filtrar notificações" [ref=f15e58]:
+            - tab "Todas" [selected] [ref=f15e59]
+            - tab "Não lidas" [ref=f15e60]
+            - tab "Prioritárias" [ref=f15e61]
+          - menu "Lista de notificações" [ref=f15e62]:
+            - generic [ref=f15e78]:
+              - generic [ref=f15e79]:
+                - menuitem [ref=f15e101]:
+                  - generic [ref=f15e81]: warning
+                  - generic [ref=f15e83]:
+                    - paragraph [ref=f15e85]: 5 ocorrências em Abertura de Caixa · 1 impedimento
+                    - paragraph [ref=f15e87]: "Colaborador Teste • Conferir Fundo de Troco: CAMARA FRIA PAROU DE GELAR - produtos em risco"
+                    - time [ref=f15e88]: há 9 min
+                - button "Recolher 5 notificações" [expanded] [active] [ref=f15e102]:
+                  - generic [ref=f15e90]: expand_more
+              - generic [ref=f15e103]:
+                - menuitem "Impedimento em Abertura de Caixa. Não lida. há 9 min." [ref=f15e104] [cursor=pointer]:
+                  - generic [ref=f15e105]: warning
+                  - generic [ref=f15e108]:
+                    - paragraph [ref=f15e110]: Impedimento em Abertura de Caixa
+                    - paragraph [ref=f15e112]: "Colaborador Teste • Conferir Fundo de Troco: CAMARA FRIA PAROU DE GELAR - produtos em risco"
+                    - time [ref=f15e113]: há 9 min
+                - menuitem "Nova ocorrência em Abertura de Caixa. Não lida. há 3 min." [ref=f15e114] [cursor=pointer]:
+                  - generic [ref=f15e115]: chat
+                  - generic [ref=f15e117]:
+                    - paragraph [ref=f15e119]: Nova ocorrência em Abertura de Caixa
+                    - paragraph [ref=f15e121]: "Colaborador Teste • Conferir Fundo de Troco: Faltou papel toalha no dispenser"
+                    - time [ref=f15e122]: há 3 min
+                - menuitem "Nova ocorrência em Abertura de Caixa. Não lida. há 4 min." [ref=f15e123] [cursor=pointer]:
+                  - generic [ref=f15e124]: chat
+                  - generic [ref=f15e126]:
+                    - paragraph [ref=f15e128]: Nova ocorrência em Abertura de Caixa
+                    - paragraph [ref=f15e130]: "Colaborador Teste • Conferir Fundo de Troco: Torneira da pia pingando"
+                    - time [ref=f15e131]: há 4 min
+                - menuitem "Nova ocorrência em Abertura de Caixa. Não lida. há 6 min." [ref=f15e132] [cursor=pointer]:
+                  - generic [ref=f15e133]: chat
+                  - generic [ref=f15e135]:
+                    - paragraph [ref=f15e137]: Nova ocorrência em Abertura de Caixa
+                    - paragraph [ref=f15e139]: "Colaborador Teste • Conferir Fundo de Troco: Lampada do estoque queimada"
+                    - time [ref=f15e140]: há 6 min
+                - menuitem "Nova ocorrência em Abertura de Caixa. Não lida. há 7 min." [ref=f15e141] [cursor=pointer]:
+                  - generic [ref=f15e142]: chat
+                  - generic [ref=f15e144]:
+                    - paragraph [ref=f15e146]: Nova ocorrência em Abertura de Caixa
+                    - paragraph [ref=f15e148]: "Colaborador Teste • Conferir Fundo de Troco: Balanca desregulada"
+                    - time [ref=f15e149]: há 7 min
+  - button "Open Next.js Dev Tools" [ref=f15e96] [cursor=pointer]
+  - alert [ref=f15e100]

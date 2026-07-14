@@ -1,0 +1,53 @@
+- generic [ref=f7e2]:
+  - complementary [ref=f7e3]:
+    - generic [ref=f7e4]:
+      - generic [ref=f7e5]:
+        - img "Ordem na Mesa Logo" [ref=f7e7]
+        - generic [ref=f7e8]: Ordem na Mesa
+      - button "chevron_left" [ref=f7e10]
+    - navigation [ref=f7e12]:
+      - generic [ref=f7e13]: Menu Principal
+      - link "dashboard Dashboard" [ref=f7e14] [cursor=pointer]:
+        - /url: /dashboard
+        - generic [ref=f7e15]: dashboard
+        - generic [ref=f7e16]: Dashboard
+      - link "assignment_ind Meu Turno" [ref=f7e17] [cursor=pointer]:
+        - /url: /turno
+        - generic [ref=f7e18]: assignment_ind
+        - generic [ref=f7e19]: Meu Turno
+      - link "checklist Checklists" [ref=f7e20] [cursor=pointer]:
+        - /url: /checklists
+        - generic [ref=f7e21]: checklist
+        - generic [ref=f7e22]: Checklists
+      - link "local_shipping Recebimentos" [ref=f7e23] [cursor=pointer]:
+        - /url: /recebimentos
+        - generic [ref=f7e24]: local_shipping
+        - generic [ref=f7e25]: Recebimentos
+      - link "group Equipe" [ref=f7e26] [cursor=pointer]:
+        - /url: /equipe
+        - generic [ref=f7e27]: group
+        - generic [ref=f7e28]: Equipe
+      - link "bar_chart Relatórios" [ref=f7e29] [cursor=pointer]:
+        - /url: /relatorios
+        - generic [ref=f7e30]: bar_chart
+        - generic [ref=f7e31]: Relatórios
+      - link "settings Configurações" [ref=f7e32] [cursor=pointer]:
+        - /url: /configuracoes
+        - generic [ref=f7e33]: settings
+        - generic [ref=f7e34]: Configurações
+    - generic [ref=f7e35]:
+      - generic [ref=f7e36]:
+        - generic [ref=f7e37]: person
+        - generic [ref=f7e39]:
+          - generic [ref=f7e40]: Usuário
+          - generic [ref=f7e41]: Colaborador
+      - button "logout Sair da conta" [ref=f7e42]:
+        - generic [ref=f7e43]: logout
+        - generic [ref=f7e44]: Sair da conta
+  - generic [ref=f7e45]:
+    - banner [ref=f7e46]:
+      - heading "Dashboard Geral" [level=2] [ref=f7e49]
+      - button "Notificações" [ref=f7e52]:
+        - generic [ref=f7e53]: notifications
+    - main [ref=f7e54]:
+      - main [ref=f7e58]

@@ -7,6 +7,7 @@ import { getAccountBilling, canExecuteTasks } from '@/lib/billing/subscription-a
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
 import { trackChecklistEvent } from '@/lib/analytics/track-event';
 import { buildTasksSnapshot } from '@/lib/services/checklist-snapshot';
+import { emitDomainEvent } from '@/lib/notifications/emit';
 
 const getAdminSupabase = () =>
     createClient(
@@ -158,52 +159,41 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             console.error('[POST /api/checklists/[id]/complete] auto-archive exception:', archiveErr, { checklist_id: checklistId });
         }
 
-        // Gerar notificações para managers/owners se houver observação
+        // ── s90: a notificação vira CONSEQUÊNCIA de um evento de domínio ─────
+        //
+        // Antes, esta rota montava a notificação inline: escolhia os destinatários,
+        // escrevia o texto e o `related_id`, e engolia qualquer erro num `catch`. Era
+        // a "lógica espalhada" que o redesenho veio matar — e, se o insert falhasse, a
+        // notificação sumia sem deixar rastro.
+        //
+        // Agora a rota só DECLARA o que aconteceu. Destinatário, prioridade, texto e
+        // destino são decididos pelo materializador, em um só lugar. Falha vira um
+        // evento `pending` com `last_error`, reprocessado pelo cron.
+        //
+        // O `date_key` e o `assumption_id` viajam no payload — é o que permite ao
+        // deep-link abrir a execução do dia CERTO, e não a de hoje.
         if (observation && observation.trim()) {
-            try {
-                // Buscar nome do checklist
-                const { data: checklist } = await adminSupabase
-                    .from('checklists')
-                    .select('name')
-                    .eq('id', checklistId)
-                    .single();
+            const { data: checklist } = await adminSupabase
+                .from('checklists')
+                .select('name')
+                .eq('id', checklistId)
+                .maybeSingle();
 
-                const checklistName = checklist?.name || 'Atividade';
+            const text = observation.trim();
 
-                // Buscar managers e owners do restaurante
-                const { data: managers } = await adminSupabase
-                    .from('restaurant_users')
-                    .select('user_id')
-                    .eq('restaurant_id', restaurant_id)
-                    .eq('active', true)
-                    .in('role', ['owner', 'manager']);
-
-                if (managers && managers.length > 0) {
-                    const notifications = managers
-                        .filter((m) => m.user_id !== user.id) // Não notificar a si mesmo
-                        .map((m) => ({
-                            restaurant_id,
-                            user_id: m.user_id,
-                            type: 'TASK_COMPLETED_WITH_NOTE' as const,
-                            title: `${userName} deixou uma observação`,
-                            description: `"${observation.trim().slice(0, 100)}${observation.trim().length > 100 ? '...' : ''}" — ${checklistName}`,
-                            metadata: {
-                                checklist_id: checklistId,
-                                checklist_name: checklistName,
-                                completed_by_name: userName,
-                                completed_by_user_id: user.id,
-                            },
-                            related_id: checklistId,
-                        }));
-
-                    if (notifications.length > 0) {
-                        await adminSupabase.from('notifications').insert(notifications);
-                    }
-                }
-            } catch (notifError) {
-                // Não falhar a finalização por erro na notificação
-                console.error('[POST /api/checklists/[id]/complete] Erro ao criar notificações:', notifError);
-            }
+            await emitDomainEvent(adminSupabase, 'RoutineCompletedWithNote', {
+                restaurantId: restaurant_id,
+                actorUserId: user.id,
+                payload: {
+                    checklist_id: checklistId,
+                    checklist_assumption_id: assumption?.id ?? null,
+                    date_key: dateKey,
+                    completed_by_user_id: user.id,
+                    checklist_name: checklist?.name ?? 'Rotina',
+                    completed_by_name: userName,
+                    excerpt: text.length > 120 ? `${text.slice(0, 120)}…` : text,
+                },
+            });
         }
 
         return NextResponse.json({ assumption });
