@@ -46,9 +46,10 @@ services:
       NODE_ENV: production
       PORT: "3000"
       HOSTNAME: "0.0.0.0"
-      # Versão servida (tag da imagem = SHA do commit). Reportada por /api/health.
+      # SHA do commit servido. Reportado por /api/health.
       # Pega um bug que ninguém veria: deploy "verde" que continua servindo a imagem antiga.
-      APP_VERSION: ${IMAGE_TAG:-unknown}
+      # NÃO usar IMAGE_TAG aqui: ele vale "prod-latest", que não identifica commit nenhum.
+      APP_VERSION: ${APP_VERSION:-unknown}
       NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
       NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
