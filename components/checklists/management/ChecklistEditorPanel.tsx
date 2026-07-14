@@ -2,13 +2,14 @@
 
 import { formatShiftNames } from "@/lib/utils/shift-labels";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { getPhotoSignedUrl } from "@/lib/supabase/storage";
 import { ChecklistForm } from "@/components/checklists/checklist-form";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
-import { getBrazilDateKey, formatDateBR } from "@/lib/utils/brazil-date";
+import { formatDateBR, getDayRangeIsoInTz, getNowInTz } from "@/lib/utils/brazil-date";
+import type { ChecklistPanelTab } from "@/lib/notifications/navigation";
 import { describeRecurrence } from "@/lib/utils/recurrence/describe";
 import { durationMinutes, formatDuration } from "@/lib/utils/time-window";
 import { useTaskIssues } from "@/lib/hooks/use-task-issues";
@@ -53,33 +54,52 @@ interface AssumptionDetail {
 
 // ── Hooks ─────────────────────────────────────────────────────────────────────
 
-function useChecklistExecutions(checklistId: string, restaurantId: string) {
+/**
+ * s90 — os dois hooks abaixo passam a ser ASSUMPTION-SCOPED.
+ *
+ * Antes eram hardcoded em "hoje" (`getBrazilDateKey()` / meia-noite do NAVEGADOR). Isso
+ * tornava uma ocorrência de ontem ESTRUTURALMENTE INALCANÇÁVEL: o painel só sabia falar
+ * do dia corrente, então nenhum deep-link histórico podia funcionar — por melhor que
+ * fosse o payload.
+ *
+ * Três correções em um golpe:
+ *   1. `dateKey` vira parâmetro (o deep-link informa o dia do evento).
+ *   2. O dia é calculado no FUSO DO RESTAURANTE, não no do navegador (um gestor em
+ *      outro fuso via o dia errado).
+ *   3. A queryKey ganha o `restaurantId` — ela o OMITIA, o que é um risco real de
+ *      vazamento de cache entre tenants na troca de restaurante.
+ */
+function useChecklistExecutions(
+    checklistId: string,
+    restaurantId: string,
+    dateKey: string,
+    timezone: string,
+) {
     return useQuery({
-        queryKey: ["checklist-executions-panel", checklistId],
+        queryKey: ["checklist-executions-panel", restaurantId, checklistId, dateKey],
         queryFn: async (): Promise<TaskExecution[]> => {
             const supabase = createClient();
-            const todayStart = new Date();
-            todayStart.setHours(0, 0, 0, 0);
+            const { start, end } = getDayRangeIsoInTz(timezone, dateKey);
 
             const { data } = await supabase
                 .from("task_executions")
                 .select("id, task_id, status, photo_url, executed_at, blocked_reason, observation, value_date, value_number, value_rating, photos, has_alert")
                 .eq("checklist_id", checklistId)
                 .eq("restaurant_id", restaurantId)
-                .gte("executed_at", todayStart.toISOString());
+                .gte("executed_at", start)
+                .lte("executed_at", end);
 
             return data ?? [];
         },
-        enabled: !!checklistId && !!restaurantId,
+        enabled: !!checklistId && !!restaurantId && !!dateKey,
     });
 }
 
-function useAssumptionDetail(checklistId: string, restaurantId: string) {
+function useAssumptionDetail(checklistId: string, restaurantId: string, dateKey: string) {
     return useQuery({
-        queryKey: ["checklist-assumption-panel", checklistId],
+        queryKey: ["checklist-assumption-panel", restaurantId, checklistId, dateKey],
         queryFn: async (): Promise<AssumptionDetail | null> => {
             const supabase = createClient();
-            const dateKey = getBrazilDateKey();
 
             const { data } = await supabase
                 .from("checklist_assumptions")
@@ -91,7 +111,7 @@ function useAssumptionDetail(checklistId: string, restaurantId: string) {
 
             return data;
         },
-        enabled: !!checklistId && !!restaurantId,
+        enabled: !!checklistId && !!restaurantId && !!dateKey,
     });
 }
 
@@ -150,6 +170,14 @@ interface ChecklistViewPanelProps {
     onEdit: () => void;
     onClose: () => void;
     focusIssueId?: string | null;
+    /**
+     * s90 — escopo TEMPORAL do painel ('YYYY-MM-DD' no fuso do restaurante).
+     * Vem do deep-link. Ausente ⇒ dia corrente (o comportamento de sempre).
+     * É este parâmetro que destrava as ocorrências históricas.
+     */
+    dateKey?: string | null;
+    /** Aba a abrir. Vem do deep-link. */
+    initialTab?: ChecklistPanelTab | null;
 }
 
 // Normaliza fotos da execução: photos[] (Sprint 35) tem precedência, fallback para photo_url (legado)
@@ -160,16 +188,33 @@ function getExecutionPhotos(execution: TaskExecution | undefined): string[] {
     return [];
 }
 
-function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose, focusIssueId }: ChecklistViewPanelProps) {
+function ChecklistViewPanel({
+    checklist,
+    restaurantId,
+    onEdit,
+    onClose,
+    focusIssueId,
+    dateKey,
+    initialTab,
+}: ChecklistViewPanelProps) {
     const userRole = useRestaurantStore((s) => s.userRole);
+    const timezone = useRestaurantStore((s) => s.timezone) ?? "America/Sao_Paulo";
     const canManageIssues = userRole === "owner" || userRole === "manager";
     const [selectedPhoto, setSelectedPhoto] = useState<{ url: string; title: string } | null>(null);
     const [signedUrls, setSignedUrls] = useState<Record<string, string[]>>({});
     const [selectedIssue, setSelectedIssue] = useState<TaskIssue | null>(null);
 
+    // O deep-link manda o dia do evento; sem ele, o dia corrente NO FUSO DO RESTAURANTE.
+    const scopedDateKey = dateKey || getNowInTz(timezone).dateKey;
+    const isHistorical = scopedDateKey !== getNowInTz(timezone).dateKey;
+
+    const [activeTab, setActiveTab] = useState<ChecklistPanelTab>(initialTab ?? "tasks");
+
     const { data: executions = [], isLoading: execLoading } = useChecklistExecutions(
         checklist.id,
-        restaurantId ?? ""
+        restaurantId ?? "",
+        scopedDateKey,
+        timezone,
     );
 
     // Resolve signed URLs para TODAS as fotos de cada execução (multi-foto Sprint 35)
@@ -209,10 +254,11 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose, focusIss
 
     const { data: assumptionDetail } = useAssumptionDetail(
         checklist.id,
-        restaurantId ?? ""
+        restaurantId ?? "",
+        scopedDateKey,
     );
 
-    // Sprint 45 — ocorrências da assumption de hoje
+    // s90 — ocorrências da assumption DO DIA ESCOPADO (não mais "de hoje").
     const { data: issues = [] } = useTaskIssues({
         restaurantId: restaurantId,
         checklistAssumptionId: assumptionDetail?.id,
@@ -229,15 +275,58 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose, focusIss
         return map;
     }, [checklist.tasks]);
 
-    // Auto-seleciona issue se veio via deep-link, ou primeira aberta
+    /**
+     * s90 — a ocorrência do deep-link NÃO pode cair em fallback silencioso.
+     *
+     * Antes, se o `focusIssueId` não fosse encontrado, o código selecionava `issues[0]`
+     * sem avisar: o gestor via a ocorrência ERRADA, achando que era a da notificação.
+     * Isso é pior do que não mostrar nada.
+     *
+     * Agora: alvo não encontrado ⇒ estado explícito (`issueNotFound`), e a UI diz que
+     * aquela ocorrência não está mais disponível.
+     */
+    const [issueNotFound, setIssueNotFound] = useState(false);
+
     useEffect(() => {
-        if (issues.length === 0) { setSelectedIssue(null); return; }
-        if (focusIssueId) {
-            const target = issues.find(i => i.id === focusIssueId);
-            if (target) { setSelectedIssue(target); return; }
+        if (issues.length === 0) {
+            setSelectedIssue(null);
+            setIssueNotFound(!!focusIssueId);
+            return;
         }
-        setSelectedIssue(prev => prev ?? issues[0]);
+        if (focusIssueId) {
+            const target = issues.find((i) => i.id === focusIssueId);
+            setIssueNotFound(!target);
+            setSelectedIssue(target ?? null);
+            return;
+        }
+        setIssueNotFound(false);
+        setSelectedIssue((prev) => prev ?? issues[0]);
     }, [issues, focusIssueId]);
+
+    // Chegou pelo deep-link de uma ocorrência ⇒ abre na aba Ocorrências.
+    useEffect(() => {
+        if (focusIssueId) setActiveTab("issues");
+    }, [focusIssueId]);
+
+    /**
+     * Scroll automático + destaque, SEM TIMEOUT DE SINCRONIZAÇÃO.
+     *
+     * A restrição do projeto proíbe usar timeout para sincronizar navegação — e com
+     * razão: "esperar 300ms e torcer para o nó existir" é uma corrida disfarçada.
+     *
+     * A primitiva correta é o CALLBACK REF: o React o invoca no instante em que o nó
+     * MONTA. Não há espera, não há palpite. O destaque some sozinho via `onAnimationEnd`
+     * (animação CSS), então também não há timer para limpá-lo.
+     */
+    const focusedIssueRef = useCallback(
+        (node: HTMLDivElement | null) => {
+            if (!node) return;
+            const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+            node.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
+        },
+        // Identidade nova a cada alvo ⇒ o ref dispara de novo num segundo deep-link.
+        [focusIssueId],
+    );
 
     const executionMap = new Map(executions.map((e) => [e.task_id, e]));
     const hasExecution = executions.length > 0 || !!assumptionDetail;
@@ -294,15 +383,80 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose, focusIss
                 </button>
             </div>
 
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto">
+            {/* ── s90: ABAS ───────────────────────────────────────────────────
+                O painel era uma coluna única com seções empilhadas. Sem abas, um
+                deep-link não tinha "para onde" apontar: as Ocorrências ficavam abaixo
+                da dobra, depois de Execução + Descrição + Configuração, e o usuário
+                podia nem vê-las. */}
+            <div
+                role="tablist"
+                aria-label="Seções da rotina"
+                className="flex border-b border-[#233f48] shrink-0 px-2"
+            >
+                {([
+                    { id: "tasks" as const, label: "Tarefas", count: checklist.tasks?.length ?? 0 },
+                    { id: "issues" as const, label: "Ocorrências", count: issues.length },
+                ]).map((tab) => {
+                    const active = activeTab === tab.id;
+                    return (
+                        <button
+                            key={tab.id}
+                            role="tab"
+                            id={`panel-tab-${tab.id}`}
+                            aria-selected={active}
+                            aria-controls={`panel-tabpanel-${tab.id}`}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`relative px-4 py-3 text-sm font-medium transition-colors ${
+                                active ? "text-white" : "text-[#92bbc9] hover:text-white"
+                            }`}
+                        >
+                            {tab.label}
+                            {tab.count > 0 && (
+                                <span
+                                    className={`ml-1.5 text-[10px] font-bold rounded-full px-1.5 py-0.5 ${
+                                        tab.id === "issues" && openIssuesCount > 0
+                                            ? "bg-amber-500/15 text-amber-400 border border-amber-500/40"
+                                            : "bg-[#233f48] text-[#92bbc9]"
+                                    }`}
+                                >
+                                    {tab.count}
+                                </span>
+                            )}
+                            {active && (
+                                <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-[#13b6ec] rounded-full" />
+                            )}
+                        </button>
+                    );
+                })}
+            </div>
 
-                {/* ── Execução de hoje ───────────────────────────────────────── */}
-                {restaurantId && hasExecution && (
+            {/* Aviso de escopo histórico: o painel pode estar mostrando OUTRO dia. */}
+            {isHistorical && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-[#13b6ec]/10 border-b border-[#13b6ec]/20 shrink-0">
+                    <span className="material-symbols-outlined text-[16px] text-[#13b6ec]" aria-hidden="true">
+                        history
+                    </span>
+                    <span className="text-[#92bbc9] text-xs">
+                        Mostrando a execução de{" "}
+                        <strong className="text-white">{formatDateBR(scopedDateKey)}</strong>
+                    </span>
+                </div>
+            )}
+
+            {/* Content */}
+            <div
+                className="flex-1 overflow-y-auto"
+                role="tabpanel"
+                id={`panel-tabpanel-${activeTab}`}
+                aria-labelledby={`panel-tab-${activeTab}`}
+            >
+
+                {/* ── Execução do dia ────────────────────────────────────────── */}
+                {activeTab === "tasks" && restaurantId && hasExecution && (
                     <div className="p-4 border-b border-[#1a2c32]">
                         <div className="flex items-center justify-between mb-3">
                             <p className="text-[#92bbc9] text-xs font-bold uppercase tracking-wide">
-                                Execução de hoje
+                                {isHistorical ? "Execução do dia" : "Execução de hoje"}
                             </p>
                             {assumptionDetail?.execution_status && (
                                 <span className={`text-xs font-bold ${statusColor[assumptionDetail.execution_status] ?? "text-[#92bbc9]"}`}>
@@ -368,7 +522,7 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose, focusIss
                 )}
 
                 {/* Informações básicas */}
-                {checklist.description && (
+                {activeTab === "tasks" && checklist.description && (
                     <div className="p-4 border-b border-[#1a2c32]">
                         <p className="text-[#92bbc9] text-xs font-bold uppercase tracking-wide mb-2">Descrição</p>
                         <p className="text-white text-sm leading-relaxed">{checklist.description}</p>
@@ -376,6 +530,7 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose, focusIss
                 )}
 
                 {/* Configuração */}
+                {activeTab === "tasks" && (
                 <div className="p-4 border-b border-[#1a2c32]">
                     <p className="text-[#92bbc9] text-xs font-bold uppercase tracking-wide mb-3">Configuração</p>
                     <div className="flex flex-col gap-2.5">
@@ -446,39 +601,72 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose, focusIss
                         )}
                     </div>
                 </div>
+                )}
 
-                {/* ── Ocorrências (Sprint 45) ────────────────────────────────── */}
-                {assumptionDetail?.id && issues.length > 0 && (
-                    <div id="issues-section" className="p-4 border-b border-[#1a2c32] bg-[#0c1518]">
-                        <div className="flex items-center justify-between mb-3">
-                            <p className="text-[#92bbc9] text-xs font-bold uppercase tracking-wide">
-                                Ocorrências
-                            </p>
-                            {openIssuesCount > 0 && (
-                                <span className="text-[10px] font-bold rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/40 px-2 py-0.5">
-                                    {openIssuesCount} aberta{openIssuesCount > 1 ? "s" : ""}
+                {/* ── Aba OCORRÊNCIAS ────────────────────────────────────────────
+                    s90 — antes era uma seção empilhada no fim do scroll, e só renderizava
+                    se `assumptionDetail?.id && issues.length > 0`. Agora é uma aba com
+                    empty state próprio: um deep-link para uma ocorrência que não está mais
+                    lá encontra uma explicação, não uma seção que sumiu. */}
+                {activeTab === "issues" && (
+                    <div id="issues-section" className="p-4">
+                        {issueNotFound && (
+                            <div
+                                role="alert"
+                                className="mb-4 flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3"
+                            >
+                                <span className="material-symbols-outlined text-[18px] text-amber-400 shrink-0" aria-hidden="true">
+                                    info
                                 </span>
-                            )}
-                        </div>
-                        <IssueList
-                            issues={issues}
-                            selectedId={selectedIssue?.id ?? null}
-                            onSelect={(i) => setSelectedIssue(i)}
-                            taskTitleById={taskTitleById}
-                        />
-                        {selectedIssue && (
-                            <div className="mt-4 pt-4 border-t border-[#233f48]">
-                                <IssueDetail
-                                    issue={selectedIssue}
-                                    canManage={canManageIssues}
-                                    taskTitle={taskTitleById[selectedIssue.task_id]}
-                                />
+                                <p className="text-amber-300/90 text-xs leading-relaxed">
+                                    Esta ocorrência não está mais disponível. Ela pode ter sido
+                                    removida, ou pertence a outro dia de execução.
+                                </p>
                             </div>
+                        )}
+
+                        {issues.length === 0 ? (
+                            <div className="py-12 flex flex-col items-center gap-2 text-center">
+                                <span className="material-symbols-outlined text-3xl text-[#325a67]" aria-hidden="true">
+                                    check_circle
+                                </span>
+                                <p className="text-[#92bbc9] text-sm">
+                                    Nenhuma ocorrência {isHistorical ? "neste dia" : "hoje"}
+                                </p>
+                            </div>
+                        ) : (
+                            <>
+                                {openIssuesCount > 0 && (
+                                    <div className="flex justify-end mb-3">
+                                        <span className="text-[10px] font-bold rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/40 px-2 py-0.5">
+                                            {openIssuesCount} aberta{openIssuesCount > 1 ? "s" : ""}
+                                        </span>
+                                    </div>
+                                )}
+                                <IssueList
+                                    issues={issues}
+                                    selectedId={selectedIssue?.id ?? null}
+                                    onSelect={(i) => setSelectedIssue(i)}
+                                    taskTitleById={taskTitleById}
+                                    focusedIssueId={focusIssueId ?? null}
+                                    focusedRef={focusedIssueRef}
+                                />
+                                {selectedIssue && (
+                                    <div className="mt-4 pt-4 border-t border-[#233f48]">
+                                        <IssueDetail
+                                            issue={selectedIssue}
+                                            canManage={canManageIssues}
+                                            taskTitle={taskTitleById[selectedIssue.task_id]}
+                                        />
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
                 )}
 
                 {/* ── Tarefas (com status de execução e fotos) ──────────────── */}
+                {activeTab === "tasks" && (
                 <div className="p-4">
                     <div className="flex items-center justify-between mb-3">
                         <p className="text-[#92bbc9] text-xs font-bold uppercase tracking-wide">Tarefas</p>
@@ -656,6 +844,7 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose, focusIss
                         </div>
                     )}
                 </div>
+                )}
             </div>
 
             {/* Footer */}
@@ -691,6 +880,9 @@ export interface ChecklistEditorPanelProps {
     onSaved: () => void;
     restaurantId?: string;
     focusIssueId?: string | null;
+    /** s90 — escopo temporal vindo do deep-link. Ausente ⇒ dia corrente. */
+    dateKey?: string | null;
+    initialTab?: ChecklistPanelTab | null;
 }
 
 export function ChecklistEditorPanel({
@@ -701,6 +893,8 @@ export function ChecklistEditorPanel({
     onSaved,
     restaurantId,
     focusIssueId,
+    dateKey,
+    initialTab,
 }: ChecklistEditorPanelProps) {
     if (mode === "view" && checklist) {
         return (
@@ -710,6 +904,8 @@ export function ChecklistEditorPanel({
                 onEdit={() => onModeChange("edit")}
                 onClose={onClose}
                 focusIssueId={focusIssueId}
+                dateKey={dateKey}
+                initialTab={initialTab}
             />
         );
     }

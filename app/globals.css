@@ -41,3 +41,27 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #3e525a;
 }
+/*
+ * s90 — destaque temporário da ocorrência aberta por deep-link.
+ *
+ * O realce se apaga SOZINHO ao fim da animação (o componente escuta `onAnimationEnd`).
+ * Não há setTimeout envolvido — nem para o scroll (que usa callback ref, disparado no
+ * instante em que o nó monta), nem para limpar o destaque.
+ */
+@keyframes notification-flash {
+  0%   { box-shadow: 0 0 0 0 rgba(19, 182, 236, 0.55); }
+  35%  { box-shadow: 0 0 0 4px rgba(19, 182, 236, 0.35); }
+  100% { box-shadow: 0 0 0 0 rgba(19, 182, 236, 0); }
+}
+
+.animate-notification-flash {
+  animation: notification-flash 2s ease-out 2;
+}
+
+/* Acessibilidade: quem pediu menos movimento não recebe o pulso. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-notification-flash {
+    animation: none;
+    box-shadow: 0 0 0 2px rgba(19, 182, 236, 0.6);
+  }
+}

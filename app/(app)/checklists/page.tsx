@@ -10,6 +10,7 @@ import { useChecklists, useCreateChecklist, useDeleteChecklist, useToggleCheckli
 import { useChecklistById } from "@/lib/hooks/use-checklist-by-id";
 import { useTenantFromUrl } from "@/lib/hooks/use-tenant-from-url";
 import { useNotificationNavigator, NOTIFICATION_ACK_PARAM } from "@/lib/notifications/navigator";
+import type { ChecklistPanelTab } from "@/lib/notifications/navigation";
 import { DeepLinkFallback } from "@/components/checklists/management/DeepLinkFallback";
 import { useIssueCountsByChecklist } from "@/lib/hooks/use-task-issues";
 import { useShifts } from "@/lib/hooks/use-shifts";
@@ -116,10 +117,14 @@ function ChecklistsContent() {
     // Deep-link: abre o painel da rotina informada. Vem do Dashboard e das notificações.
     const deepLinkChecklistId = searchParams.get("openId");
     // s90 — token do handshake de leitura: a notificação só é marcada como lida quando
-    // ESTA página confirma que reconstruiu o contexto. (Os params `date_key`,
-    // `assumption_id` e `tab` já vêm na URL e passam a ser consumidos na F5, quando o
-    // painel deixa de ser hardcoded em "hoje".)
+    // ESTA página confirma que reconstruiu o contexto.
     const notificationKey = searchParams.get(NOTIFICATION_ACK_PARAM);
+    // Escopo TEMPORAL do painel. É este param que destrava as ocorrências históricas —
+    // antes o painel era hardcoded em "hoje" e uma ocorrência de ontem era inalcançável.
+    const deepLinkDateKey = searchParams.get("date_key");
+    const rawTab = searchParams.get("tab");
+    const deepLinkTab: ChecklistPanelTab | null =
+        rawTab === "issues" || rawTab === "tasks" || rawTab === "history" ? rawTab : null;
 
     // s90 — o modo de visualização passa a ser endereçável por URL. Antes era `useState`
     // puro: o deep-link não conseguia forçar o modo Cards, e o link não era compartilhável.
@@ -966,6 +971,8 @@ function ChecklistsContent() {
                             onSaved={handleEditorSaved}
                             restaurantId={restaurantId ?? undefined}
                             focusIssueId={focusIssueId}
+                            dateKey={deepLinkDateKey}
+                            initialTab={deepLinkTab}
                         />
                     </div>
                 )}
