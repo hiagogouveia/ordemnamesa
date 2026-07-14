@@ -145,9 +145,39 @@ jobs:
             docker compose pull nextjs
             docker compose up -d --remove-orphans
 
+            # ── GATE DE DEPLOY ────────────────────────────────────────────────
+            #
+            # Antes disto, o deploy fazia `up -d` e saía com código 0. Uma imagem em
+            # CRASHLOOP resultava num deploy VERDE: ninguém era avisado, e o site ficava
+            # fora até alguém reparar por acaso.
+            #
+            # Agora esperamos a aplicação ficar REALMENTE pronta (readiness: banco e
+            # Storage alcançáveis), e falhamos o deploy se ela não ficar.
+            #
+            # 127.0.0.1 (e não `localhost`): há falso-negativo conhecido quando `localhost`
+            # resolve para IPv6 dentro do container.
+            echo "=== Aguardando a aplicação ficar saudável ==="
+            HEALTHY=0
+            for i in $(seq 1 30); do
+              if docker compose exec -T nextjs wget -qO- http://127.0.0.1:3000/api/health/ready >/dev/null 2>&1; then
+                echo "Aplicação saudável após ${i} tentativa(s)."
+                HEALTHY=1
+                break
+              fi
+              sleep 3
+            done
+
+            if [ "$HEALTHY" -ne 1 ]; then
+              echo "::error::Deploy subiu, mas a aplicação NÃO ficou saudável em 90s. Veja os logs abaixo."
+              docker compose ps
+              docker compose logs --tail=80 nextjs
+              exit 1
+            fi
+
             # Limpeza pós-deploy: remove SOMENTE imagens dangling (sem tag), que são
-            # as versões antigas desreferenciadas a cada deploy. Executa apenas após
-            # o 'up -d' ter sucesso (set -e aborta antes daqui em caso de falha).
+            # as versões antigas desreferenciadas a cada deploy.
+            # Agora roda DEPOIS do gate: não faz sentido fazer housekeeping num deploy
+            # que falhou — e o operador que vai investigar encontra a máquina como estava.
             # Nunca remove imagem em uso, Traefik, volumes ou networks.
             # Resiliente: uma falha na limpeza jamais marca um deploy OK como falho.
             docker image prune -f || echo "AVISO: prune pós-deploy falhou (não crítico), seguindo."

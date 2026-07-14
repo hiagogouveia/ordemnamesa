@@ -24,9 +24,15 @@
 .DS_Store
 *.pem
 
-# cópias acidentais do Finder ("arquivo 2.tsx")
-* 2.*
-* 2/
+# Cópias acidentais do Finder / sincronizador ("arquivo 2.tsx", "arquivo 3.sql", ...).
+#
+# A regra antiga cobria APENAS " 2.". O macOS incrementa o sufixo a cada nova cópia
+# (" 2", " 3", " 4"...), então 383 duplicatas escaparam e foram COMMITADAS — incluindo
+# 12 migrations e um workflow de cron, que passou a rodar em duplicidade no GitHub.
+# Agora cobre qualquer dígito.
+* [0-9].*
+* [0-9]/
+* [0-9][0-9].*
 
 # debug
 npm-debug.log*

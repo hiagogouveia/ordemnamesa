@@ -1,7 +1,0 @@
-- generic [ref=f1e3]:
-  - generic [ref=f1e4]:
-    - img "Ordem na Mesa Logo" [ref=f1e6]
-    - heading "Ordem na Mesa" [level=1] [ref=f1e7]
-  - generic [ref=f1e8]:
-    - heading "Selecione o Restaurante" [level=2] [ref=f1e9]
-    - paragraph [ref=f1e10]: Escolha a unidade para iniciar sua sessão

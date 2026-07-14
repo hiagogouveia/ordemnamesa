@@ -63,6 +63,15 @@ jobs:
           HISTORY_URL="${PHOTO_URL/photo-retention/history-retention}"
           echo "endpoint=$HISTORY_URL"
 
+          # GUARDA: se a substituição não aconteceu (PHOTO_RETENTION_URL mudou de forma),
+          # a URL derivada seria idêntica à de fotos — e este passo faria um POST na rota
+          # ERRADA, devolvendo HTTP 200. O job de deleção IRREVERSÍVEL de histórico pararia
+          # de rodar em SILÊNCIO, com o workflow verde. Falhar alto é a única resposta certa.
+          if [ "$HISTORY_URL" = "$PHOTO_URL" ]; then
+            echo "::error::PHOTO_RETENTION_URL não contém 'photo-retention'. A URL de histórico não pôde ser derivada, e a retenção de histórico NÃO rodou."
+            exit 1
+          fi
+
           HTTP_CODE=$(curl -sS -o response.json -w "%{http_code}" \
             -X POST "$HISTORY_URL?dryRun=$DRY_RUN" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
