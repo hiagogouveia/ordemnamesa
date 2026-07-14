@@ -1,9 +1,9 @@
 "use client";
 
 import { useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import type { AnyNotification } from "@/lib/notifications/contract";
 import { resolveNavigationTarget, targetToHref } from "@/lib/notifications/navigation";
+import { useNotificationNavigator } from "@/lib/notifications/navigator";
 import { colorFor, iconFor } from "@/lib/notifications/registry";
 
 function formatTimeAgo(dateStr: string): string {
@@ -21,7 +21,6 @@ interface NotificationDropdownProps {
     notifications: AnyNotification[];
     unreadCount: number;
     onClose: () => void;
-    onMarkRead: (id: string) => void;
     onMarkAllRead: () => void;
 }
 
@@ -29,10 +28,9 @@ export function NotificationDropdown({
     notifications,
     unreadCount,
     onClose,
-    onMarkRead,
     onMarkAllRead,
 }: NotificationDropdownProps) {
-    const router = useRouter();
+    const { navigate } = useNotificationNavigator();
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     // Fechar ao clicar fora
@@ -47,26 +45,20 @@ export function NotificationDropdown({
     }, [onClose]);
 
     /**
-     * s90 — o destino vem do CONTRATO, não de um if/else no componente.
+     * s90 — o componente NÃO decide para onde ir, e NÃO marca como lida.
      *
-     * Antes: `if (BLOCKED_ROUTINE) push('/checklists')` (tela genérica) `else if
-     * (related_id) push('/turno/atividade/<id>')` — a tela do COLABORADOR, errada para
-     * o gestor. O `related_id` era um checklist_id sem tipo de entidade, então qualquer
-     * tipo novo rotearia errado.
+     * Antes: um if/else hardcoded aqui mandava BLOCKED_ROUTINE para '/checklists' (tela
+     * genérica) e qualquer `related_id` para '/turno/atividade/<id>' — a tela do
+     * COLABORADOR, errada para o gestor. E marcava como lida imediatamente, mesmo quando
+     * a navegação não levava a lugar nenhum.
      *
-     * Agora o resolver produz uma intenção de domínio e `targetToHref` a traduz. Tipo
-     * desconhecido ou payload corrompido ⇒ destino `none` ⇒ card não-clicável, jamais
-     * uma exception ou uma navegação para o lugar errado.
-     *
-     * A marcação de lida ainda acontece no clique; o handshake "só marcar após navegação
-     * bem-sucedida" chega na F4, junto com o NotificationNavigator e a página de destino
-     * que confirma o sucesso.
+     * Agora o `navigate` do NotificationNavigator resolve a intenção a partir do contrato
+     * e executa. A leitura só é marcada quando a PÁGINA DE DESTINO confirma que
+     * reconstruiu o contexto (handshake causal, sem timeout).
      */
-    const handleNotificationClick = (notification: AnyNotification, href: string | null) => {
-        if (!href) return;
-        if (!notification.read) onMarkRead(notification.id);
-        router.push(href);
-        onClose();
+    const handleNotificationClick = (notification: AnyNotification) => {
+        const { navigated } = navigate(notification);
+        if (navigated) onClose();
     };
 
     return (
@@ -109,7 +101,7 @@ export function NotificationDropdown({
                             <button
                                 key={notification.id}
                                 role="menuitem"
-                                onClick={() => handleNotificationClick(notification, href)}
+                                onClick={() => handleNotificationClick(notification)}
                                 disabled={!href}
                                 aria-disabled={!href}
                                 aria-label={`${notification.title}${notification.read ? "" : " (não lida)"}`}

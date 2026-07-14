@@ -18,6 +18,94 @@ const getAdminSupabase = () => {
     );
 };
 
+/**
+ * GET /api/checklists/[id]?restaurant_id=<uuid>
+ *
+ * ── s90 — a peça que torna o deep-link DETERMINÍSTICO ────────────────────────
+ *
+ * Antes, a única forma de abrir uma rotina era achá-la na lista já carregada em
+ * memória (`checklists.find(c => c.id === openId)`). Se ela não estivesse lá — porque
+ * um filtro a escondeu, porque está inativa, porque a lista ainda não carregou, ou
+ * porque o tenant é outro — o deep-link falhava EM SILÊNCIO: nenhum painel, nenhum
+ * aviso, e o param ainda era apagado da URL.
+ *
+ * Carregar POR ID resolve isso na raiz: a rotina abre independentemente de qualquer
+ * filtro ativo. É o que sustenta o requisito "jamais 'não encontrou rotina' quando
+ * ela existe".
+ *
+ * Devolve códigos LEGÍVEIS POR MÁQUINA para que o destino possa distinguir os casos
+ * e mostrar a mensagem certa em vez de uma tela branca:
+ *   404 { code: 'CHECKLIST_NOT_FOUND' } → "Esta rotina não existe mais."
+ *   403 { code: 'NO_ACCESS' }           → "Você não tem acesso a esta unidade."
+ *
+ * `includeOneShot: true` de propósito: uma notificação pode apontar para uma rotina
+ * one-shot, que é excluída das LISTAGENS mas continua sendo um alvo válido.
+ */
+export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
+    try {
+        const { id } = await context.params;
+        const { searchParams } = new URL(request.url);
+        const restaurantId = searchParams.get('restaurant_id');
+
+        if (!restaurantId) {
+            return NextResponse.json(
+                { error: 'restaurant_id é obrigatório', code: 'BAD_REQUEST' },
+                { status: 400 }
+            );
+        }
+
+        const authHeader = request.headers.get('Authorization');
+        if (!authHeader) {
+            return NextResponse.json({ error: 'Não autorizado', code: 'NO_ACCESS' }, { status: 401 });
+        }
+
+        const admin = getAdminSupabase();
+        const { data: { user }, error: userError } = await admin.auth.getUser(
+            authHeader.replace('Bearer ', '')
+        );
+        if (userError || !user) {
+            return NextResponse.json({ error: 'Não autorizado', code: 'NO_ACCESS' }, { status: 401 });
+        }
+
+        // A URL é um PEDIDO, nunca uma autoridade: a pertinência é decidida aqui, no
+        // servidor, contra a sessão. Um restaurant_id forjado na URL bate em 403.
+        const { data: membership } = await admin
+            .from('restaurant_users')
+            .select('role')
+            .eq('restaurant_id', restaurantId)
+            .eq('user_id', user.id)
+            .eq('active', true)
+            .maybeSingle();
+
+        if (!membership) {
+            return NextResponse.json(
+                { error: 'Sem acesso a este restaurante', code: 'NO_ACCESS' },
+                { status: 403 }
+            );
+        }
+
+        const rows = await fetchChecklistViews(admin, {
+            restaurantIds: [restaurantId],
+            checklistIds: [id],
+            includeOneShot: true,
+        });
+
+        if (rows.length === 0) {
+            // A rotina foi excluída, ou pertence a outro restaurante (o filtro por
+            // restaurantIds já garante o isolamento — não vaza nem a existência).
+            return NextResponse.json(
+                { error: 'Rotina não encontrada', code: 'CHECKLIST_NOT_FOUND' },
+                { status: 404 }
+            );
+        }
+
+        return NextResponse.json(rows[0]);
+    } catch (error: unknown) {
+        console.error('[GET /api/checklists/[id]] Erro:', error);
+        return NextResponse.json({ error: (error as Error).message }, { status: 500 });
+    }
+}
+
 export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await context.params;

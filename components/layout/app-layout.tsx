@@ -7,14 +7,15 @@ import { Sidebar } from "./sidebar";
 import { Header } from "./header";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useRestaurantTimezoneSync } from "@/lib/hooks/use-restaurant-timezone-sync";
-import { useNotifications, useNotificationsRealtime, useMarkNotificationRead } from "@/lib/hooks/use-notifications";
+import { useNotifications, useMarkNotificationRead } from "@/lib/hooks/use-notifications";
 import { BillingBanner } from "@/components/billing/BillingBanner";
 import { BillingProvider } from "@/lib/context/billing-context";
+import { NotificationsProvider } from "@/components/notifications/notifications-provider";
 
 function PasswordChangedBanner({ restaurantId }: { restaurantId: string }) {
-    // Ponto único de realtime para notificações — evita múltiplas subscriptions
-    useNotificationsRealtime(restaurantId);
-
+    // s90 — a subscription de realtime SAIU daqui (foi para o NotificationsProvider).
+    // Estava indevidamente acoplada a este banner: se ele fosse removido ou refatorado,
+    // o realtime de TODAS as notificações morreria junto, sem ninguém perceber.
     const { data } = useNotifications(restaurantId);
     const markRead = useMarkNotificationRead();
     const [dismissedId, setDismissedId] = useState<string | null>(null);
@@ -79,6 +80,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
     return (
         <BillingProvider>
+        <NotificationsProvider>
         <div className="flex h-dvh overflow-hidden bg-[#101d22] font-sans">
             {/* Overlay para Mobile */}
             {isMobileMenuOpen && (
@@ -125,6 +127,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 )}
             </div>
         </div>
+        </NotificationsProvider>
         </BillingProvider>
     );
 }

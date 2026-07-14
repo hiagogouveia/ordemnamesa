@@ -29,7 +29,24 @@ export type AdminEventName =
     | 'lead_rejected'
     | 'checklist_responsible_transferred'
 
-export type EventName = AuthEventName | OnboardingEventName | UsageEventName | AdminEventName
+/**
+ * s90 — auditoria da navegação por notificação, correlacionada por `event_id`.
+ *
+ * A razão de existir: a métrica que define se o deep-link é de fato determinístico é
+ * `navigation_failed / clicked`, que deve ficar ≈ 0 (exceto rotinas genuinamente
+ * excluídas). Sem estes eventos, "o gestor caiu na tela errada" é indiagnosticável.
+ */
+export type NotificationEventName =
+    | 'notification_clicked'
+    | 'notification_navigation_succeeded'
+    | 'notification_navigation_failed'
+
+export type EventName =
+    | AuthEventName
+    | OnboardingEventName
+    | UsageEventName
+    | AdminEventName
+    | NotificationEventName
 
 export interface TrackEventInput {
     eventName: EventName

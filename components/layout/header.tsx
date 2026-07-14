@@ -101,7 +101,6 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
                             notifications={notifications}
                             unreadCount={unreadCount}
                             onClose={() => setIsDropdownOpen(false)}
-                            onMarkRead={handleMarkRead}
                             onMarkAllRead={handleMarkAllRead}
                         />
                     )}

@@ -1,12 +1,16 @@
 "use client";
 
-import { useState, useMemo, useCallback, Suspense, useEffect, useRef } from "react";
+import { useState, useMemo, useCallback, Suspense, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useAccountSessionStore } from "@/lib/store/account-session-store";
 import { useChecklists, useCreateChecklist, useDeleteChecklist, useToggleChecklistStatus } from "@/lib/hooks/use-checklists";
+import { useChecklistById } from "@/lib/hooks/use-checklist-by-id";
+import { useTenantFromUrl } from "@/lib/hooks/use-tenant-from-url";
+import { useNotificationNavigator, NOTIFICATION_ACK_PARAM } from "@/lib/notifications/navigator";
+import { DeepLinkFallback } from "@/components/checklists/management/DeepLinkFallback";
 import { useIssueCountsByChecklist } from "@/lib/hooks/use-task-issues";
 import { useShifts } from "@/lib/hooks/use-shifts";
 import { shouldChecklistAppearToday } from "@/lib/utils/should-checklist-appear-today";
@@ -86,7 +90,6 @@ function ChecklistsContent() {
 
     // UI state
     const [mounted, setMounted] = useState(false);
-    const [view, setView] = useState<"list" | "board" | "preview">("list");
     const [searchQuery, setSearchQuery] = useState("");
     const [editorState, setEditorState] = useState<EditorState>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -110,8 +113,19 @@ function ChecklistsContent() {
     }, [deleteToast]);
 
     const focusIssueId = searchParams.get("issue");
-    // Deep-link do Dashboard: abre o preview da rotina informada em ?openId=<checklist_id>.
+    // Deep-link: abre o painel da rotina informada. Vem do Dashboard e das notificações.
     const deepLinkChecklistId = searchParams.get("openId");
+    // s90 — token do handshake de leitura: a notificação só é marcada como lida quando
+    // ESTA página confirma que reconstruiu o contexto. (Os params `date_key`,
+    // `assumption_id` e `tab` já vêm na URL e passam a ser consumidos na F5, quando o
+    // painel deixa de ser hardcoded em "hoje".)
+    const notificationKey = searchParams.get(NOTIFICATION_ACK_PARAM);
+
+    // s90 — o modo de visualização passa a ser endereçável por URL. Antes era `useState`
+    // puro: o deep-link não conseguia forçar o modo Cards, e o link não era compartilhável.
+    const rawView = searchParams.get("view");
+    const view: "list" | "board" | "preview" =
+        rawView === "board" || rawView === "preview" || rawView === "list" ? rawView : "list";
     const selectedShift = searchParams.get("shift") ?? "";
     const selectedAreaId = searchParams.get("area_id") ?? "";
     // Compat: URLs antigos com ?availability=draft caem em "active" (sem-op)
@@ -135,6 +149,12 @@ function ChecklistsContent() {
     const sortField = (searchParams.get("sort") as SortField | null) ?? null;
     const sortOrder = (searchParams.get("order") as SortOrder | null) ?? "asc";
     const queryClient = useQueryClient();
+
+    // s90 — adota o tenant vindo da URL (?restaurant_id=), validando a pertinência
+    // contra /api/my-restaurants. Sem isto, um link de notificação aberto em ABA NOVA
+    // (o caso normal) chegava sem tenant — o restaurant_id só existia em sessionStorage —
+    // e o deep-link morria em silêncio. A URL é um PEDIDO, nunca uma autoridade.
+    const tenantAdoption = useTenantFromUrl();
 
     // Store
     const restaurantId = useRestaurantStore((state) => state.restaurantId);
@@ -169,20 +189,51 @@ function ChecklistsContent() {
     const { data: issueCounts = {} } = useIssueCountsByChecklist(restaurantId ?? undefined, tzDateKey);
     const { data: units = [] } = useUnits(isGlobal ? accountId : null);
 
-    // Deep-link: ao chegar do Dashboard com ?openId, abre o painel de preview da
-    // rotina assim que a lista carrega. Guard por ref evita reabrir e o param é
-    // removido da URL para não reaparecer quando o usuário fechar o painel.
-    const didOpenDeepLinkRef = useRef(false);
+    // ─── DEEP-LINK DETERMINÍSTICO (s90) ─────────────────────────────────────────
+    //
+    // ANTES: `checklists.find(c => c.id === openId)` — buscava na lista JÁ CARREGADA em
+    // memória. Se a rotina não estivesse lá (filtro ativo a escondeu, rotina inativa,
+    // lista ainda carregando, tenant errado), o deep-link falhava EM SILÊNCIO: nenhum
+    // painel, nenhum aviso — e o efeito ainda APAGAVA o `openId` da URL, tornando o link
+    // não-recarregável e destruindo a única pista do que deu errado.
+    //
+    // AGORA: carrega POR ID, direto da API. A rotina abre independentemente de qualquer
+    // filtro ativo, e o `openId` PERMANECE na URL (link recarregável e compartilhável).
+    // O guard por `useRef` some junto: um fluxo dirigido por URL é idempotente por
+    // natureza, e o ref impedia que um segundo deep-link abrisse na mesma sessão.
+    const {
+        data: deepLinkChecklist,
+        error: deepLinkError,
+        isLoading: isDeepLinkLoading,
+    } = useChecklistById(restaurantId ?? undefined, deepLinkChecklistId);
+
     useEffect(() => {
-        if (!deepLinkChecklistId || didOpenDeepLinkRef.current || checklists.length === 0) return;
-        didOpenDeepLinkRef.current = true;
-        const target = checklists.find((c) => c.id === deepLinkChecklistId);
-        if (target) setEditorState({ checklist: target, mode: "view" });
-        const params = new URLSearchParams(searchParams.toString());
-        params.delete("openId");
-        const queryString = params.toString();
-        router.replace(`/checklists${queryString ? `?${queryString}` : ""}`, { scroll: false });
-    }, [deepLinkChecklistId, checklists, searchParams, router]);
+        if (!deepLinkChecklistId || !deepLinkChecklist) return;
+        setEditorState((prev) => {
+            // Não reabre se o usuário já está com este painel aberto (evita loop de render).
+            if (prev?.mode === "view" && prev.checklist?.id === deepLinkChecklistId) return prev;
+            return { checklist: deepLinkChecklist as ExtendedChecklist, mode: "view" };
+        });
+    }, [deepLinkChecklistId, deepLinkChecklist]);
+
+    // ── Handshake de leitura (causal, sem timeout) ──────────────────────────────
+    // A notificação só é marcada como lida quando ESTA PÁGINA confirma que reconstruiu
+    // o contexto. Se a rotina foi excluída ou o acesso é negado, `fail()` — e a
+    // notificação PERMANECE não-lida, porque o gestor não chegou ao assunto.
+    const { ack, fail } = useNotificationNavigator();
+
+    useEffect(() => {
+        if (!notificationKey) return;
+        if (tenantAdoption.status === "denied") {
+            fail(notificationKey, "tenant_denied");
+            return;
+        }
+        if (deepLinkError) {
+            fail(notificationKey, deepLinkError.code === "NO_ACCESS" ? "no_access" : "not_found");
+            return;
+        }
+        if (deepLinkChecklist) ack(notificationKey);
+    }, [notificationKey, deepLinkChecklist, deepLinkError, tenantAdoption.status, ack, fail]);
 
     // Mutations
     const { mutate: toggleStatus } = useToggleChecklistStatus();
@@ -378,6 +429,46 @@ function ChecklistsContent() {
     }, []);
 
     // ─── URL HELPERS ────────────────────────────────────────────────────────────
+
+    /**
+     * s90 — qual estado de fallback mostrar no lugar do painel. `null` ⇒ painel normal.
+     * Só entra em cena quando há um deep-link ativo (`openId` na URL).
+     */
+    const deepLinkFallbackKind = !deepLinkChecklistId
+        ? null
+        : tenantAdoption.status === "denied"
+            ? ("TENANT_DENIED" as const)
+            : deepLinkError
+                ? deepLinkError.code
+                : isDeepLinkLoading || tenantAdoption.status === "adopting"
+                    ? ("LOADING" as const)
+                    : null;
+
+    /**
+     * Fecha o painel E limpa os params do deep-link.
+     *
+     * O `openId` PERMANECE na URL enquanto o painel está aberto (é o que torna o link
+     * recarregável e compartilhável — antes ele era apagado imediatamente). Só sai
+     * quando o usuário fecha, para que o painel não reabra sozinho.
+     */
+    const closeDeepLink = () => {
+        setEditorState(null);
+        if (!deepLinkChecklistId && !notificationKey) return;
+        const params = new URLSearchParams(searchParams.toString());
+        for (const p of ["openId", "issue", "date_key", "assumption_id", "tab", NOTIFICATION_ACK_PARAM]) {
+            params.delete(p);
+        }
+        const qs = params.toString();
+        router.replace(`/checklists${qs ? `?${qs}` : ""}`, { scroll: false });
+    };
+
+    /** s90 — o modo vive na URL, para que o deep-link possa forçar "Cards" e o link seja compartilhável. */
+    const setView = (next: "list" | "board" | "preview") => {
+        const params = new URLSearchParams(searchParams.toString());
+        if (next === "list") params.delete("view"); // "list" é o default: não polui a URL
+        else params.set("view", next);
+        router.replace(`/checklists?${params.toString()}`, { scroll: false });
+    };
 
     const setShiftFilter = (shift: string) => {
         const params = new URLSearchParams(searchParams.toString());
@@ -851,14 +942,27 @@ function ChecklistsContent() {
                     )}
                 </div>
 
+                {/* s90 — Deep-link que NÃO chegou ao contexto: estado elegante, nunca uma
+                    tela vazia. Antes, os três casos (rotina excluída, sem acesso, tenant
+                    negado) davam o mesmo resultado — nada: nenhum painel, nenhuma mensagem.
+                    A notificação também NÃO é marcada como lida (o handshake chama `fail`). */}
+                {deepLinkFallbackKind && (
+                    <div className="flex-1 md:flex-none md:w-[560px] shrink-0 border-l border-[#233f48] h-full overflow-hidden">
+                        <DeepLinkFallback
+                            kind={deepLinkFallbackKind}
+                            onClose={closeDeepLink}
+                        />
+                    </div>
+                )}
+
                 {/* Painel direito: visualização */}
-                {showSidePanel && editorState && (
+                {!deepLinkFallbackKind && showSidePanel && editorState && (
                     <div className="flex-1 md:flex-none md:w-[560px] shrink-0 border-l border-[#233f48] h-full overflow-hidden">
                         <ChecklistEditorPanel
                             checklist={editorState.checklist}
                             mode="view"
                             onModeChange={(mode) => setEditorState((s) => (s ? { ...s, mode } : null))}
-                            onClose={() => setEditorState(null)}
+                            onClose={closeDeepLink}
                             onSaved={handleEditorSaved}
                             restaurantId={restaurantId ?? undefined}
                             focusIssueId={focusIssueId}
