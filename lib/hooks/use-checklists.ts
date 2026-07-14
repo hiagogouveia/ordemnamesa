@@ -188,15 +188,26 @@ export function useUpdateChecklist() {
             return res.json();
         },
         onSuccess: (updatedChecklist, variables) => {
-            queryClient.setQueryData(
-                ["checklists", variables.restaurant_id],
-                (old: any[] | undefined) => {
-                    if (!old) return [updatedChecklist];
+            // Patch de todas as listas de rotinas em cache que contenham este item.
+            //
+            // Por prefixo, porque há duas: ["checklists", restaurantId] (visão da unidade) e
+            // ["checklists", "global", accountId] (visão multi-unidade). Antes, só a primeira era
+            // tocada — na visão global a listagem não refletia o save.
+            //
+            // A resposta do PUT tem o mesmo shape do GET (fetchChecklistViews), então substituir o
+            // item é seguro: `area`, `shifts`, `responsible` e o status vêm completos. Enquanto o
+            // PUT devolvia um objeto parcial, esta linha era a origem do flicker "Sem área".
+            queryClient.setQueriesData(
+                { queryKey: ["checklists"] },
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (old: any) => {
+                    if (!Array.isArray(old)) return old;
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     return old.map((c: any) => c.id === updatedChecklist.id ? updatedChecklist : c);
                 }
             );
             if (!variables.skipInvalidation) {
-                queryClient.invalidateQueries({ queryKey: ["checklists", variables.restaurant_id] });
+                queryClient.invalidateQueries({ queryKey: ["checklists"] });
                 queryClient.invalidateQueries({ queryKey: ["kanban", variables.restaurant_id] });
                 queryClient.invalidateQueries({ queryKey: ["my-activities", variables.restaurant_id] });
                 queryClient.invalidateQueries({ queryKey: ["my-activities-badge", variables.restaurant_id] });

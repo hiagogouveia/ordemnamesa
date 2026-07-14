@@ -9,6 +9,7 @@ import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
 import { getAccountBilling, canManageChecklists, canDeleteChecklists } from '@/lib/billing/subscription-access';
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
 import { collectExecutionPhotoPaths, collectIssuePhotoPaths, removePhotosBestEffort } from '@/lib/supabase/storage-cleanup';
+import { fetchChecklistViews } from '@/lib/services/checklist-view';
 
 const getAdminSupabase = () => {
     return createClient(
@@ -328,20 +329,21 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
             });
         }
 
-        // 3. Buscar checklist completo atualizado
-        const { data: fullChecklist, error: fetchFullError } = await adminSupabase
-            .from('checklists')
-            .select(`
-                *,
-                roles:role_id (id, name, color),
-                tasks:checklist_tasks (*)
-            `)
-            .eq('id', id)
-            .single();
+        // 3. Devolver a rotina no MESMO shape do GET da listagem.
+        //
+        // Antes, a resposta era `*, roles, tasks` — sem o objeto `area`, sem `responsible`, sem
+        // `shifts`. O cliente escreve esta resposta direto no cache da lista (useUpdateChecklist),
+        // então a linha renderizava "Sem área" até o refetch chegar; no autosave (que não invalida)
+        // o item ficava mutilado no cache. `fetchChecklistViews` é a fonte única desse shape.
+        const [fullChecklist] = await fetchChecklistViews(adminSupabase, {
+            restaurantIds: [restaurant_id],
+            checklistIds: [id],
+            includeOneShot: true, // um-shot também precisa da resposta ao ser editado
+        });
 
-        if (fetchFullError) {
-            console.error('[PUT /api/checklists/[id]] Erro ao buscar checklist atualizado:', fetchFullError);
-            return NextResponse.json({ error: fetchFullError.message }, { status: 500 });
+        if (!fullChecklist) {
+            console.error('[PUT /api/checklists/[id]] Checklist não encontrado após update:', id);
+            return NextResponse.json({ error: 'Rotina não encontrada após a atualização.' }, { status: 500 });
         }
 
         return NextResponse.json(fullChecklist);

@@ -1,8 +1,5 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import type { ExecutionStatus } from '@/lib/types';
-import { getNowInTz } from '@/lib/utils/brazil-date';
-import { getRestaurantTimezone } from '@/lib/utils/restaurant-time';
 import { resolveGlobalScope, rejectIfGlobal, isGlobalScopeResult } from '@/lib/api/global-scope';
 import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
 import { getAccountBilling, canManageChecklists } from '@/lib/billing/subscription-access';
@@ -12,6 +9,7 @@ import { deriveShiftEnum } from '@/lib/api/derive-shift-enum';
 import { validateShiftAssignment } from '@/lib/api/validate-shift-assignment';
 import { normalizeShiftIds, shiftIdShadow, replaceChecklistShifts } from '@/lib/api/shift-links';
 import { trackChecklistEvent } from '@/lib/analytics/track-event';
+import { fetchChecklistViews } from '@/lib/services/checklist-view';
 
 const getAdminSupabase = () => {
     return createClient(
@@ -86,128 +84,13 @@ export async function GET(request: Request) {
             return NextResponse.json([]);
         }
 
-        const tz = await getRestaurantTimezone(adminSupabase, restaurantIds[0]);
-        const todayKey = getNowInTz(tz).dateKey;
-
-        const checklistsQuery = adminSupabase
-            .from('checklists')
-            .select(`
-                    *,
-                    roles ( id, name, color ),
-                    area:areas!area_id ( id, name, color ),
-                    responsible:users!assigned_to_user_id ( id, name ),
-                    checklist_shifts ( shift_id, shifts ( id, name ) ),
-                    tasks:checklist_tasks (*)
-                `)
-            .in('restaurant_id', restaurantIds)
-            .order('order_index', { ascending: true });
-        if (!includeOneShot) checklistsQuery.eq('is_one_shot', false);
-
-        const [checklistsResult, assumptionsResult, blockedTasksResult] = await Promise.all([
-            checklistsQuery,
-            adminSupabase
-                .from('checklist_assumptions')
-                .select('id, checklist_id, user_id, user_name, execution_status, completed_at, blocked_reason')
-                .in('restaurant_id', restaurantIds)
-                .eq('date_key', todayKey),
-            adminSupabase
-                .from('task_executions')
-                .select('checklist_id, checklist_assumption_id')
-                .in('restaurant_id', restaurantIds)
-                .eq('status', 'blocked')
-                .gte('executed_at', new Date(todayKey).toISOString()),
-        ]);
-
-        let checklists = checklistsResult.data;
-        const error = checklistsResult.error;
-
-        if (error) {
-            // Fallback se order_index não existir
-            if (error.code === '42703' || error.message.includes('order_index')) {
-                const fallbackQuery = adminSupabase
-                    .from('checklists')
-                    .select(`
-                        *,
-                        roles ( id, name, color ),
-                        area:areas!area_id ( id, name, color ),
-                        responsible:users!assigned_to_user_id ( id, name ),
-                        checklist_shifts ( shift_id, shifts ( id, name ) ),
-                        tasks:checklist_tasks (*)
-                    `)
-                    .in('restaurant_id', restaurantIds)
-                    .order('created_at', { ascending: false });
-                if (!includeOneShot) fallbackQuery.eq('is_one_shot', false);
-                const fallbackFetch = await fallbackQuery;
-
-                if (fallbackFetch.error) {
-                    console.error('[GET /api/checklists] Falha Fetch Fallback Checklists:', fallbackFetch.error);
-                    return NextResponse.json({ error: fallbackFetch.error.message }, { status: 500 });
-                }
-                checklists = fallbackFetch.data;
-            } else {
-                console.error('[GET /api/checklists] Falha Fetch Checklists:', error);
-                return NextResponse.json({ error: error.message }, { status: 500 });
-            }
-        }
-
-        // Mapa de assumptions por checklist_id para derivar execution_status
-        type AssumptionRow = {
-            id: string;
-            checklist_id: string;
-            user_id: string;
-            user_name: string | null;
-            execution_status: 'in_progress' | 'blocked' | 'done';
-            completed_at: string | null;
-            blocked_reason: string | null;
-        };
-        const assumptionMap = new Map<string, AssumptionRow>(
-            (assumptionsResult.data ?? []).map((a: AssumptionRow) => [a.checklist_id, a])
-        );
-
-        // Set de assumption_ids que têm task_executions bloqueadas
-        const assumptionIdsWithBlockedTasks = new Set<string>(
-            (blockedTasksResult.data ?? [])
-                .filter((te: { checklist_assumption_id: string | null }) => te.checklist_assumption_id)
-                .map((te: { checklist_assumption_id: string }) => te.checklist_assumption_id)
-        );
-
-        interface ChecklistRow {
-            id: string;
-            restaurant_id: string;
-            tasks?: { order: number }[];
-            [key: string]: unknown;
-        }
-
-        const formattedChecklists = (checklists ?? []).map((checklist: ChecklistRow) => {
-            const assumption = assumptionMap.get(checklist.id);
-
-            let execution_status: ExecutionStatus;
-            if (!assumption) {
-                execution_status = 'not_started';
-            } else if (assumption.completed_at !== null || assumption.execution_status === 'done') {
-                execution_status = 'done';
-            } else if (assumptionIdsWithBlockedTasks.has(assumption.id)) {
-                execution_status = 'blocked';
-            } else {
-                execution_status = 'in_progress';
-            }
-
-            const unit = unitsById[checklist.restaurant_id];
-            // Sprint 66: turnos N:N → shift_ids + shifts (id,name) para exibição.
-            const shiftLinks = (checklist.checklist_shifts ?? []) as Array<{ shift_id: string; shifts: { id: string; name: string } | null }>;
-            const shiftIds = shiftLinks.map((l) => l.shift_id);
-            const shiftObjs = shiftLinks.map((l) => l.shifts).filter((s): s is { id: string; name: string } => Boolean(s));
-            return {
-                ...checklist,
-                checklist_shifts: undefined,
-                shift_ids: shiftIds,
-                shifts: shiftObjs,
-                tasks: (checklist.tasks ?? []).sort((a: { order: number }, b: { order: number }) => a.order - b.order),
-                execution_status,
-                assumed_by_name: assumption?.user_name ?? null,
-                assumed_by_user_id: assumption?.user_id ?? null,
-                unit: unit ? { id: unit.id, name: unit.name } : null,
-            };
+        // O shape devolvido aqui é o MESMO que o PUT devolve (fetchChecklistViews) — é isso que
+        // permite ao cliente escrever a resposta do save direto no cache da lista sem mutilar a
+        // linha (o PUT antes omitia `area`/`shifts`/`responsible`, e a listagem piscava "Sem área").
+        const formattedChecklists = await fetchChecklistViews(adminSupabase, {
+            restaurantIds,
+            includeOneShot,
+            unitsById,
         });
 
         return NextResponse.json(formattedChecklists);
