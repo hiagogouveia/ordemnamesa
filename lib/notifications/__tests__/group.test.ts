@@ -158,4 +158,34 @@ describe("cache do realtime — sem pulo, sem perda", () => {
         const merged = mergeNotifications([local], [doServidor], 30);
         expect(merged.find((n) => n.id === "a")!.read).toBe(true);
     });
+
+    it("a nova entra no TOPO quando é a mais prioritária (sem remontar a lista)", () => {
+        const antigas = [notif({ id: "v1" }), notif({ id: "v2" })];
+        const critica = notif({ id: "nova", priority: "critical" });
+        const result = applyRealtimeInsert(antigas, critica, 30);
+        expect(result[0].id).toBe("nova");
+        // As antigas continuam presentes e com a MESMA identidade de objeto — é isso que
+        // permite ao React reconciliar por key e preservar o scroll.
+        expect(result).toContain(antigas[0]);
+        expect(result).toContain(antigas[1]);
+    });
+});
+
+describe("contagem de não-lidas — o badge não pode truncar", () => {
+    it("countUnread conta só a página (por isso o unread_count vem do servidor)", () => {
+        // Cenário real: 50 não-lidas no banco, página de 30. Se o badge fosse recalculado
+        // a partir da página, o gestor veria 30 e acharia que tinha menos trabalho.
+        const pagina = Array.from({ length: 30 }, () => notif({ read: false }));
+        expect(countUnread(pagina)).toBe(30);
+        // Daí o hook ajustar o unread_count do servidor por DELTA, nunca recalculá-lo.
+    });
+
+    it("countUnread ignora as lidas", () => {
+        const items = [
+            notif({ read: true }),
+            notif({ read: false }),
+            notif({ read: false }),
+        ];
+        expect(countUnread(items)).toBe(2);
+    });
 });
