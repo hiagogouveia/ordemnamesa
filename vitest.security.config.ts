@@ -17,6 +17,10 @@ export default defineConfig({
     resolve: {
         alias: {
             "@": path.resolve(__dirname, "."),
+            // `server-only` lança fora do bundler do Next. A garantia continua valendo
+            // em produção; aqui só a neutralizamos para poder testar o emissor de
+            // notificações (lib/notifications/emit.ts) contra o banco real.
+            "server-only": path.resolve(__dirname, "tests/security/helpers/server-only-stub.ts"),
         },
     },
 });

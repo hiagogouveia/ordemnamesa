@@ -5,7 +5,11 @@ import "server-only"
  * Espelha lib/stripe/log.ts. Campos sensíveis NUNCA são logados
  * (sem bot token, sem secret, sem chat id completo).
  */
-type NotificationOp = "webhook" | "send" | "link" | "status" | "disconnect"
+// s90: verbos do ciclo de vida da notificação in-app (emit → materialize → click →
+// navigate). Correlacionados por `event_id`, que é o correlation id de ponta a ponta.
+type NotificationOp =
+    | "webhook" | "send" | "link" | "status" | "disconnect"
+    | "emit" | "materialize" | "deliver" | "click" | "navigate"
 
 interface NotificationLogContext {
     op: NotificationOp

@@ -1,11 +1,71 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { emitDomainEvent } from '@/lib/notifications/emit';
+import type { IssuePayload, IssueSeverity } from '@/lib/notifications/contract';
+import { getNowInTz } from '@/lib/utils/brazil-date';
+import { getRestaurantTimezone } from '@/lib/utils/restaurant-time';
 
 const getAdminSupabase = () =>
     createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
+
+interface IssueRow {
+    id: string;
+    restaurant_id: string;
+    checklist_id: string;
+    checklist_assumption_id: string | null;
+    task_id: string;
+    severity: string;
+    reported_by: string;
+    description: string;
+}
+
+/**
+ * Monta o payload do evento a partir da ocorrência recém-criada.
+ *
+ * O `date_key` é o que destrava o deep-link histórico: sem ele, o painel só sabe
+ * falar do "hoje" e uma ocorrência de ontem fica inalcançável. A fonte preferencial
+ * é a assumption (o dia em que a rotina foi assumida). Sem assumption, cai no dia
+ * corrente NO FUSO DO RESTAURANTE — nunca no fuso do servidor.
+ */
+async function buildIssuePayload(admin: SupabaseClient, issue: IssueRow): Promise<IssuePayload> {
+    const [assumptionRes, checklistRes, taskRes, reporterRes] = await Promise.all([
+        issue.checklist_assumption_id
+            ? admin
+                  .from('checklist_assumptions')
+                  .select('date_key')
+                  .eq('id', issue.checklist_assumption_id)
+                  .maybeSingle()
+            : Promise.resolve({ data: null }),
+        admin.from('checklists').select('name').eq('id', issue.checklist_id).maybeSingle(),
+        admin.from('checklist_tasks').select('title').eq('id', issue.task_id).maybeSingle(),
+        admin.from('users').select('name').eq('id', issue.reported_by).maybeSingle(),
+    ]);
+
+    let dateKey = (assumptionRes.data as { date_key?: string } | null)?.date_key;
+    if (!dateKey) {
+        const tz = await getRestaurantTimezone(admin, issue.restaurant_id);
+        dateKey = getNowInTz(tz).dateKey;
+    }
+
+    const text = issue.description.trim();
+
+    return {
+        issue_id: issue.id,
+        checklist_id: issue.checklist_id,
+        checklist_assumption_id: issue.checklist_assumption_id,
+        date_key: dateKey,
+        task_id: issue.task_id,
+        severity: (issue.severity === 'blocker' ? 'blocker' : 'normal') as IssueSeverity,
+        reported_by_user_id: issue.reported_by,
+        checklist_name: (checklistRes.data as { name?: string } | null)?.name ?? 'Rotina',
+        task_title: (taskRes.data as { title?: string } | null)?.title ?? 'Tarefa',
+        reported_by_name: (reporterRes.data as { name?: string } | null)?.name ?? 'Colaborador',
+        excerpt: text.length > 120 ? `${text.slice(0, 120)}…` : text,
+    };
+}
 
 async function getAuthUser(request: Request) {
     const authHeader = request.headers.get('Authorization');
@@ -39,6 +99,7 @@ export async function POST(request: Request) {
             task_execution_id,
             description,
             photos,
+            severity,
         } = body ?? {};
 
         if (!restaurant_id || !task_id || !checklist_id) {
@@ -47,6 +108,10 @@ export async function POST(request: Request) {
         if (typeof description !== 'string' || description.trim().length < 3) {
             return NextResponse.json({ error: 'description é obrigatório (mínimo 3 caracteres)' }, { status: 400 });
         }
+
+        // s90: impedimento e ocorrência são a MESMA entidade — o que os separa é a
+        // severidade. Default 'normal' preserva o comportamento de quem não envia o campo.
+        const normalizedSeverity: IssueSeverity = severity === 'blocker' ? 'blocker' : 'normal';
 
         const { user, admin } = await getAuthUser(request);
         if (!user || !admin) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
@@ -70,6 +135,7 @@ export async function POST(request: Request) {
                 description: description.trim(),
                 photos: normalizedPhotos,
                 status: 'open',
+                severity: normalizedSeverity,
             })
             .select()
             .single();
@@ -93,6 +159,22 @@ export async function POST(request: Request) {
         if (eventError) {
             console.error('[POST /api/task-issues] event insert error:', eventError);
         }
+
+        // ── s90: a ocorrência passa a NOTIFICAR ──────────────────────────────
+        //
+        // Desde o s45 nenhuma ocorrência gerava notificação: o alerta que existia
+        // (BLOCKED_ROUTINE) consultava task_executions.status='blocked', status que
+        // aquela mesma migration removeu. O gestor ficou às cegas por meses.
+        //
+        // A rota só DECLARA o fato. Quem decide destinatário, prioridade e destino é
+        // o materializador — em um só lugar. Não lança: reportar uma ocorrência não
+        // pode falhar porque a notificação está fora do ar. Mas, ao contrário do
+        // `catch` que engolia o erro, a falha agora fica registrada e é reprocessável.
+        await emitDomainEvent(admin, 'IssueReported', {
+            restaurantId: restaurant_id,
+            actorUserId: user.id,
+            payload: await buildIssuePayload(admin, issue as IssueRow),
+        });
 
         return NextResponse.json({ issue }, { status: 201 });
     } catch (error) {

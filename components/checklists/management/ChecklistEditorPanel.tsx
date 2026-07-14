@@ -500,7 +500,11 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose, focusIss
                                 .map((task, idx) => {
                                     const execution = executionMap.get(task.id);
                                     const isDone = execution?.status === "done";
-                                    const isBlocked = execution?.status === "blocked";
+                                    // s90 — removido `isBlocked` (execution.status === 'blocked'):
+                                    // o s45 eliminou esse status do CHECK de task_executions ao migrar
+                                    // impedimentos para `task_issues`, então a condição era SEMPRE falsa.
+                                    // Impedimento hoje é uma ocorrência com severity='blocker' e aparece
+                                    // na seção Ocorrências, não inline na tarefa.
                                     const isSkipped = execution?.status === "skipped";
                                     const photoUrls = signedUrls[task.id] ?? [];
 
@@ -510,27 +514,21 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose, focusIss
                                             className={`flex items-start gap-3 p-3 border rounded-xl transition-colors ${
                                                 isSkipped
                                                     ? "bg-amber-500/5 border-amber-500/30"
-                                                    : isBlocked
-                                                        ? "bg-amber-500/5 border-amber-500/20"
-                                                        : isDone
-                                                            ? "bg-emerald-500/5 border-emerald-500/20"
-                                                            : "bg-[#0a1215] border-[#233f48]"
+                                                    : isDone
+                                                        ? "bg-emerald-500/5 border-emerald-500/20"
+                                                        : "bg-[#0a1215] border-[#233f48]"
                                             }`}
                                         >
                                             {/* Status icon */}
                                             <div className="flex flex-col items-center gap-1 shrink-0 mt-0.5">
                                                 <span
                                                     className={`text-xs font-bold w-5 text-right ${
-                                                        isSkipped ? "text-amber-400" : isBlocked ? "text-amber-400" : isDone ? "text-emerald-400" : "text-[#325a67]"
+                                                        isSkipped ? "text-amber-400" : isDone ? "text-emerald-400" : "text-[#325a67]"
                                                     }`}
                                                 >
                                                     {isSkipped ? (
                                                         <span className="material-symbols-outlined text-[16px] text-amber-400">
                                                             block
-                                                        </span>
-                                                    ) : isBlocked ? (
-                                                        <span className="material-symbols-outlined text-[16px] text-amber-400">
-                                                            warning
                                                         </span>
                                                     ) : isDone ? (
                                                         <span className="material-symbols-outlined text-[16px] text-emerald-400">
@@ -545,7 +543,7 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose, focusIss
                                             <div className="flex-1 min-w-0">
                                                 <p
                                                     className={`text-sm font-medium leading-snug ${
-                                                        isSkipped ? "text-amber-300 line-through decoration-amber-400/40" : isBlocked ? "text-amber-300" : isDone ? "text-emerald-300" : "text-white"
+                                                        isSkipped ? "text-amber-300 line-through decoration-amber-400/40" : isDone ? "text-emerald-300" : "text-white"
                                                     }`}
                                                 >
                                                     {task.title}
@@ -558,13 +556,6 @@ function ChecklistViewPanel({ checklist, restaurantId, onEdit, onClose, focusIss
                                                 )}
                                                 {task.description && (
                                                     <p className="text-[#92bbc9] text-xs mt-0.5 whitespace-pre-wrap">{task.description}</p>
-                                                )}
-                                                {isBlocked && execution?.blocked_reason && (
-                                                    <div className="mt-1.5 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2">
-                                                        <p className="text-amber-300/90 text-[11px] leading-relaxed">
-                                                            <span className="font-bold">Impedimento:</span> {execution.blocked_reason}
-                                                        </p>
-                                                    </div>
                                                 )}
                                                 <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                                                     {task.requires_photo && !isDone && (

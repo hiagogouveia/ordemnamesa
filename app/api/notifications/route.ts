@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getNowInTz, getStartOfDayIsoInTz } from '@/lib/utils/brazil-date';
-import { getRestaurantTimezone } from '@/lib/utils/restaurant-time';
 
 const getAdminSupabase = () =>
     createClient(
@@ -9,11 +7,29 @@ const getAdminSupabase = () =>
         process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
+/**
+ * GET /api/notifications
+ *
+ * ── s90 ──────────────────────────────────────────────────────────────────────
+ * Removido daqui o bloco que SINTETIZAVA alertas `BLOCKED_ROUTINE` a cada request.
+ * Ele consultava `task_executions.status = 'blocked'` — status que o s45 removeu do
+ * CHECK ao migrar impedimentos para `task_issues`. A query retornava sempre `[]`:
+ * era dead code garantido, e por isso o sino ficou silencioso para ocorrências.
+ *
+ * Notificação agora é dado PERSISTIDO, nascido de um evento de domínio
+ * (lib/notifications/emit.ts). Nada é inventado no momento da leitura — o que
+ * também devolve a possibilidade de marcá-las como lidas (os alertas sintéticos
+ * tinham id `alert_<uuid>`, inexistente no banco, e nunca podiam ser lidos).
+ *
+ * A ordenação segue a mesma ordem canônica do cliente (`lib/notifications/group.ts`):
+ * não-lidas primeiro, depois prioridade, depois recência — coberta pelo índice
+ * idx_notifications_user_rest_rank (s90).
+ */
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
         const restaurant_id = searchParams.get('restaurant_id');
-        const limit = parseInt(searchParams.get('limit') || '20', 10);
+        const limit = Math.min(parseInt(searchParams.get('limit') || '30', 10), 100);
 
         if (!restaurant_id) {
             return NextResponse.json({ error: 'restaurant_id é obrigatório' }, { status: 400 });
@@ -32,13 +48,14 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
         }
 
-        // Buscar notificações reais e papel do usuário em paralelo
-        const [notificationsRes, unreadRes, userRoleRes] = await Promise.all([
+        const [notificationsRes, unreadRes] = await Promise.all([
             adminSupabase
                 .from('notifications')
-                .select('*')
+                .select('id, restaurant_id, user_id, type, title, description, read, read_at, created_at, payload, priority, group_key, event_id, metadata, related_id')
                 .eq('restaurant_id', restaurant_id)
                 .eq('user_id', user.id)
+                .order('read', { ascending: true })
+                .order('priority_rank', { ascending: true })
                 .order('created_at', { ascending: false })
                 .limit(limit),
             adminSupabase
@@ -47,98 +64,15 @@ export async function GET(request: Request) {
                 .eq('restaurant_id', restaurant_id)
                 .eq('user_id', user.id)
                 .eq('read', false),
-            adminSupabase
-                .from('restaurant_users')
-                .select('role')
-                .eq('restaurant_id', restaurant_id)
-                .eq('user_id', user.id)
-                .eq('active', true)
-                .single(),
         ]);
 
         if (notificationsRes.error) {
             return NextResponse.json({ error: notificationsRes.error.message }, { status: 500 });
         }
 
-        // ── Alertas de bloqueio para owner/manager ────────────────────────
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let alertNotifications: any[] = [];
-        const userRole = userRoleRes.data?.role;
-
-        if (userRole === 'owner' || userRole === 'manager') {
-            const tz = await getRestaurantTimezone(adminSupabase, restaurant_id);
-            const todayKey = getNowInTz(tz).dateKey;
-            const todayStartISO = getStartOfDayIsoInTz(tz, todayKey);
-
-            // 1. Buscar assumption_ids com tasks bloqueadas hoje
-            const { data: blockedTasks } = await adminSupabase
-                .from('task_executions')
-                .select('checklist_assumption_id')
-                .eq('restaurant_id', restaurant_id)
-                .eq('status', 'blocked')
-                .gte('executed_at', todayStartISO);
-
-            const assumptionIds = [...new Set(
-                (blockedTasks ?? [])
-                    .filter((t: { checklist_assumption_id: string | null }) => t.checklist_assumption_id)
-                    .map((t: { checklist_assumption_id: string }) => t.checklist_assumption_id)
-            )];
-
-            if (assumptionIds.length > 0) {
-                // 2. Buscar detalhes das assumptions (excluindo as já concluídas)
-                const { data: blockedAssumptions } = await adminSupabase
-                    .from('checklist_assumptions')
-                    .select('id, user_name, assumed_at, checklist_id')
-                    .in('id', assumptionIds)
-                    .eq('date_key', todayKey)
-                    .is('completed_at', null);
-
-                if (blockedAssumptions && blockedAssumptions.length > 0) {
-                    const checklistIds = [...new Set(blockedAssumptions.map((a: { checklist_id: string }) => a.checklist_id))];
-
-                    // 3. Buscar nome e área dos checklists
-                    const { data: checklists } = await adminSupabase
-                        .from('checklists')
-                        .select('id, name, area:areas!area_id(name)')
-                        .in('id', checklistIds);
-
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const checklistMap = new Map((checklists ?? []).map((c: any) => [c.id, c]));
-
-                    alertNotifications = blockedAssumptions.map((a: { id: string; user_name: string | null; assumed_at: string; checklist_id: string }) => {
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        const cl = checklistMap.get(a.checklist_id) as any;
-                        const areaName = cl?.area?.name;
-                        const parts = [
-                            areaName ? `Área: ${areaName}` : null,
-                            a.user_name ? `Colaborador: ${a.user_name}` : null,
-                            'Rotina com impedimento reportado',
-                        ].filter(Boolean);
-
-                        return {
-                            id: `alert_${a.id}`,
-                            restaurant_id,
-                            user_id: user.id,
-                            type: 'BLOCKED_ROUTINE',
-                            title: cl?.name || 'Rotina com impedimento',
-                            description: parts.join(' • '),
-                            read: false,
-                            created_at: a.assumed_at,
-                            metadata: null,
-                            related_id: null,
-                        };
-                    });
-                }
-            }
-        }
-
-        // Alertas de bloqueio aparecem primeiro (são críticos)
-        const allNotifications = [...alertNotifications, ...(notificationsRes.data ?? [])];
-        const unreadCount = (unreadRes.count ?? 0) + alertNotifications.length;
-
         return NextResponse.json({
-            notifications: allNotifications,
-            unread_count: unreadCount,
+            notifications: notificationsRes.data ?? [],
+            unread_count: unreadRes.count ?? 0,
         });
     } catch (error: unknown) {
         console.error('[GET /api/notifications] Erro:', error);

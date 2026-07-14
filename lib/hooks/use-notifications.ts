@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
-import type { Notification } from "@/lib/types";
+import type { AnyNotification } from "@/lib/notifications/contract";
+import { adaptNotificationRow, type NotificationRow } from "@/lib/notifications/parse";
 
 async function getAuthHeaders() {
     const supabase = createClient();
@@ -15,10 +16,12 @@ async function getAuthHeaders() {
     return headers;
 }
 
-interface NotificationsResponse {
-    notifications: Notification[];
+export interface NotificationsResponse {
+    notifications: AnyNotification[];
     unread_count: number;
 }
+
+export const NOTIFICATIONS_PAGE_SIZE = 30;
 
 export function useNotifications(restaurantId: string | undefined) {
     return useQuery({
@@ -27,11 +30,19 @@ export function useNotifications(restaurantId: string | undefined) {
             if (!restaurantId) return { notifications: [], unread_count: 0 };
             const headers = await getAuthHeaders();
             const res = await fetch(
-                `/api/notifications?restaurant_id=${restaurantId}&limit=30`,
+                `/api/notifications?restaurant_id=${restaurantId}&limit=${NOTIFICATIONS_PAGE_SIZE}`,
                 { headers }
             );
             if (!res.ok) return { notifications: [], unread_count: 0 };
-            return res.json();
+            const json = await res.json();
+
+            // s90: a linha crua do banco vira notificação TIPADA aqui. `adaptNotificationRow`
+            // nunca lança — payload malformado/tipo desconhecido degrada para uma
+            // notificação "unknown", legível e não-clicável. É a rede do "nunca tela branca".
+            return {
+                notifications: (json.notifications as NotificationRow[]).map(adaptNotificationRow),
+                unread_count: json.unread_count ?? 0,
+            };
         },
         enabled: !!restaurantId,
         staleTime: 2 * 60 * 1000,     // realtime subscription cuida de atualizações instantâneas

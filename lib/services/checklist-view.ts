@@ -90,12 +90,21 @@ export async function fetchChecklistViews(
             .select('id, checklist_id, user_id, user_name, execution_status, completed_at, blocked_reason')
             .in('restaurant_id', restaurantIds)
             .eq('date_key', todayKey),
+        // s90 — esta query estava MORTA: consultava `task_executions.status='blocked'`,
+        // status que o s45 removeu do CHECK ao migrar impedimentos para `task_issues`.
+        // Retornava sempre [], então `execution_status='blocked'` nunca era atribuído e
+        // o status "com impedimento" simplesmente não existia na UI — apesar de o filtro
+        // e o getOperationalStatus já saberem lidar com ele.
+        //
+        // Reapontada para a fonte de verdade real: uma rotina está impedida quando tem
+        // ocorrência ABERTA de severidade 'blocker'. Ocorrência comum ('normal') não
+        // trava a rotina — foi justamente essa a separação que o s45 introduziu.
         admin
-            .from('task_executions')
+            .from('task_issues')
             .select('checklist_id, checklist_assumption_id')
             .in('restaurant_id', restaurantIds)
-            .eq('status', 'blocked')
-            .gte('executed_at', new Date(todayKey).toISOString()),
+            .eq('severity', 'blocker')
+            .in('status', ['open', 'investigating']),
     ]);
 
     let checklists = checklistsResult.data as ChecklistRow[] | null;

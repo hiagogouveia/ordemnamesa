@@ -2,7 +2,9 @@
 
 import { useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import type { Notification } from "@/lib/types";
+import type { AnyNotification } from "@/lib/notifications/contract";
+import { resolveNavigationTarget, targetToHref } from "@/lib/notifications/navigation";
+import { colorFor, iconFor } from "@/lib/notifications/registry";
 
 function formatTimeAgo(dateStr: string): string {
     const now = Date.now();
@@ -15,22 +17,8 @@ function formatTimeAgo(dateStr: string): string {
     return `há ${Math.floor(diff / 86400)}d`;
 }
 
-const TYPE_ICONS: Record<string, string> = {
-    TASK_COMPLETED_WITH_NOTE: "chat",
-    NEW_TASK_ASSIGNED: "assignment_ind",
-    NEW_TASK_FOR_AREA: "add_task",
-    BLOCKED_ROUTINE: "report_problem",
-};
-
-const TYPE_COLORS: Record<string, string> = {
-    TASK_COMPLETED_WITH_NOTE: "#f59e0b",
-    NEW_TASK_ASSIGNED: "#13b6ec",
-    NEW_TASK_FOR_AREA: "#22c55e",
-    BLOCKED_ROUTINE: "#ef4444",
-};
-
 interface NotificationDropdownProps {
-    notifications: Notification[];
+    notifications: AnyNotification[];
     unreadCount: number;
     onClose: () => void;
     onMarkRead: (id: string) => void;
@@ -58,23 +46,34 @@ export function NotificationDropdown({
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [onClose]);
 
-    const handleNotificationClick = (notification: Notification) => {
-        // Alertas de bloqueio são sintéticos (sem ID real no banco), não marcar como lida
-        if (!notification.read && notification.type !== 'BLOCKED_ROUTINE') {
-            onMarkRead(notification.id);
-        }
-        if (notification.type === 'BLOCKED_ROUTINE') {
-            router.push('/checklists');
-            onClose();
-        } else if (notification.related_id) {
-            router.push(`/turno/atividade/${notification.related_id}`);
-            onClose();
-        }
+    /**
+     * s90 — o destino vem do CONTRATO, não de um if/else no componente.
+     *
+     * Antes: `if (BLOCKED_ROUTINE) push('/checklists')` (tela genérica) `else if
+     * (related_id) push('/turno/atividade/<id>')` — a tela do COLABORADOR, errada para
+     * o gestor. O `related_id` era um checklist_id sem tipo de entidade, então qualquer
+     * tipo novo rotearia errado.
+     *
+     * Agora o resolver produz uma intenção de domínio e `targetToHref` a traduz. Tipo
+     * desconhecido ou payload corrompido ⇒ destino `none` ⇒ card não-clicável, jamais
+     * uma exception ou uma navegação para o lugar errado.
+     *
+     * A marcação de lida ainda acontece no clique; o handshake "só marcar após navegação
+     * bem-sucedida" chega na F4, junto com o NotificationNavigator e a página de destino
+     * que confirma o sucesso.
+     */
+    const handleNotificationClick = (notification: AnyNotification, href: string | null) => {
+        if (!href) return;
+        if (!notification.read) onMarkRead(notification.id);
+        router.push(href);
+        onClose();
     };
 
     return (
         <div
             ref={dropdownRef}
+            role="menu"
+            aria-label="Notificações"
             className="absolute top-full right-0 mt-2 w-[360px] max-w-[calc(100vw-2rem)] bg-[#1a2c32] border border-[#233f48] rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200"
         >
             {/* Header do dropdown */}
@@ -98,52 +97,74 @@ export function NotificationDropdown({
                         <p className="text-[#92bbc9] text-sm">Nenhuma notificação</p>
                     </div>
                 ) : (
-                    notifications.map((notification) => (
-                        <button
-                            key={notification.id}
-                            onClick={() => handleNotificationClick(notification)}
-                            className={`w-full text-left px-4 py-3 flex gap-3 transition-colors hover:bg-[#16262c] ${
-                                !notification.read ? "bg-[#13b6ec]/5" : ""
-                            }`}
-                        >
-                            {/* Ícone */}
-                            <div
-                                className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                                style={{
-                                    backgroundColor: `${TYPE_COLORS[notification.type] || "#92bbc9"}15`,
-                                }}
-                            >
-                                <span
-                                    className="material-symbols-outlined text-[18px]"
-                                    style={{ color: TYPE_COLORS[notification.type] || "#92bbc9" }}
-                                >
-                                    {TYPE_ICONS[notification.type] || "notifications"}
-                                </span>
-                            </div>
+                    notifications.map((notification) => {
+                        const href = targetToHref(
+                            resolveNavigationTarget(notification),
+                            notification.id,
+                        );
+                        const icon = iconFor(notification.type);
+                        const color = colorFor(notification.type);
 
-                            {/* Conteúdo */}
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-start justify-between gap-2">
-                                    <p className={`text-sm leading-tight truncate ${
-                                        !notification.read ? "text-white font-semibold" : "text-[#92bbc9]"
-                                    }`}>
-                                        {notification.title}
-                                    </p>
-                                    {!notification.read && (
-                                        <span className="w-2 h-2 rounded-full bg-[#13b6ec] shrink-0 mt-1.5" />
-                                    )}
+                        return (
+                            <button
+                                key={notification.id}
+                                role="menuitem"
+                                onClick={() => handleNotificationClick(notification, href)}
+                                disabled={!href}
+                                aria-disabled={!href}
+                                aria-label={`${notification.title}${notification.read ? "" : " (não lida)"}`}
+                                className={`w-full text-left px-4 py-3 flex gap-3 transition-colors ${
+                                    href ? "hover:bg-[#16262c] cursor-pointer" : "cursor-default"
+                                } ${!notification.read ? "bg-[#13b6ec]/5" : ""}`}
+                            >
+                                {/* Ícone — identidade visual por tipo, vinda do registry */}
+                                <div
+                                    className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                                    style={{ backgroundColor: `${color}15` }}
+                                >
+                                    <span
+                                        className="material-symbols-outlined text-[18px]"
+                                        style={{ color }}
+                                        aria-hidden="true"
+                                    >
+                                        {icon}
+                                    </span>
                                 </div>
-                                {notification.description && (
-                                    <p className="text-[#92bbc9] text-xs mt-0.5 line-clamp-2 leading-relaxed">
-                                        {notification.description}
-                                    </p>
-                                )}
-                                <p className="text-[#325a67] text-[11px] mt-1">
-                                    {formatTimeAgo(notification.created_at)}
-                                </p>
-                            </div>
-                        </button>
-                    ))
+
+                                {/* Conteúdo */}
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <p
+                                            className={`text-sm leading-tight truncate ${
+                                                !notification.read
+                                                    ? "text-white font-semibold"
+                                                    : "text-[#92bbc9]"
+                                            }`}
+                                        >
+                                            {notification.title}
+                                        </p>
+                                        {!notification.read && (
+                                            <span
+                                                className="w-2 h-2 rounded-full bg-[#13b6ec] shrink-0 mt-1.5"
+                                                aria-hidden="true"
+                                            />
+                                        )}
+                                    </div>
+                                    {notification.description && (
+                                        <p className="text-[#92bbc9] text-xs mt-0.5 line-clamp-2 leading-relaxed">
+                                            {notification.description}
+                                        </p>
+                                    )}
+                                    <time
+                                        dateTime={notification.created_at}
+                                        className="text-[#325a67] text-[11px] mt-1 block"
+                                    >
+                                        {formatTimeAgo(notification.created_at)}
+                                    </time>
+                                </div>
+                            </button>
+                        );
+                    })
                 )}
             </div>
         </div>

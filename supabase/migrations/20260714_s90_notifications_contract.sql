@@ -115,11 +115,15 @@ ALTER TABLE public.notifications
         ) STORED;
 
 -- Segunda linha de defesa contra duplicata no fan-out: mesmo se um evento for
--- processado duas vezes, o destinatário não recebe duas cópias.
--- Parcial porque as linhas legadas têm event_id NULL (e várias por usuário).
+-- reprocessado (cron), o destinatário não recebe duas cópias. É este índice que
+-- torna o `upsert(..., onConflict: 'event_id,user_id', ignoreDuplicates)` possível.
+--
+-- NÃO pode ser um índice PARCIAL (`WHERE event_id IS NOT NULL`): o Postgres exige
+-- que o predicado seja informado na cláusula ON CONFLICT, e o PostgREST não tem como
+-- expressá-lo. E o parcial é desnecessário — no Postgres os NULLs são DISTINTOS por
+-- padrão, então este índice já permite N linhas legadas (event_id NULL) por usuário.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_event_user
-    ON public.notifications (event_id, user_id)
-    WHERE event_id IS NOT NULL;
+    ON public.notifications (event_id, user_id);
 
 -- O padrão de acesso REAL do GET (restaurant + user + não-lidas + prioridade + data)
 -- não tinha índice. Os 4 índices do s17 não cobrem essa combinação.
