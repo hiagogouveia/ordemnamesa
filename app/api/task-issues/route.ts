@@ -1,71 +1,14 @@
 import { NextResponse } from 'next/server';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 import { emitDomainEvent } from '@/lib/notifications/emit';
-import type { IssuePayload, IssueSeverity } from '@/lib/notifications/contract';
-import { getNowInTz } from '@/lib/utils/brazil-date';
-import { getRestaurantTimezone } from '@/lib/utils/restaurant-time';
+import type { IssueSeverity } from '@/lib/notifications/contract';
+import { buildIssuePayload, type TaskIssueRow } from '@/lib/notifications/payloads';
 
 const getAdminSupabase = () =>
     createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
-
-interface IssueRow {
-    id: string;
-    restaurant_id: string;
-    checklist_id: string;
-    checklist_assumption_id: string | null;
-    task_id: string;
-    severity: string;
-    reported_by: string;
-    description: string;
-}
-
-/**
- * Monta o payload do evento a partir da ocorrência recém-criada.
- *
- * O `date_key` é o que destrava o deep-link histórico: sem ele, o painel só sabe
- * falar do "hoje" e uma ocorrência de ontem fica inalcançável. A fonte preferencial
- * é a assumption (o dia em que a rotina foi assumida). Sem assumption, cai no dia
- * corrente NO FUSO DO RESTAURANTE — nunca no fuso do servidor.
- */
-async function buildIssuePayload(admin: SupabaseClient, issue: IssueRow): Promise<IssuePayload> {
-    const [assumptionRes, checklistRes, taskRes, reporterRes] = await Promise.all([
-        issue.checklist_assumption_id
-            ? admin
-                  .from('checklist_assumptions')
-                  .select('date_key')
-                  .eq('id', issue.checklist_assumption_id)
-                  .maybeSingle()
-            : Promise.resolve({ data: null }),
-        admin.from('checklists').select('name').eq('id', issue.checklist_id).maybeSingle(),
-        admin.from('checklist_tasks').select('title').eq('id', issue.task_id).maybeSingle(),
-        admin.from('users').select('name').eq('id', issue.reported_by).maybeSingle(),
-    ]);
-
-    let dateKey = (assumptionRes.data as { date_key?: string } | null)?.date_key;
-    if (!dateKey) {
-        const tz = await getRestaurantTimezone(admin, issue.restaurant_id);
-        dateKey = getNowInTz(tz).dateKey;
-    }
-
-    const text = issue.description.trim();
-
-    return {
-        issue_id: issue.id,
-        checklist_id: issue.checklist_id,
-        checklist_assumption_id: issue.checklist_assumption_id,
-        date_key: dateKey,
-        task_id: issue.task_id,
-        severity: (issue.severity === 'blocker' ? 'blocker' : 'normal') as IssueSeverity,
-        reported_by_user_id: issue.reported_by,
-        checklist_name: (checklistRes.data as { name?: string } | null)?.name ?? 'Rotina',
-        task_title: (taskRes.data as { title?: string } | null)?.title ?? 'Tarefa',
-        reported_by_name: (reporterRes.data as { name?: string } | null)?.name ?? 'Colaborador',
-        excerpt: text.length > 120 ? `${text.slice(0, 120)}…` : text,
-    };
-}
 
 async function getAuthUser(request: Request) {
     const authHeader = request.headers.get('Authorization');
@@ -173,7 +116,7 @@ export async function POST(request: Request) {
         await emitDomainEvent(admin, 'IssueReported', {
             restaurantId: restaurant_id,
             actorUserId: user.id,
-            payload: await buildIssuePayload(admin, issue as IssueRow),
+            payload: await buildIssuePayload(admin, issue as TaskIssueRow),
         });
 
         return NextResponse.json({ issue }, { status: 201 });

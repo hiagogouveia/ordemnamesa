@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { emitDomainEvent } from '@/lib/notifications/emit';
+import { buildIssuePayload, type TaskIssueRow } from '@/lib/notifications/payloads';
 
 const getAdminSupabase = () =>
     createClient(
@@ -203,6 +205,23 @@ export async function PATCH(
             if (eventError) {
                 console.error('[PATCH /api/task-issues/[id]] event insert error:', eventError);
             }
+        }
+
+        // ── s90: resolver a ocorrência avisa QUEM A REPORTOU ─────────────────
+        //
+        // O colaborador reportava um problema e nunca sabia se alguém tratou. Fechar
+        // esse laço é o que transforma a ocorrência numa conversa em vez de um buraco.
+        //
+        // Note a audiência: aqui NÃO são os gestores (eles é que resolveram) — é o autor.
+        // O materializador decide isso; a rota só declara o fato. E o autor é staff, que
+        // hoje não tem sino: a notificação é criada e fica pronta para quando o sino do
+        // staff for habilitado, sem exigir mudança de arquitetura.
+        if (update.status === 'resolved') {
+            await emitDomainEvent(admin, 'IssueResolved', {
+                restaurantId: current.restaurant_id,
+                actorUserId: user.id,
+                payload: await buildIssuePayload(admin, updated as TaskIssueRow),
+            });
         }
 
         return NextResponse.json({ issue: updated });

@@ -103,7 +103,10 @@ export const EVENT_HANDLERS: Handlers = {
     PasswordChangedByAdmin: (event) => [
         {
             type: "PASSWORD_CHANGED_BY_ADMIN",
-            payload: { changed_by_user_id: event.payload.changed_by_user_id },
+            payload: {
+                changed_by_user_id: event.payload.changed_by_user_id,
+                changed_at: event.payload.changed_at,
+            },
             audience: { kind: "user", userId: event.payload.target_user_id },
         },
     ],

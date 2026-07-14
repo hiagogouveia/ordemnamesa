@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { emitDomainEvent } from '@/lib/notifications/emit';
 
 // Flag para controle de invalidação de sessão após troca de senha.
 // true  → invalida todas as sessões ativas do colaborador (comportamento atual seguro).
@@ -103,21 +104,21 @@ export async function POST(request: Request) {
                 metadata: { changed_at: new Date().toISOString() },
             });
 
-        // Notificar o colaborador (best-effort, não bloqueia sucesso)
-        try {
-            await adminSupabase
-                .from('notifications')
-                .insert({
-                    restaurant_id,
-                    user_id: target_user_id,
-                    type: 'PASSWORD_CHANGED_BY_ADMIN',
-                    title: 'Senha redefinida',
-                    description: 'Sua senha foi redefinida por um gestor.',
-                    metadata: { changed_by: caller.id, changed_at: new Date().toISOString() },
-                });
-        } catch (notifyErr) {
-            console.warn('[change-password] notification insert failed (non-critical):', notifyErr);
-        }
+        // ── s90: último emissor inline migrado para evento de domínio ────────
+        //
+        // Antes, um insert direto envolto num `catch` que apenas logava um warning: se
+        // falhasse, o colaborador nunca saberia que sua senha foi trocada — um aviso de
+        // SEGURANÇA sumindo em silêncio. Agora a falha vira um evento `pending` com
+        // `last_error`, reprocessado pelo cron.
+        await emitDomainEvent(adminSupabase, 'PasswordChangedByAdmin', {
+            restaurantId: restaurant_id,
+            actorUserId: caller.id,
+            payload: {
+                target_user_id,
+                changed_by_user_id: caller.id,
+                changed_at: new Date().toISOString(),
+            },
+        });
 
         return NextResponse.json({ success: true });
 

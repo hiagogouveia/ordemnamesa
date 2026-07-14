@@ -128,7 +128,10 @@ function parseTransfer(raw: unknown): TransferPayload | null {
 
 function parsePassword(raw: unknown): PasswordPayload | null {
     if (!isObj(raw)) return null;
-    return { changed_by_user_id: text(raw, "changed_by_user_id") };
+    return {
+        changed_by_user_id: text(raw, "changed_by_user_id"),
+        changed_at: text(raw, "changed_at"),
+    };
 }
 
 /** Legado: o payload não existe; o dado útil está na coluna `related_id`. */

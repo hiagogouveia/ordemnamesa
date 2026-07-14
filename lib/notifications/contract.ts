@@ -89,6 +89,15 @@ export interface TransferPayload {
 
 export interface PasswordPayload {
     changed_by_user_id: string;
+    /**
+     * ISO do instante da troca. Não é decoração: entra na chave de dedup.
+     *
+     * Sem ele, a chave seria `password:<alvo>:<autor>` — e resetar a senha do MESMO
+     * colaborador uma segunda vez colidiria no índice único, deduplicando o evento.
+     * O colaborador não receberia o aviso. Num alerta de SEGURANÇA, isso é inaceitável:
+     * cada troca é um fato novo e precisa de uma chave nova.
+     */
+    changed_at: string;
 }
 
 /**
@@ -234,8 +243,11 @@ export const DEDUP_KEYS = {
         `delayed:${p.checklist_id}:${p.date_key}`,
     ResponsibleTransferred: (p: TransferPayload) =>
         `transfer:${p.checklist_id}:${p.to_user_id}:${p.date_key}`,
+    // Inclui o instante: cada troca de senha é um fato NOVO. Sem isso, um segundo
+    // reset do mesmo colaborador colidiria no índice único e o aviso de segurança
+    // seria silenciosamente deduplicado.
     PasswordChangedByAdmin: (p: PasswordPayload & { target_user_id: string }) =>
-        `password:${p.target_user_id}:${p.changed_by_user_id}`,
+        `password:${p.target_user_id}:${p.changed_at}`,
 } satisfies { [T in DomainEventType]: (p: DomainEventPayloadMap[T]) => string };
 
 export const PAYLOAD_VERSION = 1;
