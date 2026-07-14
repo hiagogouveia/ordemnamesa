@@ -10,6 +10,7 @@
  */
 
 import type {
+    AnyNotification,
     IssuePayload,
     NotificationPayloadMap,
     NotificationPriority,
@@ -112,7 +113,10 @@ export const NOTIFICATION_DESCRIPTORS: Descriptors = {
         icon: "swap_horiz", // setas
         tone: "info",
         priority: "normal",
-        groupKey: () => null,
+        // A transferência é feita EM LOTE (N rotinas de uma vez). Sem chave de
+        // agrupamento, transferir 20 rotinas produziria 20 notificações. Agrupadas
+        // por destinatário + dia, viram "20 rotinas transferidas para Ana".
+        groupKey: (p: TransferPayload) => `transfer:${p.to_user_id}:${p.date_key}`,
         render: (p: TransferPayload) => ({
             title: `${p.checklist_name} transferida para ${p.to_user_name}`,
             description: p.from_user_name ? `Antes: ${p.from_user_name}` : null,
@@ -171,6 +175,63 @@ export function assertEmittableType(type: string): asserts type is NotificationT
     if (d.deprecated) {
         throw new Error(`[notifications] tipo deprecado não pode ser emitido: ${type}`);
     }
+}
+
+/**
+ * Rótulo de um GRUPO de notificações ("5 ocorrências em Abertura de Caixa · 1 impedimento").
+ *
+ * Mora aqui, e não no componente da lista, de propósito: sem isto, adicionar um tipo
+ * agrupável exigiria também editar a UI — e a promessa da arquitetura é que um tipo novo
+ * custe evento + renderer + ícone + deep-link, e nada além.
+ *
+ * Recebe TODOS os membros porque o rótulo é inerentemente cross-type: ocorrências comuns
+ * e impedimentos compartilham a mesma `group_key` (mesma rotina, mesmo dia). Derivar o
+ * rótulo só do "cabeça" do grupo (o mais prioritário, normalmente o impedimento) produzia
+ * "5 impedimentos" para um grupo com 1 impedimento e 4 ocorrências — um bug que só
+ * apareceu ao olhar a tela.
+ */
+export function renderGroupLabel(items: AnyNotification[]): string {
+    const n = items.length;
+    const head = items[0];
+    if (!head) return "Notificações";
+
+    const contexto = checklistNameOf(head);
+    const suffix = contexto ? ` em ${contexto}` : "";
+
+    // Grupos de ocorrência podem misturar impedimentos e ocorrências comuns.
+    const blockers = items.filter((i) => i.type === "BLOCKER_REPORTED").length;
+    const isIssueGroup = items.every(
+        (i) => i.type === "ISSUE_REPORTED" || i.type === "BLOCKER_REPORTED",
+    );
+
+    if (isIssueGroup) {
+        if (blockers === n) return `${n} ${n === 1 ? "impedimento" : "impedimentos"}${suffix}`;
+        if (blockers > 0) {
+            return `${n} ocorrências${suffix} · ${blockers} ${blockers === 1 ? "impedimento" : "impedimentos"}`;
+        }
+        return `${n} novas ocorrências${suffix}`;
+    }
+
+    switch (head.type) {
+        case "ISSUE_RESOLVED":
+            return `${n} ocorrências resolvidas${suffix}`;
+        case "TASK_COMPLETED_WITH_NOTE":
+            return `${n} observações${suffix}`;
+        case "ROUTINE_DELAYED":
+            return `${n} rotinas atrasadas`;
+        case "RESPONSIBLE_TRANSFERRED":
+            return `${n} rotinas transferidas para ${head.payload.to_user_name}`;
+        default:
+            return `${n} notificações`;
+    }
+}
+
+/** Nome da rotina, quando o payload o carrega. Só para exibir — nunca para navegar. */
+function checklistNameOf(n: AnyNotification): string | null {
+    const p: unknown = n.payload;
+    if (typeof p !== "object" || p === null || !("checklist_name" in p)) return null;
+    const name = (p as { checklist_name: unknown }).checklist_name;
+    return typeof name === "string" && name ? name : null;
 }
 
 export function iconFor(type: string): string {

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { AnyNotification } from "@/lib/notifications/contract";
 import { groupNotifications, type NotificationGroup } from "@/lib/notifications/group";
-import { colorFor, iconFor } from "@/lib/notifications/registry";
+import { colorFor, iconFor, renderGroupLabel } from "@/lib/notifications/registry";
 import { NotificationItem, formatTimeAgo } from "./notification-item";
 
 interface NotificationListProps {
@@ -72,7 +72,8 @@ function GroupRow({
     const head = group.items[0];
     const icon = iconFor(head.type);
     const color = colorFor(head.type);
-    const label = groupLabel(group);
+    // O rotulo do grupo vem do REGISTRY — a UI nao conhece tipo de notificacao.
+    const label = renderGroupLabel(group.items);
 
     return (
         <div className="border-b border-[#233f48]/50 last:border-b-0">
@@ -164,53 +165,3 @@ function GroupRow({
     );
 }
 
-/**
- * "20 novas ocorrências em Abertura Cozinha" — o contexto vem do PAYLOAD, não do texto.
- *
- * O rótulo precisa ser honesto sobre a COMPOSIÇÃO do grupo. Ocorrências comuns e
- * impedimentos compartilham a mesma `group_key` (mesma rotina, mesmo dia), e o "cabeça"
- * do grupo é o membro mais prioritário — normalmente o impedimento. Derivar o rótulo só
- * dele produziria "5 impedimentos" para um grupo com 1 impedimento e 4 ocorrências.
- */
-function groupLabel(group: NotificationGroup): string {
-    const head = group.items[0];
-    const n = group.count;
-
-    const contexto =
-        head.type !== "__unknown__" &&
-        typeof head.payload === "object" &&
-        head.payload !== null &&
-        "checklist_name" in head.payload &&
-        typeof head.payload.checklist_name === "string" &&
-        head.payload.checklist_name
-            ? ` em ${head.payload.checklist_name}`
-            : "";
-
-    // Grupos de ocorrência podem misturar impedimentos e ocorrências comuns.
-    const blockers = group.items.filter((i) => i.type === "BLOCKER_REPORTED").length;
-    const issues = group.items.filter(
-        (i) => i.type === "ISSUE_REPORTED" || i.type === "BLOCKER_REPORTED",
-    ).length;
-
-    if (issues === n && n > 0) {
-        if (blockers === n) {
-            return `${n} ${n === 1 ? "impedimento" : "impedimentos"}${contexto}`;
-        }
-        if (blockers > 0) {
-            const plural = blockers === 1 ? "impedimento" : "impedimentos";
-            return `${n} ocorrências${contexto} · ${blockers} ${plural}`;
-        }
-        return `${n} novas ocorrências${contexto}`;
-    }
-
-    switch (head.type) {
-        case "ISSUE_RESOLVED":
-            return `${n} ocorrências resolvidas${contexto}`;
-        case "TASK_COMPLETED_WITH_NOTE":
-            return `${n} observações${contexto}`;
-        case "ROUTINE_DELAYED":
-            return `${n} rotinas atrasadas`;
-        default:
-            return `${n} notificações`;
-    }
-}

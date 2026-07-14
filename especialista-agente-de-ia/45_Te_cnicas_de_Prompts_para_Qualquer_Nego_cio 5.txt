@@ -1,0 +1,181 @@
+1. Chain-of-Thought (CoT)
+Descrição: Essa técnica envolve dividir um problema ou tarefa em várias etapas menores e mais gerenciáveis. Cada etapa é tratada como uma subparte do prompt, permitindo que o modelo de IA execute uma cadeia de raciocínios para chegar à solução final.
+Exemplo: Em vez de perguntar diretamente “Qual é a capital do Brasil?”, você pode construir um prompt que comece com “O Brasil é um país localizado na América do Sul. Sua cidade mais famosa é conhecida pelo Carnaval e é sede do governo federal. Qual é essa cidade?”
+
+2. Parametrização
+Descrição: A parametrização permite a substituição dinâmica de valores dentro de um prompt, tornando-o mais flexível e reutilizável para diferentes cenários. Você pode definir variáveis no prompt que serão preenchidas com valores específicos em cada execução.
+Exemplo: “Gere um relatório de vendas para {data} com base nas vendas de {produto}.”
+
+3. Templates
+Descrição: Um template é um esqueleto de prompt que pode ser preenchido com diferentes dados ou parâmetros. Isso facilita a criação de prompts consistentes para tarefas repetitivas, como relatórios, análises, ou respostas padrão.
+Exemplo: “Escreva um resumo sobre {tema}, destacando {aspecto 1}, {aspecto 2} e {aspecto 3}.”
+
+4. Condicionais
+Descrição: Esta técnica permite que o prompt tome diferentes caminhos ou produza diferentes saídas com base em condições pré-definidas. O prompt pode ser configurado para mudar sua estrutura ou saída dependendo dos dados de entrada.
+Exemplo: “Se {x} for maior que {y}, descreva os impactos positivos. Caso contrário, discuta os desafios.”
+
+5. Loops
+Descrição: Os loops permitem repetir uma estrutura de prompt para várias entradas ou valores, criando respostas ou outputs para cada um deles. Isso é útil para gerar listas, tabelas, ou análises detalhadas.
+Exemplo: “Para cada item na lista {lista de produtos}, descreva suas principais características e vantagens.”
+
+6. Funções Embutidas
+Descrição: Algumas plataformas de IA permitem a incorporação de funções embutidas ou chamadas de API dentro dos prompts. Isso pode ser usado para acessar dados externos, realizar cálculos ou manipular strings diretamente no prompt.
+Exemplo: “Calcule a soma dos valores {a}, {b}, e {c}, e então gere um gráfico de barras mostrando o resultado.”
+
+7. Substituição Dinâmica de Variáveis
+Descrição: Essa técnica permite que o prompt altere dinamicamente variáveis com base em contextos ou entradas anteriores. É usada para criar prompts que se adaptam automaticamente ao cenário em que são executados.
+Exemplo: “Se o valor de {variável 1} for ‘sim’, substitua {variável 2} por ‘positivo’, caso contrário, por ‘negativo’.”
+
+8. Inserção Dinâmica de Contextos
+Descrição: Inserir dinamicamente contextos relevantes em um prompt permite que a IA mantenha a continuidade ou adapte sua resposta com base em informações recentes ou passadas.
+Exemplo: “Com base nas informações fornecidas anteriormente sobre {assunto}, continue a análise detalhando {novo aspecto}.”
+
+9. Cadeias de Prompts Parametrizadas
+Descrição: Cadeias de prompts são sequências de prompts que dependem uns dos outros, muitas vezes com variáveis passando de um para o outro. Isso é útil para criar fluxos de trabalho mais complexos e estruturados.
+Exemplo: “Primeiro, calcule a receita total. Em seguida, use esse valor para calcular o lucro líquido com base em {despesas}. Finalmente, gere um resumo financeiro.”
+
+10. Scripts Embutidos
+Descrição: Incluir pequenos scripts ou comandos dentro de um prompt permite manipular ou transformar dados antes de passá-los para a IA. Isso é especialmente útil para preparações de dados ou cálculos complexos.
+Exemplo: “Execute o script {script} para calcular as médias e, em seguida, gere um relatório baseado nos resultados.”
+
+11. Integração de Dados Externos
+Descrição: Incorporar dados de fontes externas (APIs, bancos de dados, etc.) diretamente em prompts. Isso permite que o sistema acesse informações em tempo real ou dados específicos para gerar respostas altamente contextualizadas.
+Exemplo: “Use os dados da API {nome da API} para preencher as informações mais recentes sobre {assunto}.”
+
+12. Funções com Valores de Retorno
+Descrição: Algumas plataformas permitem que prompts incluam funções que retornam valores específicos, que podem ser reutilizados em etapas subsequentes do prompt.
+Exemplo: “A partir dos dados fornecidos, calcule a média de vendas. Use esse valor como entrada para gerar previsões de vendas futuras.”
+Vamos expandir a discussão das técnicas de prompts avançados com alguns conceitos adicionais e exemplos práticos que podem ser aplicados em sistemas de IA.
+
+13. Multi-Step Prompts
+Descrição: Os prompts de múltiplas etapas são utilizados para decompor tarefas complexas em etapas sequenciais que a IA processa uma após a outra. Cada etapa pode depender do resultado da anterior, permitindo um processo de raciocínio estruturado.
+Exemplo: “Primeiro, identifique os principais problemas enfrentados pela empresa X. Depois, para cada problema, sugira uma solução possível. Finalmente, escolha a solução mais viável com base em critérios de custo-benefício.”
+
+14. Prompt Cascading
+Descrição: Prompt cascading refere-se à técnica de encadear vários prompts em uma sequência onde cada um contribui para a construção da resposta final. Isso pode ser usado para gerar textos longos ou complexos, onde cada prompt desenvolve uma seção ou aspecto diferente.
+Exemplo: “Inicie escrevendo uma introdução sobre {tema}. Em seguida, desenvolva o corpo principal abordando {subtema 1} e {subtema 2}. Finalmente, conclua com uma síntese dos pontos discutidos e uma chamada à ação.”
+
+15. Prompt Engineering with Contextual Memory
+Descrição: Essa técnica envolve a criação de prompts que utilizam memória contextual para lembrar de informações passadas em uma conversa ou processo. Isso é útil em diálogos longos, onde o contexto deve ser mantido ao longo de várias interações.
+Exemplo: “Com base na discussão anterior sobre {tema}, continue explicando como {novo ponto} se relaciona com os desafios mencionados.”
+
+16. Advanced Co-creative Prompts
+Descrição: Nesses prompts, a IA atua como um parceiro criativo, colaborando ativamente na criação de conteúdos como histórias, músicas, ou designs. Isso envolve a combinação de inputs humanos com sugestões da IA em um processo iterativo.
+Exemplo: “Escreva a primeira estrofe de uma música sobre perseverança. Depois, sugira um refrão que complemente o tom e o tema da estrofe. Continue colaborando para desenvolver o restante da letra.”
+
+17. Meta-Prompts
+Descrição: Meta-prompts são prompts que geram outros prompts. Eles são utilizados para criar sistemas adaptativos e dinâmicos, onde a IA cria seus próprios prompts com base em critérios ou objetivos definidos pelo usuário.
+Exemplo: “Crie um prompt que possa ser usado para gerar ideias de campanhas de marketing para o lançamento de um novo produto de tecnologia.”
+
+18. Context-Aware Prompts
+Descrição: Prompts conscientes de contexto são projetados para se adaptar automaticamente ao ambiente ou às condições específicas de uma interação. Isso pode incluir fatores como localização, tempo, preferências do usuário, ou histórico de interações.
+Exemplo: “Sugira atividades para uma tarde ensolarada de domingo em {cidade}, levando em consideração as preferências de lazer fornecidas anteriormente.”
+
+19. Scenario-Based Prompts
+Descrição: Os prompts baseados em cenários são utilizados para simular situações específicas, muitas vezes em ambientes de treinamento ou para testes de soluções. Eles podem ser utilizados para prever comportamentos, testar hipóteses, ou explorar diferentes resultados possíveis.
+Exemplo: “Se a empresa X lançar um novo produto Y com 20% de desconto, simule as reações dos consumidores e o impacto nas vendas nos primeiros três meses.”
+
+20. Data-Driven Prompts
+Descrição: Prompts impulsionados por dados são aqueles que se baseiam em grandes conjuntos de dados para gerar respostas, realizar análises, ou fazer previsões. Eles integram dados quantitativos ou qualitativos para criar saídas altamente informadas.
+Exemplo: “Utilizando os dados de vendas dos últimos cinco anos, projete as tendências de crescimento para o próximo trimestre e identifique os fatores que mais contribuem para o aumento de receita.”
+
+21. Interactive Prompts
+Descrição: Prompts interativos são projetados para envolver o usuário em uma experiência de ida e volta, onde o usuário e a IA interagem de maneira contínua para refinar a resposta. Esses prompts são úteis em aplicativos que exigem tomada de decisão colaborativa ou aprendizagem contínua.
+Exemplo: “Liste três ideias iniciais para o design de um website. Com base no feedback do usuário, continue refinando o design até que uma versão final seja acordada.”
+
+22. Self-Correcting Prompts
+Descrição: Prompts autocorretivos são projetados para avaliar e ajustar suas próprias saídas com base em critérios ou feedback predefinidos. Eles podem incluir mecanismos de verificação para garantir a precisão ou relevância das respostas.
+Exemplo: “Gere um resumo de um artigo científico. Em seguida, revise o resumo para garantir que todas as informações cruciais foram incluídas e corrija quaisquer omissões.”
+
+23. Exploratory Prompts
+Descrição: Exploratory prompts são utilizados para investigar uma ampla gama de possibilidades ou opções dentro de um determinado tema ou problema. Eles são úteis para brainstorming, pesquisa criativa, ou quando é necessário explorar cenários desconhecidos.
+Exemplo: “Explore diferentes abordagens para resolver o problema da escassez de água em áreas urbanas, considerando soluções tecnológicas, sociais e econômicas.”
+
+24. Role-Based Prompts
+Descrição: Nessa técnica, o prompt instrui a IA a adotar uma “personalidade” ou perspectiva específica para gerar respostas. Isso pode ser útil em simulações, jogos, ou quando diferentes pontos de vista precisam ser explorados.
+Exemplo: “Assuma o papel de um especialista em marketing digital e desenvolva uma estratégia de mídia social para uma startup de tecnologia emergente.”
+
+25. Temporal Prompts
+Descrição: Prompts temporais incorporam elementos de tempo, como histórico de eventos, prazos, ou tendências futuras, para contextualizar a resposta. Eles são particularmente úteis em previsões, análises históricas, ou planejamento estratégico.
+Exemplo: “Analise como as tendências de consumo evoluíram nos últimos dez anos e projete como essas tendências podem influenciar o mercado nos próximos cinco anos.”
+
+26. Layered Prompts
+Descrição: Os prompts em camadas combinam várias técnicas ou abordagens em um único prompt para criar respostas multidimensionais. Isso pode incluir combinações de análise qualitativa e quantitativa, ou a integração de diferentes perspectivas.
+Exemplo: “Combine uma análise SWOT (forças, fraquezas, oportunidades e ameaças) com uma avaliação de risco quantitativa para desenvolver uma estratégia de negócios robusta.”
+Vamos expandir com mais técnicas avançadas e algumas práticas relacionadas a otimização e customização dos prompts em sistemas de IA.
+
+27. Contextual Prompting
+Descrição: Contextual prompting envolve a criação de prompts que se adaptam a diferentes contextos de uso, como plataformas específicas, públicos-alvo, ou cenários de aplicação. A ideia é ajustar o tom, estilo, e conteúdo do prompt de acordo com o ambiente em que será utilizado.
+Exemplo: “Para um chatbot que atende clientes de uma loja de luxo, ajuste o tom para ser mais formal e sofisticado, fornecendo recomendações personalizadas com base no histórico de compras do usuário.”
+
+28. Prompt Tuning
+Descrição: Tuning de prompts refere-se ao processo de refinar e ajustar os prompts para maximizar a performance do modelo de IA. Isso pode incluir ajustar a formulação do prompt, testar diferentes versões, e otimizar para variáveis como precisão, criatividade, ou tempo de resposta.
+Exemplo: “Refine o prompt de modo que as respostas geradas para perguntas de múltipla escolha sejam mais precisas, ajustando a linguagem para eliminar ambiguidades e fornecer respostas diretas.”
+
+29. Zero-Shot Prompting
+Descrição: Essa técnica consiste em criar prompts que podem lidar com tarefas desconhecidas ou não previamente treinadas, sem a necessidade de exemplos. Ela é utilizada para avaliar a capacidade do modelo em generalizar a partir de um entendimento básico.
+Exemplo: “Pergunte ao modelo sobre um tema totalmente novo, como ‘Explique a teoria da relatividade geral em termos simples,’ sem fornecer qualquer contexto ou exemplo prévio.”
+
+30. Few-Shot Prompting
+Descrição: Few-shot prompting envolve fornecer ao modelo alguns exemplos (normalmente entre 1 e 5) de como uma tarefa deve ser realizada antes de solicitar uma resposta. Isso ajuda a IA a entender melhor o formato ou a abordagem desejada.
+Exemplo: “Forneça ao modelo três exemplos de como resumir artigos científicos e, em seguida, peça para ele resumir um artigo novo com base nesse padrão.”
+
+31. Prompt Chaining with Dynamic Inputs
+Descrição: Nessa técnica, cada prompt em uma cadeia usa a saída do prompt anterior como sua entrada, mas com a possibilidade de introduzir novos dados ou variáveis dinamicamente durante o processo. Isso é útil em fluxos de trabalho adaptativos que precisam reagir a novos inputs em tempo real.
+Exemplo: “Primeiro, peça uma análise SWOT de uma empresa específica. Depois, com base nos resultados, solicite recomendações de estratégias, levando em consideração as últimas notícias econômicas ou mudanças no mercado.”
+
+32. Prompt Segmentation
+Descrição: Segmentação de prompts envolve dividir um prompt grande e complexo em segmentos menores e mais manejáveis, que são processados separadamente antes de serem combinados. Isso pode melhorar a clareza e a qualidade das respostas.
+Exemplo: “Divida a tarefa de escrever um relatório de pesquisa em três partes: revisão da literatura, metodologia e resultados, e peça ao modelo para trabalhar em cada uma separadamente antes de combinar as partes em um único documento.”
+
+33. Data Augmentation in Prompts
+Descrição: Essa técnica envolve o uso de dados adicionais ou sintéticos para enriquecer o prompt, aumentando a diversidade e a abrangência das respostas. Pode incluir a inserção de exemplos variados, cenários hipotéticos, ou dados históricos.
+Exemplo: “Ao gerar uma previsão de vendas, inclua dados adicionais como eventos econômicos passados ou padrões sazonais para aumentar a precisão da previsão.”
+
+34. Behavioral Prompting
+Descrição: Prompts comportamentais são projetados para influenciar o comportamento do modelo de IA, incentivando respostas que seguem certos padrões, normas ou objetivos. Eles são utilizados para moldar o comportamento da IA em cenários específicos.
+Exemplo: “Projete um prompt que incentive o modelo a ser mais criativo nas respostas, como pedir para ‘pensar fora da caixa’ ou ‘considerar abordagens não convencionais’ ao solucionar um problema.”
+
+35. Multi-Task Prompting
+Descrição: Nessa técnica, o prompt é construído para realizar múltiplas tarefas simultaneamente, ou sequencialmente dentro de um único contexto. Isso é útil para criar fluxos de trabalho integrados que exigem a realização de várias etapas interconectadas.
+Exemplo: “Combine tarefas como análise de dados, geração de relatórios e sugestão de melhorias em um único prompt, onde o modelo primeiro analisa os dados, depois cria um relatório e, finalmente, sugere melhorias com base nos achados.”
+
+36. Intent Recognition Prompts
+Descrição: Essa técnica envolve a criação de prompts que focam na identificação de intenções específicas do usuário, adaptando as respostas para atender a essas intenções de maneira precisa. É frequentemente usada em chatbots e assistentes virtuais.
+Exemplo: “Construa um prompt que identifique se o usuário está procurando ajuda técnica, consultoria de negócios, ou fazendo uma reclamação, e responda de acordo com a intenção detectada.”
+
+37. Hypothetical Scenario Prompting
+Descrição: Esse tipo de prompting cria cenários hipotéticos para explorar como o modelo responderia em situações que não aconteceram, mas que poderiam acontecer. É útil para testar a capacidade do modelo em lidar com incertezas e cenários futuros.
+Exemplo: “Pergunte ao modelo como ele reagiria se o preço do petróleo caísse subitamente em 50% e quais seriam os possíveis impactos globais.”
+
+38. Sequential Prompting
+Descrição: Sequential prompting é a prática de organizar uma série de prompts de forma que cada um construa sobre o resultado anterior, criando uma cadeia lógica de pensamento. Isso é ideal para resolver problemas complexos que exigem múltiplas etapas.
+Exemplo: “Inicie com a identificação de um problema, siga com a análise das causas, depois explore possíveis soluções, e finalize com a recomendação de uma estratégia de implementação.”
+
+39. Contrarian Prompting
+Descrição: Essa técnica envolve pedir ao modelo para gerar respostas que desafiem a visão predominante ou que explorem o lado oposto de um argumento. Isso é útil para explorar diferentes perspectivas ou testar a robustez de uma ideia.
+Exemplo: “Gere argumentos contrários à ideia de que a automação sempre melhora a produtividade, considerando possíveis desvantagens ou efeitos colaterais.”
+
+40. Ethical and Bias-Aware Prompting
+Descrição: Prompts conscientes de ética e viés são projetados para minimizar o viés nas respostas do modelo e para garantir que as saídas sejam éticas e justas. Isso é crucial em aplicações sensíveis, como contratação, decisões de crédito, ou recomendações médicas.
+Exemplo: “Peça ao modelo para fazer recomendações de contratação, garantindo que todas as recomendações estejam livres de viés de gênero ou racial, e forneça uma explicação sobre como isso foi alcançado.”
+
+41. Goal-Oriented Prompting
+Descrição: Essa técnica foca na definição clara de objetivos dentro do prompt, instruindo a IA a gerar respostas que avancem em direção a um objetivo específico, seja ele educacional, comercial ou criativo.
+Exemplo: “Construa um plano de marketing para uma startup de tecnologia com o objetivo de alcançar um crescimento de 20% em seis meses, considerando tanto estratégias online quanto offline.”
+
+42. Incorporating Feedback Loops
+Descrição: Feedback loops em prompts permitem que as saídas do modelo sejam revisadas e aprimoradas com base em feedback contínuo, seja de usuários humanos ou de critérios automáticos. Isso ajuda a refinar respostas e melhorar a precisão ao longo do tempo.
+Exemplo: “Após gerar um esboço inicial de um plano de projeto, peça feedback do usuário e use essa informação para ajustar e melhorar o plano.”
+
+43. Hybrid Prompts
+Descrição: Hybrid prompts combinam várias técnicas ou abordagens em um único prompt, criando um ambiente onde diferentes estratégias de prompting colaboram para gerar a melhor resposta possível.
+Exemplo: “Use um prompt híbrido que combine análise qualitativa com dados quantitativos para gerar um relatório abrangente sobre as tendências de mercado.”
+
+44. Prompt Modularity
+Descrição: Prompts modulares são compostos de vários módulos ou blocos de prompts que podem ser combinados ou reorganizados de diferentes maneiras para criar respostas personalizadas ou adaptáveis.
+Exemplo: “Crie módulos separados para introdução, análise de mercado, e recomendação de estratégias, que podem ser combinados conforme necessário para diferentes tipos de relatórios.”
+
+45. Automated Prompt Testing
+Descrição: Essa técnica envolve o uso de ferramentas automatizadas para testar e avaliar diferentes versões de prompts, identificando quais formulados geram as melhores respostas com base em critérios predefinidos.
+Exemplo: “Implemente um sistema de teste automatizado para comparar a eficácia de diferentes formulários de prompts em termos de precisão, relevância, e tempo de resposta.”

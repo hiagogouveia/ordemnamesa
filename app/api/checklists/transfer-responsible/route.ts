@@ -6,6 +6,9 @@ import { buildAccessDeniedResponse } from '@/lib/billing/errors';
 import { fetchShiftIdsByChecklist } from '@/lib/api/shift-links';
 import { validateShiftAssignment, SHIFT_ASSIGNMENT_ERROR } from '@/lib/api/validate-shift-assignment';
 import { trackAdminEvent } from '@/lib/analytics/track-event';
+import { emitDomainEvent } from '@/lib/notifications/emit';
+import { getNowInTz } from '@/lib/utils/brazil-date';
+import { getRestaurantTimezone } from '@/lib/utils/restaurant-time';
 
 const getAdminSupabase = () => {
     return createClient(
@@ -198,6 +201,39 @@ export async function POST(request: Request) {
         if (updateErr) {
             console.error('[POST /api/checklists/transfer-responsible] Erro no update em lote:', updateErr);
             return NextResponse.json({ error: 'Erro ao transferir o responsável.' }, { status: 500 });
+        }
+
+        // ── s90: a transferência passa a NOTIFICAR ───────────────────────────
+        //
+        // Até aqui, transferir o responsável de uma rotina não avisava ninguém: só
+        // gravava telemetria. O gestor que não fez a transferência não tinha como
+        // saber que a responsabilidade mudou.
+        //
+        // Um evento por rotina (cada um com seu deep-link exato), mas todos com a
+        // mesma `group_key` — uma transferência em lote de 20 rotinas vira UMA linha
+        // agrupada ("20 rotinas transferidas para Ana"), expansível.
+        const [{ data: toUser }, { data: fromUser }] = await Promise.all([
+            adminSupabase.from('users').select('name').eq('id', to_user_id).maybeSingle(),
+            adminSupabase.from('users').select('name').eq('id', sourceUserId).maybeSingle(),
+        ]);
+
+        const tz = await getRestaurantTimezone(adminSupabase, restaurant_id);
+        const transferDateKey = getNowInTz(tz).dateKey;
+
+        for (const r of rows) {
+            await emitDomainEvent(adminSupabase, 'ResponsibleTransferred', {
+                restaurantId: restaurant_id,
+                actorUserId: user.id,
+                payload: {
+                    checklist_id: r.id,
+                    date_key: transferDateKey,
+                    to_user_id,
+                    from_user_id: sourceUserId,
+                    checklist_name: r.name,
+                    to_user_name: toUser?.name ?? 'Colaborador',
+                    from_user_name: fromUser?.name ?? null,
+                },
+            });
         }
 
         // 12. Auditoria (event_logs) — best-effort, não bloqueia a resposta.

@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+    type AnyNotification,
     DEDUP_KEYS,
     DEPRECATED_TYPES,
     type IssuePayload,
     type NotificationType,
     isDeprecatedType,
 } from "../contract";
-import { NOTIFICATION_DESCRIPTORS, assertEmittableType, colorFor, iconFor } from "../registry";
+import { NOTIFICATION_DESCRIPTORS, assertEmittableType, colorFor, iconFor, renderGroupLabel } from "../registry";
 import { NAVIGATION_RESOLVERS } from "../navigation";
 import { PAYLOAD_PARSERS } from "../parse";
 
@@ -80,6 +81,50 @@ describe("emissão — tipos deprecados são renderizáveis, mas não emitíveis
             expect(NOTIFICATION_DESCRIPTORS[t].deprecated).toBe(true);
             expect(NOTIFICATION_DESCRIPTORS[t].icon).toBeTruthy();
         }
+    });
+});
+
+describe("rótulo de grupo — honesto sobre a composição", () => {
+    // Regressão: o rótulo derivava do "cabeça" do grupo (o membro mais prioritário,
+    // normalmente o impedimento), então um grupo com 1 impedimento e 4 ocorrências
+    // comuns era anunciado como "5 impedimentos". Passou por todos os testes e só
+    // apareceu ao olhar a tela.
+    const base = {
+        id: "n", restaurant_id: "r", user_id: "u", title: "t", description: null,
+        priority: "high" as const, group_key: "g", read: false, read_at: null,
+        created_at: "2026-07-14T10:00:00Z", event_id: null,
+    };
+    const payload = {
+        issue_id: "i", checklist_id: "c", checklist_assumption_id: null,
+        date_key: "2026-07-14", task_id: "t", severity: "normal" as const,
+        reported_by_user_id: "u", checklist_name: "Abertura de Caixa",
+        task_title: "Tarefa", reported_by_name: "Ana", excerpt: "x",
+    };
+    const issue = () => ({ ...base, type: "ISSUE_REPORTED", payload }) as AnyNotification;
+    const blocker = () =>
+        ({ ...base, type: "BLOCKER_REPORTED", priority: "critical",
+           payload: { ...payload, severity: "blocker" } }) as AnyNotification;
+
+    it("grupo MISTO não mente: 1 impedimento + 4 ocorrências ≠ '5 impedimentos'", () => {
+        const label = renderGroupLabel([blocker(), issue(), issue(), issue(), issue()]);
+        expect(label).toBe("5 ocorrências em Abertura de Caixa · 1 impedimento");
+        expect(label).not.toBe("5 impedimentos em Abertura de Caixa");
+    });
+
+    it("grupo só de impedimentos diz impedimentos", () => {
+        expect(renderGroupLabel([blocker(), blocker(), blocker()]))
+            .toBe("3 impedimentos em Abertura de Caixa");
+    });
+
+    it("grupo só de ocorrências comuns diz ocorrências", () => {
+        expect(renderGroupLabel([issue(), issue(), issue()]))
+            .toBe("3 novas ocorrências em Abertura de Caixa");
+    });
+
+    it("nunca lança com lista vazia ou tipo desconhecido", () => {
+        expect(() => renderGroupLabel([])).not.toThrow();
+        const unknown = { ...base, type: "__unknown__", rawType: "X", payload: {} } as AnyNotification;
+        expect(() => renderGroupLabel([unknown, unknown, unknown])).not.toThrow();
     });
 });
 

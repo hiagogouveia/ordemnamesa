@@ -1,0 +1,65 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - img "Ordem na Mesa Logo" [ref=e7]
+          - generic [ref=e8]:
+            - generic [ref=e9]: Ordem na Mesa
+            - generic [ref=e10]: Gouveia Pizzaria
+        - button "chevron_left" [ref=e11]:
+          - generic [ref=e12]: chevron_left
+      - button "Restaurante Atual Gouveia Pizzaria unfold_more" [ref=e14]:
+        - generic [ref=e15]:
+          - generic [ref=e16]: Restaurante Atual
+          - generic [ref=e17]: Gouveia Pizzaria
+        - generic [ref=e18]: unfold_more
+      - navigation [ref=e19]:
+        - generic [ref=e20]: Menu Principal
+        - link "dashboard Dashboard" [ref=e21] [cursor=pointer]:
+          - /url: /dashboard
+          - generic [ref=e22]: dashboard
+          - generic [ref=e23]: Dashboard
+        - link "assignment_ind Meu Turno" [ref=e24] [cursor=pointer]:
+          - /url: /turno
+          - generic [ref=e25]: assignment_ind
+          - generic [ref=e26]: Meu Turno
+        - link "checklist Checklists" [ref=e27] [cursor=pointer]:
+          - /url: /checklists
+          - generic [ref=e28]: checklist
+          - generic [ref=e29]: Checklists
+        - link "local_shipping Recebimentos" [ref=e30] [cursor=pointer]:
+          - /url: /recebimentos
+          - generic [ref=e31]: local_shipping
+          - generic [ref=e32]: Recebimentos
+        - link "group Equipe" [ref=e33] [cursor=pointer]:
+          - /url: /equipe
+          - generic [ref=e34]: group
+          - generic [ref=e35]: Equipe
+        - link "bar_chart Relatórios" [ref=e36] [cursor=pointer]:
+          - /url: /relatorios
+          - generic [ref=e37]: bar_chart
+          - generic [ref=e38]: Relatórios
+        - link "settings Configurações" [ref=e39] [cursor=pointer]:
+          - /url: /configuracoes
+          - generic [ref=e40]: settings
+          - generic [ref=e41]: Configurações
+      - generic [ref=e42]:
+        - generic [ref=e43]:
+          - generic [ref=e45]: person
+          - generic [ref=e46]:
+            - generic [ref=e47]: Usuário
+            - generic [ref=e48]: Proprietário
+        - button "logout Sair da conta" [ref=e49]:
+          - generic [ref=e50]: logout
+          - generic [ref=e51]: Sair da conta
+    - generic [ref=e52]:
+      - banner [ref=e53]:
+        - heading "Dashboard Geral" [level=2] [ref=e56]
+        - button "notifications" [ref=e59]:
+          - generic [ref=e60]: notifications
+      - main [ref=e61]:
+        - main [ref=e65]
+  - button "Open Next.js Dev Tools" [ref=e126] [cursor=pointer]:
+    - img [ref=e127]
+  - alert [ref=e130]
