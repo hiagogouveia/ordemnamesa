@@ -308,7 +308,7 @@ export default function AdminChecklists() {
                                             <div className="flex items-start justify-between gap-2">
                                                 <div className="flex-1 min-w-0">
                                                     <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
-                                                        {execution.checklist_tasks?.title || 'Tarefa'}
+                                                        {execution.task?.title || 'Tarefa'}
                                                     </p>
                                                     <p className="text-xs text-slate-600 dark:text-[#92bbc9] mt-1">
                                                         {date} • {time}
@@ -391,7 +391,7 @@ function PhotoModalAdmin({ entry, onClose }: PhotoModalAdminProps) {
                         /* eslint-disable-next-line @next/next/no-img-element */
                         <img
                             src={photoUrl}
-                            alt={entry.checklist_tasks?.title || 'Foto da tarefa'}
+                            alt={entry.task?.title || 'Foto da tarefa'}
                             className="max-w-full max-h-[70vh] object-contain"
                             onError={(e) => { e.currentTarget.src = '/image-error-placeholder.png'; }}
                         />
@@ -402,7 +402,7 @@ function PhotoModalAdmin({ entry, onClose }: PhotoModalAdminProps) {
 
                 {/* Caption */}
                 <div className="bg-[#16262c] border border-[#325a67] rounded-xl px-5 py-3 flex flex-col gap-1">
-                    <p className="text-white font-bold">{entry.checklist_tasks?.title}</p>
+                    <p className="text-white font-bold">{entry.task?.title}</p>
                     <p className="text-[#92bbc9] text-sm">{date} • {time}</p>
                 </div>
             </div>

@@ -24,8 +24,14 @@ export type AuditStatus =
     | 'incomplete'
     | 'impediment';
 
-/** Status de uma TASK individual no detalhe. */
-export type AuditTaskStatus = AuditStatus | 'pending';
+/**
+ * Status de uma TASK individual no detalhe.
+ *
+ * 'removed' (s88) → a tarefa constava do snapshot da rotina no momento do assume, nunca foi
+ * executada, e foi removida da rotina depois. Não é pendência do colaborador: a tarefa deixou de
+ * ser exigida. Fica fora da contagem de "não executadas".
+ */
+export type AuditTaskStatus = AuditStatus | 'pending' | 'removed';
 
 export type Shift = 'morning' | 'afternoon' | 'evening';
 
@@ -211,6 +217,7 @@ export const AUDIT_TASK_STATUS_LABEL: Record<AuditTaskStatus, string> = {
     incomplete: 'Incompleta',
     impediment: 'Com impedimento',
     pending: 'Não executada',
+    removed: 'Removida da rotina',
 };
 
 export const SHIFT_LABEL: Record<Shift, string> = {

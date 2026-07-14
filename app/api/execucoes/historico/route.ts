@@ -48,6 +48,12 @@ export async function GET(request: Request) {
         const yesterdayISO = yesterdayStart.toISOString();
 
         // Query base (dados paginados) — colunas explícitas, sem select('*')
+        //
+        // s88: a identidade da tarefa vem dos SNAPSHOTS da própria execução (s84), não de um join
+        // com `checklist_tasks`. O join mostrava o título ATUAL da tarefa (renomear a tarefa
+        // reescrevia o histórico) e passaria a devolver null quando a tarefa fosse removida da
+        // rotina. O snapshot é o que a tarefa era quando foi executada — que é o que o histórico
+        // deve mostrar.
         let dataQuery = adminSupabase
             .from('task_executions')
             .select(`
@@ -58,7 +64,8 @@ export async function GET(request: Request) {
                 executed_at,
                 photo_url,
                 notes,
-                checklist_tasks ( title, is_critical ),
+                task_title_snapshot,
+                is_critical_snapshot,
                 checklists ( name, category )
             `, { count: 'exact' })
             .eq('restaurant_id', restaurant_id)
@@ -129,8 +136,25 @@ export async function GET(request: Request) {
                 ? null
                 : Math.round(((todayDone - yesterdayDone) / yesterdayDone) * 100);
 
+        // s88: expõe a identidade histórica da tarefa em `task`, montada a partir dos snapshots da
+        // execução. Substitui o antigo embed `checklist_tasks`, que dependia da definição viva.
+        type RawRow = Record<string, unknown> & {
+            task_title_snapshot: string | null;
+            is_critical_snapshot: boolean | null;
+        };
+        const entries = ((dataResult.data ?? []) as RawRow[]).map((row) => {
+            const { task_title_snapshot, is_critical_snapshot, ...rest } = row;
+            return {
+                ...rest,
+                task: {
+                    title: task_title_snapshot ?? 'Tarefa',
+                    is_critical: !!is_critical_snapshot,
+                },
+            };
+        });
+
         return NextResponse.json({
-            entries: dataResult.data ?? [],
+            entries,
             total:   dataResult.count ?? 0,
             metrics: {
                 total:         doneCount,

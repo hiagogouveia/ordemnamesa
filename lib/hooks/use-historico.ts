@@ -13,7 +13,11 @@ export interface HistoricoEntry {
     executed_at: string;
     photo_url: string | null;
     notes: string | null;
-    checklist_tasks: { title: string; is_critical: boolean } | null;
+    /**
+     * s88 — identidade da tarefa NO MOMENTO da execução (snapshot em `task_executions`), não a
+     * definição atual. Sobrevive à renomeação e à remoção da tarefa da rotina.
+     */
+    task: { title: string; is_critical: boolean };
     checklists: { name: string; category: string | null } | null;
 }
 
@@ -72,7 +76,7 @@ export function useHistorico(
 
         const term = search.toLowerCase();
         return raw.filter(e =>
-            e.checklist_tasks?.title?.toLowerCase().includes(term) ||
+            e.task?.title?.toLowerCase().includes(term) ||
             e.checklists?.name?.toLowerCase().includes(term) ||
             e.checklists?.category?.toLowerCase().includes(term)
         );

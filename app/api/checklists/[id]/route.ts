@@ -205,16 +205,29 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
             await replaceChecklistShifts(adminSupabase, restaurant_id, id, incomingShiftIds);
         }
 
-        // 2. Atualizar Tasks
-        // Pegar estado de tasks atuais
-        const { data: existingTasks } = await adminSupabase
-            .from('checklist_tasks')
-            .select('id')
-            .eq('checklist_id', id);
+        // 2. Reconciliar Tasks (só quando o payload traz o campo `tasks`)
+        //
+        // Um PUT parcial — que atualiza apenas nome/turno/área da rotina — NÃO pode tocar nas
+        // tarefas. Antes, o bloco de remoção rodava fora desta guarda: um PUT sem `tasks` apagava
+        // todas as tarefas da rotina.
+        let createdCount = 0;
+        let updatedCount = 0;
+        let deletedCount = 0;
 
-        const existingTaskIds = new Set(existingTasks?.map(t => t.id) || []);
+        if (Array.isArray(tasks)) {
+            const { data: existingTasks, error: existingErr } = await adminSupabase
+                .from('checklist_tasks')
+                .select('id')
+                .eq('checklist_id', id);
 
-        if (tasks && tasks.length > 0) {
+            if (existingErr) {
+                console.error('[PUT /api/checklists/[id]] Erro ao ler tasks atuais:', existingErr);
+                return NextResponse.json({ error: existingErr.message }, { status: 500 });
+            }
+
+            // Começa com todas as tarefas do banco; cada tarefa enviada no payload é "reclamada"
+            // (removida do set). O que sobrar no fim foi removido pelo usuário.
+            const existingTaskIds = new Set(existingTasks?.map(t => t.id) || []);
             // Validar campos novos (Sprint 35)
             const VALID_TYPES = new Set(['boolean', 'date', 'number', 'rating']);
             for (const t of tasks) {
@@ -257,50 +270,62 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
                 }
             });
 
-            // Update preservers
+            // Update das preservadas. Uma falha aqui é uma falha do save: precisa chegar ao
+            // frontend, senão o usuário vê "salvo com sucesso" sobre uma alteração que não existiu.
             for (const task of tasksToUpdate) {
-                const { error: updateError } = await adminSupabase
+                const { error: updateTaskError } = await adminSupabase
                     .from('checklist_tasks')
                     .update(task)
                     .eq('id', task.id);
-                if (updateError) {
-                    console.error('[PUT /api/checklists/[id]] Erro update task:', updateError);
+                if (updateTaskError) {
+                    console.error('[PUT /api/checklists/[id]] Erro update task:', updateTaskError);
+                    return NextResponse.json({ error: updateTaskError.message }, { status: 500 });
                 }
             }
+            updatedCount = tasksToUpdate.length;
 
-            // Insert new tasks
             if (tasksToInsert.length > 0) {
                 const { error: insertError } = await adminSupabase
                     .from('checklist_tasks')
                     .insert(tasksToInsert);
                 if (insertError) {
                     console.error('[PUT /api/checklists/[id]] Erro insert task:', insertError);
+                    return NextResponse.json({ error: insertError.message }, { status: 500 });
                 }
+                createdCount = tasksToInsert.length;
             }
-        }
 
-        // Handle Removals gracefully (Opção B - Sem quebrar FK)
-        const idsToRemove = Array.from(existingTaskIds);
-        if (idsToRemove.length > 0) {
-            // Verify if deleted tasks have prior executions
-            const { data: executions } = await adminSupabase
-                .from('task_executions')
-                .select('task_id')
-                .in('task_id', idsToRemove);
-                
-            const executedTaskIds = new Set(executions?.map(e => e.task_id) || []);
-            const safeToDeleteIds = idsToRemove.filter(taskId => !executedTaskIds.has(taskId));
-            
-            if (safeToDeleteIds.length > 0) {
+            // Remoção: hard delete, sem exceção.
+            //
+            // Até a s89 havia um guard que pulava as tarefas com histórico de execução — era a
+            // causa do bug "removi a tarefa, salvei, ela voltou": a tarefa continuava com
+            // `checklist_id` apontando para a rotina e reaparecia no próximo GET.
+            //
+            // O guard existia para proteger a auditoria, que montava a lista de tarefas de um dia
+            // passado a partir da definição ATUAL. Isso mudou: a sessão carrega a composição
+            // congelada no assume (`tasks_snapshot`, s88) e cada execução carrega os snapshots de
+            // identidade da tarefa (s84). O passado é auto-suficiente. A s89 removeu as FKs
+            // histórico → definição, então este delete não cascateia em `task_executions` /
+            // `task_issues` e não dispara os triggers de imutabilidade.
+            const idsToRemove = Array.from(existingTaskIds);
+            if (idsToRemove.length > 0) {
                 const { error: deleteError } = await adminSupabase
                     .from('checklist_tasks')
                     .delete()
-                    .in('id', safeToDeleteIds);
+                    .in('id', idsToRemove);
                 if (deleteError) {
-                    console.error('[PUT /api/checklists/[id]] Erro na deleção safe de tasks:', deleteError);
+                    console.error('[PUT /api/checklists/[id]] Erro ao remover tasks:', deleteError);
+                    return NextResponse.json({ error: deleteError.message }, { status: 500 });
                 }
+                deletedCount = idsToRemove.length;
             }
-            // Tasks with execution histories (executedTaskIds) will inherently become orphaned from the checklist view order since the frontend doesn't render them anymore, but they stay in the DB for logs.
+
+            console.log('[PUT /api/checklists/[id]] Tasks reconciliadas:', {
+                checklist_id: id,
+                created: createdCount,
+                updated: updatedCount,
+                deleted: deletedCount,
+            });
         }
 
         // 3. Buscar checklist completo atualizado

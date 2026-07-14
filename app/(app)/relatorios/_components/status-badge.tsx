@@ -35,6 +35,13 @@ const STATUS_VISUAL: Record<AuditTaskStatus, StatusVisual> = {
         bg: 'bg-slate-700/20',
         border: 'border-slate-600/20',
     },
+    // s88 — tarefa retirada da rotina depois desta execução. Neutra: não é pendência.
+    removed: {
+        icon: 'remove_circle_outline',
+        text: 'text-[#6b7f8a]',
+        bg: 'bg-slate-800/30',
+        border: 'border-slate-700/30',
+    },
 };
 
 interface StatusBadgeProps {

@@ -92,6 +92,8 @@ const STATUS_COLORS: Record<AuditTaskStatus, { bg: string; color: string }> = {
     impediment: { bg: "#ffedd5", color: "#c2410c" },
     incomplete: { bg: "#fef3c7", color: "#a16207" },
     pending: { bg: "#f1f5f9", color: "#64748b" },
+    // s88 — tarefa retirada da rotina depois desta execução. Neutra: não é pendência.
+    removed: { bg: "#f8fafc", color: "#94a3b8" },
 };
 
 function formatDate(iso: string): string {

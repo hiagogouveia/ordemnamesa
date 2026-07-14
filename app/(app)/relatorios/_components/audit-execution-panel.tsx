@@ -511,11 +511,13 @@ function TaskRow({
 }
 
 function countTasksByStatus(tasks: AuditTaskDetail[]) {
-    const c = { completed: 0, impediment: 0, incomplete: 0, pending: 0 };
+    const c = { completed: 0, impediment: 0, incomplete: 0, pending: 0, removed: 0 };
     for (const t of tasks) {
         if (t.status === 'completed') c.completed++;
         else if (t.status === 'impediment') c.impediment++;
         else if (t.status === 'pending') c.pending++;
+        // s88: removida da rotina não é pendência do colaborador — conta à parte.
+        else if (t.status === 'removed') c.removed++;
         else c.incomplete++;
     }
     return c;

@@ -30,7 +30,7 @@ import type {
     UnitInfo,
 } from '@/lib/types/audit';
 import { AUDIT_STATUS_LABEL, SHIFT_LABEL } from '@/lib/types/audit';
-import type { TaskType } from '@/lib/types';
+import type { TaskSnapshot, TaskType } from '@/lib/types';
 import { OPERATIONAL_PREDICATE } from '@/lib/utils/operational-activity';
 import { getNowInTz, DEFAULT_TZ } from '@/lib/utils/brazil-date';
 
@@ -224,6 +224,12 @@ interface RawAssumption {
     completed_at: string | null;
     execution_status: 'in_progress' | 'blocked' | 'done';
     blocked_reason: string | null;
+    /**
+     * s88 — composição da rotina no momento do assume. É a FONTE da lista de tarefas do
+     * relatório. Null só em sessões anteriores à s88 que escaparam do backfill: nesse caso
+     * caímos na definição atual do checklist (comportamento pré-s88).
+     */
+    tasks_snapshot: TaskSnapshot[] | null;
     checklists: {
         id: string;
         name: string;
@@ -369,7 +375,7 @@ export async function fetchAuditList(
         .from('checklist_assumptions')
         .select(`
             id, restaurant_id, checklist_id, user_id, user_name,
-            date_key, assumed_at, completed_at, execution_status, blocked_reason,
+            date_key, assumed_at, completed_at, execution_status, blocked_reason, tasks_snapshot,
             checklists!inner(id, name, shift, recurrence, area_id, checklist_type, supplier_id, is_one_shot)
         `, { count: 'exact' })
         .in('restaurant_id', restaurantIds)
@@ -415,16 +421,23 @@ export async function fetchAuditList(
     const checklistIds = Array.from(new Set(rawAssumptions.map(a => a.checklist_id)));
     const userIds = Array.from(new Set(rawAssumptions.map(a => a.user_id).filter(Boolean)));
 
-    // ── Total de tasks por checklist ────────────────────────────────────────
+    // ── Definição ATUAL das rotinas ─────────────────────────────────────────
+    // s88: o total de tarefas de cada sessão vem do seu `tasks_snapshot` (composição no momento do
+    // assume) — não do template atual, senão editar a rotina hoje mudaria o total dos relatórios de
+    // todos os dias passados. A definição atual ainda é lida para dois fins:
+    //   • fallback de total, em sessões pré-s88 sem snapshot;
+    //   • identificar tarefas REMOVIDAS da rotina — elas não contam como "não executada".
     const taskTotalByChecklist: Record<string, number> = {};
+    const liveTaskIdsByChecklist: Record<string, Set<string>> = {};
     {
         const { data: tasks, error: tErr } = await admin
             .from('checklist_tasks')
-            .select('checklist_id')
+            .select('id, checklist_id')
             .in('checklist_id', checklistIds);
         if (tErr) throw tErr;
-        for (const t of (tasks ?? []) as Array<{ checklist_id: string }>) {
+        for (const t of (tasks ?? []) as Array<{ id: string; checklist_id: string }>) {
             taskTotalByChecklist[t.checklist_id] = (taskTotalByChecklist[t.checklist_id] ?? 0) + 1;
+            (liveTaskIdsByChecklist[t.checklist_id] ??= new Set()).add(t.id);
         }
     }
 
@@ -561,7 +574,10 @@ export async function fetchAuditList(
         }
         const dedupedExecs = Object.values(lastByTask);
 
-        const totalTasks = taskTotalByChecklist[a.checklist_id] ?? 0;
+        // s88: a composição da sessão é a congelada no assume. Fallback (sessão pré-s88 sem
+        // snapshot): a definição atual — que é o que essas linhas já exibiam antes da s88.
+        const snapshot = Array.isArray(a.tasks_snapshot) ? a.tasks_snapshot : null;
+        const totalTasks = snapshot ? snapshot.length : (taskTotalByChecklist[a.checklist_id] ?? 0);
         let completedCount = 0;
         let evidenceCount = 0;
         for (const e of dedupedExecs) {
@@ -585,9 +601,19 @@ export async function fetchAuditList(
         const hasAnyIssue = issuesForA.length > 0;
         const hasPendingIssue = pendingIssueTaskIds.size > 0;
 
-        // Contagem informativa — diferença vs. template ATUAL. Não afeta o status agregado.
+        // Tarefas do snapshot que ninguém executou. Tarefa REMOVIDA da rotina durante a sessão
+        // não conta como "não executada" — ela deixou de ser exigida (ver AuditTaskStatus
+        // 'removed' no detalhe). Sem snapshot (pré-s88), mantém a contagem antiga.
         const executedTaskIds = new Set(dedupedExecs.map(e => e.task_id!).filter(Boolean));
-        const incompleteCount = Math.max(0, totalTasks - executedTaskIds.size);
+        let incompleteCount: number;
+        if (snapshot) {
+            const liveIds = liveTaskIdsByChecklist[a.checklist_id] ?? new Set<string>();
+            incompleteCount = snapshot.filter(
+                t => !executedTaskIds.has(t.task_id) && liveIds.has(t.task_id),
+            ).length;
+        } else {
+            incompleteCount = Math.max(0, totalTasks - executedTaskIds.size);
+        }
 
         const status = deriveAssumptionStatus({ hasPendingIssue });
 
@@ -666,7 +692,7 @@ export async function fetchAuditDetail(
         .from('checklist_assumptions')
         .select(`
             id, restaurant_id, checklist_id, user_id, user_name,
-            date_key, assumed_at, completed_at, execution_status, blocked_reason,
+            date_key, assumed_at, completed_at, execution_status, blocked_reason, tasks_snapshot,
             checklists(id, name, description, shift, area_id)
         `)
         .eq('id', assumptionId)
@@ -686,21 +712,41 @@ export async function fetchAuditDetail(
     if (uErr) throw uErr;
     const u = userRow as RawUser | null;
 
-    // Tasks definidas (order é palavra reservada — só no ORDER BY)
-    const { data: tasksRaw, error: tErr } = await admin
-        .from('checklist_tasks')
-        .select('id, title, description, is_critical')
-        .eq('checklist_id', a.checklist_id)
-        .order('order', { ascending: true });
-    if (tErr) throw tErr;
-
+    // ── Lista de tarefas do relatório ───────────────────────────────────────
+    // s88: a espinha dorsal é o `tasks_snapshot` da sessão — a composição da rotina no momento em
+    // que ela foi assumida. Antes, era a definição ATUAL do checklist, o que reescrevia o passado
+    // a cada edição da rotina (e obrigava a API a recusar a exclusão de tarefas já executadas).
+    //
+    // A definição atual ainda é lida, para saber quais tarefas do snapshot ainda existem: uma
+    // tarefa removida da rotina e nunca executada aparece como 'removed', não como 'pending' —
+    // ela deixou de ser exigida, e não seria justo contá-la contra o colaborador.
     type RawTask = {
         id: string;
         title: string;
         description: string | null;
         is_critical: boolean;
     };
-    const taskList = (tasksRaw ?? []) as RawTask[];
+
+    // `order` é palavra reservada — só pode aparecer no ORDER BY.
+    const { data: tasksRaw, error: tErr } = await admin
+        .from('checklist_tasks')
+        .select('id, title, description, is_critical')
+        .eq('checklist_id', a.checklist_id)
+        .order('order', { ascending: true });
+    if (tErr) throw tErr;
+    const liveTasks = (tasksRaw ?? []) as RawTask[];
+    const liveTaskIds = new Set(liveTasks.map(t => t.id));
+
+    const snapshot = Array.isArray(a.tasks_snapshot) ? a.tasks_snapshot : null;
+    // Fallback (sessão pré-s88 sem snapshot): definição atual — o comportamento anterior.
+    const taskList: RawTask[] = snapshot
+        ? snapshot.map(t => ({
+            id: t.task_id,
+            title: t.title,
+            description: t.description,
+            is_critical: !!t.is_critical,
+        }))
+        : liveTasks;
 
     // Task executions desta assumption.
     // Vínculo canônico: `checklist_assumption_id`. Para linhas legadas (coluna ainda null),
@@ -821,10 +867,16 @@ export async function fetchAuditDetail(
                     });
                 }
             }
-            // Task com ocorrência pendente assume status 'impediment' (sobrepõe skipped/etc)
+            // Task com ocorrência pendente assume status 'impediment' (sobrepõe skipped/etc).
+            // s88: tarefa que estava no snapshot, nunca foi executada e não existe mais na rotina
+            // → 'removed'. Foi retirada da rotina durante a sessão; não é uma pendência do
+            // colaborador. Execução preservada (ex existe) mantém o status real dela.
+            const wasRemovedFromRoutine = !!snapshot && !ex && !liveTaskIds.has(t.id);
             const status: AuditTaskStatus = pendingIssue
                 ? 'impediment'
-                : mapTaskExecutionStatus(ex?.status);
+                : wasRemovedFromRoutine
+                    ? 'removed'
+                    : mapTaskExecutionStatus(ex?.status);
             return {
                 task_id: t.id,
                 // Fidelidade histórica (s84): snapshot da execução tem precedência sobre a definição atual.

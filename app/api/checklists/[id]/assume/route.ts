@@ -5,6 +5,7 @@ import { getRestaurantTimezone } from '@/lib/utils/restaurant-time';
 import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
 import { getAccountBilling, canExecuteTasks } from '@/lib/billing/subscription-access';
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
+import { buildTasksSnapshot } from '@/lib/services/checklist-snapshot';
 
 const getAdminSupabase = () =>
     createClient(
@@ -217,6 +218,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             .eq('user_id', user.id);
         const userShiftIds = (userShiftRows ?? []).map((r) => r.shift_id);
 
+        // Sprint 88 — Snapshot da composição da rotina. Congelado no assume: é ele que a
+        // Auditoria usa como lista de tarefas do dia, para que edições futuras da rotina
+        // (renomear/remover tarefa) não reescrevam o passado.
+        const tasksSnapshot = await buildTasksSnapshot(adminSupabase, checklistId);
+
         const { data: assumption, error: insertError } = await adminSupabase
             .from('checklist_assumptions')
             .insert({
@@ -227,6 +233,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
                 date_key: dateKey,
                 assumption_shift_id: checklistOwner.shift_id ?? null,
                 assumption_user_shift_ids: userShiftIds,
+                tasks_snapshot: tasksSnapshot,
             })
             .select()
             .single();

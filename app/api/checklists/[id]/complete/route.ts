@@ -6,6 +6,7 @@ import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
 import { getAccountBilling, canExecuteTasks } from '@/lib/billing/subscription-access';
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
 import { trackChecklistEvent } from '@/lib/analytics/track-event';
+import { buildTasksSnapshot } from '@/lib/services/checklist-snapshot';
 
 const getAdminSupabase = () =>
     createClient(
@@ -93,6 +94,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             if (error) return NextResponse.json({ error: error.message }, { status: 500 });
             assumption = data;
         } else {
+            // Sprint 88 — sessão criada direto na conclusão (rotina concluída sem assume prévio).
+            // Também precisa do snapshot da composição, senão a auditoria dessa execução cairia no
+            // fallback (definição atual) e voltaria a ser reescrita por edições futuras da rotina.
+            const tasksSnapshot = await buildTasksSnapshot(adminSupabase, checklistId);
+
             const { data, error } = await adminSupabase
                 .from('checklist_assumptions')
                 .insert({
@@ -105,6 +111,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
                     execution_status: 'done',
                     completed_by_user_id: user.id,
                     completed_by_user_name: userName,
+                    tasks_snapshot: tasksSnapshot,
                     ...(observation !== undefined && { observation }),
                 })
                 .select()

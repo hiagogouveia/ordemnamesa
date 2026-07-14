@@ -75,6 +75,24 @@ export type RecurrenceV2 =
 export type RecurrenceConfigField = RecurrenceConfig | RecurrenceV2
 
 // Sprint 8
+/**
+ * Sprint 88 — Uma tarefa como ela existia no momento em que a rotina foi assumida.
+ * Congelado em `ChecklistAssumption.tasks_snapshot`; é a fonte da lista de tarefas da Auditoria.
+ * Montado por `buildTasksSnapshot` (lib/services/checklist-snapshot.ts).
+ */
+export interface TaskSnapshot {
+    task_id: string
+    title: string
+    description: string | null
+    is_critical: boolean
+    requires_photo: boolean
+    requires_observation: boolean
+    type: TaskType
+    max_photos: number | null
+    task_config: Record<string, unknown> | null
+    order: number
+}
+
 export interface ChecklistAssumption {
     id: string
     restaurant_id: string
@@ -93,6 +111,9 @@ export interface ChecklistAssumption {
     assumption_shift_id?: string | null // deprecado (single) — ver assumption_shift_ids
     assumption_shift_ids?: string[] | null // Sprint 68 — turnos da rotina (N:N) no momento
     assumption_user_shift_ids?: string[] | null
+    // Sprint 88 — composição da rotina no momento do assume (congelada). Fonte da lista de
+    // tarefas da Auditoria. Null apenas em sessões anteriores à s88 fora do backfill.
+    tasks_snapshot?: TaskSnapshot[] | null
 }
 
 export interface Checklist {

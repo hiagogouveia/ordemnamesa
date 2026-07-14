@@ -105,7 +105,7 @@ function PhotoModal({ entry, onClose }: PhotoModalProps) {
                         /* eslint-disable-next-line @next/next/no-img-element */
                         <img
                             src={photoUrl}
-                            alt={entry.checklist_tasks?.title || 'Foto da tarefa'}
+                            alt={entry.task?.title || 'Foto da tarefa'}
                             className="max-w-full max-h-[70vh] object-contain"
                             onError={(e) => { e.currentTarget.src = '/image-error-placeholder.png'; }}
                         />
@@ -116,7 +116,7 @@ function PhotoModal({ entry, onClose }: PhotoModalProps) {
 
                 {/* Caption */}
                 <div className="bg-[#16262c] border border-[#325a67] rounded-xl px-5 py-3 flex flex-col gap-1">
-                    <p className="text-white font-bold">{entry.checklist_tasks?.title}</p>
+                    <p className="text-white font-bold">{entry.task?.title}</p>
                     <p className="text-[#92bbc9] text-sm">{date} • {time}</p>
                 </div>
             </div>
@@ -367,7 +367,7 @@ export default function HistoricoStaffPage() {
                                                         </span>
                                                     </div>
                                                     <span className="text-white font-medium text-base">
-                                                        {entry.checklist_tasks?.title || '—'}
+                                                        {entry.task?.title || '—'}
                                                     </span>
                                                 </div>
                                             </td>
