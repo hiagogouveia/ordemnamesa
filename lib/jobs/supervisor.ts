@@ -53,6 +53,12 @@ interface SupervisorOptions {
     selfPath: string;
     /** F4: filhos rodam em modo observador (registram o que fariam). */
     observe?: boolean;
+    /**
+     * F5 — allowlist de jobs que EXECUTAM DE VERDADE mesmo com `observe` global ligado.
+     * Vira a chave um job por vez: os fora da lista seguem só observando. Vazio + observe
+     * = tudo observa (F4); observe desligado = tudo executa (estado final da F5).
+     */
+    executeJobs?: Set<string>;
 }
 
 export async function runSupervisor(opts: SupervisorOptions): Promise<void> {
@@ -63,11 +69,16 @@ export async function runSupervisor(opts: SupervisorOptions): Promise<void> {
     await ensureJobState(admin);
     const reclaimed = await reclaimStaleRuns(admin);
 
+    // Descreve o modo por job no boot — o operador confirma nos logs QUAL job está
+    // executando de verdade antes de confiar. Ex.: "observe=true execute=[notifications-retention]".
+    const executeList = opts.executeJobs && opts.executeJobs.size > 0
+        ? `[${[...opts.executeJobs].join(",")}]`
+        : "[]";
     notificationLog.info({
         op: "materialize",
         action: "supervisor",
         status: "boot",
-        msg: `worker=${id} observe=${!!opts.observe} reclaimed=${reclaimed}`,
+        msg: `worker=${id} observe=${!!opts.observe} execute=${executeList} reclaimed=${reclaimed}`,
     });
 
     let lastTickDone = Date.now();
@@ -141,8 +152,10 @@ function spawnChild(
     job: string,
     children: Set<ReturnType<typeof fork>>,
 ) {
+    // Observa se o global observe está ligado E este job NÃO está na allowlist de execução.
+    const observe = !!opts.observe && !opts.executeJobs?.has(job);
     const args = ["run", job];
-    if (opts.observe) args.push("--observe");
+    if (observe) args.push("--observe");
 
     const child = fork(opts.selfPath, args, { stdio: "inherit" });
     children.add(child);

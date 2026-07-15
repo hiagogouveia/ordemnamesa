@@ -50,7 +50,26 @@ async function main() {
     // Default: supervisor residente. O modo observador (F4) vem do ambiente
     // (WORKER_OBSERVE=1) — é o compose que decide, não o argv, para virar a chave na F5
     // removendo uma env var em vez de mudar o command.
-    await runSupervisor({ selfPath: SELF, observe: observe || process.env.WORKER_OBSERVE === "1" });
+    //
+    // F5 — WORKER_EXECUTE=job1,job2 é a allowlist de jobs que executam DE VERDADE mesmo
+    // com o observe global ligado. Vira a chave um por vez. Nomes inválidos são ignorados
+    // com aviso (um typo não deve executar nada por engano, nem derrubar o worker).
+    const executeJobs = new Set<string>();
+    for (const raw of (process.env.WORKER_EXECUTE ?? "").split(",")) {
+        const name = raw.trim();
+        if (!name) continue;
+        if (isJobName(name)) {
+            executeJobs.add(name);
+        } else {
+            console.error(`[worker] WORKER_EXECUTE: job desconhecido "${name}" ignorado. Válidos: ${Object.keys(JOB_REGISTRY).join(", ")}`);
+        }
+    }
+
+    await runSupervisor({
+        selfPath: SELF,
+        observe: observe || process.env.WORKER_OBSERVE === "1",
+        executeJobs,
+    });
 }
 
 main().catch((err) => {
