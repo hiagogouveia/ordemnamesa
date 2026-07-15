@@ -19,8 +19,10 @@ name: routines-delayed
 #   CRON_SECRET          -> mesmo valor do env CRON_SECRET do app (PROD)
 
 on:
-  schedule:
-    - cron: "*/15 * * * *"
+  # AGENDAMENTO DESLIGADO (s91): este job migrou para o WORKER interno (NONPROD já executa;
+  # PROD assume no cutover). O secret ROUTINES_DELAYED_URL nunca foi criado, então o cron
+  # falhava a cada 15 min com URL vazia (`curl (3) URL rejected`), gerando e-mail de erro.
+  # Mantido só o disparo manual até a F6 remover a superfície HTTP de vez.
   workflow_dispatch:
 
 jobs:
