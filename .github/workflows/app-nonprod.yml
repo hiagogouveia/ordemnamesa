@@ -102,7 +102,7 @@ jobs:
           host: ${{ secrets.VM_HOST }}
           username: ubuntu
           key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
-          source: "infra/docker/docker-compose.yml,infra/docker/traefik/traefik.yml,infra/gatus/config.yaml,infra/docker/app-env.list"
+          source: "infra/docker/docker-compose.yml,infra/docker/traefik/traefik.yml,infra/docker/traefik/routes.yml,infra/gatus/config.yaml,infra/docker/app-env.list"
           target: /opt/ordemnamesa/
           strip_components: 2
 
@@ -141,11 +141,15 @@ jobs:
               printf '%s\n' "$APP_ENV" | grep -E "^(${WHITELIST})=" || true
               printf 'IMAGE_TAG=%s\n' "$IMAGE_TAG"
               printf 'APP_VERSION=%s\n' "$APP_VERSION"
+              # Parametriza o compose ÚNICO (F8b): nomes de projeto/rede/container.
+              printf 'DEPLOY_ENV=nonprod\n'
             } > .env
 
-            # Mover traefik.yml para o diretório correto
+            # traefik.yml e routes.yml já caem em traefik/ (scp strip_components); mkdir
+            # defensivo + mv tolerante caso caiam na raiz (robusto aos dois casos).
             mkdir -p traefik
-            [ -f traefik.yml ] && mv traefik.yml traefik/traefik.yml || true
+            [ -f traefik.yml ] && mv -f traefik.yml traefik/traefik.yml || true
+            [ -f routes.yml ] && mv -f routes.yml traefik/routes.yml || true
 
             # Config do Gatus (strip_components deixou config.yaml na raiz → move para gatus/)
             mkdir -p gatus

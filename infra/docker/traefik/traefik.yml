@@ -22,7 +22,6 @@ entryPoints:
 certificatesResolvers:
   letsencrypt:
     acme:
-      # Substituir pelo e-mail real antes do deploy
       email: devops@ordemnamesa.com.br
       storage: /acme.json
       httpChallenge:

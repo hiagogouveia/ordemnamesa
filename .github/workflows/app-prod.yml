@@ -101,7 +101,7 @@ jobs:
           host: ${{ secrets.PROD_VM_HOST }}
           username: root
           key: ${{ secrets.PROD_VM_SSH_PRIVATE_KEY }}
-          source: "infra/docker/docker-compose.prod.yml,infra/docker/traefik/traefik.prod.yml,infra/docker/traefik/routes.prod.yml,infra/gatus/config.yaml,infra/docker/app-env.list"
+          source: "infra/docker/docker-compose.yml,infra/docker/traefik/traefik.yml,infra/docker/traefik/routes.prod.yml,infra/gatus/config.yaml,infra/docker/app-env.list"
           target: /opt/ordemnamesa-prod/
           strip_components: 2
 
@@ -140,15 +140,18 @@ jobs:
               printf '%s\n' "$APP_ENV" | grep -E "^(${WHITELIST})=" || true
               printf 'IMAGE_TAG=%s\n' "$IMAGE_TAG"
               printf 'APP_VERSION=%s\n' "$APP_VERSION"
+              # Parametriza o compose ÚNICO (F8b): nomes de projeto/rede/container.
+              printf 'DEPLOY_ENV=prod\n'
+              # PROD ainda em MODO OBSERVADOR até o cutover (worker registra o que faria,
+              # sem executar). Sai daqui quando o PROD virar a chave.
+              printf 'WORKER_OBSERVE=1\n'
             } > .env
 
-            # Normalizar nomes de arquivo (prod → padrão esperado pelo compose)
-            [ -f docker-compose.prod.yml ] && mv docker-compose.prod.yml docker-compose.yml || true
-
-            # Configurar traefik (SCP já entrega em traefik/ com sufixo .prod)
+            # Compose e traefik.yml agora são COMPARTILHADOS (F8b) e já caem no lugar certo
+            # (docker-compose.yml na raiz; traefik.yml em traefik/). Só o routes é por-domínio:
+            # o prod usa routes.prod.yml, renomeado para o nome que o compose monta.
             mkdir -p traefik
-            [ -f traefik/traefik.prod.yml ] && mv -f traefik/traefik.prod.yml traefik/traefik.yml || true
-            [ -f traefik/routes.prod.yml ]  && mv -f traefik/routes.prod.yml  traefik/routes.yml  || true
+            [ -f traefik/routes.prod.yml ] && mv -f traefik/routes.prod.yml traefik/routes.yml || true
 
             # Config do Gatus (strip_components deixou config.yaml na raiz → move para gatus/)
             mkdir -p gatus

@@ -1,12 +1,27 @@
-name: ordem-na-mesa-nonprod
+# TEMPLATE ÚNICO de compose — serve PROD e NONPROD (s91, F8b).
+#
+# Antes havia dois arquivos quase idênticos (docker-compose.yml + .prod.yml) que só
+# divergiam em nome, paths e no modo do worker — e divergir era questão de tempo. Agora um
+# arquivo só, parametrizado por interpolação NATIVA do compose a partir do .env que o deploy
+# escreve:
+#   - ${DEPLOY_ENV}            → "nonprod" | "prod" (nomes de projeto/rede/volume/containers)
+#   - ${IMAGE_TAG}      → tag da imagem servida (o deploy sempre escreve)
+#   - ${WORKER_OBSERVE} → "1" liga o modo observador do worker; vazio = executa (default)
+# Os paths de volume são RELATIVOS (./traefik, ./gatus) → resolvem sozinhos ao diretório do
+# projeto na VM (/opt/ordemnamesa[-prod]), sem precisar de var de path.
+#
+# O que é genuinamente por-ambiente (o DOMÍNIO) vive em traefik/routes.yml, escolhido pelo
+# deploy (routes.yml no nonprod, routes.prod.yml no prod).
+
+name: ordem-na-mesa-${DEPLOY_ENV}
 
 networks:
   proxy:
-    name: ordem-na-mesa-nonprod-proxy
+    name: ordem-na-mesa-${DEPLOY_ENV}-proxy
 
 volumes:
   traefik-acme:
-    name: ordem-na-mesa-nonprod-acme
+    name: ordem-na-mesa-${DEPLOY_ENV}-acme
 
 services:
 
@@ -15,15 +30,15 @@ services:
   # ---------------------------------------------------------------------------
   traefik:
     image: traefik:v3.2
-    container_name: ordem-na-mesa-nonprod-traefik
+    container_name: ordem-na-mesa-${DEPLOY_ENV}-traefik
     restart: always
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - /opt/ordemnamesa/traefik/traefik.yml:/traefik.yml:ro
-      - /opt/ordemnamesa/traefik/routes.yml:/routes.yml:ro
-      - /opt/ordemnamesa/traefik/acme.json:/acme.json
+      - ./traefik/traefik.yml:/traefik.yml:ro
+      - ./traefik/routes.yml:/routes.yml:ro
+      - ./traefik/acme.json:/acme.json
     networks:
       - proxy
     healthcheck:
@@ -37,13 +52,15 @@ services:
   # Next.js — aplicação web Ordem na Mesa
   # ---------------------------------------------------------------------------
   nextjs:
-    image: ghcr.io/hiagogouveia/ordem-na-mesa-web:${IMAGE_TAG:-nonprod-latest}
-    container_name: ordem-na-mesa-nonprod-web
+    image: ghcr.io/hiagogouveia/ordem-na-mesa-web:${IMAGE_TAG:-latest}
+    container_name: ordem-na-mesa-${DEPLOY_ENV}-web
     restart: always
     expose:
       - "3000"
     # Todas as vars de runtime vêm do .env (fonte única: infra/docker/app-env.list, filtrado
-    # pelo deploy). Aqui ficam só as COMPUTADAS/estáticas. APP_VERSION vem do .env também.
+    # pelo deploy). Aqui ficam só as COMPUTADAS/estáticas. APP_VERSION vem do .env também
+    # (o deploy o escreve lá) — reportado por /api/health, pega deploy verde servindo imagem
+    # antiga.
     env_file:
       - .env
     environment:
@@ -64,25 +81,28 @@ services:
   # ---------------------------------------------------------------------------
   # Worker — executor de jobs agendados (substitui o cron via GitHub Actions).
   # ---------------------------------------------------------------------------
-  # MESMA imagem da app, command `node dist/worker.cjs`. NÃO entra na rede `proxy` —
-  # não expõe HTTP. F4: sobe em MODO OBSERVADOR (registra o que faria, sem executar).
+  # MESMA imagem da app, command `node dist/worker.cjs` (o supervisor). NÃO entra na rede
+  # `proxy` — não expõe HTTP. Modo do worker via ${WORKER_OBSERVE}: "1" observa (registra o
+  # que faria, sem executar); vazio executa. O deploy do PROD escreve WORKER_OBSERVE=1 até o
+  # cutover; o do NONPROD deixa vazio (F5 concluída — tudo executa).
   worker:
-    image: ghcr.io/hiagogouveia/ordem-na-mesa-web:${IMAGE_TAG:-nonprod-latest}
-    container_name: ordem-na-mesa-worker
+    image: ghcr.io/hiagogouveia/ordem-na-mesa-web:${IMAGE_TAG:-latest}
+    container_name: ordem-na-mesa-${DEPLOY_ENV}-worker
     restart: always
     command: ["node", "dist/worker.cjs"]
+    # Janela de graça no shutdown: o supervisor fecha o portão e espera o filho em curso.
     stop_grace_period: 30s
-    # Mesmo .env do web (fonte única). O worker ignora as vars que não usa; e agora recebe
-    # HISTORY_RETENTION_DAYS de graça (antes só o web tinha, então o history-retention do
-    # worker caía sempre no default 60).
+    # Mesmo .env do web (fonte única). O worker ignora as vars que não usa.
     env_file:
       - .env
     environment:
       NODE_ENV: production
-      # F5 CONCLUÍDA no NONPROD: todos os 6 jobs executam de verdade. Para voltar tudo a
-      # observar em um incidente: WORKER_OBSERVE: "1" aqui. Um job específico:
-      # WORKER_EXECUTE: "job-a,job-b" (allowlist do que executa com observe global ligado).
+      # Vazio = executa (default do NONPROD). "1" no .env (PROD, até o cutover) = observa.
+      WORKER_OBSERVE: "${WORKER_OBSERVE:-}"
     healthcheck:
+      # O worker escreve /tmp/worker-alive a cada tick; o healthcheck confere a idade.
+      # Serve para OBSERVAR (docker ps mostra unhealthy) — o restart de verdade quando
+      # trava vem do self-watchdog interno (o Compose não reinicia por healthcheck).
       test: ["CMD-SHELL", "test $(( $(date +%s) - $(stat -c %Y /tmp/worker-alive 2>/dev/null || echo 0) )) -lt 60"]
       interval: 30s
       timeout: 5s
@@ -98,12 +118,12 @@ services:
   # roda dentro dela. Liveness do processo ja vem do `restart: always`.
   gatus:
     image: twinproduction/gatus:v5.13.1
-    container_name: ordem-na-mesa-gatus
+    container_name: ordem-na-mesa-${DEPLOY_ENV}-gatus
     restart: always
     expose:
       - "8080"
     volumes:
-      - /opt/ordemnamesa/gatus/config.yaml:/config/config.yaml:ro
+      - ./gatus/config.yaml:/config/config.yaml:ro
     environment:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
