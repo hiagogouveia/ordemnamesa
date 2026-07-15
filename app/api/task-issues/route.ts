@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
-import { emitDomainEvent } from '@/lib/notifications/emit';
-import type { IssueSeverity } from '@/lib/notifications/contract';
+import { settleEmittedEvent } from '@/lib/notifications/emit';
+import { DEDUP_KEYS, PAYLOAD_VERSION, type IssueSeverity } from '@/lib/notifications/contract';
+import type { StoredDomainEvent } from '@/lib/notifications/materialize';
 import { buildIssuePayload, type TaskIssueRow } from '@/lib/notifications/payloads';
 
 const getAdminSupabase = () =>
@@ -66,60 +68,64 @@ export async function POST(request: Request) {
             ? photos.filter((p): p is string => typeof p === 'string' && p.length > 0)
             : [];
 
-        const { data: issue, error: insertError } = await admin
-            .from('task_issues')
-            .insert({
-                restaurant_id,
-                task_id,
-                checklist_id,
-                checklist_assumption_id: checklist_assumption_id ?? null,
-                task_execution_id: task_execution_id ?? null,
-                reported_by: user.id,
-                description: description.trim(),
-                photos: normalizedPhotos,
-                status: 'open',
-                severity: normalizedSeverity,
-            })
-            .select()
-            .single();
-
-        if (insertError) {
-            console.error('[POST /api/task-issues] insert error:', insertError);
-            return NextResponse.json({ error: insertError.message }, { status: 500 });
-        }
-
-        const { error: eventError } = await admin
-            .from('task_issue_events')
-            .insert({
-                task_issue_id: issue.id,
-                restaurant_id,
-                event_type: 'created',
-                to_status: 'open',
-                actor_user_id: user.id,
-                metadata: { source: 'api' },
-            });
-
-        if (eventError) {
-            console.error('[POST /api/task-issues] event insert error:', eventError);
-        }
-
-        // ── s90: a ocorrência passa a NOTIFICAR ──────────────────────────────
+        // ── OUTBOX TRANSACIONAL (s91, F7) ────────────────────────────────────
         //
-        // Desde o s45 nenhuma ocorrência gerava notificação: o alerta que existia
-        // (BLOCKED_ROUTINE) consultava task_executions.status='blocked', status que
-        // aquela mesma migration removeu. O gestor ficou às cegas por meses.
+        // A ocorrência, seu evento de auditoria e o domain_event (que vira notificação)
+        // são gravados numa TRANSAÇÃO só, via report_task_issue_tx. Antes eram 3 escritas
+        // separadas: um crash no meio deixava uma ocorrência sem notificação, sem retry.
         //
-        // A rota só DECLARA o fato. Quem decide destinatário, prioridade e destino é
-        // o materializador — em um só lugar. Não lança: reportar uma ocorrência não
-        // pode falhar porque a notificação está fora do ar. Mas, ao contrário do
-        // `catch` que engolia o erro, a falha agora fica registrada e é reprocessável.
-        await emitDomainEvent(admin, 'IssueReported', {
-            restaurantId: restaurant_id,
-            actorUserId: user.id,
-            payload: await buildIssuePayload(admin, issue as TaskIssueRow),
+        // O id é gerado AQUI para que o payload — que referencia o issue_id — seja montado
+        // antes da transação (buildIssuePayload só lê tabelas pré-existentes + os campos da
+        // request). A rota só DECLARA o fato; destinatário/prioridade/destino são decididos
+        // pelo materializador, num só lugar.
+        const issueId = randomUUID();
+        const issueRow: TaskIssueRow = {
+            id: issueId,
+            restaurant_id,
+            checklist_id,
+            checklist_assumption_id: checklist_assumption_id ?? null,
+            task_id,
+            severity: normalizedSeverity,
+            reported_by: user.id,
+            description: description.trim(),
+        };
+        const payload = await buildIssuePayload(admin, issueRow);
+        const dedupKey = DEDUP_KEYS.IssueReported(payload);
+
+        const { data: txData, error: txError } = await admin.rpc('report_task_issue_tx', {
+            p_issue_id: issueId,
+            p_restaurant_id: restaurant_id,
+            p_task_id: task_id,
+            p_checklist_id: checklist_id,
+            p_checklist_assumption_id: checklist_assumption_id ?? null,
+            p_task_execution_id: task_execution_id ?? null,
+            p_reported_by: user.id,
+            p_description: description.trim(),
+            p_photos: normalizedPhotos,
+            p_severity: normalizedSeverity,
+            p_actor_user_id: user.id,
+            p_event_type: 'IssueReported',
+            p_dedup_key: dedupKey,
+            p_payload: payload,
+            p_payload_version: PAYLOAD_VERSION,
         });
 
-        return NextResponse.json({ issue }, { status: 201 });
+        if (txError) {
+            console.error('[POST /api/task-issues] tx error:', txError);
+            return NextResponse.json({ error: txError.message }, { status: 500 });
+        }
+
+        const result = txData as { issue: unknown; domain_event: StoredDomainEvent | null };
+
+        // Fast-path inline: materializa a notificação AGORA (fora da transação, best-effort).
+        // Se falhar, o domain_event já está gravado (pending) e o worker reentrega — não lança.
+        await settleEmittedEvent(admin, result.domain_event, {
+            type: 'IssueReported',
+            restaurantId: restaurant_id,
+            dedupKey,
+        });
+
+        return NextResponse.json({ issue: result.issue }, { status: 201 });
     } catch (error) {
         console.error('[POST /api/task-issues] error:', error);
         return NextResponse.json({ error: (error as Error).message }, { status: 500 });

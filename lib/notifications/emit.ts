@@ -73,33 +73,13 @@ export async function emitDomainEvent<T extends DomainEventType>(
             return;
         }
 
-        // `ignoreDuplicates` devolve 0 linhas quando a chave já existia: o fato já
-        // foi registrado antes. Isto é o caminho feliz do dedup, não um erro.
-        if (!data) {
-            notificationLog.info({
-                op: "emit",
-                action: type,
-                restaurant_id: args.restaurantId,
-                status: "deduped",
-                msg: dedupKey,
-            });
-            return;
-        }
-
-        const event = data as StoredDomainEvent;
-
-        notificationLog.info({
-            op: "emit",
-            action: type,
-            restaurant_id: args.restaurantId,
-            status: "emitted",
-            msg: event.id,
+        // `ignoreDuplicates`/ON CONFLICT devolve 0 linhas quando a chave já existia: o
+        // fato já foi registrado. Caminho feliz do dedup, não erro.
+        await settleEmittedEvent(admin, (data as StoredDomainEvent | null) ?? null, {
+            type,
+            restaurantId: args.restaurantId,
+            dedupKey,
         });
-
-        // Fast-path inline: materializa AGORA (latência ~zero para a notificação). Se
-        // falhar, `settleDomainEvent` deixa o evento pending com backoff, e o worker o
-        // reentrega — MESMO invólucro que o retry usa, uma implementação só (F3).
-        await settleDomainEvent(admin, event);
     } catch (err) {
         notificationLog.error({
             op: "emit",
@@ -109,6 +89,44 @@ export async function emitDomainEvent<T extends DomainEventType>(
             msg: err instanceof Error ? err.message : "unknown",
         });
     }
+}
+
+/**
+ * Materializa (fast-path inline) um domain_event JÁ inserido, ou registra o dedup se ele
+ * não foi criado (linha nula). Extraído para servir DOIS chamadores com uma lógica só:
+ *   - emitDomainEvent (upsert + materialize no mesmo processo);
+ *   - o caminho TRANSACIONAL (report_task_issue_tx insere o evento atomicamente com a
+ *     ocorrência; a rota chama isto DEPOIS, com a linha que o RPC devolveu).
+ *
+ * Se `event` é null → o fato já existia (deduped): nada a materializar. Se falhar,
+ * settleDomainEvent deixa o evento pending com backoff e o worker reentrega — mesma rede
+ * de segurança do emit inline.
+ */
+export async function settleEmittedEvent(
+    admin: SupabaseClient,
+    event: StoredDomainEvent | null,
+    ctx: { type: DomainEventType; restaurantId: string; dedupKey: string },
+): Promise<void> {
+    if (!event) {
+        notificationLog.info({
+            op: "emit",
+            action: ctx.type,
+            restaurant_id: ctx.restaurantId,
+            status: "deduped",
+            msg: ctx.dedupKey,
+        });
+        return;
+    }
+
+    notificationLog.info({
+        op: "emit",
+        action: ctx.type,
+        restaurant_id: ctx.restaurantId,
+        status: "emitted",
+        msg: event.id,
+    });
+
+    await settleDomainEvent(admin, event);
 }
 
 // `processDomainEvent` foi REMOVIDO nesta fase (F3): seu invólucro (materialize + settle
