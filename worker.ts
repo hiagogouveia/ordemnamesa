@@ -47,8 +47,10 @@ async function main() {
         process.exit(report.outcome === "failed" || report.outcome === "timeout" ? 1 : 0);
     }
 
-    // Default: supervisor residente.
-    await runSupervisor({ selfPath: SELF, observe });
+    // Default: supervisor residente. O modo observador (F4) vem do ambiente
+    // (WORKER_OBSERVE=1) — é o compose que decide, não o argv, para virar a chave na F5
+    // removendo uma env var em vez de mudar o command.
+    await runSupervisor({ selfPath: SELF, observe: observe || process.env.WORKER_OBSERVE === "1" });
 }
 
 main().catch((err) => {

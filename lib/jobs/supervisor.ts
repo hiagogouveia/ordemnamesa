@@ -1,6 +1,7 @@
 import "server-only";
 
 import { fork } from "child_process";
+import { writeFileSync } from "fs";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { ensureJobState, findDueJobs } from "./lease";
 import { reclaimStaleRuns } from "./runner";
@@ -23,6 +24,16 @@ import { notificationLog } from "@/lib/notifications/log";
 
 const TICK_MS = 10_000;
 const WATCHDOG_FACTOR = 3;
+/** Heartbeat lido pelo healthcheck do container. Mtime = último tick vivo. */
+const HEARTBEAT_FILE = "/tmp/worker-alive";
+
+function touchHeartbeat() {
+    try {
+        writeFileSync(HEARTBEAT_FILE, String(Date.now()));
+    } catch {
+        // Não fatal: em dev (fora do container) o path pode não ser gravável.
+    }
+}
 
 function getAdmin(): SupabaseClient {
     return createClient(
@@ -105,6 +116,7 @@ export async function runSupervisor(opts: SupervisorOptions): Promise<void> {
     // ── Loop principal ───────────────────────────────────────────────────────
     // eslint-disable-next-line no-constant-condition
     while (!stopping) {
+        touchHeartbeat(); // sinal de vida ANTES do trabalho do tick
         try {
             const due = await findDueJobs(admin, new Date());
             for (const { name } of due) {

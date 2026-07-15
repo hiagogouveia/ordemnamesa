@@ -34,9 +34,12 @@ await build({
     // que quebram sob `format: esm` (`const { RRule } = pkg`). CJS interopera com ambos.
     format: "cjs",
     target: "node20",
-    // Deps externas (resolvidas em runtime pelo node_modules). Só o CÓDIGO do projeto é
-    // empacotado; supabase-js e afins ficam de fora do bundle.
-    packages: "external",
+    // Empacota TUDO no bundle (supabase-js, resend, rrule…). Não usar `packages:
+    // external`: o standalone do Next faz file-tracing e inclui só os .js que a APP
+    // importa — sem o package.json dos pacotes, um `require('@supabase/...')` do worker
+    // não resolveria. Com o bundle autossuficiente, o worker roda com um único .cjs e
+    // NENHUMA dependência de node_modules em runtime.
+    // (bundle: true já empacota; a ausência de `packages: external` é o que puxa as deps.)
     // `import.meta.url` não existe em CJS. O worker.ts o usa para achar o próprio caminho
     // (para forkar). Em CJS, `__filename` é o equivalente — o esbuild o injeta.
     define: { "import.meta.url": "__worker_self_url" },

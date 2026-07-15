@@ -35,6 +35,12 @@ ENV NODE_ENV=production
 
 RUN npm run build
 
+# Bundle do worker de jobs (dist/worker.cjs). O standalone do Next só traça o grafo da
+# app; o worker precisa do seu próprio bundle. `packages: external` deixa as deps fora do
+# bundle — elas vêm do node_modules do standalone (o worker usa as MESMAS libs da app:
+# supabase-js etc., que o Next já inclui).
+RUN npm run build:worker
+
 # =============================================================================
 # Stage 3: runner — imagem final mínima para produção
 # =============================================================================
@@ -55,6 +61,12 @@ RUN addgroup --system --gid 1001 nodejs && \
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+
+# Worker de jobs: só o bundle. As libs de runtime (supabase-js etc.) o worker resolve do
+# node_modules do STANDALONE (já copiado acima) — são as MESMAS que a app usa, então o
+# Next já as incluiu. Nada de copiar node_modules cheio: mataria o ganho do standalone.
+# O worker roda no MESMO container/imagem, via `command: node dist/worker.cjs` no compose.
+COPY --from=builder --chown=nextjs:nodejs /app/dist ./dist
 
 USER nextjs
 
