@@ -8,7 +8,7 @@ import {
     type DomainEventType,
     PAYLOAD_VERSION,
 } from "./contract";
-import { materializeNotifications } from "./materialize";
+import { settleDomainEvent, type StoredDomainEvent } from "./materialize";
 import { notificationLog } from "./log";
 
 /**
@@ -86,7 +86,7 @@ export async function emitDomainEvent<T extends DomainEventType>(
             return;
         }
 
-        const event = data as DomainEvent<T>;
+        const event = data as StoredDomainEvent;
 
         notificationLog.info({
             op: "emit",
@@ -96,7 +96,10 @@ export async function emitDomainEvent<T extends DomainEventType>(
             msg: event.id,
         });
 
-        await processDomainEvent(admin, event);
+        // Fast-path inline: materializa AGORA (latência ~zero para a notificação). Se
+        // falhar, `settleDomainEvent` deixa o evento pending com backoff, e o worker o
+        // reentrega — MESMO invólucro que o retry usa, uma implementação só (F3).
+        await settleDomainEvent(admin, event);
     } catch (err) {
         notificationLog.error({
             op: "emit",
@@ -108,48 +111,7 @@ export async function emitDomainEvent<T extends DomainEventType>(
     }
 }
 
-/**
- * Materializa UM evento em notificações e marca o resultado.
- *
- * Chamado inline pelo `emitDomainEvent` (fast-path) e pelo cron (rede de segurança).
- * Idempotente: o índice UNIQUE(event_id, user_id) impede que um reprocessamento
- * entregue duas cópias ao mesmo destinatário.
- */
-export async function processDomainEvent(
-    admin: SupabaseClient,
-    event: DomainEvent,
-): Promise<void> {
-    try {
-        const count = await materializeNotifications(admin, event);
-
-        await admin
-            .from("domain_events")
-            .update({ status: "processed", processed_at: new Date().toISOString(), last_error: null })
-            .eq("id", event.id);
-
-        notificationLog.info({
-            op: "materialize",
-            action: event.event_type,
-            restaurant_id: event.restaurant_id,
-            status: "processed",
-            msg: `${event.id} → ${count} notificação(ões)`,
-        });
-    } catch (err) {
-        const message = err instanceof Error ? err.message : "unknown";
-
-        // O evento fica `pending` com a causa registrada, e o cron reprocessa com
-        // backoff (F3). É exatamente o que o `catch` que engolia o erro nunca permitiu.
-        await admin
-            .from("domain_events")
-            .update({ last_error: message })
-            .eq("id", event.id);
-
-        notificationLog.error({
-            op: "materialize",
-            action: event.event_type,
-            restaurant_id: event.restaurant_id,
-            status: "failed",
-            msg: `${event.id}: ${message}`,
-        });
-    }
-}
+// `processDomainEvent` foi REMOVIDO nesta fase (F3): seu invólucro (materialize + settle
+// + log) era uma duplicata do que o cron de retry fazia. Ambos agora usam
+// `settleDomainEvent` (lib/notifications/materialize.ts) — uma implementação, dois
+// gatilhos. Consumidores externos devem importar `settleDomainEvent`.

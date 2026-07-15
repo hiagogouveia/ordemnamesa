@@ -10,6 +10,7 @@ import {
     PAYLOAD_VERSION,
 } from "./contract";
 import { NOTIFICATION_DESCRIPTORS, assertEmittableType } from "./registry";
+import { notificationLog } from "./log";
 
 /**
  * MATERIALIZAÇÃO — evento de domínio → notificações.
@@ -222,4 +223,92 @@ function relatedIdOf(payload: unknown): string | null {
         return typeof v === "string" ? v : null;
     }
     return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SETTLE — o invólucro ÚNICO: materializa o evento e resolve seu status.
+//
+// Antes, este invólucro (materialize + atualizar status + log) estava DUPLICADO em dois
+// lugares: `emit.ts` (fast-path inline) e `process.ts` (cron de retry). Os dois já
+// chamavam `materializeNotifications`, mas cada um reimplementava o settle — e podiam
+// divergir. Agora há UMA implementação, chamada pelos DOIS gatilhos.
+//
+// A contabilidade de tentativas fica consistente: cada chamada é uma tentativa. O evento
+// carrega `attempts`/`max_attempts` do banco; sucesso marca `processed`, falha aplica
+// backoff e, esgotadas as tentativas, marca `failed` (que a retenção preserva — é
+// evidência de bug).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Evento como vem do banco: o DomainEvent + os campos de controle de retry. */
+export type StoredDomainEvent = DomainEvent & {
+    attempts: number;
+    max_attempts: number;
+};
+
+export type SettleOutcome = "processed" | "retry_scheduled" | "exhausted";
+
+/** Backoff exponencial: 1min, 2, 4, 8, 16… teto 60. Não martela um banco em apuros. */
+export function nextAttemptAt(attempts: number): string {
+    const minutes = Math.min(2 ** attempts, 60);
+    return new Date(Date.now() + minutes * 60_000).toISOString();
+}
+
+/**
+ * Materializa UM evento e resolve seu status no `domain_events`. NUNCA lança — o desfecho
+ * volta no retorno, para que nem o fast-path nem o cron sejam derrubados por um evento.
+ */
+export async function settleDomainEvent(
+    admin: SupabaseClient,
+    event: StoredDomainEvent,
+): Promise<{ outcome: SettleOutcome; count: number }> {
+    const attempts = (event.attempts ?? 0) + 1;
+
+    try {
+        const count = await materializeNotifications(admin, event);
+
+        await admin
+            .from("domain_events")
+            .update({
+                status: "processed",
+                attempts,
+                processed_at: new Date().toISOString(),
+                last_error: null,
+            })
+            .eq("id", event.id);
+
+        notificationLog.info({
+            op: "materialize",
+            action: event.event_type,
+            restaurant_id: event.restaurant_id,
+            status: "processed",
+            msg: `${event.id} → ${count} notificação(ões) (tentativa ${attempts})`,
+        });
+
+        return { outcome: "processed", count };
+    } catch (err) {
+        const message = err instanceof Error ? err.message : "unknown";
+        // Esgotou as tentativas: para de tentar, mas a linha PERMANECE como evidência do
+        // bug (a retenção não apaga `failed`).
+        const exhausted = attempts >= (event.max_attempts ?? 5);
+
+        await admin
+            .from("domain_events")
+            .update({
+                status: exhausted ? "failed" : "pending",
+                attempts,
+                next_attempt_at: nextAttemptAt(attempts),
+                last_error: message,
+            })
+            .eq("id", event.id);
+
+        notificationLog.error({
+            op: "materialize",
+            action: event.event_type,
+            restaurant_id: event.restaurant_id,
+            status: exhausted ? "exhausted" : "retry_scheduled",
+            msg: `${event.id} (tentativa ${attempts}/${event.max_attempts ?? 5}): ${message}`,
+        });
+
+        return { outcome: exhausted ? "exhausted" : "retry_scheduled", count: 0 };
+    }
 }

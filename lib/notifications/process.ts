@@ -1,9 +1,8 @@
 import "server-only";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { DomainEvent } from "./contract";
-import { materializeNotifications } from "./materialize";
 import { notificationLog } from "./log";
+import { settleDomainEvent, type StoredDomainEvent } from "./materialize";
 
 /**
  * REDE DE SEGURANÇA do outbox de eventos de domínio.
@@ -17,14 +16,10 @@ import { notificationLog } from "./log";
  * notificação sumia sem deixar rastro. Agora ela é reprocessável, e a falha é visível.
  *
  * Reprocessar é seguro: o índice UNIQUE(event_id, user_id) impede que um destinatário
- * receba duas cópias.
+ * receba duas cópias. E a lógica de materialização/backoff é COMPARTILHADA com o
+ * fast-path via `settleDomainEvent` (F3) — este módulo só ORQUESTRA (busca elegíveis,
+ * contabiliza).
  */
-
-/** Backoff exponencial: 1min, 2, 4, 8, 16… — não martela um banco já em apuros. */
-function nextAttemptAt(attempts: number): string {
-    const minutes = Math.min(2 ** attempts, 60);
-    return new Date(Date.now() + minutes * 60_000).toISOString();
-}
 
 function getAdminSupabase(): SupabaseClient {
     return createClient(
@@ -63,66 +58,17 @@ export async function processDomainEventsOutbox(
         throw new Error(`outbox query: ${error.message}`);
     }
 
-    const rows = (data ?? []) as (DomainEvent & {
-        status: string;
-        attempts: number;
-        max_attempts: number;
-    })[];
+    const rows = (data ?? []) as StoredDomainEvent[];
 
     const result: ProcessResult = { picked: rows.length, processed: 0, retrying: 0, exhausted: 0 };
 
     for (const row of rows) {
-        const attempts = row.attempts + 1;
-
-        try {
-            const count = await materializeNotifications(admin, row);
-
-            await admin
-                .from("domain_events")
-                .update({
-                    status: "processed",
-                    attempts,
-                    processed_at: new Date().toISOString(),
-                    last_error: null,
-                })
-                .eq("id", row.id);
-
-            result.processed += 1;
-            notificationLog.info({
-                op: "materialize",
-                action: row.event_type,
-                restaurant_id: row.restaurant_id,
-                status: "reprocessed",
-                msg: `${row.id} → ${count} notificação(ões) (tentativa ${attempts})`,
-            });
-        } catch (err) {
-            const message = err instanceof Error ? err.message : "unknown";
-
-            // Esgotou as tentativas: para de tentar, mas a linha PERMANECE como
-            // evidência do bug. A retenção (F9) não apaga eventos `failed`.
-            const exhausted = attempts >= row.max_attempts;
-
-            await admin
-                .from("domain_events")
-                .update({
-                    status: exhausted ? "failed" : "pending",
-                    attempts,
-                    next_attempt_at: nextAttemptAt(attempts),
-                    last_error: message,
-                })
-                .eq("id", row.id);
-
-            if (exhausted) result.exhausted += 1;
-            else result.retrying += 1;
-
-            notificationLog.error({
-                op: "materialize",
-                action: row.event_type,
-                restaurant_id: row.restaurant_id,
-                status: exhausted ? "exhausted" : "retry_scheduled",
-                msg: `${row.id} (tentativa ${attempts}/${row.max_attempts}): ${message}`,
-            });
-        }
+        // MESMO invólucro do fast-path inline (F3): materializa + resolve status + log,
+        // com backoff. Antes este loop reimplementava tudo isso; agora só contabiliza.
+        const { outcome } = await settleDomainEvent(admin, row);
+        if (outcome === "processed") result.processed += 1;
+        else if (outcome === "exhausted") result.exhausted += 1;
+        else result.retrying += 1;
     }
 
     return result;
