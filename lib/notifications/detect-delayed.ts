@@ -31,12 +31,20 @@ import { notificationLog } from "./log";
  * minutos, mas o índice UNIQUE garante NO MÁXIMO UMA notificação por rotina/dia. Sem
  * isso, uma rotina atrasada geraria um alerta a cada varredura — spam garantido.
  *
- * CUSTO (medido): a varredura é O(restaurantes) e sequencial — 3 queries por restaurante
- * mais uma emissão por rotina atrasada. No NONPROD (com dados reais) levou ~1 minuto.
- * Isso é aceitável para um cron de 15 minutos e não vale otimizar agora. Se a contagem
- * de tenants crescer muito, os pontos a atacar são, nesta ordem: (1) cachear os
- * destinatários por restaurante — hoje `resolveRecipients` roda uma query por notificação
- * emitida; (2) paralelizar o laço por restaurante em lotes.
+ * CUSTO — SCAN EM LOTE (s91, F7): o desenho anterior era O(restaurantes) sequencial, com
+ * ~5 queries POR restaurante (medido: ~2.5 min no NONPROD). Agora as buscas são
+ * BATCHEADAS: shifts e areas de TODOS os restaurantes em 1 query cada; as views agrupadas
+ * POR FUSO (uma chamada de fetchChecklistViews por timezone distinto — quase sempre 1).
+ * O laço de status roda em memória, sem novas queries. Queries totais caem de O(5N) para
+ * ~O(3 + fusos·3). Sobra apenas 1 emissão por rotina atrasada (inerente ao evento).
+ *
+ * Por que agrupar por FUSO e não jogar tudo numa chamada só: fetchChecklistViews usa o
+ * fuso do PRIMEIRO restaurante para o `date_key` das assumptions. Misturar fusos usaria um
+ * dia errado para parte deles — reintroduzindo exatamente o bug de fuso que evitamos. Como
+ * todos os restaurantes de um grupo compartilham o fuso, o date_key fica correto para todos.
+ *
+ * Próximo ponto se crescer: cachear `resolveRecipients` por restaurante (hoje 1 query por
+ * emissão).
  */
 
 export interface DelayedScanResult {
@@ -56,6 +64,7 @@ function getAdminSupabase(): SupabaseClient {
 interface RestaurantRow {
     id: string;
     timezone: string | null;
+    name: string | null;
 }
 
 export async function detectDelayedRoutines(
@@ -68,61 +77,105 @@ export async function detectDelayedRoutines(
     const admin = options.admin ?? getAdminSupabase();
     const result: DelayedScanResult = { restaurants: 0, checked: 0, delayed: 0 };
 
-    let query = admin.from("restaurants").select("id, timezone").eq("active", true);
+    let query = admin.from("restaurants").select("id, timezone, name").eq("active", true);
     if (options.restaurantIds?.length) {
         query = query.in("id", options.restaurantIds);
     }
 
     const { data: restaurants, error } = await query;
-
     if (error) throw new Error(`restaurants: ${error.message}`);
 
-    for (const r of (restaurants ?? []) as RestaurantRow[]) {
-        result.restaurants += 1;
+    const rests = (restaurants ?? []) as RestaurantRow[];
+    const allIds = rests.map((r) => r.id);
 
-        const tz = r.timezone ?? "America/Sao_Paulo";
-        const now = getNowInTz(tz);
-
-        const [views, shiftsRes, areasRes] = await Promise.all([
-            fetchChecklistViews(admin, { restaurantIds: [r.id] }),
-            admin.from("shifts").select("*").eq("restaurant_id", r.id),
-            admin.from("areas").select("id, name").eq("restaurant_id", r.id),
+    if (allIds.length > 0) {
+        // ── Batch 1: shifts e areas de TODOS os restaurantes (independem de fuso) ──────
+        const [shiftsRes, areasRes] = await Promise.all([
+            admin.from("shifts").select("*").in("restaurant_id", allIds),
+            admin.from("areas").select("id, name, restaurant_id").in("restaurant_id", allIds),
         ]);
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const shifts = (shiftsRes.data ?? []) as any[];
-        const areaNameById = new Map(
-            ((areasRes.data ?? []) as { id: string; name: string }[]).map((a) => [a.id, a.name]),
+        const shiftsByRest = new Map<string, any[]>();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for (const s of (shiftsRes.data ?? []) as any[]) {
+            const list = shiftsByRest.get(s.restaurant_id) ?? [];
+            list.push(s);
+            shiftsByRest.set(s.restaurant_id, list);
+        }
+
+        const areaNameByRest = new Map<string, Map<string, string>>();
+        for (const a of (areasRes.data ?? []) as { id: string; name: string; restaurant_id: string }[]) {
+            const m = areaNameByRest.get(a.restaurant_id) ?? new Map<string, string>();
+            m.set(a.id, a.name);
+            areaNameByRest.set(a.restaurant_id, m);
+        }
+
+        // unitsById pronto → evita a query interna de restaurants do fetchChecklistViews.
+        const unitsById = Object.fromEntries(
+            rests.map((r) => [r.id, { id: r.id, name: r.name ?? "" }]),
         );
 
-        const statusCtx = { dayOfWeek: now.dayOfWeek, dateKey: now.dateKey, shifts };
+        // ── Batch 2: views agrupadas por FUSO (o date_key das assumptions depende do fuso) ─
+        const idsByTz = new Map<string, string[]>();
+        for (const r of rests) {
+            const tz = r.timezone ?? "America/Sao_Paulo";
+            const list = idsByTz.get(tz) ?? [];
+            list.push(r.id);
+            idsByTz.set(tz, list);
+        }
 
-        for (const view of views) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const checklist = view as any;
-            if (!checklist.active) continue;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const viewsByRest = new Map<string, any[]>();
+        for (const [, ids] of idsByTz) {
+            const views = await fetchChecklistViews(admin, { restaurantIds: ids, unitsById });
+            for (const v of views) {
+                const rid = (v as { restaurant_id: string }).restaurant_id;
+                const list = viewsByRest.get(rid) ?? [];
+                list.push(v);
+                viewsByRest.set(rid, list);
+            }
+        }
 
-            result.checked += 1;
+        // ── Laço em memória: status por restaurante no SEU fuso, sem novas queries ─────
+        for (const r of rests) {
+            result.restaurants += 1;
 
-            const status = getOperationalStatus(checklist, now.minutes, statusCtx);
-            if (status !== "overdue") continue;
+            const tz = r.timezone ?? "America/Sao_Paulo";
+            const now = getNowInTz(tz);
+            const shifts = shiftsByRest.get(r.id) ?? [];
+            const areaNameById = areaNameByRest.get(r.id) ?? new Map<string, string>();
+            const views = viewsByRest.get(r.id) ?? [];
 
-            result.delayed += 1;
+            const statusCtx = { dayOfWeek: now.dayOfWeek, dateKey: now.dateKey, shifts };
 
-            await emitDomainEvent(admin, "RoutineDelayed", {
-                restaurantId: r.id,
-                // Ninguém "causou" o atraso — é o tempo passando. Sem ator.
-                actorUserId: null,
-                payload: {
-                    checklist_id: checklist.id,
-                    checklist_assumption_id: checklist.assumption_id ?? null,
-                    date_key: now.dateKey,
-                    checklist_name: checklist.name ?? "Rotina",
-                    area_name: checklist.area_id
-                        ? (areaNameById.get(checklist.area_id) ?? null)
-                        : null,
-                },
-            });
+            for (const view of views) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const checklist = view as any;
+                if (!checklist.active) continue;
+
+                result.checked += 1;
+
+                const status = getOperationalStatus(checklist, now.minutes, statusCtx);
+                if (status !== "overdue") continue;
+
+                result.delayed += 1;
+
+                await emitDomainEvent(admin, "RoutineDelayed", {
+                    restaurantId: r.id,
+                    // Ninguém "causou" o atraso — é o tempo passando. Sem ator.
+                    actorUserId: null,
+                    payload: {
+                        checklist_id: checklist.id,
+                        checklist_assumption_id: checklist.assumption_id ?? null,
+                        date_key: now.dateKey,
+                        checklist_name: checklist.name ?? "Rotina",
+                        area_name: checklist.area_id
+                            ? (areaNameById.get(checklist.area_id) ?? null)
+                            : null,
+                    },
+                });
+            }
         }
     }
 

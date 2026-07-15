@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { JOB_REGISTRY, JOB_NAMES } from "@/lib/jobs/registry";
+import { JOB_REGISTRY, JOB_NAMES, isJobOverdue } from "@/lib/jobs/registry";
 
 export const dynamic = "force-dynamic";
 
@@ -73,18 +73,15 @@ export async function GET() {
             if (workerSeenAt === null || t > workerSeenAt) workerSeenAt = t;
         }
 
-        const lastSuccess = row?.last_success_at ? new Date(row.last_success_at).getTime() : null;
-        // "overdue" só faz sentido para job habilitado. Um job nunca-bem-sucedido conta
-        // como overdue assim que passa 2× o intervalo desde que o estado foi semeado.
-        const staleThreshold = def.everySeconds * 1000 * 2;
-        const overdue =
-            enabled &&
-            (lastSuccess === null
-                ? // nunca teve sucesso: overdue se a linha existe há mais de 2× o intervalo
-                  row?.updated_at
-                    ? now - new Date(row.updated_at).getTime() > staleThreshold
-                    : false
-                : now - lastSuccess > staleThreshold);
+        const overdue = isJobOverdue(
+            def,
+            {
+                enabled,
+                lastSuccessAtMs: row?.last_success_at ? new Date(row.last_success_at).getTime() : null,
+                updatedAtMs: row?.updated_at ? new Date(row.updated_at).getTime() : null,
+            },
+            now,
+        );
 
         if (overdue) anyOverdue = true;
 

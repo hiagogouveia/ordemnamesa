@@ -120,6 +120,31 @@ export function effectiveIntervalMs(
     return Math.max(everySeconds, backoff) * 1000;
 }
 
+/**
+ * Um job está OVERDUE se não teve sucesso dentro de 2× o seu intervalo. Baseada em
+ * RESULTADO (last_success_at), não em processo — uma condição só que captura worker morto,
+ * worker travado, job em loop de falha e banco inacessível pelo worker.
+ *
+ * A ÚNICA definição de "overdue" no projeto: o health endpoint (dead-man's-switch) e a
+ * página de jobs do Control Hub chamam ESTA função. Duplicá-la criaria duas verdades sobre
+ * o que é "atrasado". Pura e isomórfica de propósito (mesmo motivo do effectiveIntervalMs).
+ *
+ * `lastSuccessAtMs`/`updatedAtMs` em epoch ms (ou null). Job nunca bem-sucedido conta como
+ * overdue assim que a linha existe há mais de 2× o intervalo.
+ */
+export function isJobOverdue(
+    def: JobDefinition,
+    row: { enabled: boolean; lastSuccessAtMs: number | null; updatedAtMs: number | null },
+    nowMs: number,
+): boolean {
+    if (!row.enabled) return false;
+    const staleThreshold = def.everySeconds * 1000 * 2;
+    if (row.lastSuccessAtMs === null) {
+        return row.updatedAtMs !== null && nowMs - row.updatedAtMs > staleThreshold;
+    }
+    return nowMs - row.lastSuccessAtMs > staleThreshold;
+}
+
 // ── INVARIANTE verificado no import ──────────────────────────────────────────
 // lockTtlMs > timeoutMs para TODO job. Se alguém errar, o processo (worker, teste ou
 // health endpoint) falha ao carregar este módulo — antes de qualquer job rodar, e não

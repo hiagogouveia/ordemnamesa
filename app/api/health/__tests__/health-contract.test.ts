@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "fs";
 import { execSync } from "child_process";
+import { isJobOverdue, JOB_REGISTRY } from "@/lib/jobs/registry";
 
 /**
  * O CONTRATO DE SAÚDE é uma interface pública consumida por ferramentas externas.
@@ -61,8 +62,37 @@ describe("jobs — dead-man's-switch observado pelo WEB, não pelo worker", () =
         expect(jobs).toContain("last_success_at");
     });
 
-    it("overdue é baseado em RESULTADO (last_success), não em processo vivo", () => {
-        expect(jobs).toContain("staleThreshold");
+    it("usa a função única isJobOverdue (não redefine 'atrasado' localmente)", () => {
+        // "overdue" tem UMA definição no projeto (lib/jobs/registry). A rota e a página do
+        // Control Hub chamam a mesma função — duplicar criaria duas verdades sobre atraso.
+        expect(jobs).toContain("isJobOverdue");
+    });
+});
+
+describe("isJobOverdue — 'atrasado' é baseado em RESULTADO, não em processo vivo", () => {
+    const def = JOB_REGISTRY["domain-events"]; // everySeconds = 300 → limiar = 600s
+    const now = 1_000_000_000_000;
+    const staleMs = def.everySeconds * 1000 * 2;
+
+    it("sucesso recente → NÃO atrasado", () => {
+        expect(isJobOverdue(def, { enabled: true, lastSuccessAtMs: now - 1000, updatedAtMs: now }, now)).toBe(false);
+    });
+
+    it("último sucesso além de 2× o intervalo → atrasado (mesmo com o processo 'vivo')", () => {
+        // updatedAt recente (worker tocou a linha), mas o SUCESSO é velho: ainda assim atrasado.
+        expect(isJobOverdue(def, { enabled: true, lastSuccessAtMs: now - staleMs - 1, updatedAtMs: now }, now)).toBe(true);
+    });
+
+    it("job desligado nunca conta como atrasado", () => {
+        expect(isJobOverdue(def, { enabled: false, lastSuccessAtMs: now - staleMs - 1, updatedAtMs: now }, now)).toBe(false);
+    });
+
+    it("nunca teve sucesso, mas a linha é nova → ainda NÃO atrasado", () => {
+        expect(isJobOverdue(def, { enabled: true, lastSuccessAtMs: null, updatedAtMs: now - 1000 }, now)).toBe(false);
+    });
+
+    it("nunca teve sucesso e a linha já é velha → atrasado", () => {
+        expect(isJobOverdue(def, { enabled: true, lastSuccessAtMs: null, updatedAtMs: now - staleMs - 1 }, now)).toBe(true);
     });
 });
 
