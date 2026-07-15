@@ -154,7 +154,11 @@ function spawnChild(
 ) {
     // Observa se o global observe está ligado E este job NÃO está na allowlist de execução.
     const observe = !!opts.observe && !opts.executeJobs?.has(job);
-    const args = ["run", job];
+    // `--scheduled`: marca que quem forka é o SUPERVISOR, não um humano no shell. Isenta os
+    // jobs destrutivos do guard de --confirm (que existe só contra digitar `run
+    // history-retention` à mão num shell de produção). As travas reais do agendado são a
+    // allowlist WORKER_EXECUTE e o `enabled` no banco.
+    const args = ["run", job, "--scheduled"];
     if (observe) args.push("--observe");
 
     const child = fork(opts.selfPath, args, { stdio: "inherit" });

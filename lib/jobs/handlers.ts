@@ -6,6 +6,7 @@ import { processDomainEventsOutbox } from "@/lib/notifications/process";
 import { processAdminNotificationOutbox } from "@/lib/admin-notifications/process";
 import { detectDelayedRoutines } from "@/lib/notifications/detect-delayed";
 import { applyNotificationRetention } from "@/lib/notifications/retention";
+import { applyPhotoRetention, applyHistoryRetention } from "@/lib/photos/retention";
 
 /**
  * HANDLERS — o que cada job efetivamente FAZ.
@@ -27,20 +28,6 @@ export interface JobResult {
 }
 
 export type JobHandler = (admin: SupabaseClient) => Promise<JobResult>;
-
-/**
- * Photo/history-retention ainda têm a lógica DENTRO da rota (`app/api/cron/*`), não num
- * módulo. Serão extraídos para `lib/` na F5, quando forem migrados — aí ganham handler
- * real. Até lá, um handler que sinaliza "não implementado no worker" impede que sejam
- * ligados por engano antes da extração.
- */
-function notYetExtracted(name: string): JobHandler {
-    return async () => {
-        throw new Error(
-            `[jobs] "${name}" ainda não foi extraído da rota para lib/ — migra na F5, não ligar antes.`,
-        );
-    };
-}
 
 export const JOB_HANDLERS: Record<JobName, JobHandler> = {
     "domain-events": async (admin) => {
@@ -80,6 +67,27 @@ export const JOB_HANDLERS: Record<JobName, JobHandler> = {
         };
     },
 
-    "photo-retention": notYetExtracted("photo-retention"),
-    "history-retention": notYetExtracted("history-retention"),
+    "photo-retention": async (admin) => {
+        const r = await applyPhotoRetention({ admin });
+        return {
+            itemsProcessed: r.removed,
+            details: { expired: r.expiredCount, removed: r.removed },
+        };
+    },
+
+    // Deleção IRREVERSÍVEL. Roda real (dryRun=false) quando o job executa — o guard de
+    // segurança contra disparo manual acidental fica no worker.ts (--confirm).
+    "history-retention": async (admin) => {
+        const r = await applyHistoryRetention({ admin });
+        const total = r.executionsDeleted + r.assumptionsDeleted + r.issuesDeleted;
+        return {
+            itemsProcessed: total,
+            details: {
+                executions: r.executionsDeleted,
+                assumptions: r.assumptionsDeleted,
+                issues: r.issuesDeleted,
+                photos: r.photosRemoved,
+            },
+        };
+    },
 };

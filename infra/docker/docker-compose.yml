@@ -91,7 +91,7 @@ services:
       # Vira a chave um por vez; os fora da lista seguem só observando. Ordem do menos ao
       # mais crítico: notifications-retention → photo/history → domain-events →
       # admin-notifications → routines-delayed.
-      WORKER_EXECUTE: "notifications-retention,domain-events,admin-notifications"
+      WORKER_EXECUTE: "notifications-retention,domain-events,admin-notifications,photo-retention,history-retention"
       NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
       RESEND_API_KEY: ${RESEND_API_KEY}

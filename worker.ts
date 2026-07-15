@@ -26,6 +26,8 @@ async function main() {
     const [cmd, jobArg, ...rest] = process.argv.slice(2);
     const observe = rest.includes("--observe");
     const confirm = rest.includes("--confirm");
+    // Passado pelo supervisor ao forkar — sinaliza execução AGENDADA, não um humano no shell.
+    const scheduled = rest.includes("--scheduled");
 
     if (cmd === "run") {
         if (!jobArg || !isJobName(jobArg)) {
@@ -33,10 +35,11 @@ async function main() {
             process.exit(2);
         }
 
-        // Jobs destrutivos (deleção irreversível) exigem --confirm no disparo MANUAL.
-        // No fork do supervisor, `observe` ou o fluxo agendado normal não passam por aqui
-        // como "manual" — o guard é para o operador, que digita o comando.
-        if (JOB_REGISTRY[jobArg].destructive && !confirm && !observe) {
+        // Jobs destrutivos (deleção irreversível) exigem --confirm no disparo MANUAL. O
+        // fork agendado do supervisor passa --scheduled e é isento — senão o scheduler
+        // jamais rodaria o history-retention. O guard existe só contra o operador digitar
+        // `run history-retention` à mão. Observador também não deleta nada, então é isento.
+        if (JOB_REGISTRY[jobArg].destructive && !confirm && !observe && !scheduled) {
             console.error(`"${jobArg}" é destrutivo (deleção irreversível). Repita com --confirm.`);
             process.exit(3);
         }
