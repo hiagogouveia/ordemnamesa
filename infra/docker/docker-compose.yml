@@ -85,13 +85,9 @@ services:
     environment:
       NODE_ENV: production
       APP_VERSION: ${APP_VERSION:-unknown}
-      # F4 → observador. Remover (ou =0) na F5 liga a execução real de TODOS os jobs.
-      WORKER_OBSERVE: "1"
-      # F5 — allowlist de jobs que EXECUTAM DE VERDADE mesmo com o observe global ligado.
-      # Vira a chave um por vez; os fora da lista seguem só observando. Ordem do menos ao
-      # mais crítico: notifications-retention → photo/history → domain-events →
-      # admin-notifications → routines-delayed.
-      WORKER_EXECUTE: "notifications-retention,domain-events,admin-notifications,photo-retention,history-retention"
+      # F5 CONCLUÍDA no NONPROD: todos os 6 jobs executam de verdade. WORKER_OBSERVE e
+      # WORKER_EXECUTE removidos (a rampa "um por vez" cumpriu o papel; o estado final é
+      # "tudo executa"). Reintroduzir WORKER_OBSERVE=1 volta tudo a observar, se preciso.
       NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
       RESEND_API_KEY: ${RESEND_API_KEY}
