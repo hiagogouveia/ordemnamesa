@@ -20,8 +20,10 @@ name: notifications-retention
 #   CRON_SECRET                 -> mesmo valor do env CRON_SECRET do app (PROD)
 
 on:
-  schedule:
-    - cron: "17 4 * * *" # 04:17 UTC, diario (fora do pico)
+  # AGENDAMENTO DESLIGADO (s91): migrou para o WORKER interno (NONPROD já executa; PROD
+  # assume no cutover). O secret NOTIFICATIONS_RETENTION_URL nunca foi criado, então o cron
+  # diário falhava com URL vazia (`curl (3) URL rejected`), gerando e-mail de erro.
+  # Mantido só o disparo manual até a F6 remover a superfície HTTP de vez.
   workflow_dispatch:
 
 jobs:
