@@ -33,6 +33,20 @@ describe("contrato de saúde — o veredito viaja no status HTTP", () => {
     });
 });
 
+describe("system — disco e memória, mesmo contrato de status HTTP", () => {
+    const system = readFileSync("app/api/health/system/route.ts", "utf8");
+
+    it("responde 503 quando degradado, veredito no status", () => {
+        expect(system).toMatch(/status:\s*degraded\s*\?\s*503\s*:\s*200/);
+    });
+
+    it("null (não medível em dev) NÃO conta como degradado", () => {
+        // macOS não tem /proc/meminfo. Um endpoint que virasse 503 em dev seria inútil.
+        expect(system).toMatch(/disk !== null/);
+        expect(system).toMatch(/mem !== null/);
+    });
+});
+
 describe("liveness NÃO checa dependências (senão vira crashloop)", () => {
     const liveness = readFileSync("app/api/health/route.ts", "utf8");
 
