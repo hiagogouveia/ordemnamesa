@@ -1,0 +1,102 @@
+# Gatus — monitoramento da plataforma HexAI (Ordem na Mesa).
+#
+# ── Princípio: o monitor é um CONSUMIDOR, nunca uma dependência ───────────────
+# Este arquivo NÃO conhece a aplicação por dentro. Ele só faz GET nos health endpoints
+# e decide pelo STATUS HTTP (200 = ok, 503 = degradado). Trocar o Gatus por outra
+# ferramenta amanhã é refazer ESTE diretório — zero linhas de código da app.
+#
+# ── Monitoramento CRUZADO ─────────────────────────────────────────────────────
+# Um monitor que roda na mesma VPS não detecta aquela VPS caindo — morre junto. Por isso
+# este MESMO config é implantado nos DOIS ambientes, e cada instância vigia AMBOS: a de
+# PROD vigia o NONPROD e a si mesma; a de NONPROD vigia o PROD e a si mesma. Se um cair,
+# o outro alerta. Zero SaaS externo, 100% versionado.
+#
+# ── Segredos ──────────────────────────────────────────────────────────────────
+# ${TELEGRAM_*} são substituídos em runtime pelas env vars do container. NADA de token
+# no arquivo (o repo é público). Enquanto o TELEGRAM_CHAT_ID não for preenchido, o
+# monitoramento e o painel funcionam; só o alerta fica inerte.
+
+storage:
+  type: memory
+
+ui:
+  title: "HexAI · Status"
+  header: "Plataforma HexAI"
+
+# Alerta padrão: Telegram. Cada endpoint referencia por `type: telegram`.
+alerting:
+  telegram:
+    token: "${TELEGRAM_BOT_TOKEN}"
+    id: "${TELEGRAM_CHAT_ID}"
+    # Não derruba o Gatus se as credenciais estiverem vazias: apenas não envia.
+    default-alert:
+      # Alerta após 3 checagens falhas seguidas; resolve após 2 ok.
+      failure-threshold: 3
+      success-threshold: 2
+      send-on-resolved: true
+
+endpoints:
+  # ── PRODUÇÃO ────────────────────────────────────────────────────────────────
+  - name: prod-liveness
+    group: "Ordem na Mesa · PROD"
+    url: "https://ordemnamesa.com.br/api/health"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+    alerts:
+      - type: telegram
+
+  - name: prod-readiness
+    group: "Ordem na Mesa · PROD"
+    url: "https://ordemnamesa.com.br/api/health/ready"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200" # 503 = banco ou Storage inacessível
+    alerts:
+      - type: telegram
+
+  - name: prod-jobs
+    group: "Ordem na Mesa · PROD"
+    url: "https://ordemnamesa.com.br/api/health/jobs"
+    interval: 120s
+    conditions:
+      - "[STATUS] == 200" # 503 = algum job atrasado / worker morto (dead-man's-switch)
+    alerts:
+      - type: telegram
+
+  - name: prod-system
+    group: "Ordem na Mesa · PROD"
+    url: "https://ordemnamesa.com.br/api/health/system"
+    interval: 300s
+    conditions:
+      - "[STATUS] == 200" # 503 = disco > 85% ou memória > 90%
+    alerts:
+      - type: telegram
+
+  # ── NONPROD ─────────────────────────────────────────────────────────────────
+  - name: nonprod-liveness
+    group: "Ordem na Mesa · NONPROD"
+    url: "https://nonprod.ordemnamesa.com.br/api/health"
+    interval: 120s
+    conditions:
+      - "[STATUS] == 200"
+    alerts:
+      - type: telegram
+
+  - name: nonprod-readiness
+    group: "Ordem na Mesa · NONPROD"
+    url: "https://nonprod.ordemnamesa.com.br/api/health/ready"
+    interval: 120s
+    conditions:
+      - "[STATUS] == 200"
+    alerts:
+      - type: telegram
+
+  - name: nonprod-jobs
+    group: "Ordem na Mesa · NONPROD"
+    url: "https://nonprod.ordemnamesa.com.br/api/health/jobs"
+    interval: 300s
+    conditions:
+      - "[STATUS] == 200"
+    alerts:
+      - type: telegram

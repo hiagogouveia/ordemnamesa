@@ -108,3 +108,29 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+  # ---------------------------------------------------------------------------
+  # Gatus — monitor da plataforma (health endpoints + monitoramento cruzado).
+  # ---------------------------------------------------------------------------
+  # Config 100% versionada em infra/gatus/config.yaml (montado read-only). O painel e
+  # servido pelo Traefik (rota em routes.prod.yml, com basic-auth). Alerta via Telegram
+  # (credenciais por env var — nada de token no repo publico).
+  gatus:
+    image: twinproduction/gatus:v5.13.1
+    container_name: ordem-na-mesa-prod-gatus
+    restart: always
+    expose:
+      - "8080"
+    volumes:
+      - /opt/ordemnamesa-prod/gatus/config.yaml:/config/config.yaml:ro
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+    networks:
+      - proxy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
