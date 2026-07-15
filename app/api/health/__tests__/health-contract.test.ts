@@ -47,6 +47,25 @@ describe("system — disco e memória, mesmo contrato de status HTTP", () => {
     });
 });
 
+describe("jobs — dead-man's-switch observado pelo WEB, não pelo worker", () => {
+    const jobs = readFileSync("app/api/health/jobs/route.ts", "utf8");
+
+    it("responde 503 quando algum job está overdue, veredito no status", () => {
+        expect(jobs).toMatch(/status:\s*anyOverdue\s*\?\s*503\s*:\s*200/);
+    });
+
+    it("lê job_state (observa a saúde ATRAVÉS do banco, não do worker)", () => {
+        // O ponto-chave do desenho: um worker morto não consegue esconder que morreu,
+        // porque quem responde é o container web lendo job_state.
+        expect(jobs).toMatch(/from\("job_state"\)/);
+        expect(jobs).toContain("last_success_at");
+    });
+
+    it("overdue é baseado em RESULTADO (last_success), não em processo vivo", () => {
+        expect(jobs).toContain("staleThreshold");
+    });
+});
+
 describe("liveness NÃO checa dependências (senão vira crashloop)", () => {
     const liveness = readFileSync("app/api/health/route.ts", "utf8");
 
