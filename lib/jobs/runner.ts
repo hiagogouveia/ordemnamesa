@@ -84,6 +84,18 @@ export async function runJob(
 
     let runId: string | null = null;
     try {
+        // Self-healing: adquirimos o lease, logo somos o ÚNICO dono deste job agora. Qualquer
+        // linha `running` anterior deste job é órfã (worker morto num deploy, tipicamente) —
+        // marca como `interrupted`. Sem isto, um run interrompido ficaria `running` até um
+        // boot posterior ao vencimento do lease, mentindo "travado" no painel. O reclaim de
+        // boot cobre o restart; este cobre o intervalo entre boots.
+        await admin
+            .from("job_runs")
+            .update({ status: "interrupted", finished_at: new Date().toISOString() })
+            .eq("job_name", job)
+            .eq("status", "running")
+            .then(() => undefined, () => undefined);
+
         // 2. Marca `running` no histórico (será atualizado ao fim ou virará no-op).
         const { data: runRow } = await admin
             .from("job_runs")
