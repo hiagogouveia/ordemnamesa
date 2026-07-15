@@ -81,6 +81,7 @@ jobs:
             NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ env.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
             NEXT_PUBLIC_SITE_URL=${{ env.NEXT_PUBLIC_SITE_URL }}
             NEXT_PUBLIC_PHOTO_TRACE=${{ env.NEXT_PUBLIC_PHOTO_TRACE }}
+            NEXT_PUBLIC_SUPPORT_EMAIL=${{ env.NEXT_PUBLIC_SUPPORT_EMAIL }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:prod-latest
           cache-to: type=inline
 
@@ -100,7 +101,7 @@ jobs:
           host: ${{ secrets.PROD_VM_HOST }}
           username: root
           key: ${{ secrets.PROD_VM_SSH_PRIVATE_KEY }}
-          source: "infra/docker/docker-compose.prod.yml,infra/docker/traefik/traefik.prod.yml,infra/docker/traefik/routes.prod.yml,infra/gatus/config.yaml"
+          source: "infra/docker/docker-compose.prod.yml,infra/docker/traefik/traefik.prod.yml,infra/docker/traefik/routes.prod.yml,infra/gatus/config.yaml,infra/docker/app-env.list"
           target: /opt/ordemnamesa-prod/
           strip_components: 2
 
@@ -126,10 +127,17 @@ jobs:
             # Autenticar no GHCR para pull de imagem privada
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # Escrever .env whitelistando apenas chaves conhecidas da aplicação
-            # (protege contra secret contendo comentários, SSH keys ou outras vars)
+            # Escrever .env whitelistando apenas chaves conhecidas da aplicação (protege
+            # contra o secret conter comentários, SSH keys ou outras vars). A whitelist é
+            # DERIVADA da fonte única infra/docker/app-env.list (scp'd para cá): adicionar
+            # uma var de runtime é uma linha LÁ, não editar este workflow em 4 lugares.
+            WHITELIST=$(grep -vE '^[[:space:]]*(#|$)' app-env.list | paste -sd '|' -)
+            if [ -z "$WHITELIST" ]; then
+              echo "::error::app-env.list vazio ou ausente — abortando para não subir o container sem env."
+              exit 1
+            fi
             {
-              printf '%s\n' "$APP_ENV" | grep -E '^(NEXT_PUBLIC_SUPABASE_URL|NEXT_PUBLIC_SUPABASE_ANON_KEY|NEXT_PUBLIC_SITE_URL|SUPABASE_SERVICE_ROLE_KEY|RESEND_API_KEY|RESEND_FROM|WHATSAPP_ADMIN_NUMBER|STRIPE_SECRET_KEY|STRIPE_WEBHOOK_SECRET|CRON_SECRET|PHOTO_RETENTION_DAYS|TELEGRAM_BOT_TOKEN|TELEGRAM_CHAT_ID)=' || true
+              printf '%s\n' "$APP_ENV" | grep -E "^(${WHITELIST})=" || true
               printf 'IMAGE_TAG=%s\n' "$IMAGE_TAG"
               printf 'APP_VERSION=%s\n' "$APP_VERSION"
             } > .env

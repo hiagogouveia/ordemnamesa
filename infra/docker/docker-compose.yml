@@ -42,24 +42,14 @@ services:
     restart: always
     expose:
       - "3000"
+    # Todas as vars de runtime vêm do .env (fonte única: infra/docker/app-env.list, filtrado
+    # pelo deploy). Aqui ficam só as COMPUTADAS/estáticas. APP_VERSION vem do .env também.
+    env_file:
+      - .env
     environment:
       NODE_ENV: production
       PORT: "3000"
       HOSTNAME: "0.0.0.0"
-      # SHA do commit servido. Reportado por /api/health.
-      # NÃO usar IMAGE_TAG aqui: ele vale "nonprod-latest", que não identifica commit nenhum.
-      APP_VERSION: ${APP_VERSION:-unknown}
-      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
-      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
-      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
-      RESEND_API_KEY: ${RESEND_API_KEY}
-      RESEND_FROM: ${RESEND_FROM}
-      WHATSAPP_ADMIN_NUMBER: ${WHATSAPP_ADMIN_NUMBER}
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
-      CRON_SECRET: ${CRON_SECRET}
-      PHOTO_RETENTION_DAYS: ${PHOTO_RETENTION_DAYS}
     networks:
       - proxy
     healthcheck:
@@ -82,17 +72,16 @@ services:
     restart: always
     command: ["node", "dist/worker.cjs"]
     stop_grace_period: 30s
+    # Mesmo .env do web (fonte única). O worker ignora as vars que não usa; e agora recebe
+    # HISTORY_RETENTION_DAYS de graça (antes só o web tinha, então o history-retention do
+    # worker caía sempre no default 60).
+    env_file:
+      - .env
     environment:
       NODE_ENV: production
-      APP_VERSION: ${APP_VERSION:-unknown}
-      # F5 CONCLUÍDA no NONPROD: todos os 6 jobs executam de verdade. WORKER_OBSERVE e
-      # WORKER_EXECUTE removidos (a rampa "um por vez" cumpriu o papel; o estado final é
-      # "tudo executa"). Reintroduzir WORKER_OBSERVE=1 volta tudo a observar, se preciso.
-      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
-      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
-      RESEND_API_KEY: ${RESEND_API_KEY}
-      RESEND_FROM: ${RESEND_FROM}
-      PHOTO_RETENTION_DAYS: ${PHOTO_RETENTION_DAYS}
+      # F5 CONCLUÍDA no NONPROD: todos os 6 jobs executam de verdade. Para voltar tudo a
+      # observar em um incidente: WORKER_OBSERVE: "1" aqui. Um job específico:
+      # WORKER_EXECUTE: "job-a,job-b" (allowlist do que executa com observe global ligado).
     healthcheck:
       test: ["CMD-SHELL", "test $(( $(date +%s) - $(stat -c %Y /tmp/worker-alive 2>/dev/null || echo 0) )) -lt 60"]
       interval: 30s

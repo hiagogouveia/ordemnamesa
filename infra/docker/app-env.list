@@ -1,0 +1,48 @@
+# FONTE ÚNICA das variáveis de ambiente de RUNTIME do container (app web + worker).
+#
+# Antes, esta lista vivia DUPLICADA em 4 lugares (2 workflows + 2 composes) — e foi isso
+# que fez o Telegram nunca funcionar em produção (a var estava no código, mas ausente da
+# whitelist do deploy). Agora:
+#
+#   - o deploy (app-{prod,nonprod}.yml) DERIVA a whitelist do .env DESTE arquivo;
+#   - a compose injeta o .env inteiro via `env_file` (não re-lista cada var).
+#
+# Adicionar uma variável de runtime = UMA linha aqui. Nada mais.
+#
+# NÃO entram aqui:
+#   - NEXT_PUBLIC_* que são SÓ de build (baked na imagem) — vão em build-args no Dockerfile.
+#     As NEXT_PUBLIC_* abaixo estão porque o servidor também as lê em runtime.
+#   - Vars computadas pelo deploy/compose (IMAGE_TAG, APP_VERSION, NODE_ENV, PORT, HOSTNAME,
+#     WORKER_OBSERVE, WORKER_EXECUTE) — ficam no `environment:` do compose.
+#   - Vars de CI/build (SUPABASE_ACCESS_TOKEN, *_PROJECT_REF) — não são do container.
+#
+# Comentários (#) e linhas vazias são ignorados pelo parser do deploy.
+
+# ── Supabase ──────────────────────────────────────────────────────────────────
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+NEXT_PUBLIC_SITE_URL
+SUPABASE_SERVICE_ROLE_KEY
+
+# ── E-mail (Resend) ───────────────────────────────────────────────────────────
+RESEND_API_KEY
+RESEND_FROM
+
+# ── Stripe ────────────────────────────────────────────────────────────────────
+STRIPE_SECRET_KEY
+STRIPE_WEBHOOK_SECRET
+
+# ── Cron/retenção (CRON_SECRET sai na F6, quando a superfície HTTP for removida) ─
+CRON_SECRET
+PHOTO_RETENTION_DAYS
+HISTORY_RETENTION_DAYS
+
+# ── Trial de leads (Control Hub) ──────────────────────────────────────────────
+LEAD_TRIAL_DAYS
+LEAD_TRIAL_PLAN_CODE
+
+# ── Telegram (bot de leads + alertas do Gatus) ────────────────────────────────
+TELEGRAM_BOT_TOKEN
+TELEGRAM_CHAT_ID
+TELEGRAM_BOT_USERNAME
+TELEGRAM_WEBHOOK_SECRET

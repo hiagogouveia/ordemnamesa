@@ -42,25 +42,16 @@ services:
     restart: always
     expose:
       - "3000"
+    # Todas as vars de runtime vêm do .env (fonte única: infra/docker/app-env.list, filtrado
+    # pelo deploy). Aqui ficam só as COMPUTADAS/estáticas. APP_VERSION vem do .env também
+    # (o deploy o escreve lá) — reportado por /api/health, pega deploy verde servindo imagem
+    # antiga.
+    env_file:
+      - .env
     environment:
       NODE_ENV: production
       PORT: "3000"
       HOSTNAME: "0.0.0.0"
-      # SHA do commit servido. Reportado por /api/health.
-      # Pega um bug que ninguém veria: deploy "verde" que continua servindo a imagem antiga.
-      # NÃO usar IMAGE_TAG aqui: ele vale "prod-latest", que não identifica commit nenhum.
-      APP_VERSION: ${APP_VERSION:-unknown}
-      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
-      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
-      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
-      RESEND_API_KEY: ${RESEND_API_KEY}
-      RESEND_FROM: ${RESEND_FROM}
-      WHATSAPP_ADMIN_NUMBER: ${WHATSAPP_ADMIN_NUMBER}
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
-      CRON_SECRET: ${CRON_SECRET}
-      PHOTO_RETENTION_DAYS: ${PHOTO_RETENTION_DAYS}
     networks:
       - proxy
     healthcheck:
@@ -89,16 +80,15 @@ services:
     command: ["node", "dist/worker.cjs"]
     # Janela de graça no shutdown: o supervisor fecha o portão e espera o filho em curso.
     stop_grace_period: 30s
+    # Mesmo .env do web (fonte única). O worker ignora as vars que não usa.
+    env_file:
+      - .env
     environment:
       NODE_ENV: production
-      APP_VERSION: ${APP_VERSION:-unknown}
-      # F4 → observador. Remover esta linha (ou =0) na F5 liga a execução real.
+      # PROD ainda em MODO OBSERVADOR (F4): registra o que faria, sem executar. Os workflows
+      # do GitHub seguem sendo a fonte de verdade até o cutover do PROD, onde esta linha sai
+      # (ou vira WORKER_EXECUTE, para virar a chave um job por vez, como no NONPROD).
       WORKER_OBSERVE: "1"
-      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
-      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
-      RESEND_API_KEY: ${RESEND_API_KEY}
-      RESEND_FROM: ${RESEND_FROM}
-      PHOTO_RETENTION_DAYS: ${PHOTO_RETENTION_DAYS}
     healthcheck:
       # O worker escreve /tmp/worker-alive a cada tick; o healthcheck confere a idade.
       # Serve para OBSERVAR (docker ps mostra unhealthy) — o restart de verdade quando
