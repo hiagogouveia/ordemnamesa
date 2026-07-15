@@ -64,3 +64,4 @@ infra/terraform/**/*.tfstate.backup
 
 # Dev server log
 dev.log
+/dist/
