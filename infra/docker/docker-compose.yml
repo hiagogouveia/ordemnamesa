@@ -102,6 +102,10 @@ services:
   # ---------------------------------------------------------------------------
   # Gatus — monitor da plataforma (health endpoints + monitoramento cruzado).
   # ---------------------------------------------------------------------------
+  # Painel NAO exposto publicamente (sem rota no Traefik) — acesso por tunel SSH. O
+  # monitoramento cruzado funciona por requisicoes de SAIDA aos health endpoints.
+  # SEM healthcheck de propósito: imagem distroless (sem shell/wget/curl) — nenhum `test`
+  # roda dentro dela. Liveness do processo ja vem do `restart: always`.
   gatus:
     image: twinproduction/gatus:v5.13.1
     container_name: ordem-na-mesa-gatus
@@ -115,9 +119,3 @@ services:
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
     networks:
       - proxy
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
-      interval: 60s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
