@@ -29,7 +29,10 @@ module "compute" {
   subnet_id           = module.network.subnet_id
   availability_domain = data.oci_identity_availability_domains.ads.availability_domains[0].name
   shape               = var.instance_shape
-  user_data_base64    = filebase64("${path.module}/../../../scripts/userdata.sh")
+  # cloud-init = params do NONPROD + provision.sh (fonte única), renderizado pelo Terraform.
+  user_data_base64 = base64encode(templatefile("${path.module}/../../../scripts/userdata.sh.tftpl", {
+    provision_script = file("${path.module}/../../../scripts/provision.sh")
+  }))
   tags                = local.tags
 }
 

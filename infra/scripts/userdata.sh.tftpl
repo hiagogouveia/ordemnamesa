@@ -1,0 +1,15 @@
+#!/bin/bash
+# cloud-init userdata NONPROD — apenas define os parâmetros e delega ao provision.sh
+# (a FONTE ÚNICA de provisionamento). Renderizado pelo Terraform via templatefile: o
+# placeholder provision_script (abaixo) é substituído pelo conteúdo de provision.sh.
+#
+# Não edite lógica de provisionamento aqui — ela mora em provision.sh, compartilhada com
+# o PROD (infra-prod.yml). Aqui só ficam os valores específicos do NONPROD.
+
+export APP_USER=ubuntu
+export APP_DIR=/opt/ordemnamesa
+export ENABLE_SWAP=true
+export SWAP_SIZE=2G
+export PRUNE_SCHEDULE="Mon,Thu 04:00"
+
+${provision_script}
