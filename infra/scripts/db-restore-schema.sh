@@ -49,8 +49,19 @@ fi
 echo "Alvo vazio confirmado. Aplicando supabase/schema.sql..."
 PSQL -f /snapshot/schema.sql
 
-echo "Aplicando supabase/schema-storage.sql (bucket + RLS de storage)..."
-PSQL -f /snapshot/schema-storage.sql
+# storage.buckets é provisionada pela PLATAFORMA Supabase (storage-api), não pelo Postgres.
+# Num projeto Supabase real ela sempre existe; num Postgres de teste local (imagem
+# supabase/postgres crua), não. Nesse caso, avisa ALTO e pula — sem mascarar no alvo real.
+HAS_STORAGE=$(docker run --rm postgres:17-alpine psql "$DB_URL" -tAc \
+  "select count(*) from information_schema.tables where table_schema='storage' and table_name='buckets'")
+if [ "$HAS_STORAGE" = "1" ]; then
+  echo "Aplicando supabase/schema-storage.sql (bucket + RLS de storage)..."
+  PSQL -f /snapshot/schema-storage.sql
+else
+  echo "⚠ AVISO: storage.buckets não existe no alvo (Postgres cru, sem a plataforma Supabase)."
+  echo "  supabase/schema-storage.sql NÃO foi aplicado. Num projeto Supabase real, aplique-o"
+  echo "  depois — o bucket de fotos e as RLS de storage fazem parte do DR."
+fi
 
 echo ""
 echo "Restore concluído. Verificação rápida:"
