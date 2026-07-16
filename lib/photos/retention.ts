@@ -5,8 +5,8 @@ import { PHOTO_RETENTION_DAYS, HISTORY_RETENTION_DAYS } from "@/lib/config/photo
 import { notificationLog } from "@/lib/notifications/log";
 
 /**
- * RETENÇÃO de FOTOS e HISTÓRICO — a lógica que antes vivia dentro de
- * `app/api/cron/{photo,history}-retention/route.ts`.
+ * RETENÇÃO de FOTOS e HISTÓRICO — a lógica que antes vivia nas rotas
+ * `/api/cron/{photo,history}-retention` (removidas na F6 — o worker é o único chamador).
  *
  * Extraída para cá (s91, F5) para que o worker e a rota chamem A MESMA função — uma fonte
  * de verdade só. Quando a superfície HTTP sair (F6), a rota some e isto fica intacto.

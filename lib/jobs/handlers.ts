@@ -11,10 +11,9 @@ import { applyPhotoRetention, applyHistoryRetention } from "@/lib/photos/retenti
 /**
  * HANDLERS — o que cada job efetivamente FAZ.
  *
- * Princípio central desta migração: o worker chama AS MESMAS funções que as rotas
- * `/api/cron/*` chamam hoje. Nenhuma lógica é reescrita — só passa a ser disparada por
- * um processo interno em vez de um `curl` do GitHub. Quando a superfície HTTP for
- * removida (F6), estas funções continuam idênticas; só perdem o invólucro de rota.
+ * Princípio central desta migração: o worker chama as mesmas funções que as antigas
+ * rotas `/api/cron/*` chamavam. A superfície HTTP foi removida na F6; o worker é o
+ * único disparador (além do `worker.cjs run <job>` manual).
  *
  * Cada handler devolve um `JobResult` uniforme. `itemsProcessed` é o que alimenta o
  * histórico legível de `job_runs` — e a regra do "no-op não vira linha": se um job
