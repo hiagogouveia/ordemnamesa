@@ -34,3 +34,12 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "shape_config" {
+  description = "Config para shapes Flex (ocpus/memória). null para shapes fixos (ex.: E2.1.Micro) — comportamento original intacto."
+  type = object({
+    ocpus         = number
+    memory_in_gbs = number
+  })
+  default = null
+}

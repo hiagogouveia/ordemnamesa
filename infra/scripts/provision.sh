@@ -66,6 +66,12 @@ else
 fi
 
 # Usuário não-root no grupo docker (nonprod usa 'ubuntu'; prod roda como root → pula).
+# Se o usuário não existir (ex.: VM de teste fora da OCI), avisa e segue — um provision
+# não pode morrer NO MEIO por isso e deixar a máquina meio-configurada (achado do F9).
+if [ "${APP_USER}" != "root" ] && ! id -u "${APP_USER}" >/dev/null 2>&1; then
+  echo "AVISO: usuário '${APP_USER}' não existe nesta máquina — pulando grupo docker/chown."
+  APP_USER="root"
+fi
 if [ "${APP_USER}" != "root" ]; then
   usermod -aG docker "${APP_USER}" || true
 fi
