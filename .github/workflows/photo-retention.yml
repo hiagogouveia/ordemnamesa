@@ -12,8 +12,9 @@ name: data-retention
 # A URL de histórico é derivada da PHOTO_RETENTION_URL (mesmo host) — sem novo secret.
 
 on:
-  schedule:
-    - cron: "0 4 * * 1" # toda segunda 04:00 UTC
+  # AGENDAMENTO DESLIGADO (s91, cutover do PROD): photo-retention E history-retention
+  # (que este workflow derivava por substituição de URL) migraram para o WORKER interno,
+  # que agora EXECUTA nos dois ambientes. Mantido só o disparo manual até a F6.
   workflow_dispatch:
     inputs:
       dryRun:

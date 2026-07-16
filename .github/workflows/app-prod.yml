@@ -142,9 +142,9 @@ jobs:
               printf 'APP_VERSION=%s\n' "$APP_VERSION"
               # Parametriza o compose ÚNICO (F8b): nomes de projeto/rede/container.
               printf 'DEPLOY_ENV=prod\n'
-              # PROD ainda em MODO OBSERVADOR até o cutover (worker registra o que faria,
-              # sem executar). Sai daqui quando o PROD virar a chave.
-              printf 'WORKER_OBSERVE=1\n'
+              # CUTOVER FEITO: o worker EXECUTA os jobs (sem WORKER_OBSERVE). Para voltar
+              # tudo a observar num incidente: printf 'WORKER_OBSERVE=1\n' aqui. Um job
+              # específico: UPDATE job_state SET enabled=false (kill switch, sem deploy).
             } > .env
 
             # Compose e traefik.yml agora são COMPARTILHADOS (F8b) e já caem no lugar certo

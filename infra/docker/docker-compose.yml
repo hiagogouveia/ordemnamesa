@@ -83,8 +83,8 @@ services:
   # ---------------------------------------------------------------------------
   # MESMA imagem da app, command `node dist/worker.cjs` (o supervisor). NÃO entra na rede
   # `proxy` — não expõe HTTP. Modo do worker via ${WORKER_OBSERVE}: "1" observa (registra o
-  # que faria, sem executar); vazio executa. O deploy do PROD escreve WORKER_OBSERVE=1 até o
-  # cutover; o do NONPROD deixa vazio (F5 concluída — tudo executa).
+  # que faria, sem executar); vazio executa. CUTOVER FEITO: ambos os ambientes executam;
+  # WORKER_OBSERVE=1 no .env é o freio de emergência global (por job: job_state.enabled).
   worker:
     image: ghcr.io/hiagogouveia/ordem-na-mesa-web:${IMAGE_TAG:-latest}
     container_name: ordem-na-mesa-${DEPLOY_ENV}-worker
