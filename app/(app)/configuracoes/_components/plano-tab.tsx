@@ -8,6 +8,7 @@ import { usePortal } from "@/lib/hooks/use-portal"
 import { useChangePlan } from "@/lib/hooks/use-change-plan"
 import { useUsage } from "@/lib/hooks/use-usage"
 import { useSubscriptionDiscount, type ActiveDiscount } from "@/lib/hooks/use-subscription-discount"
+import { usePendingPayment } from "@/lib/hooks/use-pending-payment"
 import { useAccountSessionStore } from "@/lib/store/account-session-store"
 import { useAccountUnits } from "@/lib/hooks/use-account-units"
 import type { BillingCycle } from "@/lib/billing/types"
@@ -133,6 +134,7 @@ export function PlanoTab() {
 
     const { data: usage } = useUsage()
     const { data: discount } = useSubscriptionDiscount()
+    const { data: pendingPayment } = usePendingPayment()
 
     // Hooks SEMPRE antes de qualquer return condicional (rules of hooks).
     // Default "yearly" — enfatiza economia do plano anual no comparador.
@@ -318,6 +320,67 @@ export function PlanoTab() {
                 <div className="flex items-center gap-2 rounded-xl px-4 py-3 bg-amber-500/10 border border-amber-500/20 text-amber-300 text-sm">
                     <span className="material-symbols-outlined text-[18px]">info</span>
                     <span>Checkout cancelado. Você pode tentar novamente quando quiser.</span>
+                </div>
+            )}
+
+            {/* Boleto: estados assíncronos (o retorno do checkout com boleto NÃO
+                passa pelo ?checkout=success — o usuário volta do voucher). */}
+            {pendingPayment?.state === "boleto_pending" && (
+                <div className="flex flex-col gap-3 rounded-xl px-4 py-3 bg-[#13b6ec]/10 border border-[#13b6ec]/20 text-sm">
+                    <div className="flex items-center gap-2 text-[#13b6ec]">
+                        <span className="material-symbols-outlined text-[18px]">receipt_long</span>
+                        <span>
+                            Boleto de <strong>{formatCents(pendingPayment.amount_cents)}</strong> gerado —
+                            aguardando pagamento
+                            {pendingPayment.expires_at && (
+                                <> · vence em <strong>{formatDate(pendingPayment.expires_at)}</strong></>
+                            )}
+                            .
+                        </span>
+                    </div>
+                    <p className="text-xs text-[#92bbc9]">
+                        A compensação leva até 1 dia útil após o pagamento
+                        {pendingPayment.context === "first_payment"
+                            ? " — seu plano será ativado automaticamente."
+                            : " — sua assinatura será regularizada automaticamente."}{" "}
+                        Se preferir pagar com cartão, escolha um plano abaixo (já existe um boleto
+                        aguardando pagamento; ignore-o nesse caso).
+                    </p>
+                    <a
+                        href={pendingPayment.hosted_voucher_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="self-start inline-flex items-center gap-1.5 bg-[#13b6ec]/20 hover:bg-[#13b6ec]/30 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                    >
+                        Ver boleto / 2ª via
+                        <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+                    </a>
+                </div>
+            )}
+            {pendingPayment?.state === "boleto_expired" && (
+                <div className="flex items-center gap-2 rounded-xl px-4 py-3 bg-amber-500/10 border border-amber-500/20 text-amber-300 text-sm">
+                    <span className="material-symbols-outlined text-[18px]">event_busy</span>
+                    <span>Seu boleto venceu sem pagamento. Escolha um plano abaixo para assinar novamente.</span>
+                </div>
+            )}
+            {pendingPayment?.state === "invoice_open" && (
+                <div className="flex flex-col gap-3 rounded-xl px-4 py-3 bg-amber-500/10 border border-amber-500/20 text-sm text-amber-300">
+                    <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[18px]">warning</span>
+                        <span>
+                            Fatura de renovação de <strong>{formatCents(pendingPayment.amount_cents)}</strong> em
+                            aberto. Pague para regularizar sua assinatura.
+                        </span>
+                    </div>
+                    <a
+                        href={pendingPayment.hosted_invoice_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="self-start inline-flex items-center gap-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-50 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                    >
+                        Pagar fatura
+                        <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+                    </a>
                 </div>
             )}
 

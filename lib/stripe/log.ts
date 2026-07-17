@@ -6,7 +6,7 @@ import "server-only"
  * grep em produção (docker logs). Campos sensíveis NUNCA são logados
  * (sem secret/whsec/token/card).
  */
-type StripeOp = "checkout" | "portal" | "webhook"
+type StripeOp = "checkout" | "portal" | "webhook" | "billing"
 
 interface StripeLogContext {
     op: StripeOp

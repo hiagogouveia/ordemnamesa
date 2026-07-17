@@ -163,9 +163,26 @@ export async function POST(request: Request) {
         }
 
         const stripe = getStripe()
-        const current = await stripe.subscriptions.retrieve(sub.stripe_subscription_id)
+        const current = await stripe.subscriptions.retrieve(sub.stripe_subscription_id, {
+            expand: ["latest_invoice"],
+        })
         const item = current.items.data[0]
         if (!item) return NextResponse.json({ error: "Assinatura sem item." }, { status: 422 })
+
+        // Guard boleto: com fatura em aberto (boleto de renovação aguardando
+        // pagamento/vencido), trocar de plano empilharia mudança sobre cobrança
+        // pendente. Regularizar primeiro. (Com cartão isso é raro — janela curta
+        // entre finalização da fatura e a cobrança automática.)
+        const latestInvoice = current.latest_invoice as Stripe.Invoice | null
+        if (latestInvoice && latestInvoice.status === "open") {
+            return NextResponse.json(
+                {
+                    error: "Há uma cobrança em aberto nesta assinatura. Pague a fatura pendente antes de trocar de plano.",
+                    reason: "pending_payment",
+                },
+                { status: 409 }
+            )
+        }
 
         if (item.price.id === targetPrice) {
             return NextResponse.json({ error: "Você já está neste plano/ciclo.", reason: "same_plan" }, { status: 409 })

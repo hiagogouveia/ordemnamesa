@@ -22,6 +22,7 @@ export interface BillingSubscription {
     started_at: string
     ends_at: string | null
     canceled_at: string | null
+    stripe_subscription_id: string | null
 }
 
 export interface BillingStatus {
