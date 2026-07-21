@@ -29,6 +29,11 @@ export async function uploadBrandLogo(
         contentType: 'image/png',
         // upsert: reenviar exatamente a mesma imagem gera o mesmo hash e portanto o
         // mesmo path. Sem isso, um "salvar" repetido falharia com 409.
+        //
+        // ATENÇÃO (s93b): o Storage traduz upsert para INSERT ... ON CONFLICT DO UPDATE,
+        // e o Postgres exige policy de SELECT no bucket para executar esse caminho —
+        // ele precisa ler a linha conflitante. Sem a SELECT, TODO upload falha com
+        // "new row violates row-level security policy", que despista para o WITH CHECK.
         upsert: true,
     });
 
@@ -38,15 +43,4 @@ export async function uploadBrandLogo(
     }
 
     return path;
-}
-
-/** Remove um objeto do bucket `brand`. Best-effort: falha não deve travar o fluxo. */
-export async function deleteBrandAsset(path: string | null | undefined): Promise<void> {
-    if (!path) return;
-    try {
-        const supabase = createClient();
-        await supabase.storage.from(BRAND_BUCKET).remove([path]);
-    } catch (err) {
-        console.warn('[Brand Delete Warn] órfão deixado no storage', path, err);
-    }
 }
