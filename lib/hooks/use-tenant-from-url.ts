@@ -9,9 +9,12 @@ export interface MyRestaurant {
     id: string;
     name: string;
     slug: string;
-    logo_url: string | null;
+    /** Sprint 93 — path no bucket 'brand' (NÃO url). */
+    logo_path: string | null;
     account_id: string;
     account_name: string;
+    /** Sprint 93 — logo do grupo; fallback desta unidade e marca da Visão Global. */
+    account_logo_path: string | null;
     timezone?: string;
     role: "owner" | "manager" | "staff";
 }
@@ -99,8 +102,15 @@ export function useTenantFromUrl(): TenantAdoption {
                     slug: target.slug,
                     role: target.role,
                     timezone: target.timezone ?? null,
+                    // Sprint 93 — sem isto, o merge raso do Zustand manteria a logo do
+                    // tenant anterior ao abrir um deep-link de notificação.
+                    logoPath: target.logo_path,
                 });
-                setAccount({ id: target.account_id, name: target.account_name });
+                setAccount({
+                    id: target.account_id,
+                    name: target.account_name,
+                    logoPath: target.account_logo_path,
+                });
                 // Notificações são sempre tenant-scoped. Abrir um deep-link em modo
                 // global implica voltar para a visão da unidade — é a única forma de
                 // o painel (que é por restaurante) conseguir carregar as ocorrências.

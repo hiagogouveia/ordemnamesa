@@ -152,13 +152,22 @@ export function useExportRelatoriosLote() {
             if (!params.isGlobal && params.scope.mode === 'single') {
                 const { data: rest } = await supabase
                     .from('restaurants')
-                    .select('name, logo_url')
+                    .select('name, logo_path, accounts ( logo_path )')
                     .eq('id', params.scope.restaurantId)
-                    .maybeSingle();
+                    .maybeSingle<{ name: string | null; logo_path: string | null; accounts: { logo_path: string | null } | null }>();
                 if (rest?.name) restaurantName = rest.name;
-                if (rest?.logo_url) {
+                // Sprint 93 — mesma cascata da interface (filial → grupo), via resolveBrand.
+                // Quando cai na plataforma, deixamos o header sem logo: o rodapé do PDF já
+                // traz a marca do Ordem na Mesa como emissor.
+                const { resolveBrand } = await import('@/lib/branding/resolve');
+                const brand = resolveBrand({
+                    restaurantLogoPath: rest?.logo_path ?? null,
+                    accountLogoPath: rest?.accounts?.logo_path ?? null,
+                    mode: 'single',
+                });
+                if (brand.isTenantBranded) {
                     const { loadImageAsDataUrl } = await import('@/lib/pdf/shared');
-                    logoDataUrl = await loadImageAsDataUrl(rest.logo_url);
+                    logoDataUrl = await loadImageAsDataUrl(brand.logoSrc);
                 }
             }
 

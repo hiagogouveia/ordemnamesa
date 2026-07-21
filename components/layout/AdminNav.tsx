@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Logo } from "@/components/ui/Logo";
+import { BrandLogo } from "@/components/ui/BrandLogo";
 
 export function AdminNav() {
     const pathname = usePathname();
@@ -24,7 +24,7 @@ export function AdminNav() {
                 {/* Sidebar Header */}
                 <div className="h-16 flex items-center px-6 border-b border-[#233f48] shrink-0">
                     <Link href="/admin" className="flex items-center gap-2">
-                        <Logo width={24} height={24} />
+                        <BrandLogo slot="nav" />
                         <span className="font-bold text-white text-lg tracking-tight pb-0.5">Ordem na Mesa</span>
                     </Link>
                     <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden ml-auto text-slate-400 hover:text-white">

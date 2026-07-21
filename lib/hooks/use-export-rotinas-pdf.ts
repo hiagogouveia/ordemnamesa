@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import type { Checklist } from "@/lib/types";
 import { createClient } from "@/lib/supabase/client";
+import { resolveBrand } from "@/lib/branding/resolve";
 
 /**
  * Hook de exportação de rotinas para PDF.
@@ -27,15 +28,27 @@ export interface UseExportRotinasPdfOptions {
     onError?: (message: string) => void;
 }
 
+/**
+ * Sprint 93 — resolve a marca do documento pela mesma cascata da interface
+ * (filial → grupo → Ordem na Mesa), reusando `resolveBrand` em vez de reimplementar
+ * o fallback aqui. Retorna null quando cai na plataforma: o rodapé do PDF já carrega
+ * a marca do Ordem na Mesa como emissor, então repeti-la no header seria redundante.
+ */
 async function fetchLogoUrl(restaurantId: string): Promise<string | null> {
     try {
         const supabase = createClient();
         const { data } = await supabase
             .from("restaurants")
-            .select("logo_url")
+            .select("logo_path, accounts ( logo_path )")
             .eq("id", restaurantId)
-            .single();
-        return data?.logo_url ?? null;
+            .single<{ logo_path: string | null; accounts: { logo_path: string | null } | null }>();
+
+        const brand = resolveBrand({
+            restaurantLogoPath: data?.logo_path ?? null,
+            accountLogoPath: data?.accounts?.logo_path ?? null,
+            mode: "single",
+        });
+        return brand.isTenantBranded ? brand.logoSrc : null;
     } catch {
         return null;
     }

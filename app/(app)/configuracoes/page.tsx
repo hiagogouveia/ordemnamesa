@@ -6,6 +6,7 @@ import { ShiftsTab } from "./_components/shifts-tab";
 import { AreasTab } from "./_components/areas-tab";
 import { UnidadesTab } from "./_components/unidades-tab";
 import { ContaTab } from "./_components/conta-tab";
+import { MarcaTab } from "./_components/marca-tab";
 import { PlanoTab } from "./_components/plano-tab";
 import { FornecedoresTab } from "./_components/fornecedores-tab";
 import { NotificacoesTab } from "./_components/notificacoes-tab";
@@ -14,8 +15,8 @@ import { useAccountSessionStore } from "@/lib/store/account-session-store";
 import { useAccountUnits } from "@/lib/hooks/use-account-units";
 import { useAccountAccess } from "@/lib/hooks/use-account-access";
 
-type TabId = "unidades" | "turnos" | "funcoes" | "fornecedores" | "notificacoes" | "conta" | "plano";
-const VALID_TABS: TabId[] = ["unidades", "turnos", "funcoes", "fornecedores", "notificacoes", "conta", "plano"];
+type TabId = "unidades" | "turnos" | "funcoes" | "fornecedores" | "notificacoes" | "marca" | "conta" | "plano";
+const VALID_TABS: TabId[] = ["unidades", "turnos", "funcoes", "fornecedores", "notificacoes", "marca", "conta", "plano"];
 
 export default function ConfiguracoesPage() {
     // Persistência da aba via querystring (?tab=...). Init lê da URL; troca usa
@@ -116,6 +117,14 @@ export default function ConfiguracoesPage() {
                     )}
                     {isOwner && (
                         <button
+                            onClick={() => setActiveTab("marca")}
+                            className={`pb-4 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeTab === "marca" ? "border-[#13b6ec] text-[#13b6ec]" : "border-transparent text-[#92bbc9] hover:text-white"}`}
+                        >
+                            Marca
+                        </button>
+                    )}
+                    {isOwner && (
+                        <button
                             onClick={() => setActiveTab("conta")}
                             className={`pb-4 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeTab === "conta" ? "border-[#13b6ec] text-[#13b6ec]" : "border-transparent text-[#92bbc9] hover:text-white"}`}
                         >
@@ -191,6 +200,7 @@ export default function ConfiguracoesPage() {
                     )
                 )}
                 {activeTab === "notificacoes" && <NotificacoesTab />}
+                {activeTab === "marca" && <MarcaTab />}
                 {activeTab === "conta" && <ContaTab />}
                 {activeTab === "plano" && <PlanoTab />}
             </div>

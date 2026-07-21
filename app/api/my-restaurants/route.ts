@@ -9,11 +9,11 @@ interface RestaurantUserJoin {
         id: string
         name: string
         slug: string
-        logo_url: string | null
+        logo_path: string | null
         active: boolean
         account_id: string
         timezone: string | null
-        accounts: { id: string; name: string } | null
+        accounts: { id: string; name: string; logo_path: string | null } | null
     } | null
 }
 
@@ -51,11 +51,11 @@ export async function GET() {
                 id,
                 name,
                 slug,
-                logo_url,
+                logo_path,
                 active,
                 account_id,
                 timezone,
-                accounts!inner ( id, name )
+                accounts!inner ( id, name, logo_path )
             )
         `)
         .eq('user_id', user.id)
@@ -72,9 +72,13 @@ export async function GET() {
             id: row.restaurants!.id,
             name: row.restaurants!.name,
             slug: row.restaurants!.slug,
-            logo_url: row.restaurants!.logo_url,
+            logo_path: row.restaurants!.logo_path,
             account_id: row.restaurants!.account_id,
             account_name: row.restaurants!.accounts?.name ?? '',
+            // Sprint 93 — logo do grupo viaja junto: é o fallback das filiais sem logo
+            // própria e a única marca possível na Visão Global. Carona no join que já
+            // existia, sem query nova.
+            account_logo_path: row.restaurants!.accounts?.logo_path ?? null,
             timezone: row.restaurants!.timezone ?? 'America/Sao_Paulo',
             role: row.role,
         }))

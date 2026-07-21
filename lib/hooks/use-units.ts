@@ -11,6 +11,8 @@ export interface Unit {
     account_id: string
     created_at: string
     timezone?: string
+    /** Sprint 93 — path no bucket 'brand' (NÃO url). Alimenta a aba Marca. */
+    logo_path?: string | null
 }
 
 async function getAuthHeaders(): Promise<Record<string, string>> {

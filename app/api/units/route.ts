@@ -31,6 +31,8 @@ interface UnitRow {
     account_id: string
     created_at: string
     timezone: string
+    /** Sprint 93 — path no bucket 'brand' (NÃO url). */
+    logo_path?: string | null
 }
 
 function digitsOnly(value: string): string {
@@ -85,7 +87,9 @@ export async function GET(request: Request) {
 
         const { data, error } = await admin
             .from('restaurants')
-            .select('id, name, slug, cnpj, is_primary, active, account_id, created_at, timezone')
+            // Sprint 93 — `logo_path` alimenta a aba Marca (uma logo por filial),
+            // reusando esta listagem em vez de abrir um endpoint novo.
+            .select('id, name, slug, cnpj, is_primary, active, account_id, created_at, timezone, logo_path')
             .eq('account_id', account_id)
             .eq('active', true)
             .order('is_primary', { ascending: false })

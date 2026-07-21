@@ -3,7 +3,10 @@ export interface Restaurant {
     name: string
     slug: string
     owner_id: string
+    /** @deprecated s93 — nunca foi escrita. Use `logo_path`. DROP previsto na s94. */
     logo_url?: string | null
+    /** Sprint 93 — path no bucket 'brand' (NÃO url). Resolvido por lib/branding. */
+    logo_path?: string | null
     active: boolean
     cnpj?: string | null
     phone?: string | null
@@ -24,6 +27,8 @@ export interface Account {
     id: string
     name: string
     plan_id?: string | null
+    /** Sprint 93 — logo do grupo; fallback das filiais sem logo própria. */
+    logo_path?: string | null
     active: boolean
     created_at: string
     updated_at: string

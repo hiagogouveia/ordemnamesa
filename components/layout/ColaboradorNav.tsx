@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Logo } from "@/components/ui/Logo";
+import { BrandLogo } from "@/components/ui/BrandLogo";
 
 export function ColaboradorNav() {
     const pathname = usePathname();
@@ -20,7 +20,7 @@ export function ColaboradorNav() {
             <aside className="hidden md:flex flex-col w-64 bg-white dark:bg-[#111e22] border-r border-slate-200 dark:border-border-dark h-screen fixed top-0 left-0 z-40">
                 <div className="h-16 flex items-center px-6 border-b border-slate-200 dark:border-border-dark">
                     <Link href="/colaborador" className="flex items-center gap-2">
-                        <Logo width={24} height={24} />
+                        <BrandLogo slot="nav" />
                         <span className="font-bold text-slate-900 dark:text-white">Ordem na Mesa</span>
                     </Link>
                 </div>
@@ -63,7 +63,7 @@ export function ColaboradorNav() {
             {/* Mobile Header (Fixed Top) */}
             <header className="md:hidden fixed top-0 w-full bg-white dark:bg-[#111e22] border-b border-slate-200 dark:border-border-dark h-16 z-40 px-4 flex justify-between items-center transition-all">
                 <div className="flex items-center gap-2">
-                    <Logo width={24} height={24} />
+                    <BrandLogo slot="nav" />
                     <span className="font-bold text-slate-900 dark:text-white">Ordem na Mesa</span>
                 </div>
                 {/* s90 — sino DECORATIVO removido: <button> sem onClick e bolinha vermelha

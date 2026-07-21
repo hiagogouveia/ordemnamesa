@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { usePathname } from "next/navigation";
-import { Logo } from "@/components/ui/Logo";
+import { BrandLogo } from "@/components/ui/BrandLogo";
 import { createClient } from "@/lib/supabase/client";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useNotifications, useMarkAllNotificationsRead } from "@/lib/hooks/use-notifications";
@@ -76,7 +76,7 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
 
                 <div className="flex items-center gap-3">
                     <div className="lg:hidden">
-                        <Logo width={32} height={32} />
+                        <BrandLogo slot="header" />
                     </div>
                     <h2 className="text-xl font-bold text-white tracking-tight hidden sm:block">{getHeaderTitle()}</h2>
                 </div>

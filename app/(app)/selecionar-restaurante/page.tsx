@@ -5,15 +5,19 @@ import { useRouter } from "next/navigation";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useAccountSessionStore } from "@/lib/store/account-session-store";
 import { Logo } from "@/components/ui/Logo";
+import { brandPublicUrl } from "@/lib/branding/storage";
 import Image from "next/image";
 
 interface MyRestaurant {
     id: string;
     name: string;
     slug: string;
-    logo_url: string | null;
+    /** Sprint 93 — path no bucket 'brand' (NÃO url). */
+    logo_path: string | null;
     account_id: string;
     account_name: string;
+    /** Sprint 93 — logo do grupo; fallback desta unidade. */
+    account_logo_path: string | null;
     timezone?: string;
     role: "owner" | "manager" | "staff";
 }
@@ -66,8 +70,13 @@ export default function SelecionarRestaurantePage() {
                 slug: restaurant.slug,
                 role: restaurant.role,
                 timezone: restaurant.timezone,
+                logoPath: restaurant.logo_path,
             });
-            setAccount({ id: restaurant.account_id, name: restaurant.account_name });
+            setAccount({
+                id: restaurant.account_id,
+                name: restaurant.account_name,
+                logoPath: restaurant.account_logo_path,
+            });
             setContextCookies(restaurant);
             const target = restaurant.role === "staff" ? "/turno" : "/dashboard";
             window.location.assign(target);
@@ -205,8 +214,19 @@ export default function SelecionarRestaurantePage() {
                                         className="group flex items-center gap-4 rounded-xl border border-[#233f48] bg-[#16262c] p-5 hover:border-[#13b6ec] hover:shadow-[0_4px_20px_0_rgba(19,182,236,0.1)] transition-all text-left animate-fade-in focus:outline-none focus:ring-2 focus:ring-[#13b6ec]"
                                     >
                                         <div className="w-14 h-14 shrink-0 rounded-full border-2 border-[#233f48] group-hover:border-[#13b6ec]/50 flex items-center justify-center overflow-hidden bg-[#101d22] relative transition-colors">
-                                            {item.logo_url ? (
-                                                <Image src={item.logo_url} alt={`Logo ${item.name}`} fill sizes="56px" className="object-cover" />
+                                            {/* Sprint 93 — cascata filial → grupo. O último degrau aqui é a
+                                                INICIAL, não a marca da plataforma: numa lista cross-tenant, a
+                                                logo do Ordem na Mesa repetida N vezes viraria ruído e deixaria
+                                                de distinguir as unidades. */}
+                                            {(brandPublicUrl(item.logo_path) ?? brandPublicUrl(item.account_logo_path)) ? (
+                                                <Image
+                                                    src={(brandPublicUrl(item.logo_path) ?? brandPublicUrl(item.account_logo_path))!}
+                                                    alt={`Logo ${item.name}`}
+                                                    fill
+                                                    sizes="56px"
+                                                    className="object-contain p-1.5"
+                                                    unoptimized
+                                                />
                                             ) : (
                                                 <span className="text-lg font-bold text-white">{item.name.charAt(0).toUpperCase()}</span>
                                             )}

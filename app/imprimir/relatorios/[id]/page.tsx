@@ -3,6 +3,8 @@
 import { useEffect, useMemo } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useRelatorioDetail } from '@/lib/hooks/use-relatorios-detail';
+import { useBrandByScope } from '@/lib/hooks/use-brand-by-scope';
+import type { Brand } from '@/lib/branding/resolve';
 import {
     AUDIT_STATUS_LABEL,
     AUDIT_TASK_STATUS_LABEL,
@@ -34,6 +36,8 @@ export default function ImprimirRelatorioPage() {
     }, [sp]);
 
     const { data: detail, isLoading, error } = useRelatorioDetail(scope, params.id ?? null);
+    // Sprint 93 — marca resolvida pelo escopo da URL, não pelo store (ver hook).
+    const brand = useBrandByScope(scope);
 
     // Auto-abre diálogo de impressão quando os dados carregam
     useEffect(() => {
@@ -49,7 +53,7 @@ export default function ImprimirRelatorioPage() {
     if (error) return <Notice message={`Erro: ${error.message}`} />;
     if (!detail) return <Notice message="Execução não encontrada." />;
 
-    return <PrintLayout detail={detail} />;
+    return <PrintLayout detail={detail} brand={brand} />;
 }
 
 function Notice({ message }: { message: string }) {
@@ -60,7 +64,7 @@ function Notice({ message }: { message: string }) {
     );
 }
 
-function PrintLayout({ detail }: { detail: AuditExecutionDetail }) {
+function PrintLayout({ detail, brand }: { detail: AuditExecutionDetail; brand: Brand | null }) {
     return (
         <div className="bg-white text-slate-900 min-h-screen print:min-h-0">
             {/* Toolbar visível só na tela */}
@@ -93,12 +97,20 @@ function PrintLayout({ detail }: { detail: AuditExecutionDetail }) {
                 <header className="flex items-start justify-between gap-6 pb-5 border-b-2 border-slate-900">
                     <div className="flex items-center gap-3">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        {/* ?v= força cache-bust: este <img> cru (não next/image) era servido
-                            do cache do navegador com o logo antigo. Bump ao trocar o logo. */}
-                        <img src="/logo-icon.png?v=20260617" alt="Ordem na Mesa" width={48} height={48} className="shrink-0" />
+                        {/* Sprint 93 — logo do restaurante no cabeçalho; a atribuição ao
+                            Ordem na Mesa fica no rodapé, como emissor do documento.
+                            O cache-bust manual (?v=) sumiu: o path da logo do tenant carrega
+                            hash de conteúdo, então a URL já é imutável e auto-invalidante. */}
+                        <img
+                            src={brand?.logoSrc ?? '/logo-icon.png'}
+                            alt={brand?.isTenantBranded ? 'Logo do restaurante' : 'Ordem na Mesa'}
+                            className="shrink-0 h-12 max-w-[180px] w-auto object-contain object-left"
+                        />
                         <div>
                             <p className="text-xs uppercase tracking-[0.2em] text-slate-500 font-bold mb-1">
-                                Ordem na Mesa
+                                {brand?.isTenantBranded
+                                    ? (detail.unit?.name ?? 'Relatório')
+                                    : 'Ordem na Mesa'}
                             </p>
                             <h1 className="text-2xl font-black text-slate-900 leading-tight">
                                 Relatório oficial de auditoria

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Logo } from "@/components/ui/Logo";
+import { BrandLogo } from "@/components/ui/BrandLogo";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import { useAccountSessionStore } from "@/lib/store/account-session-store";
 import { useAccountAccess } from "@/lib/hooks/use-account-access";
@@ -10,6 +10,7 @@ import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useMyActivitiesBadge } from "@/lib/hooks/use-my-activities";
 import { useAuthUser } from "@/lib/hooks/use-auth-user";
+import { useBrandLogo } from "@/lib/hooks/use-brand-logo";
 
 interface NavItem {
     name: string;
@@ -72,6 +73,7 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggle }: Sideba
     const [switcherOpen, setSwitcherOpen] = useState(false);
     const switcherRef = useRef<HTMLDivElement>(null);
     const { data: authUser } = useAuthUser();
+    const { isTenantBranded } = useBrandLogo();
     const { data: badgeData } = useMyActivitiesBadge(restaurantId || undefined, authUser?.id);
     const pendingCount = badgeData?.pending ?? 0;
 
@@ -107,16 +109,25 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggle }: Sideba
 
         const { data: link } = await supabase
             .from('restaurant_users')
-            .select('role, restaurants ( id, name, slug, timezone )')
+            // Sprint 93 — `logo_path` entra aqui: sem ele toda troca de unidade
+            // resolveria a marca para null e cairia no fallback do grupo, sem erro visível.
+            .select('role, restaurants ( id, name, slug, timezone, logo_path )')
             .eq('restaurant_id', unitId)
             .eq('user_id', user.id)
             .eq('active', true)
-            .maybeSingle<{ role: 'owner' | 'manager' | 'staff'; restaurants: { id: string; name: string; slug: string; timezone: string | null } | null }>();
+            .maybeSingle<{ role: 'owner' | 'manager' | 'staff'; restaurants: { id: string; name: string; slug: string; timezone: string | null; logo_path: string | null } | null }>();
 
         const nextRole = link?.role ?? (accountRole === 'owner' ? 'owner' : 'manager');
         const slug = link?.restaurants?.slug ?? '';
 
-        setRestaurant({ id: unitId, name: unitName, slug, role: nextRole, timezone: link?.restaurants?.timezone });
+        setRestaurant({
+            id: unitId,
+            name: unitName,
+            slug,
+            role: nextRole,
+            timezone: link?.restaurants?.timezone,
+            logoPath: link?.restaurants?.logo_path ?? null,
+        });
         setAccountMode("single");
 
         const base = "; path=/; SameSite=Strict";
@@ -169,15 +180,32 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggle }: Sideba
             {/* Header expandido: visível no mobile (sempre) e desktop expandido */}
             <div className={`w-full mb-8 pt-6 px-4 flex items-center justify-between ${collapsed ? 'lg:hidden' : ''}`}>
                 <div className="flex items-center gap-3 min-w-0">
-                    <Logo width={40} height={40} className="shrink-0" />
+                    <BrandLogo slot="sidebar" />
+                    {/* Sprint 93 — com logo do tenant, a linha principal passa a ser o nome
+                        do restaurante e "Ordem na Mesa" desce para atribuição discreta.
+                        Manter o título da plataforma em destaque ao lado da logo do CLIENTE
+                        ficaria contraditório: duas marcas disputando a mesma linha. */}
                     <div className="flex flex-col min-w-0">
-                        <span className="text-white font-bold text-sm leading-tight">
-                            Ordem na Mesa
-                        </span>
-                        {restaurantName && (
-                            <span className="text-[#92bbc9] text-xs truncate">
-                                {restaurantName}
-                            </span>
+                        {isTenantBranded && restaurantName ? (
+                            <>
+                                <span className="text-white font-bold text-sm leading-tight truncate">
+                                    {restaurantName}
+                                </span>
+                                <span className="text-[#92bbc9] text-[10px] truncate">
+                                    Ordem na Mesa
+                                </span>
+                            </>
+                        ) : (
+                            <>
+                                <span className="text-white font-bold text-sm leading-tight">
+                                    Ordem na Mesa
+                                </span>
+                                {restaurantName && (
+                                    <span className="text-[#92bbc9] text-xs truncate">
+                                        {restaurantName}
+                                    </span>
+                                )}
+                            </>
                         )}
                     </div>
                 </div>
@@ -196,7 +224,7 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggle }: Sideba
 
             {/* Header colapsado: visível somente no desktop quando colapsado */}
             <div className={`w-full mb-4 pt-6 hidden flex-col items-center gap-2 ${collapsed ? 'lg:flex' : ''}`}>
-                <Logo width={36} height={36} className="shrink-0" />
+                <BrandLogo slot="sidebarCollapsed" />
                 <button
                     onClick={onToggle}
                     className="p-1 text-[#92bbc9] hover:text-white rounded-lg hover:bg-[#1a2c32] transition-colors"
