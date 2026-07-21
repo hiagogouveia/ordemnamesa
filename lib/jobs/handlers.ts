@@ -5,6 +5,7 @@ import type { JobName } from "./registry";
 import { processDomainEventsOutbox } from "@/lib/notifications/process";
 import { processAdminNotificationOutbox } from "@/lib/admin-notifications/process";
 import { detectDelayedRoutines } from "@/lib/notifications/detect-delayed";
+import { reconcileTemporaryTransfers } from "@/lib/api/temporary-transfer";
 import { applyNotificationRetention } from "@/lib/notifications/retention";
 import { applyPhotoRetention, applyHistoryRetention } from "@/lib/photos/retention";
 
@@ -50,6 +51,21 @@ export const JOB_HANDLERS: Record<JobName, JobHandler> = {
         return {
             itemsProcessed: r.delayed,
             details: { restaurants: r.restaurants, checked: r.checked, delayed: r.delayed },
+        };
+    },
+
+    // s94 — reconciliador (converge estado, não reage a evento): rodar 2× tem o mesmo
+    // efeito de rodar 1×, e worker fora do ar por dias converge na volta.
+    "temporary-transfers": async (admin) => {
+        const r = await reconcileTemporaryTransfers({ admin });
+        return {
+            itemsProcessed: r.activated + r.expired + r.targetInactive,
+            details: {
+                activated: r.activated,
+                expired: r.expired,
+                target_inactive: r.targetInactive,
+                restaurants: r.restaurants,
+            },
         };
     },
 

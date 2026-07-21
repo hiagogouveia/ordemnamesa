@@ -19,6 +19,7 @@ import { getAccountBilling, canManageChecklists, canDeleteChecklists } from '@/l
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
 import { collectExecutionPhotoPaths, collectIssuePhotoPaths, removePhotosBestEffort } from '@/lib/supabase/storage-cleanup';
 import { fetchChecklistViews } from '@/lib/services/checklist-view';
+import { findOpenTransfer, endTransfer } from '@/lib/api/temporary-transfer';
 
 const getAdminSupabase = () => {
     return createClient(
@@ -312,6 +313,24 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
             await replaceChecklistResponsibles(
                 adminSupabase, restaurant_id, id, isIndividual ? effectiveResponsibleIds : [],
             );
+
+            // ── s94 (R1) — a edição manual VENCE a transferência temporária ──────
+            //
+            // O gestor acabou de definir os responsáveis à mão. Se houvesse uma
+            // transferência viva, o reconciliador iria, no fim da janela, "restaurar"
+            // um original que o gestor já substituiu — desfazendo silenciosamente a
+            // decisão dele dias depois.
+            //
+            // Encerra como 'superseded', SEM restaurar (`restoreOriginal: false`):
+            // restaurar sobrescreveria o que acabou de ser gravado acima. Fica auditado
+            // com motivo próprio, distinguível de um cancelamento do gestor.
+            const openTransfer = await findOpenTransfer(adminSupabase, id);
+            if (openTransfer) {
+                await endTransfer(adminSupabase, openTransfer, 'superseded', {
+                    endedBy: user.id,
+                    restoreOriginal: false,
+                });
+            }
         }
 
         // 2. Reconciliar Tasks (só quando o payload traz o campo `tasks`)

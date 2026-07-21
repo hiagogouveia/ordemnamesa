@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ExecutionStatus } from '@/lib/types';
 import { getNowInTz } from '@/lib/utils/brazil-date';
 import { getRestaurantTimezone } from '@/lib/utils/restaurant-time';
+import { fetchOpenTransfersByChecklist } from '@/lib/api/temporary-transfer';
 
 /**
  * A "view" da rotina — o shape que o frontend consome.
@@ -56,6 +57,22 @@ interface AssumptionRow {
     blocked_reason: string | null;
 }
 
+/** Map user_id → { id, name }. Só os ids realmente usados (dedup antes da query). */
+async function fetchUserNames(
+    admin: SupabaseClient,
+    userIds: string[],
+): Promise<Map<string, { id: string; name: string }>> {
+    const map = new Map<string, { id: string; name: string }>();
+    const ids = [...new Set(userIds)];
+    if (ids.length === 0) return map;
+
+    const { data } = await admin.from('users').select('id, name').in('id', ids);
+    for (const u of (data ?? []) as Array<{ id: string; name: string | null }>) {
+        map.set(u.id, { id: u.id, name: u.name ?? 'Colaborador' });
+    }
+    return map;
+}
+
 export interface FetchChecklistViewsOptions {
     restaurantIds: string[];
     /** Restringe a rotinas específicas (usado pelo PUT para devolver uma só). */
@@ -91,6 +108,12 @@ export async function fetchChecklistViews(
         return q;
     };
 
+    // s94 — a transferência temporária viva entra como QUERY SEPARADA (mesmo padrão de
+    // `assumptionMap`/`blockedTasksResult` logo abaixo), e não como embed PostgREST.
+    // Um embed traria também o histórico encerrado — que cresce sem limite — e filtrar
+    // embed depende de sintaxe sutil (`!inner` altera o filtro do pai). A query separada
+    // é coberta pelo índice parcial `idx_ctt_open_window` e devolve no máximo 1 linha
+    // por rotina (garantido pelo índice único `uq_ctt_one_open`).
     const [checklistsResult, assumptionsResult, blockedTasksResult] = await Promise.all([
         buildQuery('order_index'),
         admin
@@ -144,6 +167,18 @@ export async function fetchChecklistViews(
         ((assumptionsResult.data ?? []) as AssumptionRow[]).map(a => [a.checklist_id, a]),
     );
 
+    // s94 — transferências vivas + nomes dos dois envolvidos, para o badge e o tooltip.
+    // Buscada DEPOIS das rotinas porque depende dos ids já resolvidos (e porque a lista
+    // costuma ser curta: só rotinas com transferência aberta produzem linha).
+    const transferMap = await fetchOpenTransfersByChecklist(
+        admin,
+        (checklists ?? []).map((c) => c.id),
+    );
+    const transferUserNames = await fetchUserNames(
+        admin,
+        [...transferMap.values()].flatMap((t) => [t.original_user_id, t.temporary_user_id]),
+    );
+
     const assumptionIdsWithBlockedTasks = new Set<string>(
         ((blockedTasksResult.data ?? []) as Array<{ checklist_assumption_id: string | null }>)
             .filter(te => te.checklist_assumption_id)
@@ -165,6 +200,24 @@ export async function fetchChecklistViews(
         }
 
         const unit = unitsById![checklist.restaurant_id];
+
+        // s94 — SÓ EXIBIÇÃO. O responsável efetivo já está em `responsible_user_ids`
+        // (o reconciliador fez o swap na junção); este objeto existe para o badge
+        // "Temporário" saber quem é o original e até quando a cobertura vai.
+        const transfer = transferMap.get(checklist.id);
+        const temporary_transfer = transfer
+            ? {
+                id: transfer.id,
+                checklist_id: transfer.checklist_id,
+                original: transferUserNames.get(transfer.original_user_id) ?? null,
+                temporary: transferUserNames.get(transfer.temporary_user_id) ?? null,
+                starts_on: transfer.starts_on,
+                ends_on: transfer.ends_on,
+                status: transfer.status,
+                reason_code: transfer.reason_code,
+                reason_note: transfer.reason_note,
+            }
+            : null;
         // Sprint 66: turnos N:N → shift_ids + shifts (id, name) para exibição.
         const shiftLinks = checklist.checklist_shifts ?? [];
         const shiftIds = shiftLinks.map(l => l.shift_id);
@@ -196,6 +249,7 @@ export async function fetchChecklistViews(
             assumed_by_name: assumption?.user_name ?? null,
             assumed_by_user_id: assumption?.user_id ?? null,
             unit: unit ? { id: unit.id, name: unit.name } : null,
+            temporary_transfer,
         };
     });
 }

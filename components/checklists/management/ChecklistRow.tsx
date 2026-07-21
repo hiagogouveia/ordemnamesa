@@ -12,6 +12,7 @@ import { UnitBadge } from "@/components/ui/unit-badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { IssueBadge } from "@/components/checklists/issues/IssueBadge";
 import { ChecklistTypeBadge } from "@/components/checklists/management/ChecklistTypeBadge";
+import { TemporaryTransferBadge } from "@/components/checklists/management/TemporaryTransferBadge";
 import { displayAreas, areasLabel, responsibleLabel, responsiblesTitle } from "@/lib/utils/checklist-labels";
 
 
@@ -50,6 +51,8 @@ interface ChecklistRowProps {
     onStatusToggle: (active: boolean) => void;
     onDuplicate: () => void;
     onDelete: () => void;
+    /** s94 — abre o modal de transferência temporária (ou de encerramento, se já houver uma). */
+    onTemporaryTransfer?: () => void;
     currentMinutes: number;
     statusCtx?: StatusContext;
     isGlobal?: boolean;
@@ -67,6 +70,7 @@ export function ChecklistRow({
     onStatusToggle,
     onDuplicate,
     onDelete,
+    onTemporaryTransfer,
     currentMinutes,
     statusCtx,
     isGlobal,
@@ -104,7 +108,9 @@ export function ChecklistRow({
         }
         const rect = buttonRef.current?.getBoundingClientRect();
         if (!rect) return;
-        const MENU_HEIGHT = 180;
+        // s94: +1 item no menu ("Transferir temporariamente"). Sem ajustar isto, a
+        // heurística de abrir-para-cima erraria e o menu vazaria para fora da viewport.
+        const MENU_HEIGHT = onTemporaryTransfer ? 224 : 180;
         const openUp = rect.bottom + MENU_HEIGHT > window.innerHeight;
         setMenuPos({
             top: openUp ? rect.top - MENU_HEIGHT : rect.bottom + 4,
@@ -198,9 +204,19 @@ export function ChecklistRow({
                         <span className="text-white text-sm font-medium truncate">{checklist.assumed_by_name}</span>
                     </span>
                 ) : responsible ? (
-                    <span className="flex items-center gap-1.5" title={responsiblesTitle(checklist) || "Colaborador atribuído à rotina"}>
+                    <span className="flex items-center gap-1.5">
                         <span className="material-symbols-outlined text-[14px] text-[#5a8a99] shrink-0">person</span>
-                        <span className="text-[#92bbc9] text-sm truncate">{responsible}</span>
+                        <span
+                            className="text-[#92bbc9] text-sm truncate"
+                            title={responsiblesTitle(checklist) || "Colaborador atribuído à rotina"}
+                        >
+                            {responsible}
+                        </span>
+                        {/* s94 — quem está em `responsible` JÁ é o substituto (o swap é feito
+                            em checklist_responsibles); o badge revela que é temporário. */}
+                        {checklist.temporary_transfer && (
+                            <TemporaryTransferBadge transfer={checklist.temporary_transfer} />
+                        )}
                     </span>
                 ) : (
                     <span className="text-[#325a67] text-sm italic">
@@ -292,6 +308,15 @@ export function ChecklistRow({
                                 <span className="material-symbols-outlined text-[16px]">content_copy</span>
                                 Duplicar
                             </button>
+                            {onTemporaryTransfer && (
+                                <button
+                                    onClick={() => { setMenuOpen(false); setMenuPos(null); onTemporaryTransfer(); }}
+                                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-[#92bbc9] hover:bg-[#233f48] hover:text-white transition-colors"
+                                >
+                                    <span className="material-symbols-outlined text-[16px]">swap_horiz</span>
+                                    {checklist.temporary_transfer ? "Encerrar transferência" : "Transferir temporariamente"}
+                                </button>
+                            )}
                             <div className="border-t border-[#233f48] my-1" />
                             <button
                                 onClick={handleDelete}

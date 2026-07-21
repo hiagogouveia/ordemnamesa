@@ -85,6 +85,8 @@ interface ChecklistListViewProps {
     onStatusToggle: (id: string, active: boolean) => void;
     onDuplicate: (checklist: ExtendedChecklist) => void;
     onDelete: (id: string) => void;
+    /** s94 — ausente quando o usuário não pode gerenciar responsáveis (esconde o item do menu). */
+    onTemporaryTransfer?: (checklist: ExtendedChecklist) => void;
     onReorder: (items: Array<{ id: string; order_index: number }>) => Promise<void>;
     onAutoReprioritize: () => Promise<void>;
     selectedAreaId: string;
@@ -114,6 +116,7 @@ export function ChecklistListView({
     onStatusToggle,
     onDuplicate,
     onDelete,
+    onTemporaryTransfer,
     onReorder,
     onAutoReprioritize,
     selectedAreaId,
@@ -467,6 +470,9 @@ export function ChecklistListView({
                                         onStatusToggle={(active) => onStatusToggle(checklist.id, active)}
                                         onDuplicate={() => onDuplicate(checklist)}
                                         onDelete={() => onDelete(checklist.id)}
+                                        onTemporaryTransfer={
+                                            onTemporaryTransfer ? () => onTemporaryTransfer(checklist) : undefined
+                                        }
                                         currentMinutes={currentMinutes}
                                         statusCtx={statusCtx}
                                         isGlobal={isGlobal}
@@ -484,6 +490,9 @@ export function ChecklistListView({
                                     onStatusToggle={(active) => onStatusToggle(checklist.id, active)}
                                     onDuplicate={() => onDuplicate(checklist)}
                                     onDelete={() => onDelete(checklist.id)}
+                                    onTemporaryTransfer={
+                                        onTemporaryTransfer ? () => onTemporaryTransfer(checklist) : undefined
+                                    }
                                     currentMinutes={currentMinutes}
                                     statusCtx={statusCtx}
                                     isGlobal={isGlobal}

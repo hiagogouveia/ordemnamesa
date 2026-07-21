@@ -3,14 +3,12 @@ import { createClient } from '@supabase/supabase-js';
 import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
 import { getAccountBilling, canManageChecklists } from '@/lib/billing/subscription-access';
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
-import { fetchShiftIdsByChecklist } from '@/lib/api/shift-links';
-import { validateShiftAssignment, SHIFT_ASSIGNMENT_ERROR } from '@/lib/api/validate-shift-assignment';
 import {
     fetchAreaIdsByChecklist,
     fetchResponsibleIdsByChecklist,
     replaceChecklistResponsibles,
-    validateResponsiblesBelongToAreas,
 } from '@/lib/api/area-links';
+import { validateTransferTarget } from '@/lib/api/validate-transfer-target';
 import { trackAdminEvent } from '@/lib/analytics/track-event';
 import { emitDomainEvent } from '@/lib/notifications/emit';
 import { getNowInTz } from '@/lib/utils/brazil-date';
@@ -150,54 +148,48 @@ export async function POST(request: Request) {
             );
         }
 
-        // 8. Destino ativo na unidade
-        const { data: destMember } = await adminSupabase
-            .from('restaurant_users')
-            .select('role, active')
-            .eq('restaurant_id', restaurant_id)
-            .eq('user_id', to_user_id)
-            .eq('active', true)
-            .maybeSingle();
-
-        if (!destMember) {
-            return NextResponse.json(
-                { error: 'O colaborador de destino não está ativo nesta unidade.' },
-                { status: 422 }
-            );
+        // 8. Elegibilidade do destino (ativo na unidade + pertence a alguma área +
+        //    cobre o turno de cada rotina).
+        //
+        // s94: extraído para `validateTransferTarget` e COMPARTILHADO com a
+        // transferência temporária — as duas precisam respeitar exatamente as mesmas
+        // regras de atribuição, e duas cópias divergiriam na primeira mudança.
+        const targetErr = await validateTransferTarget(adminSupabase, {
+            restaurantId: restaurant_id,
+            toUserId: to_user_id,
+            routines: rows,
+            areaIds,
+        });
+        if (targetErr) {
+            return NextResponse.json(targetErr, { status: 422 });
         }
 
-        // 9. Destino pertence a ALGUMA das áreas da rotina
-        const destAreaErr = await validateResponsiblesBelongToAreas(
-            adminSupabase, restaurant_id, [to_user_id], areaIds,
-        );
-        if (destAreaErr) {
-            return NextResponse.json({ error: destAreaErr }, { status: 422 });
-        }
+        // 9. (s94 / R2) Nenhuma rotina pode ter transferência TEMPORÁRIA viva.
+        //
+        // Sem esta guarda, a "origem" lida no passo 5 seria o SUBSTITUTO (é ele que
+        // está em checklist_responsibles durante a janela), e o reconciliador, ao
+        // expirar, restauraria o original antigo — desfazendo a transferência
+        // permanente que o gestor acabou de fazer. Bloquear é mais previsível do que
+        // encerrar a temporária implicitamente por baixo dele.
+        const { data: openTransfers } = await adminSupabase
+            .from('checklist_temporary_transfers')
+            .select('checklist_id')
+            .in('checklist_id', ids)
+            .in('status', ['scheduled', 'active']);
 
-        // 10. Regra de turno (mesma da edição): destino deve cobrir o turno de cada rotina.
-        const shiftMap = await fetchShiftIdsByChecklist(adminSupabase, ids);
-        const shiftBlocked: string[] = [];
-        for (const r of rows) {
-            const err = await validateShiftAssignment(
-                adminSupabase,
-                restaurant_id,
-                to_user_id,
-                shiftMap.get(r.id) ?? []
-            );
-            if (err) shiftBlocked.push(r.name);
-        }
-        if (shiftBlocked.length > 0) {
+        if (openTransfers && openTransfers.length > 0) {
             return NextResponse.json(
                 {
-                    error: SHIFT_ASSIGNMENT_ERROR,
-                    code: 'SHIFT_ASSIGNMENT_INVALID',
-                    blocked_routines: shiftBlocked,
+                    error: openTransfers.length === 1
+                        ? 'Esta rotina tem uma transferência temporária em andamento. Encerre-a antes de transferir definitivamente.'
+                        : `${openTransfers.length} rotinas têm transferência temporária em andamento. Encerre-as antes de transferir definitivamente.`,
+                    code: 'TEMPORARY_TRANSFER_OPEN',
                 },
                 { status: 422 }
             );
         }
 
-        // 11. Execução — troca o vínculo N:N de cada rotina. A coluna-sombra
+        // 10. Execução — troca o vínculo N:N de cada rotina. A coluna-sombra
         // `assigned_to_user_id` é reescrita pelo trigger; gravá-la direto deixaria a
         // junção desatualizada.
         try {
@@ -242,7 +234,7 @@ export async function POST(request: Request) {
             });
         }
 
-        // 12. Auditoria (event_logs) — best-effort, não bloqueia a resposta.
+        // 11. Auditoria (event_logs) — best-effort, não bloqueia a resposta.
         await trackAdminEvent('checklist_responsible_transferred', {
             accountId,
             restaurantId: restaurant_id,

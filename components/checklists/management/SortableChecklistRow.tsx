@@ -12,6 +12,7 @@ import { getOperationalStatus, type StatusContext } from "@/lib/utils/get-operat
 import { describeRecurrence } from "@/lib/utils/recurrence/describe";
 import { UnitBadge } from "@/components/ui/unit-badge";
 import { displayAreas, areasLabel, responsibleLabel, responsiblesTitle } from "@/lib/utils/checklist-labels";
+import { TemporaryTransferBadge } from "@/components/checklists/management/TemporaryTransferBadge";
 
 
 const EXECUTION_STATUS_CONFIG: Record<ExecutionStatus, { label: string; className: string }> = {
@@ -49,6 +50,8 @@ interface SortableChecklistRowProps {
     onStatusToggle: (active: boolean) => void;
     onDuplicate: () => void;
     onDelete: () => void;
+    /** s94 — mesma ação da ChecklistRow; mantida aqui para não sumir no modo reordenar. */
+    onTemporaryTransfer?: () => void;
     currentMinutes: number;
     statusCtx?: StatusContext;
     isGlobal?: boolean;
@@ -62,6 +65,7 @@ export function SortableChecklistRow({
     onStatusToggle,
     onDuplicate,
     onDelete,
+    onTemporaryTransfer,
     currentMinutes,
     statusCtx,
     isGlobal,
@@ -112,7 +116,8 @@ export function SortableChecklistRow({
         }
         const rect = buttonRef.current?.getBoundingClientRect();
         if (!rect) return;
-        const MENU_HEIGHT = 180;
+        // s94: +1 item no menu quando a transferência temporária está disponível.
+        const MENU_HEIGHT = onTemporaryTransfer ? 224 : 180;
         const openUp = rect.bottom + MENU_HEIGHT > window.innerHeight;
         setMenuPos({
             top: openUp ? rect.top - MENU_HEIGHT : rect.bottom + 4,
@@ -197,11 +202,16 @@ export function SortableChecklistRow({
 
             {/* Responsável */}
             <td className="px-3 py-3 hidden md:table-cell">
-                <span
-                    className={`text-sm ${responsible ? "text-[#92bbc9]" : "text-[#325a67] italic"}`}
-                    title={responsiblesTitle(checklist) || undefined}
-                >
-                    {responsible ?? (areas.length > 1 ? "Distribuído para todas as áreas" : "Distribuído para toda a área")}
+                <span className="flex items-center gap-1.5">
+                    <span
+                        className={`text-sm ${responsible ? "text-[#92bbc9]" : "text-[#325a67] italic"}`}
+                        title={responsiblesTitle(checklist) || undefined}
+                    >
+                        {responsible ?? (areas.length > 1 ? "Distribuído para todas as áreas" : "Distribuído para toda a área")}
+                    </span>
+                    {checklist.temporary_transfer && (
+                        <TemporaryTransferBadge transfer={checklist.temporary_transfer} />
+                    )}
                 </span>
             </td>
 
@@ -288,6 +298,15 @@ export function SortableChecklistRow({
                                 <span className="material-symbols-outlined text-[16px]">content_copy</span>
                                 Duplicar
                             </button>
+                            {onTemporaryTransfer && (
+                                <button
+                                    onClick={() => { setMenuOpen(false); setMenuPos(null); onTemporaryTransfer(); }}
+                                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-[#92bbc9] hover:bg-[#233f48] hover:text-white transition-colors"
+                                >
+                                    <span className="material-symbols-outlined text-[16px]">swap_horiz</span>
+                                    {checklist.temporary_transfer ? "Encerrar transferência" : "Transferir temporariamente"}
+                                </button>
+                            )}
                             <div className="border-t border-[#233f48] my-1" />
                             <button
                                 onClick={handleDelete}

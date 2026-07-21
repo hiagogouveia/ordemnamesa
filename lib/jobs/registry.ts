@@ -19,6 +19,7 @@ export type JobName =
     | "domain-events"
     | "admin-notifications"
     | "routines-delayed"
+    | "temporary-transfers"
     | "notifications-retention"
     | "photo-retention"
     | "history-retention";
@@ -43,9 +44,10 @@ export interface JobDefinition {
 }
 
 /**
- * As 6 definições. Cadências herdadas dos workflows atuais (comprovadamente corretas):
+ * As 7 definições. Cadências herdadas dos workflows atuais (comprovadamente corretas):
  *   domain-events / admin-notifications  → a cada 5 min   (retry de outbox)
  *   routines-delayed                     → a cada 15 min  (detecção de atraso)
+ *   temporary-transfers                  → a cada 15 min  (s94; ver comentário na entrada)
  *   notifications-retention              → diário
  *   photo/history-retention              → semanal
  */
@@ -70,6 +72,19 @@ export const JOB_REGISTRY: Record<JobName, JobDefinition> = {
         lockTtlMs: 6 * 60_000,
         maxBackoffSeconds: 60 * 60,
         description: "Detecta rotinas atrasadas e emite RoutineDelayed (único produtor).",
+    },
+    // s94 — 15 min, e NÃO 24 h. O job converge transferências na virada do dia, e
+    // "o dia" é o do FUSO DE CADA RESTAURANTE — não existe um instante único em que
+    // todas viram. A cadência de 15 min limita a "janela de responsável errado" a 15
+    // minutos em qualquer fuso; um job diário erraria por horas nas unidades cujo
+    // fuso não coincide com o horário em que ele roda. A varredura é barata: índice
+    // parcial só sobre transferências vivas (idx_ctt_open_window).
+    "temporary-transfers": {
+        everySeconds: 15 * 60,
+        timeoutMs: 2 * 60_000,
+        lockTtlMs: 3 * 60_000,
+        maxBackoffSeconds: 60 * 60,
+        description: "Ativa e encerra transferências temporárias de responsável (retorno automático).",
     },
     "notifications-retention": {
         everySeconds: 24 * 60 * 60,

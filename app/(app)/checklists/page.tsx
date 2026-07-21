@@ -22,6 +22,10 @@ const CopyChecklistModal = dynamic(
     () => import("@/components/checklists/management/CopyChecklistModal").then((m) => ({ default: m.CopyChecklistModal })),
     { loading: () => null }
 );
+const TemporaryTransferModal = dynamic(
+    () => import("@/components/checklists/management/TemporaryTransferModal").then((m) => ({ default: m.TemporaryTransferModal })),
+    { ssr: false }
+);
 const TransferResponsibleModal = dynamic(
     () => import("@/components/checklists/management/TransferResponsibleModal").then((m) => ({ default: m.TransferResponsibleModal })),
     { loading: () => null }
@@ -386,6 +390,14 @@ function ChecklistsContent() {
         : transferEligibleTargets.length === 0
             ? "Não há outro colaborador ativo nesta área."
             : undefined;
+
+    // ─── s94: TRANSFERIR TEMPORARIAMENTE ────────────────────────────────────────
+    // Ação por rotina (menu de 3 pontinhos), não em massa. Mesma restrição da
+    // transferência permanente: só na visão de unidade única, porque áreas, turnos e
+    // colaboradores são por restaurante — na Visão Global não existe "a equipe".
+    const canTemporaryTransfer = !isGlobal && isManagerOrOwner && !!restaurantId;
+    const [temporaryTransferTarget, setTemporaryTransferTarget] =
+        useState<ExtendedChecklist | null>(null);
 
     // ─── EXPORTAÇÃO PARA PDF ────────────────────────────────────────────────────
     const { exportPdf, isExporting } = useExportRotinasPdf({
@@ -922,6 +934,9 @@ function ChecklistsContent() {
                             onStatusToggle={handleStatusToggle}
                             onDuplicate={handleDuplicate}
                             onDelete={handleDelete}
+                            onTemporaryTransfer={
+                                canTemporaryTransfer ? setTemporaryTransferTarget : undefined
+                            }
                             selectedAreaId={selectedAreaId}
                             hasReducingFilters={(selectedAvailability !== "all" && selectedAvailability !== "") || !!selectedExecStatus}
                             onReorder={handleReorder}
@@ -1052,6 +1067,21 @@ function ChecklistsContent() {
                                 : `${count} rotinas transferidas com sucesso.`,
                         });
                     }}
+                />
+            )}
+
+            {/* s94 — transferência temporária (uma rotina, pelo menu de 3 pontinhos).
+                `today` vem do fuso do RESTAURANTE (useRestaurantNow), nunca do browser:
+                é o mesmo dateKey que o backend usa para validar e ativar a janela. */}
+            {mounted && temporaryTransferTarget && restaurantId && (
+                <TemporaryTransferModal
+                    isOpen
+                    onClose={() => setTemporaryTransferTarget(null)}
+                    checklist={temporaryTransferTarget}
+                    restaurantId={restaurantId}
+                    collaborators={equipeData?.equipe ?? []}
+                    today={tzDateKey}
+                    onSuccess={(message) => setDeleteToast({ kind: "success", message })}
                 />
             )}
         </div>

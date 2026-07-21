@@ -28,6 +28,11 @@ export type AdminEventName =
     | 'lead_approved'
     | 'lead_rejected'
     | 'checklist_responsible_transferred'
+    // s94 — transferência temporária. O ledger (checklist_temporary_transfers) é a
+    // FONTE da auditoria; estes eventos são o espelho para análise fora do produto
+    // (e sobrevivem à exclusão da rotina, que cascateia o ledger).
+    | 'temporary_transfer_created'
+    | 'temporary_transfer_ended'
 
 /**
  * s90 — auditoria da navegação por notificação, correlacionada por `event_id`.

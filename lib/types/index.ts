@@ -1,3 +1,12 @@
+// s94 — o vocabulário da transferência temporária vive no módulo puro (isomórfico,
+// sem banco), para que modal, reconciliador e testes compartilhem a MESMA definição.
+import type {
+    TemporaryTransferStatus,
+    TransferReasonCode,
+} from '@/lib/utils/temporary-transfer'
+
+export type { TemporaryTransferStatus, TransferReasonCode }
+
 export interface Restaurant {
     id: string
     name: string
@@ -189,6 +198,28 @@ export interface Checklist {
     // rotina foi importada do catálogo global. Somente registro — não sincroniza.
     origin_template_id?: string | null
     origin_template_version?: number | null
+    // Sprint 94 — Transferência temporária VIVA (scheduled|active), quando houver.
+    // Apenas EXIBIÇÃO (badge, tooltip): quem já está em `responsible_user_ids` é o
+    // responsável efetivo — o reconciliador faz o swap lá. Nunca derivar visibilidade
+    // deste campo.
+    temporary_transfer?: TemporaryTransfer | null
+}
+
+// Sprint 94 — Transferência temporária de responsável
+export interface TemporaryTransfer {
+    id: string
+    checklist_id: string
+    /** Para onde a rotina VOLTA no fim da janela. */
+    original: { id: string; name: string } | null
+    /** Quem responde pela rotina DURANTE a janela. */
+    temporary: { id: string; name: string } | null
+    /** `YYYY-MM-DD` no fuso do restaurante. Janela inclusiva nas duas pontas. */
+    starts_on: string
+    ends_on: string
+    status: TemporaryTransferStatus
+    /** ADR-3 — por que COMEÇOU (opcional; não confundir com o motivo do término). */
+    reason_code?: TransferReasonCode | null
+    reason_note?: string | null
 }
 
 // Sprint 56 — Receiving Templates + Suppliers
