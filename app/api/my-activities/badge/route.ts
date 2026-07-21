@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { fetchShiftIdsByChecklist, isVisibleByShiftIntersection } from '@/lib/api/shift-links';
+import { filterExecutable } from '@/lib/api/area-links';
 
 const getAdminSupabase = () =>
     createClient(
@@ -60,22 +61,21 @@ export async function GET(request: Request) {
         const userShiftIds = (userShiftRows ?? []).map((r) => r.shift_id);
         if (userAreaIds.length === 0) return NextResponse.json({ pending: 0 });
 
-        // Checklists ativos nas áreas/funções do usuário
-        const filterParts: string[] = [];
-        filterParts.push(`and(area_id.in.(${userAreaIds.join(',')}),assigned_to_user_id.is.null)`);
-        if (userRoleIds.length > 0) {
-            filterParts.push(`and(role_id.in.(${userRoleIds.join(',')}),assigned_to_user_id.is.null,area_id.in.(${userAreaIds.join(',')}))`);
-        }
-        filterParts.push(`and(assigned_to_user_id.eq.${user.id},area_id.in.(${userAreaIds.join(',')}))`);
+        // Checklists ativos nas áreas/funções do usuário.
+        // Sprint 92: superconjunto via `checklist_areas!inner`; a decisão final é do
+        // `canExecuteChecklist` (filterExecutable), igual ao kanban e ao my-activities.
+        const visibilityCtx = { userId: user.id, areaIds: userAreaIds, roleIds: userRoleIds };
 
-        const checklistSelect = 'id, shift_id, assigned_to_user_id, end_time, task_count:checklist_tasks(count)';
-        const { data: checklistsData } = await adminSupabase
+        const checklistSelect = 'id, shift_id, assigned_to_user_id, role_id, area_id, end_time, task_count:checklist_tasks(count)';
+        const { data: rawChecklists } = await adminSupabase
             .from('checklists')
-            .select(checklistSelect)
+            .select(`${checklistSelect}, checklist_areas!inner(area_id)`)
             .eq('restaurant_id', restaurant_id)
             .eq('active', true)
             .eq('status', 'active')
-            .or(filterParts.join(','));
+            .in('checklist_areas.area_id', userAreaIds);
+
+        const checklistsData = await filterExecutable(adminSupabase, rawChecklists ?? [], visibilityCtx);
 
         // Sprint 66 — segmentação por turno (interseção, igual ao GET): sem turno
         // → vê tudo; atribuição direta → sempre; rotina sem turnos → visível;
@@ -83,12 +83,12 @@ export async function GET(request: Request) {
         const applyShiftFilter = userShiftIds.length > 0;
         const shiftMap = await fetchShiftIdsByChecklist(
             adminSupabase,
-            (checklistsData || []).map((c: { id: string }) => c.id),
+            checklistsData.map((c) => c.id),
         );
         let checklists = !applyShiftFilter
-            ? (checklistsData || [])
-            : (checklistsData || []).filter((c: { id: string; assigned_to_user_id?: string | null }) =>
-                isVisibleByShiftIntersection(shiftMap.get(c.id) ?? [], userShiftIds, c.assigned_to_user_id, user.id));
+            ? checklistsData
+            : checklistsData.filter((c) =>
+                isVisibleByShiftIntersection(shiftMap.get(c.id) ?? [], userShiftIds, c.responsible_user_ids, user.id));
 
         // Defesa em profundidade: reincorpora checklists com assumptions
         // in_progress mesmo quando active=false. Mantém coerência com
@@ -105,12 +105,12 @@ export async function GET(request: Request) {
                 inProgressOrphans.map((a: { checklist_id: string }) => a.checklist_id)
             )).filter((id) => !knownIds.has(id));
             if (orphanIds.length > 0) {
-                const { data: orphanChecklists } = await adminSupabase
+                const { data: rawOrphans } = await adminSupabase
                     .from('checklists')
-                    .select(checklistSelect)
-                    .in('id', orphanIds)
-                    .or(filterParts.join(','));
-                if (orphanChecklists && orphanChecklists.length > 0) {
+                    .select(`${checklistSelect}, checklist_areas(area_id)`)
+                    .in('id', orphanIds);
+                const orphanChecklists = await filterExecutable(adminSupabase, rawOrphans ?? [], visibilityCtx);
+                if (orphanChecklists.length > 0) {
                     checklists = [...checklists, ...orphanChecklists];
                 }
             }

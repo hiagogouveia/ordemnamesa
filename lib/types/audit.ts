@@ -112,7 +112,10 @@ export interface AuditExecution {
         /** s60: tipo da rotina (receiving distingue recebimento de rotina regular). */
         checklist_type?: 'regular' | 'opening' | 'closing' | 'receiving' | null;
     };
+    /** s92 — DEPRECADO: primeira área. Use `areas` (a rotina pode ter várias). */
     area: AreaInfo | null;
+    /** s92 — todas as áreas da rotina, ordenadas por nome. */
+    areas: AreaInfo[];
     user: UserInfo;
     /** s60: fornecedor da execução — sempre nulo em rotinas não-recebimento. */
     supplier: SupplierInfo | null;
@@ -191,7 +194,10 @@ export interface AuditExecutionDetail {
         description: string | null;
         shift: Shift | null;
     };
+    /** s92 — DEPRECADO: primeira área. Use `areas`. */
     area: AreaInfo | null;
+    /** s92 — todas as áreas da rotina, ordenadas por nome. */
+    areas: AreaInfo[];
     user: UserInfo;
     unit?: UnitInfo;
     tasks: AuditTaskDetail[];

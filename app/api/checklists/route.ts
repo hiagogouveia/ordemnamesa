@@ -6,8 +6,15 @@ import { getAccountBilling, canManageChecklists } from '@/lib/billing/subscripti
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
 import { processRecurrencePayload } from '@/lib/api/recurrence-payload';
 import { deriveShiftEnum } from '@/lib/api/derive-shift-enum';
-import { validateShiftAssignment } from '@/lib/api/validate-shift-assignment';
+import { validateShiftAssignments } from '@/lib/api/validate-shift-assignment';
 import { normalizeShiftIds, shiftIdShadow, replaceChecklistShifts } from '@/lib/api/shift-links';
+import {
+    readAreaIdsFromBody,
+    readResponsibleIdsFromBody,
+    replaceChecklistAreas,
+    replaceChecklistResponsibles,
+    validateResponsiblesBelongToAreas,
+} from '@/lib/api/area-links';
 import { trackChecklistEvent } from '@/lib/analytics/track-event';
 import { fetchChecklistViews } from '@/lib/services/checklist-view';
 
@@ -120,14 +127,27 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json();
-        const { restaurant_id, name, description, shift, shift_id, shift_ids, status, tasks, category, role_id, is_required, checklist_type, assigned_to_user_id, recurrence, start_time, end_time, recurrence_config, enforce_sequential_order, allow_early_start, area_id, target_role, assignment_type, origin_template_id, origin_template_version } = body;
+        const { restaurant_id, name, description, shift, shift_id, shift_ids, status, tasks, category, role_id, is_required, checklist_type, recurrence, start_time, end_time, recurrence_config, enforce_sequential_order, allow_early_start, target_role, assignment_type, origin_template_id, origin_template_version } = body;
 
         if (!restaurant_id || !name) {
             return NextResponse.json({ error: 'Campos obrigatórios faltando' }, { status: 400 });
         }
 
-        if (!area_id) {
-            return NextResponse.json({ error: 'Selecione uma área para a rotina.' }, { status: 400 });
+        // Sprint 92: áreas N:N. `area_ids` é a fonte da verdade; `area_id` único
+        // continua aceito (clientes antigos) e vira uma lista de um elemento.
+        const areaIds = readAreaIdsFromBody(body) ?? [];
+        if (areaIds.length === 0) {
+            return NextResponse.json({ error: 'Selecione ao menos uma área para a rotina.' }, { status: 400 });
+        }
+
+        // Responsáveis específicos (N:N). `assignment_type` é o discriminador do modo.
+        const responsibleIds = readResponsibleIdsFromBody(body) ?? [];
+        const isIndividual = assignment_type === 'user' || responsibleIds.length > 0;
+        if (isIndividual && responsibleIds.length === 0) {
+            return NextResponse.json(
+                { error: 'Selecione ao menos um responsável ou mude a atribuição para toda a equipe.' },
+                { status: 400 }
+            );
         }
 
         if (status === 'active' && (!Array.isArray(tasks) || tasks.length === 0)) {
@@ -178,21 +198,12 @@ export async function POST(request: Request) {
         const accessCheck = canManageChecklists(billing);
         if (!accessCheck.allowed) return buildAccessDeniedResponse(accessCheck);
 
-        // Validação de domínio: responsável deve pertencer à área selecionada
-        if (assigned_to_user_id && area_id) {
-            const { data: userArea } = await adminSupabase
-                .from('user_areas')
-                .select('id')
-                .eq('user_id', assigned_to_user_id)
-                .eq('area_id', area_id)
-                .maybeSingle();
-
-            if (!userArea) {
-                return NextResponse.json(
-                    { error: 'O colaborador selecionado não pertence à área escolhida.' },
-                    { status: 422 }
-                );
-            }
+        // Validação de domínio: todo responsável deve pertencer a ALGUMA das áreas.
+        const responsibleAreaErr = await validateResponsiblesBelongToAreas(
+            adminSupabase, restaurant_id, responsibleIds, areaIds,
+        );
+        if (responsibleAreaErr) {
+            return NextResponse.json({ error: responsibleAreaErr }, { status: 422 });
         }
 
         // PR 2: Em v2, a fonte de verdade é o JSONB validado — sincroniza coluna text
@@ -216,8 +227,8 @@ export async function POST(request: Request) {
             ? await deriveShiftEnum(adminSupabase, restaurant_id, finalShiftId)
             : (shift || 'any');
 
-        // Sprint 66: atribuição direta exige interseção com os turnos da rotina.
-        const shiftAssignErr = await validateShiftAssignment(adminSupabase, restaurant_id, assigned_to_user_id || null, incomingShiftIds);
+        // Sprint 66/92: cada responsável exige interseção com os turnos da rotina.
+        const shiftAssignErr = await validateShiftAssignments(adminSupabase, restaurant_id, responsibleIds, incomingShiftIds);
         if (shiftAssignErr) {
             return NextResponse.json({ error: shiftAssignErr, code: 'SHIFT_ASSIGNMENT_INVALID' }, { status: 422 });
         }
@@ -236,16 +247,17 @@ export async function POST(request: Request) {
                 role_id,
                 is_required: is_required !== undefined ? is_required : true,
                 checklist_type: checklist_type || 'regular',
-                assigned_to_user_id: assigned_to_user_id || null,
+                // Sombras s92: o valor real é gravado pelo trigger a partir das junções.
+                assigned_to_user_id: responsibleIds.length === 1 ? responsibleIds[0] : null,
                 recurrence: finalRecurrence,
                 start_time: start_time || null,
                 end_time: end_time || null,
                 recurrence_config: finalRecurrenceConfig,
                 enforce_sequential_order: enforce_sequential_order !== undefined ? enforce_sequential_order : false,
                 allow_early_start: allow_early_start !== undefined ? allow_early_start : false,
-                area_id: area_id || null,
+                area_id: areaIds[0],
                 target_role: target_role || 'all',
-                assignment_type: assignment_type || (assigned_to_user_id ? 'user' : (area_id ? 'area' : 'all')),
+                assignment_type: isIndividual ? 'user' : 'area',
                 // Sprint 70 — rastreabilidade da origem (importação de modelo do catálogo)
                 origin_template_id: origin_template_id || null,
                 origin_template_version: origin_template_version ?? null,
@@ -262,6 +274,11 @@ export async function POST(request: Request) {
 
         // Sprint 66: grava os turnos N:N da rotina (vazio = "Todos os turnos").
         await replaceChecklistShifts(adminSupabase, restaurant_id, newChecklist.id, incomingShiftIds);
+
+        // Sprint 92: áreas e responsáveis N:N. As colunas-sombra acima são
+        // recalculadas por trigger a partir daqui.
+        await replaceChecklistAreas(adminSupabase, restaurant_id, newChecklist.id, areaIds);
+        await replaceChecklistResponsibles(adminSupabase, restaurant_id, newChecklist.id, responsibleIds);
 
         await trackChecklistEvent('checklist_created', {
             restaurantId: restaurant_id,

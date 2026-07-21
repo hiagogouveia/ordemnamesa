@@ -5,6 +5,8 @@ import { getRestaurantTimezone } from '@/lib/utils/restaurant-time';
 import { filterChecklistsByRecurrence } from '@/lib/utils/should-checklist-appear-today';
 import { fetchShiftIdsByTemplate, isVisibleByShiftIntersection } from '@/lib/api/shift-links';
 import type { ReceivingTemplate } from '@/lib/types';
+import { RECEIVING_TEMPLATE_SELECT, shapeTemplateRows } from '@/lib/services/receiving-template-view';
+import { canExecuteChecklist } from '@/lib/utils/checklist-visibility';
 
 const getAdminSupabase = () =>
     createClient(
@@ -71,22 +73,21 @@ export async function GET(request: Request) {
             return NextResponse.json(withMeta ? { available: [], total_in_scope: 0 } : []);
         }
 
-        // Filtro OR no escopo (assignment_type implícito)
-        const scopeParts: string[] = [];
-        scopeParts.push(`and(assigned_to_user_id.is.null,role_id.is.null,area_id.in.(${userAreaIds.join(',')}))`);
-        if (userRoleIds.length > 0) {
-            scopeParts.push(`and(role_id.in.(${userRoleIds.join(',')}),area_id.in.(${userAreaIds.join(',')}))`);
+        // Sprint 92 — escopo por interseção de áreas (N:N). O embed `!inner` filtrado
+        // devolve o superconjunto; `canExecuteChecklist` decide, igual às rotinas.
+        const scopeAreaIds = filterAreaId
+            ? userAreaIds.filter((id) => id === filterAreaId)
+            : userAreaIds;
+        if (scopeAreaIds.length === 0) {
+            return NextResponse.json(withMeta ? { available: [], total_in_scope: 0 } : []);
         }
-        scopeParts.push(`assigned_to_user_id.eq.${user.id}`);
 
-        let query = adminSupabase
+        const query = adminSupabase
             .from('receiving_templates')
-            .select('*, area:areas(id, name, color), role:roles(id, name, color), tasks_count:receiving_template_tasks(count)')
+            .select(`${RECEIVING_TEMPLATE_SELECT}, tasks_count:receiving_template_tasks(count), receiving_template_areas!inner(area_id)`)
             .eq('restaurant_id', restaurant_id)
             .eq('active', true)
-            .or(scopeParts.join(','));
-
-        if (filterAreaId) query = query.eq('area_id', filterAreaId);
+            .in('receiving_template_areas.area_id', scopeAreaIds);
 
         const [templatesRes, shiftsRes] = await Promise.all([
             query,
@@ -99,9 +100,22 @@ export async function GET(request: Request) {
         }
 
         const brazil = getNowInTz(await getRestaurantTimezone(adminSupabase, restaurant_id));
-        const templates = (templatesRes.data ?? []) as Array<ReceivingTemplate & {
+        const inScope = shapeTemplateRows(templatesRes.data ?? []) as Array<ReceivingTemplate & {
             tasks_count?: Array<{ count: number }> | number;
         }>;
+
+        // O predicado de rotinas vale igual para modelos: interseção de área →
+        // responsáveis específicos → cargo → distribuição por área.
+        const templates = inScope.filter((t) => canExecuteChecklist(
+            {
+                area_ids: t.area_ids,
+                responsible_user_ids: t.responsible_user_ids,
+                role_id: t.role_id,
+                area_id: t.area_id,
+                assigned_to_user_id: t.assigned_to_user_id,
+            },
+            { userId: user.id, areaIds: userAreaIds, roleIds: userRoleIds },
+        ));
 
         // Sprint 67 — turnos do modelo (N:N). Anexa shift_ids para a recorrência
         // usar a UNIÃO dos dias e para a visibilidade por interseção.
@@ -123,7 +137,7 @@ export async function GET(request: Request) {
         const visibleByShift = !applyShiftFilter
             ? visible
             : visible.filter((t) =>
-                isVisibleByShiftIntersection(t.shift_ids ?? [], userShiftIds, t.assigned_to_user_id, user.id));
+                isVisibleByShiftIntersection(t.shift_ids ?? [], userShiftIds, t.responsible_user_ids ?? [], user.id));
 
         // Normaliza tasks_count para number
         const normalized = visibleByShift.map((t) => {

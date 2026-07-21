@@ -75,13 +75,16 @@ export function TransferResponsibleModal({
     );
 
     const eligibleTargets = useMemo(() => {
-        if (!group.ok || !group.areaId || !group.sourceUserId) return [];
-        return getEligibleTransferTargets(collaborators, group.areaId, group.sourceUserId);
+        if (!group.ok || !group.areaIds?.length || !group.sourceUserId) return [];
+        return getEligibleTransferTargets(collaborators, group.areaIds, group.sourceUserId);
     }, [group, collaborators]);
 
     const sourceName = group.sourceName ?? "colaborador";
+    // s92: a rotina pode ter várias áreas — o modal mostra todas.
     const areaName = useMemo(() => {
         const first = selectedChecklists[0];
+        const names = (first?.areas_list ?? []).map((a) => a.name);
+        if (names.length > 0) return names.join(", ");
         return first?.area?.name ?? "—";
     }, [selectedChecklists]);
     const targetName = useMemo(

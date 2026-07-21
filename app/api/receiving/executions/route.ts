@@ -72,7 +72,8 @@ export async function GET(request: Request) {
                 active,
                 is_one_shot,
                 created_at,
-                area:areas(id, name, color),
+                area:areas!area_id(id, name, color),
+                checklist_areas(area_id, areas(id, name, color)),
                 supplier:suppliers(id, name),
                 tasks:checklist_tasks(id)
             `)
@@ -139,6 +140,13 @@ export async function GET(request: Request) {
                     name: cl.area.name as string,
                     color: cl.area.color as string,
                 } : null,
+                // s92 — todas as áreas do recebimento (N:N), ordenadas por nome.
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                areas: ((cl.checklist_areas ?? []) as any[])
+                    .map((l) => l.areas)
+                    .filter(Boolean)
+                    .sort((x: { name: string }, y: { name: string }) => x.name.localeCompare(y.name))
+                    .map((a: { id: string; name: string; color: string }) => ({ id: a.id, name: a.name, color: a.color })),
                 active: cl.active as boolean,
                 is_one_shot: cl.is_one_shot as boolean,
                 created_at: cl.created_at as string,

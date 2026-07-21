@@ -136,6 +136,8 @@ export interface Checklist {
     created_at: string
     category?: string
     role_id?: string
+    // Sprint 92: DEPRECADO — sombra derivada de checklist_responsibles, preenchida
+    // só quando há EXATAMENTE 1 responsável. Fonte da verdade: responsible_user_ids.
     assigned_to_user_id?: string
     is_required?: boolean
     checklist_type?: 'regular' | 'opening' | 'closing' | 'receiving'
@@ -150,7 +152,17 @@ export interface Checklist {
     tasks?: ChecklistTask[]
     roles?: Role
     // Sprint 13: My Activities
+    // Sprint 92: DEPRECADO — sombra derivada de checklist_areas (primeira área por
+    // nome). Fonte da verdade: area_ids. Mantida para o embed area:areas!area_id.
     area_id?: string | null
+    // Sprint 92 — Áreas da rotina (N:N). Todas com o mesmo peso, sem área principal.
+    // Conjunto vazio = rotina não executável.
+    area_ids?: string[]
+    // Áreas resolvidas (id+nome+cor) para exibição. Vem do join checklist_areas.
+    areas_list?: Area[]
+    // Sprint 92 — Responsáveis específicos (N:N). Só vale quando assignment_type='user'.
+    responsible_user_ids?: string[]
+    responsibles?: { id: string; name: string }[]
     target_role?: TargetRole
     // Sprint 21: Assignment type independente
     assignment_type?: AssignmentType
@@ -190,9 +202,19 @@ export interface ReceivingTemplate {
     restaurant_id: string
     name: string
     description?: string | null
-    area_id: string
+    // Sprint 92: DEPRECADO — sombra derivada de receiving_template_areas.
+    area_id?: string | null
+    // Sprint 92 — Áreas do modelo (N:N). Fonte da verdade.
+    area_ids?: string[]
+    areas_list?: Area[]
     role_id?: string | null
+    // Sprint 92: DEPRECADO — sombra de receiving_template_responsibles (só com 1).
     assigned_to_user_id?: string | null
+    // Sprint 92 — Responsáveis específicos do modelo (N:N). Só vale com assignment_type='user'.
+    responsible_user_ids?: string[]
+    responsibles?: { id: string; name: string }[]
+    // Sprint 92 — Discriminador do modo de atribuição ('area' = toda a equipe das áreas).
+    assignment_type?: 'area' | 'user'
     shift?: 'morning' | 'afternoon' | 'evening' | null
     shift_id?: string | null // Sprint 63 — DEPRECADO (sombra); ver shift_ids (N:N)
     shift_ids?: string[] // Sprint 67 — turnos do modelo (N:N). Vazio = todos os turnos
@@ -439,8 +461,10 @@ export interface MyActivity {
     start_time?: string | null
     end_time?: string | null
     target_role: TargetRole
-    area_id?: string | null
+    area_id?: string | null // Sprint 92 — DEPRECADO (sombra); ver area_ids/areas_list
     area?: Area | null
+    area_ids?: string[] // Sprint 92 — áreas da rotina (N:N)
+    areas_list?: Area[] // Sprint 92 — áreas resolvidas para exibição
     order_index?: number | null
     task_count: number
     done_count: number

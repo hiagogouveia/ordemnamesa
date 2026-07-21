@@ -36,3 +36,27 @@ export async function validateShiftAssignment(
 
     return (data && data.length > 0) ? null : SHIFT_ASSIGNMENT_ERROR;
 }
+
+/**
+ * Sprint 92 — versão N:N: TODOS os responsáveis precisam compartilhar ao menos um
+ * turno com a rotina. Mesmas regras de curto-circuito da versão singular.
+ */
+export async function validateShiftAssignments(
+    supabase: SupabaseClient,
+    restaurantId: string,
+    userIds: string[],
+    routineShiftIds: string[] | null | undefined,
+): Promise<string | null> {
+    if (userIds.length === 0) return null;
+    if (!routineShiftIds || routineShiftIds.length === 0) return null;
+
+    const { data } = await supabase
+        .from('user_shifts')
+        .select('user_id')
+        .eq('restaurant_id', restaurantId)
+        .in('user_id', userIds)
+        .in('shift_id', routineShiftIds);
+
+    const ok = new Set((data ?? []).map((r: { user_id: string }) => r.user_id));
+    return userIds.every((id) => ok.has(id)) ? null : SHIFT_ASSIGNMENT_ERROR;
+}

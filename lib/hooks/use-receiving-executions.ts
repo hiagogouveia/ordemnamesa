@@ -16,8 +16,10 @@ export interface ReceivingExecutionRow {
     name: string;
     supplier: { id: string; name: string } | null;
     source_template_id: string | null;
-    area_id: string | null;
-    area: { id: string; name: string; color: string } | null;
+    area_id: string | null; // s92 — DEPRECADO (sombra); ver `areas`
+    area: { id: string; name: string; color: string } | null; // s92 — DEPRECADO
+    /** s92 — todas as áreas do recebimento, ordenadas por nome. */
+    areas: { id: string; name: string; color: string }[];
     active: boolean;
     is_one_shot: boolean;
     created_at: string;

@@ -15,13 +15,19 @@ import { getRestaurantTimezone } from '@/lib/utils/restaurant-time';
  * relacionamento novo for exibido na lista, ele entra aqui — e os dois endpoints ganham juntos.
  */
 
-/** Relacionamentos que a listagem renderiza. `area` é objeto embedado, não só `area_id`. */
+/**
+ * Relacionamentos que a listagem renderiza. `area`/`responsible` (singular) são as
+ * sombras legadas; a fonte da verdade desde o s92 é o N:N `checklist_areas` /
+ * `checklist_responsibles`, devolvido como `area_ids`/`areas_list`/`responsibles`.
+ */
 export const CHECKLIST_VIEW_SELECT = `
     *,
     roles ( id, name, color ),
     area:areas!area_id ( id, name, color ),
     responsible:users!assigned_to_user_id ( id, name ),
     checklist_shifts ( shift_id, shifts ( id, name ) ),
+    checklist_areas ( area_id, areas ( id, name, color ) ),
+    checklist_responsibles ( user_id, users ( id, name ) ),
     tasks:checklist_tasks (*)
 `;
 
@@ -35,6 +41,8 @@ interface ChecklistRow {
     restaurant_id: string;
     tasks?: { order: number }[];
     checklist_shifts?: Array<{ shift_id: string; shifts: { id: string; name: string } | null }>;
+    checklist_areas?: Array<{ area_id: string; areas: { id: string; name: string; color: string } | null }>;
+    checklist_responsibles?: Array<{ user_id: string; users: { id: string; name: string } | null }>;
     [key: string]: unknown;
 }
 
@@ -164,11 +172,25 @@ export async function fetchChecklistViews(
             .map(l => l.shifts)
             .filter((s): s is { id: string; name: string } => Boolean(s));
 
+        // Sprint 92: áreas e responsáveis N:N → listas ordenadas por nome para exibição.
+        const areaLinks = (checklist.checklist_areas ?? [])
+            .filter((l) => Boolean(l.areas))
+            .sort((a, b) => (a.areas!.name).localeCompare(b.areas!.name));
+        const responsibleLinks = (checklist.checklist_responsibles ?? [])
+            .filter((l) => Boolean(l.users))
+            .sort((a, b) => (a.users!.name ?? '').localeCompare(b.users!.name ?? ''));
+
         return {
             ...checklist,
             checklist_shifts: undefined,
+            checklist_areas: undefined,
+            checklist_responsibles: undefined,
             shift_ids: shiftIds,
             shifts: shiftObjs,
+            area_ids: areaLinks.map((l) => l.area_id),
+            areas_list: areaLinks.map((l) => l.areas!),
+            responsible_user_ids: responsibleLinks.map((l) => l.user_id),
+            responsibles: responsibleLinks.map((l) => l.users!),
             tasks: (checklist.tasks ?? []).sort((a, b) => a.order - b.order),
             execution_status,
             assumed_by_name: assumption?.user_name ?? null,

@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import type { MyActivity, MyActivityStatus, TargetRole } from '@/lib/types';
+import type { Area, MyActivity, MyActivityStatus, TargetRole } from '@/lib/types';
 import { getNowInTz, getStartOfDayIsoInTz } from '@/lib/utils/brazil-date';
 import { getRestaurantTimezone } from '@/lib/utils/restaurant-time';
 import { filterChecklistsByRecurrence } from '@/lib/utils/should-checklist-appear-today';
 import { OPERATIONAL_PREDICATE, fetchArchivedQuickIdsForToday } from '@/lib/utils/operational-activity';
 import { fetchShiftIdsByChecklist, isVisibleByShiftIntersection } from '@/lib/api/shift-links';
+import { filterExecutable } from '@/lib/api/area-links';
 
 const getAdminSupabase = () =>
     createClient(
@@ -86,22 +87,14 @@ export async function GET(request: Request) {
         const roleIds = (userRoleRows ?? []).map((r) => r.role_id);
         const userShiftIds = (userShiftRows ?? []).map((r) => r.shift_id);
 
-        // Filtro: checklists da área/role do usuário (sem atribuição individual),
-        //         OU atribuídos diretamente ao usuário.
-        // INVARIANTE: rotinas sem área (area_id = null) NÃO são executáveis e NÃO aparecem no turno.
-        const checklistFilterParts: string[] = [];
-        if (areaIds.length > 0) {
-            checklistFilterParts.push(`and(area_id.in.(${areaIds.join(',')}),assigned_to_user_id.is.null)`);
-        }
-        if (roleIds.length > 0 && areaIds.length > 0) {
-            checklistFilterParts.push(`and(role_id.in.(${roleIds.join(',')}),assigned_to_user_id.is.null,area_id.in.(${areaIds.join(',')}))`);
-        }
-        if (areaIds.length > 0) {
-            checklistFilterParts.push(`and(assigned_to_user_id.eq.${user.id},area_id.in.(${areaIds.join(',')}))`);
-        }
+        // Sprint 92 — a visibilidade deixou de ser uma string `.or()` sobre `area_id`.
+        // O embed `checklist_areas!inner` filtrado pelas áreas do usuário devolve o
+        // superconjunto; `canExecuteChecklist` (via filterExecutable) decide.
+        // INVARIANTE: rotinas sem nenhuma área NÃO são executáveis e NÃO aparecem no turno.
+        const visibilityCtx = { userId: user.id, areaIds, roleIds };
 
         // Sem áreas atribuídas = sem atividades visíveis
-        if (checklistFilterParts.length === 0) {
+        if (areaIds.length === 0) {
             return NextResponse.json([]);
         }
 
@@ -129,22 +122,24 @@ export async function GET(request: Request) {
                 role:roles(id, name, color),
                 task_count:checklist_tasks(count)
             `;
-        const { data: checklistsData, error: checklistsError } = await adminSupabase
+        const { data: rawChecklists, error: checklistsError } = await adminSupabase
             .from('checklists')
-            .select(checklistSelect)
+            .select(`${checklistSelect}, checklist_areas!inner(area_id)`)
             .eq('restaurant_id', restaurant_id)
             .eq('active', true)
             .eq('status', 'active')
             // Sprint 54: receivings recurring têm fluxo próprio em /admin/recebimentos;
             // quick receivings (is_one_shot=true) entram como atividade operacional do dia.
             .or(OPERATIONAL_PREDICATE)
-            .or(checklistFilterParts.join(','))
+            .in('checklist_areas.area_id', areaIds)
             .order('order_index', { ascending: true, nullsFirst: false });
 
         if (checklistsError) {
             console.error('[GET /api/my-activities] Erro ao buscar checklists:', checklistsError);
             return NextResponse.json({ error: checklistsError.message }, { status: 500 });
         }
+
+        const checklistsData = await filterExecutable(adminSupabase, rawChecklists ?? [], visibilityCtx);
 
         // Sprint 66 — Segmentação por turno (visibilidade) no modelo N:N. Regra:
         //   - sem turno vinculado → vê tudo (opt-in);
@@ -155,12 +150,12 @@ export async function GET(request: Request) {
         const applyShiftFilter = userShiftIds.length > 0;
         const baseShiftMap = await fetchShiftIdsByChecklist(
             adminSupabase,
-            (checklistsData || []).map((c: { id: string }) => c.id),
+            checklistsData.map((c) => c.id),
         );
         const baseChecklists = !applyShiftFilter
-            ? (checklistsData || [])
-            : (checklistsData || []).filter((c: { id: string; assigned_to_user_id?: string | null }) =>
-                isVisibleByShiftIntersection(baseShiftMap.get(c.id) ?? [], userShiftIds, c.assigned_to_user_id, user.id));
+            ? checklistsData
+            : checklistsData.filter((c) =>
+                isVisibleByShiftIntersection(baseShiftMap.get(c.id) ?? [], userShiftIds, c.responsible_user_ids, user.id));
 
         // Reincorpora quick receivings arquivados hoje (active=false após conclusão s53)
         // para que permaneçam visíveis em Meu Turno até a virada do dia.
@@ -170,12 +165,12 @@ export async function GET(request: Request) {
             const knownIds = new Set(checklists.map((c: { id: string }) => c.id));
             const idsToFetch = Array.from(archivedQuickIds).filter((id) => !knownIds.has(id));
             if (idsToFetch.length > 0) {
-                const { data: archivedQuicks } = await adminSupabase
+                const { data: rawArchivedQuicks } = await adminSupabase
                     .from('checklists')
-                    .select(checklistSelect)
-                    .in('id', idsToFetch)
-                    .or(checklistFilterParts.join(','));
-                if (archivedQuicks && archivedQuicks.length > 0) {
+                    .select(`${checklistSelect}, checklist_areas(area_id)`)
+                    .in('id', idsToFetch);
+                const archivedQuicks = await filterExecutable(adminSupabase, rawArchivedQuicks ?? [], visibilityCtx);
+                if (archivedQuicks.length > 0) {
                     checklists = [...checklists, ...archivedQuicks];
                 }
             }
@@ -196,12 +191,12 @@ export async function GET(request: Request) {
                 inProgressOrphans.map((a: { checklist_id: string }) => a.checklist_id)
             )).filter((id) => !knownIds.has(id));
             if (orphanIds.length > 0) {
-                const { data: orphanChecklists } = await adminSupabase
+                const { data: rawOrphans } = await adminSupabase
                     .from('checklists')
-                    .select(checklistSelect)
-                    .in('id', orphanIds)
-                    .or(checklistFilterParts.join(','));
-                if (orphanChecklists && orphanChecklists.length > 0) {
+                    .select(`${checklistSelect}, checklist_areas(area_id)`)
+                    .in('id', orphanIds);
+                const orphanChecklists = await filterExecutable(adminSupabase, rawOrphans ?? [], visibilityCtx);
+                if (orphanChecklists.length > 0) {
                     checklists = [...checklists, ...orphanChecklists];
                 }
             }
@@ -302,6 +297,14 @@ export async function GET(request: Request) {
             }
         }
 
+        // Sprint 92 — metadados das áreas do restaurante (tabela pequena) para
+        // montar `areas_list` a partir dos ids do N:N sem N+1.
+        const { data: areaRows } = await adminSupabase
+            .from('areas')
+            .select('id, name, color, priority_mode, restaurant_id, created_at')
+            .eq('restaurant_id', restaurant_id);
+        const areaById = new Map((areaRows ?? []).map((a) => [a.id, a as unknown as Area]));
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const activities: MyActivity[] = (visibleChecklists as any[]).map((checklist) => {
             const rawCount = checklist.task_count;
@@ -338,6 +341,11 @@ export async function GET(request: Request) {
                 area_id: checklist.area_id ?? checklist.role_id ?? null,
                 order_index: checklist.order_index ?? null,
                 area: fallbackArea ? { id: fallbackArea.id, name: fallbackArea.name, color: fallbackArea.color, restaurant_id: checklist.restaurant_id, priority_mode: fallbackArea.priority_mode ?? 'auto', created_at: '' } : null,
+                // Sprint 92 — áreas da rotina (N:N). As abas do Meu Turno casam por aqui.
+                area_ids: (checklist.area_ids as string[] | undefined) ?? [],
+                areas_list: ((checklist.area_ids as string[] | undefined) ?? [])
+                    .map((id) => areaById.get(id))
+                    .filter((a): a is Area => Boolean(a)),
                 task_count: taskCount,
                 done_count: doneCount,
                 progress_percent: progressPercent,

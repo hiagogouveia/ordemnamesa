@@ -368,10 +368,10 @@ function ChecklistsContent() {
         [selectedChecklists]
     );
     const transferEligibleTargets = useMemo(() => {
-        if (!transferGroup.ok || !transferGroup.areaId || !transferGroup.sourceUserId) return [];
+        if (!transferGroup.ok || !transferGroup.areaIds?.length || !transferGroup.sourceUserId) return [];
         return getEligibleTransferTargets(
             equipeData?.equipe ?? [],
-            transferGroup.areaId,
+            transferGroup.areaIds,
             transferGroup.sourceUserId
         );
     }, [transferGroup, equipeData]);

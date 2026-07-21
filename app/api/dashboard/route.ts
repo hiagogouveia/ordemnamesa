@@ -43,6 +43,8 @@ interface ChecklistRow {
     recurrence_config?: any;
     assigned_to_user_id: string | null;
     areas: { id: string; name: string; color: string } | null;
+    // Sprint 92 — áreas da rotina (N:N). `areas`/`area_id` são a sombra legada.
+    checklist_areas?: { area_id: string; areas: { id: string; name: string; color: string } | null }[];
     checklist_tasks: { id: string; is_critical: boolean }[];
 }
 
@@ -176,7 +178,7 @@ export async function GET(request: Request) {
         const archivedQuickIds = await fetchArchivedQuickIdsForToday(adminSupabase, restaurantIds, todayKey);
 
         // ── Round 1: Queries paralelas ─────────────────────────────────────
-        const checklistSelect = 'id, name, restaurant_id, shift, shift_id, area_id, end_time, start_time, recurrence, recurrence_config, assigned_to_user_id, areas(id, name, color), checklist_tasks(id, is_critical)';
+        const checklistSelect = 'id, name, restaurant_id, shift, shift_id, area_id, end_time, start_time, recurrence, recurrence_config, assigned_to_user_id, areas(id, name, color), checklist_areas(area_id, areas(id, name, color)), checklist_tasks(id, is_critical)';
         const [checklistsRes, archivedQuicksRes, assumptionsRes, taskExecsRes, shiftsRes] = await Promise.all([
             adminSupabase
                 .from('checklists')
@@ -652,7 +654,12 @@ export async function GET(request: Request) {
                 if (percent >= 100) status = 'Concluído';
                 else if (percent >= 60) status = 'Em Andamento';
 
-                const area = cl.areas;
+                // s92: a rotina pode ter várias áreas; o card mostra todas.
+                const clAreas = (cl.checklist_areas ?? [])
+                    .map((l) => l.areas)
+                    .filter((a): a is { id: string; name: string; color: string } => Boolean(a))
+                    .sort((a, b) => a.name.localeCompare(b.name));
+                const area = clAreas[0] ?? cl.areas;
 
                 return {
                     id: cl.id,
@@ -662,6 +669,9 @@ export async function GET(request: Request) {
                     status,
                     area_name: area?.name || null,
                     area_color: area?.color || null,
+                    areas: clAreas.length > 0
+                        ? clAreas.map((a) => ({ id: a.id, name: a.name, color: a.color }))
+                        : (cl.areas ? [cl.areas] : []),
                     unit: getUnit(cl.restaurant_id),
                 };
             })
@@ -679,26 +689,35 @@ export async function GET(request: Request) {
         // Em global, usar chave composta area_id+restaurant_id para não misturar áreas de unidades distintas
         const areaMap = new Map<string, AreaProgressoEntry>();
 
+        // Sprint 92 — uma rotina multi-área conta em TODAS as suas áreas: o % de cada
+        // área continua respondendo "quanto do que esta área executa já foi feito".
+        // O somatório entre áreas passa a ser maior que o total de rotinas — esperado,
+        // e não é usado como total em lugar nenhum.
         for (const cl of checklists) {
-            if (!cl.area_id || !cl.areas) continue;
+            const clAreas = (cl.checklist_areas ?? [])
+                .map((l) => l.areas)
+                .filter((a): a is { id: string; name: string; color: string } => Boolean(a));
+            const effectiveAreas = clAreas.length > 0 ? clAreas : (cl.areas ? [cl.areas] : []);
 
-            const key = isGlobal ? `${cl.area_id}__${cl.restaurant_id}` : cl.area_id;
-            let entry = areaMap.get(key);
-            if (!entry) {
-                entry = {
-                    area_id: cl.area_id,
-                    area_name: cl.areas.name,
-                    area_color: cl.areas.color,
-                    total: 0,
-                    completed: 0,
-                    unit: getUnit(cl.restaurant_id),
-                };
-                areaMap.set(key, entry);
-            }
+            for (const area of effectiveAreas) {
+                const key = isGlobal ? `${area.id}__${cl.restaurant_id}` : area.id;
+                let entry = areaMap.get(key);
+                if (!entry) {
+                    entry = {
+                        area_id: area.id,
+                        area_name: area.name,
+                        area_color: area.color,
+                        total: 0,
+                        completed: 0,
+                        unit: getUnit(cl.restaurant_id),
+                    };
+                    areaMap.set(key, entry);
+                }
 
-            entry.total++;
-            if (completedChecklistIdsToday.has(cl.id)) {
-                entry.completed++;
+                entry.total++;
+                if (completedChecklistIdsToday.has(cl.id)) {
+                    entry.completed++;
+                }
             }
         }
 

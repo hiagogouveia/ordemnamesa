@@ -1,9 +1,16 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import type { ReceivingTemplate } from '@/lib/types';
+import { RECEIVING_TEMPLATE_SELECT, shapeTemplateRow, shapeTemplateRows } from '@/lib/services/receiving-template-view';
 import { deriveShiftEnum } from '@/lib/api/derive-shift-enum';
-import { validateShiftAssignment } from '@/lib/api/validate-shift-assignment';
+import { validateShiftAssignments } from '@/lib/api/validate-shift-assignment';
 import { normalizeShiftIds, shiftIdShadow, replaceTemplateShifts } from '@/lib/api/shift-links';
+import {
+    readAreaIdsFromBody,
+    readResponsibleIdsFromBody,
+    replaceTemplateAreas,
+    replaceTemplateResponsibles,
+    validateResponsiblesBelongToAreas,
+} from '@/lib/api/area-links';
 
 const getAdminSupabase = () =>
     createClient(
@@ -86,7 +93,7 @@ export async function GET(request: Request) {
 
         let query = adminSupabase
             .from('receiving_templates')
-            .select('*, area:areas(id, name, color), role:roles(id, name, color)')
+            .select(RECEIVING_TEMPLATE_SELECT)
             .eq('restaurant_id', restaurant_id)
             .order('name', { ascending: true });
         if (!includeInactive) query = query.eq('active', true);
@@ -96,7 +103,7 @@ export async function GET(request: Request) {
             console.error('[GET /api/receiving-templates] Erro:', error);
             return NextResponse.json({ error: error.message }, { status: 500 });
         }
-        return NextResponse.json((data ?? []) as ReceivingTemplate[]);
+        return NextResponse.json(shapeTemplateRows(data ?? []));
     } catch (error: unknown) {
         console.error('[GET /api/receiving-templates] Erro inesperado:', error);
         return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 });
@@ -119,15 +126,27 @@ export async function POST(request: Request) {
 
         const body = await request.json().catch(() => ({}));
         const {
-            restaurant_id, name, description, area_id, role_id, assigned_to_user_id,
+            restaurant_id, name, description, role_id, assignment_type,
             recurrence, recurrence_config, enforce_sequential_order, tasks, shift, shift_id, shift_ids,
         } = body as Record<string, unknown>;
 
         if (!restaurant_id || typeof restaurant_id !== 'string') {
             return NextResponse.json({ error: 'restaurant_id é obrigatório.' }, { status: 400 });
         }
-        if (!area_id || typeof area_id !== 'string') {
-            return NextResponse.json({ error: 'area_id é obrigatório.' }, { status: 400 });
+
+        // Sprint 92: áreas N:N (aceita `area_id` único de clientes antigos).
+        const areaIds = readAreaIdsFromBody(body as Record<string, unknown>) ?? [];
+        if (areaIds.length === 0) {
+            return NextResponse.json({ error: 'Selecione ao menos uma área para o modelo.' }, { status: 400 });
+        }
+
+        const responsibleIds = readResponsibleIdsFromBody(body as Record<string, unknown>) ?? [];
+        const isIndividual = assignment_type === 'user' || responsibleIds.length > 0;
+        if (isIndividual && responsibleIds.length === 0) {
+            return NextResponse.json(
+                { error: 'Selecione ao menos um responsável ou mude a atribuição para toda a equipe.' },
+                { status: 400 }
+            );
         }
         const cleanName = typeof name === 'string' ? name.trim() : '';
         if (!cleanName) return NextResponse.json({ error: 'name é obrigatório.' }, { status: 400 });
@@ -166,11 +185,18 @@ export async function POST(request: Request) {
             ? (derivedEnum === 'any' ? null : derivedEnum)
             : cleanShift;
 
-        // Sprint 66: atribuição direta exige interseção com os turnos do modelo.
-        const cleanAssigned = typeof assigned_to_user_id === 'string' && assigned_to_user_id ? assigned_to_user_id : null;
-        const tplShiftAssignErr = await validateShiftAssignment(adminSupabase, restaurant_id, cleanAssigned, incomingShiftIds);
+        // Sprint 66/92: cada responsável exige interseção com os turnos do modelo.
+        const tplShiftAssignErr = await validateShiftAssignments(adminSupabase, restaurant_id, responsibleIds, incomingShiftIds);
         if (tplShiftAssignErr) {
             return NextResponse.json({ error: tplShiftAssignErr, code: 'SHIFT_ASSIGNMENT_INVALID' }, { status: 422 });
+        }
+
+        // Sprint 92: todo responsável deve pertencer a alguma das áreas do modelo.
+        const tplResponsibleAreaErr = await validateResponsiblesBelongToAreas(
+            adminSupabase, restaurant_id, responsibleIds, areaIds,
+        );
+        if (tplResponsibleAreaErr) {
+            return NextResponse.json({ error: tplResponsibleAreaErr }, { status: 422 });
         }
 
         // Insert template
@@ -180,9 +206,11 @@ export async function POST(request: Request) {
                 restaurant_id,
                 name: cleanName,
                 description: typeof description === 'string' ? description.trim() || null : null,
-                area_id,
+                // Sombras s92: recalculadas por trigger a partir das junções.
+                area_id: areaIds[0],
                 role_id: typeof role_id === 'string' && role_id ? role_id : null,
-                assigned_to_user_id: typeof assigned_to_user_id === 'string' && assigned_to_user_id ? assigned_to_user_id : null,
+                assigned_to_user_id: responsibleIds.length === 1 ? responsibleIds[0] : null,
+                assignment_type: isIndividual ? 'user' : 'area',
                 shift: finalShift,
                 shift_id: finalShiftId,
                 recurrence: cleanRecurrence,
@@ -200,6 +228,10 @@ export async function POST(request: Request) {
         // Sprint 67: grava os turnos N:N do modelo (vazio = "Todos os turnos").
         await replaceTemplateShifts(adminSupabase, restaurant_id, template.id, incomingShiftIds);
 
+        // Sprint 92: áreas e responsáveis N:N.
+        await replaceTemplateAreas(adminSupabase, restaurant_id, template.id, areaIds);
+        await replaceTemplateResponsibles(adminSupabase, restaurant_id, template.id, responsibleIds);
+
         // Insert tasks via RPC (atomic)
         const { error: tasksErr } = await adminSupabase.rpc('replace_receiving_template_tasks', {
             p_template_id: template.id,
@@ -215,11 +247,11 @@ export async function POST(request: Request) {
 
         const { data: full } = await adminSupabase
             .from('receiving_templates')
-            .select('*, area:areas(id, name, color), role:roles(id, name, color), tasks:receiving_template_tasks(*)')
+            .select(`${RECEIVING_TEMPLATE_SELECT}, tasks:receiving_template_tasks(*)`)
             .eq('id', template.id)
             .single();
 
-        return NextResponse.json(full as ReceivingTemplate, { status: 201 });
+        return NextResponse.json(full ? shapeTemplateRow(full) : null, { status: 201 });
     } catch (error: unknown) {
         console.error('[POST /api/receiving-templates] Erro inesperado:', error);
         return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 });

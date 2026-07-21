@@ -3,8 +3,17 @@ import { createClient } from '@supabase/supabase-js';
 import type { ShiftType } from '@/lib/types';
 import { processRecurrencePayload } from '@/lib/api/recurrence-payload';
 import { deriveShiftEnum } from '@/lib/api/derive-shift-enum';
-import { validateShiftAssignment } from '@/lib/api/validate-shift-assignment';
+import { validateShiftAssignments } from '@/lib/api/validate-shift-assignment';
 import { normalizeShiftIds, shiftIdShadow, replaceChecklistShifts, fetchShiftIdsByChecklist } from '@/lib/api/shift-links';
+import {
+    readAreaIdsFromBody,
+    readResponsibleIdsFromBody,
+    fetchAreaIdsByChecklist,
+    fetchResponsibleIdsByChecklist,
+    replaceChecklistAreas,
+    replaceChecklistResponsibles,
+    validateResponsiblesBelongToAreas,
+} from '@/lib/api/area-links';
 import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
 import { getAccountBilling, canManageChecklists, canDeleteChecklists } from '@/lib/billing/subscription-access';
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
@@ -125,7 +134,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         }
 
         const body = await request.json();
-        const { restaurant_id, name, description, shift, shift_id, shift_ids, status, tasks, category, role_id, is_required, checklist_type, assigned_to_user_id, recurrence, start_time, end_time, recurrence_config, enforce_sequential_order, allow_early_start, area_id, target_role, assignment_type } = body;
+        const { restaurant_id, name, description, shift, shift_id, shift_ids, status, tasks, category, role_id, is_required, checklist_type, recurrence, start_time, end_time, recurrence_config, enforce_sequential_order, allow_early_start, target_role, assignment_type } = body;
 
         if (!restaurant_id || !name) {
             return NextResponse.json({ error: 'restaurant_id e name são obrigatórios.' }, { status: 400 });
@@ -153,20 +162,30 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         const putAccess = canManageChecklists(putBilling);
         if (!putAccess.allowed) return buildAccessDeniedResponse(putAccess);
 
-        // 1. Buscar estado atual para proteger campos críticos contra remoção acidental
-        const { data: currentChecklist } = await adminSupabase
-            .from('checklists')
-            .select('area_id, status, shift_id')
-            .eq('id', id)
-            .eq('restaurant_id', restaurant_id)
-            .single();
+        // Sprint 92 — mesma proteção do antigo `safeAreaId`, agora sobre o conjunto N:N:
+        // se o payload não trouxe áreas/responsáveis, preserva o que já está gravado
+        // (PUT parcial não pode zerar a distribuição da rotina).
+        const incomingAreaIds = readAreaIdsFromBody(body);
+        const effectiveAreaIds = incomingAreaIds
+            ?? ((await fetchAreaIdsByChecklist(adminSupabase, [id])).get(id) ?? []);
 
-        // Proteção: area_id só é removido se explicitamente enviado como null no body
-        // Se o campo não veio no payload (undefined), preserva o valor atual
-        const safeAreaId = area_id !== undefined ? (area_id || null) : (currentChecklist?.area_id ?? null);
+        if (effectiveAreaIds.length === 0) {
+            return NextResponse.json({ error: 'Selecione ao menos uma área para a rotina.' }, { status: 400 });
+        }
 
-        if (!safeAreaId) {
-            return NextResponse.json({ error: 'Selecione uma área para a rotina.' }, { status: 400 });
+        const incomingResponsibleIds = readResponsibleIdsFromBody(body);
+        const effectiveResponsibleIds = incomingResponsibleIds
+            ?? ((await fetchResponsibleIdsByChecklist(adminSupabase, [id])).get(id) ?? []);
+
+        const isIndividual = assignment_type !== undefined
+            ? assignment_type === 'user'
+            : effectiveResponsibleIds.length > 0;
+
+        if (isIndividual && effectiveResponsibleIds.length === 0) {
+            return NextResponse.json(
+                { error: 'Selecione ao menos um responsável ou mude a atribuição para toda a equipe.' },
+                { status: 400 }
+            );
         }
 
         if (status === 'active') {
@@ -208,22 +227,12 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
             }
         }
 
-        // Validação de domínio: responsável deve pertencer à área selecionada
-        const effectiveUserId = assigned_to_user_id || null;
-        if (effectiveUserId && safeAreaId) {
-            const { data: userArea } = await adminSupabase
-                .from('user_areas')
-                .select('id')
-                .eq('user_id', effectiveUserId)
-                .eq('area_id', safeAreaId)
-                .maybeSingle();
-
-            if (!userArea) {
-                return NextResponse.json(
-                    { error: 'O colaborador selecionado não pertence à área escolhida.' },
-                    { status: 422 }
-                );
-            }
+        // Validação de domínio: todo responsável deve pertencer a ALGUMA das áreas.
+        const putResponsibleAreaErr = await validateResponsiblesBelongToAreas(
+            adminSupabase, restaurant_id, effectiveResponsibleIds, effectiveAreaIds,
+        );
+        if (putResponsibleAreaErr) {
+            return NextResponse.json({ error: putResponsibleAreaErr }, { status: 422 });
         }
 
         // Sprint 66: turnos N:N. incomingShiftIds = null → não alterar turnos.
@@ -236,7 +245,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         const effectiveShiftIds = incomingShiftIds !== null
             ? incomingShiftIds
             : ((await fetchShiftIdsByChecklist(adminSupabase, [id])).get(id) ?? []);
-        const putShiftAssignErr = await validateShiftAssignment(adminSupabase, restaurant_id, effectiveUserId, effectiveShiftIds);
+        const putShiftAssignErr = await validateShiftAssignments(adminSupabase, restaurant_id, effectiveResponsibleIds, effectiveShiftIds);
         if (putShiftAssignErr) {
             return NextResponse.json({ error: putShiftAssignErr, code: 'SHIFT_ASSIGNMENT_INVALID' }, { status: 422 });
         }
@@ -270,16 +279,17 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
             .update({
                 name, description, ...shiftFields, status, category,
                 role_id, is_required: is_required !== undefined ? is_required : true, checklist_type: checklist_type || 'regular',
-                assigned_to_user_id: assigned_to_user_id || null,
+                // Sombras s92: recalculadas por trigger a partir das junções abaixo.
+                assigned_to_user_id: effectiveResponsibleIds.length === 1 ? effectiveResponsibleIds[0] : null,
                 recurrence: finalRecurrence,
                 start_time: start_time || null,
                 end_time: end_time || null,
                 recurrence_config: finalRecurrenceConfig,
                 enforce_sequential_order: enforce_sequential_order !== undefined ? enforce_sequential_order : false,
                 allow_early_start: allow_early_start !== undefined ? allow_early_start : false,
-                area_id: safeAreaId,
+                area_id: effectiveAreaIds[0],
                 target_role: target_role || 'all',
-                assignment_type: assignment_type || (assigned_to_user_id ? 'user' : (area_id ? 'area' : 'all')),
+                assignment_type: isIndividual ? 'user' : 'area',
             })
             .eq('id', id)
             .eq('restaurant_id', restaurant_id);
@@ -292,6 +302,16 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         // Sprint 66: substitui os turnos N:N quando o payload os trouxe.
         if (incomingShiftIds !== null) {
             await replaceChecklistShifts(adminSupabase, restaurant_id, id, incomingShiftIds);
+        }
+
+        // Sprint 92: idem para áreas e responsáveis — só quando vieram no payload.
+        if (incomingAreaIds !== null) {
+            await replaceChecklistAreas(adminSupabase, restaurant_id, id, effectiveAreaIds);
+        }
+        if (incomingResponsibleIds !== null || !isIndividual) {
+            await replaceChecklistResponsibles(
+                adminSupabase, restaurant_id, id, isIndividual ? effectiveResponsibleIds : [],
+            );
         }
 
         // 2. Reconciliar Tasks (só quando o payload traz o campo `tasks`)

@@ -7,6 +7,7 @@ import { resolveGlobalScope, isGlobalScopeResult } from '@/lib/api/global-scope'
 import { fetchArchivedQuickIdsForToday } from '@/lib/utils/operational-activity';
 import { fetchShiftIdsByChecklist, isVisibleByShiftIntersection } from '@/lib/api/shift-links';
 import { determineChecklistResets, RESET_DELETABLE_STATUS, type ResettableChecklist } from '@/lib/api/checklist-reset';
+import { filterExecutable } from '@/lib/api/area-links';
 
 const getAdminSupabase = () => {
     return createClient(
@@ -88,24 +89,19 @@ export async function GET(request: Request) {
         }
         const applyShiftFilter = userShiftIds.length > 0;
 
-        // 2. Buscar checklists ativos visíveis para este usuário:
-        //    - Da área do usuário (sem atribuição individual)
-        //    - Do role do usuário E com area_id nas áreas do usuário (sem atribuição individual)
-        //    - Atribuídos diretamente ao usuário (com area_id válida)
-        //    INVARIANTE: checklists sem area_id NÃO aparecem no turno (não são executáveis)
-        const checklistFilterParts: string[] = [];
-        if (areaIds.length > 0) {
-            checklistFilterParts.push(`and(area_id.in.(${areaIds.join(',')}),assigned_to_user_id.is.null)`);
-        }
-        if (roleIds.length > 0 && areaIds.length > 0) {
-            checklistFilterParts.push(`and(role_id.in.(${roleIds.join(',')}),assigned_to_user_id.is.null,area_id.in.(${areaIds.join(',')}))`);
-        }
-        if (areaIds.length > 0) {
-            checklistFilterParts.push(`and(assigned_to_user_id.eq.${user.id},area_id.in.(${areaIds.join(',')}))`);
-        }
+        // 2. Buscar checklists ativos visíveis para este usuário.
+        //
+        // Sprint 92 — o filtro deixou de ser uma string `.or()` sobre `area_id` único.
+        // O embed `checklist_areas!inner` filtrado pelas áreas do usuário devolve
+        // EXATAMENTE o superconjunto do que é visível (toda regra de visibilidade
+        // exige interseção de área); a decisão final fica com `canExecuteChecklist`,
+        // que é a fonte única do predicado.
+        //
+        // INVARIANTE: checklists sem nenhuma área NÃO aparecem no turno.
+        const visibilityCtx = { userId: user.id, areaIds, roleIds };
 
         // Sem áreas atribuídas = sem checklists visíveis no turno
-        if (checklistFilterParts.length === 0) {
+        if (areaIds.length === 0) {
             return NextResponse.json({
                 checklists: [],
                 tasks: [],
@@ -116,15 +112,17 @@ export async function GET(request: Request) {
 
         const checklistSelect = 'id, name, description, shift, shift_id, is_required, recurrence, recurrence_config, last_reset_at, assigned_to_user_id, role_id, area_id, order_index, restaurant_id, roles(id, name, color), areas(id, name, color), checklist_type, start_time, end_time, allow_early_start, is_one_shot, supplier_id, source_template_id';
 
-        const { data: activeChecklistsData } = await adminSupabase
+        const { data: rawActiveChecklists } = await adminSupabase
             .from('checklists')
-            .select(checklistSelect)
+            .select(`${checklistSelect}, checklist_areas!inner(area_id)`)
             .in('restaurant_id', restaurantIds)
             .eq('active', true)
             .eq('status', 'active')
-            .or(checklistFilterParts.join(','))
+            .in('checklist_areas.area_id', areaIds)
             .order('order_index', { ascending: true, nullsFirst: false })
             .order('id', { ascending: true });
+
+        const activeChecklistsData = await filterExecutable(adminSupabase, rawActiveChecklists ?? [], visibilityCtx);
 
         // Sprint 73 — fuso do restaurante para todas as operações de data
         const tz = await getRestaurantTimezone(adminSupabase, restaurantIds[0]);
@@ -142,19 +140,19 @@ export async function GET(request: Request) {
             (activeChecklistsData || []).map((c: { id: string }) => c.id),
         );
         let activeChecklists = applyShiftFilter
-            ? (activeChecklistsData || []).filter((c: { id: string; assigned_to_user_id?: string | null }) =>
-                isVisibleByShiftIntersection(baseShiftMap.get(c.id) ?? [], userShiftIds, c.assigned_to_user_id, user.id))
-            : (activeChecklistsData || []);
+            ? activeChecklistsData.filter((c) =>
+                isVisibleByShiftIntersection(baseShiftMap.get(c.id) ?? [], userShiftIds, c.responsible_user_ids, user.id))
+            : activeChecklistsData;
         if (archivedQuickIds.size > 0) {
             const knownIds = new Set(activeChecklists.map((c: { id: string }) => c.id));
             const idsToFetch = Array.from(archivedQuickIds).filter((id) => !knownIds.has(id));
             if (idsToFetch.length > 0) {
-                const { data: archivedQuicks } = await adminSupabase
+                const { data: rawArchivedQuicks } = await adminSupabase
                     .from('checklists')
-                    .select(checklistSelect)
-                    .in('id', idsToFetch)
-                    .or(checklistFilterParts.join(','));
-                if (archivedQuicks && archivedQuicks.length > 0) {
+                    .select(`${checklistSelect}, checklist_areas(area_id)`)
+                    .in('id', idsToFetch);
+                const archivedQuicks = await filterExecutable(adminSupabase, rawArchivedQuicks ?? [], visibilityCtx);
+                if (archivedQuicks.length > 0) {
                     activeChecklists = [...activeChecklists, ...archivedQuicks];
                 }
             }
@@ -175,12 +173,12 @@ export async function GET(request: Request) {
                 inProgressOrphans.map((a: { checklist_id: string }) => a.checklist_id)
             )).filter((id) => !knownIds.has(id));
             if (orphanIds.length > 0) {
-                const { data: orphanChecklists } = await adminSupabase
+                const { data: rawOrphans } = await adminSupabase
                     .from('checklists')
-                    .select(checklistSelect)
-                    .in('id', orphanIds)
-                    .or(checklistFilterParts.join(','));
-                if (orphanChecklists && orphanChecklists.length > 0) {
+                    .select(`${checklistSelect}, checklist_areas(area_id)`)
+                    .in('id', orphanIds);
+                const orphanChecklists = await filterExecutable(adminSupabase, rawOrphans ?? [], visibilityCtx);
+                if (orphanChecklists.length > 0) {
                     activeChecklists = [...activeChecklists, ...orphanChecklists];
                 }
             }
@@ -306,10 +304,11 @@ export async function GET(request: Request) {
 
             const { data: tasks } = await tasksQuery;
 
-            // Checklists atribuídos diretamente ao usuário — todas as tasks são visíveis
+            // Checklists atribuídos diretamente ao usuário — todas as tasks são visíveis.
+            // s92: a atribuição é N:N, então a sombra `assigned_to_user_id` não basta.
             const directlyAssignedChecklistIds = new Set(
                 (activeChecklists || [])
-                    .filter((c: { assigned_to_user_id?: string }) => c.assigned_to_user_id === user.id)
+                    .filter((c) => c.responsible_user_ids.includes(user.id))
                     .map((c: { id: string }) => c.id)
             );
             const allUserEffectiveIds = [...areaIds, ...roleIds];

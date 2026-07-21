@@ -5,6 +5,12 @@ import { getAccountBilling, canManageChecklists } from '@/lib/billing/subscripti
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
 import { fetchShiftIdsByChecklist } from '@/lib/api/shift-links';
 import { validateShiftAssignment, SHIFT_ASSIGNMENT_ERROR } from '@/lib/api/validate-shift-assignment';
+import {
+    fetchAreaIdsByChecklist,
+    fetchResponsibleIdsByChecklist,
+    replaceChecklistResponsibles,
+    validateResponsiblesBelongToAreas,
+} from '@/lib/api/area-links';
 import { trackAdminEvent } from '@/lib/analytics/track-event';
 import { emitDomainEvent } from '@/lib/notifications/emit';
 import { getNowInTz } from '@/lib/utils/brazil-date';
@@ -88,7 +94,7 @@ export async function POST(request: Request) {
         // 4. Carregar rotinas selecionadas (escopo do restaurante)
         const { data: rows, error: rowsErr } = await adminSupabase
             .from('checklists')
-            .select('id, name, area_id, assigned_to_user_id, restaurant_id')
+            .select('id, name, restaurant_id')
             .in('id', ids)
             .eq('restaurant_id', restaurant_id);
 
@@ -105,26 +111,33 @@ export async function POST(request: Request) {
             );
         }
 
-        // 5. Todas precisam ter responsável direto
-        if (rows.some((r) => !r.assigned_to_user_id)) {
+        // 5. Todas precisam ter EXATAMENTE UM responsável direto.
+        // s92: com vários responsáveis a transferência fica ambígua ("tirar de quem?"),
+        // então a operação segue restrita ao caso 1:1 — que é o que a UI oferece.
+        const responsibleMap = await fetchResponsibleIdsByChecklist(adminSupabase, ids);
+        if (rows.some((r) => (responsibleMap.get(r.id) ?? []).length !== 1)) {
             return NextResponse.json(
-                { error: 'Apenas rotinas atribuídas diretamente a um colaborador podem ser transferidas.' },
+                { error: 'Apenas rotinas atribuídas diretamente a um único colaborador podem ser transferidas.' },
                 { status: 422 }
             );
         }
 
-        // 6. Origem única + área única
-        const sourceUserId = rows[0].assigned_to_user_id as string;
-        const areaId = rows[0].area_id as string | null;
-        if (rows.some((r) => r.assigned_to_user_id !== sourceUserId)) {
+        // 6. Origem única + mesmo conjunto de áreas
+        const sourceUserId = (responsibleMap.get(rows[0].id) ?? [])[0];
+        const areaMap = await fetchAreaIdsByChecklist(adminSupabase, ids);
+        const areaKey = (id: string) => [...(areaMap.get(id) ?? [])].sort().join(',');
+        const baseAreaKey = areaKey(rows[0].id);
+        const areaIds = areaMap.get(rows[0].id) ?? [];
+
+        if (rows.some((r) => (responsibleMap.get(r.id) ?? [])[0] !== sourceUserId)) {
             return NextResponse.json(
                 { error: 'Selecione rotinas de um único colaborador de origem.' },
                 { status: 422 }
             );
         }
-        if (!areaId || rows.some((r) => r.area_id !== areaId)) {
+        if (areaIds.length === 0 || rows.some((r) => areaKey(r.id) !== baseAreaKey)) {
             return NextResponse.json(
-                { error: 'Selecione rotinas de uma única área.' },
+                { error: 'Selecione rotinas com o mesmo conjunto de áreas.' },
                 { status: 422 }
             );
         }
@@ -153,19 +166,12 @@ export async function POST(request: Request) {
             );
         }
 
-        // 9. Destino pertence à área
-        const { data: destArea } = await adminSupabase
-            .from('user_areas')
-            .select('id')
-            .eq('user_id', to_user_id)
-            .eq('area_id', areaId)
-            .maybeSingle();
-
-        if (!destArea) {
-            return NextResponse.json(
-                { error: 'O colaborador selecionado não pertence à área escolhida.' },
-                { status: 422 }
-            );
+        // 9. Destino pertence a ALGUMA das áreas da rotina
+        const destAreaErr = await validateResponsiblesBelongToAreas(
+            adminSupabase, restaurant_id, [to_user_id], areaIds,
+        );
+        if (destAreaErr) {
+            return NextResponse.json({ error: destAreaErr }, { status: 422 });
         }
 
         // 10. Regra de turno (mesma da edição): destino deve cobrir o turno de cada rotina.
@@ -191,15 +197,15 @@ export async function POST(request: Request) {
             );
         }
 
-        // 11. Execução atômica — UPDATE em lote (somente o responsável)
-        const { error: updateErr } = await adminSupabase
-            .from('checklists')
-            .update({ assigned_to_user_id: to_user_id })
-            .in('id', ids)
-            .eq('restaurant_id', restaurant_id);
-
-        if (updateErr) {
-            console.error('[POST /api/checklists/transfer-responsible] Erro no update em lote:', updateErr);
+        // 11. Execução — troca o vínculo N:N de cada rotina. A coluna-sombra
+        // `assigned_to_user_id` é reescrita pelo trigger; gravá-la direto deixaria a
+        // junção desatualizada.
+        try {
+            for (const r of rows) {
+                await replaceChecklistResponsibles(adminSupabase, restaurant_id, r.id, [to_user_id]);
+            }
+        } catch (updateErr) {
+            console.error('[POST /api/checklists/transfer-responsible] Erro ao trocar responsável:', updateErr);
             return NextResponse.json({ error: 'Erro ao transferir o responsável.' }, { status: 500 });
         }
 
@@ -244,7 +250,7 @@ export async function POST(request: Request) {
             metadata: {
                 from_user_id: sourceUserId,
                 to_user_id,
-                area_id: areaId,
+                area_ids: areaIds,
                 checklist_count: ids.length,
                 checklist_ids: ids,
             },

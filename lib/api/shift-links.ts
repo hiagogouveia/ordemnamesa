@@ -88,10 +88,14 @@ export function normalizeShiftIds(input: unknown): string[] {
 export function isVisibleByShiftIntersection(
     routineShiftIds: string[],
     userShiftIds: string[],
-    assignedToUserId: string | null | undefined,
+    /** s92: aceita a lista de responsáveis (N:N) ou a sombra única. */
+    assignedToUserId: string | string[] | null | undefined,
     userId: string,
 ): boolean {
-    if (assignedToUserId && assignedToUserId === userId) return true;
+    const assigned = Array.isArray(assignedToUserId)
+        ? assignedToUserId
+        : (assignedToUserId ? [assignedToUserId] : []);
+    if (assigned.includes(userId)) return true;
     if (routineShiftIds.length === 0) return true;
     const userSet = new Set(userShiftIds);
     return routineShiftIds.some((id) => userSet.has(id));

@@ -6,6 +6,7 @@ import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
 import { getAccountBilling, canExecuteTasks } from '@/lib/billing/subscription-access';
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
 import { buildTasksSnapshot } from '@/lib/services/checklist-snapshot';
+import { fetchAreaIdsByChecklist } from '@/lib/api/area-links';
 
 const getAdminSupabase = () =>
     createClient(
@@ -149,32 +150,30 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             }
         }
 
-        // 2) Limite por ÁREA — por colaborador dentro da área
-        const { data: checklist } = await adminSupabase
-            .from('checklists')
-            .select('area_id')
-            .eq('id', checklistId)
-            .single();
+        // 2) Limite por ÁREA — por colaborador dentro da área.
+        // Sprint 92: a rotina pode pertencer a várias áreas. Regra: QUALQUER área no
+        // limite bloqueia a assunção (a mais restritiva vence), e a contagem de cada
+        // área considera todas as rotinas que a incluem.
+        const checklistAreaIds = (await fetchAreaIdsByChecklist(adminSupabase, [checklistId])).get(checklistId) ?? [];
 
-        if (checklist?.area_id) {
-            const { data: area } = await adminSupabase
+        if (checklistAreaIds.length > 0) {
+            const { data: areasWithLimit } = await adminSupabase
                 .from('areas')
-                .select('max_parallel_tasks')
-                .eq('id', checklist.area_id)
-                .single();
+                .select('id, name, max_parallel_tasks')
+                .in('id', checklistAreaIds)
+                .not('max_parallel_tasks', 'is', null);
 
-            const maxByArea = area?.max_parallel_tasks;
+            for (const area of (areasWithLimit ?? []) as Array<{ id: string; name: string; max_parallel_tasks: number }>) {
+                const maxByArea = area.max_parallel_tasks;
 
-            // NULL = ilimitado, pular validação
-            if (maxByArea != null) {
-                // Buscar checklists da mesma área
+                // Rotinas que incluem esta área (via junção N:N)
                 const areaChecklistIds =
                     (await adminSupabase
-                        .from('checklists')
-                        .select('id')
+                        .from('checklist_areas')
+                        .select('checklist_id')
                         .eq('restaurant_id', restaurant_id)
-                        .eq('area_id', checklist.area_id)
-                    ).data?.map((c: { id: string }) => c.id) ?? [];
+                        .eq('area_id', area.id)
+                    ).data?.map((c: { checklist_id: string }) => c.checklist_id) ?? [];
 
                 // Contar assumptions in_progress deste usuário nesta área hoje
                 const { data: areaAssumptions, error: areaCountError } = await adminSupabase
@@ -191,16 +190,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
                     return NextResponse.json({ error: 'Erro ao validar limite por área' }, { status: 500 });
                 }
 
-                const areaIds = (areaAssumptions ?? []).map((a) => a.id);
-                const areaBlockedIds = await getBlockedAssumptionIds(adminSupabase, areaIds);
+                const assumptionIds = (areaAssumptions ?? []).map((a) => a.id);
+                const areaBlockedIds = await getBlockedAssumptionIds(adminSupabase, assumptionIds);
                 // Apenas rotinas em execução (doing) consomem o limite — blocked não contam
-                const areaActiveCount = areaIds.filter((id) => !areaBlockedIds.has(id)).length;
+                const areaActiveCount = assumptionIds.filter((id) => !areaBlockedIds.has(id)).length;
 
                 if (areaActiveCount >= maxByArea) {
                     return NextResponse.json(
                         {
                             error: 'Limite por área atingido',
-                            message: `Você já atingiu o limite de ${maxByArea} atividade${maxByArea > 1 ? 's' : ''} simultânea${maxByArea > 1 ? 's' : ''} nesta área.`,
+                            message: `Você já atingiu o limite de ${maxByArea} atividade${maxByArea > 1 ? 's' : ''} simultânea${maxByArea > 1 ? 's' : ''} na área ${area.name}.`,
                             code: 'AREA_LIMIT_REACHED',
                         },
                         { status: 409 }

@@ -22,12 +22,15 @@ export type AssignmentOrigin = 'all' | 'direct' | 'area';
  * Filtra checklists por colaborador de forma determinística.
  *
  * Um checklist aparece para o colaborador selecionado se:
- * 1. Foi diretamente atribuído a ele (assigned_to_user_id / responsible.id)
- * 2. É distribuído por área (sem atribuição direta) E:
+ * 1. Foi diretamente atribuído a ele (está entre os responsáveis da rotina)
+ * 2. É distribuído por área (sem responsáveis) E:
  *    a. Ninguém assumiu ainda (disponível para o colaborador)
  *    b. O próprio colaborador assumiu
  *
  * Checklists de área já assumidos por OUTRO colaborador são excluídos.
+ *
+ * Sprint 92 — a rotina tem 1..N áreas e 0..N responsáveis: "mesma área" virou
+ * INTERSEÇÃO e "atribuído a ele" virou pertinência à lista de responsáveis.
  *
  * O parâmetro `origin` permite restringir o resultado por origem da atribuição
  * (ver {@link AssignmentOrigin}). O padrão 'all' preserva o comportamento original.
@@ -45,10 +48,24 @@ export function filterChecklistsByCollaborator(
 
     const collaboratorAreaIds = new Set(collaborator.areas.map((a) => a.id));
 
+    /** Áreas efetivas da rotina (N:N, com fallback para a sombra `area_id`). */
+    const areasOf = (c: Checklist): string[] => {
+        if (c.area_ids && c.area_ids.length > 0) return c.area_ids;
+        return c.area_id ? [c.area_id] : [];
+    };
+    /** Responsáveis efetivos (N:N, com fallback para as sombras). */
+    const responsiblesOf = (c: Checklist): string[] => {
+        if (c.responsible_user_ids && c.responsible_user_ids.length > 0) return c.responsible_user_ids;
+        const single = c.assigned_to_user_id ?? c.responsible?.id;
+        return single ? [single] : [];
+    };
+
     return checklists.filter((c) => {
+        const responsibles = responsiblesOf(c);
+        const areaIds = areasOf(c);
+
         // 1. Diretamente atribuído ao colaborador
-        const directlyAssigned = c.responsible?.id === collaboratorId
-            || c.assigned_to_user_id === collaboratorId;
+        const directlyAssigned = responsibles.includes(collaboratorId);
 
         // "Apenas atribuídas ao colaborador": só responsabilidades individuais
         if (origin === 'direct') return directlyAssigned;
@@ -57,7 +74,7 @@ export function filterChecklistsByCollaborator(
         if (directlyAssigned) return origin === 'all';
 
         // 2. Global (sem área e sem atribuição direta) — visível para todos
-        const isGlobal = !c.assigned_to_user_id && !c.area_id;
+        const isGlobal = responsibles.length === 0 && areaIds.length === 0;
         if (isGlobal) {
             // Globais nunca contam como "atribuídas à área"
             if (origin === 'area') return false;
@@ -66,10 +83,9 @@ export function filterChecklistsByCollaborator(
             return false;
         }
 
-        // 3. Distribuído por área (sem atribuição direta)
-        const isAreaDistributed = !c.assigned_to_user_id
-            && !!c.area_id
-            && collaboratorAreaIds.has(c.area_id);
+        // 3. Distribuído por área (sem responsáveis) — interseção de áreas
+        const isAreaDistributed = responsibles.length === 0
+            && areaIds.some((id) => collaboratorAreaIds.has(id));
 
         if (!isAreaDistributed) return false;
 

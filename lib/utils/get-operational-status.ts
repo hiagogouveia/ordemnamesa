@@ -2,7 +2,10 @@ import type { ExecutionStatus, RecurrenceConfig, RecurrenceV2 } from "@/lib/type
 import { shouldChecklistAppearToday } from "./should-checklist-appear-today";
 
 interface ChecklistForStatus {
+    /** s92 — DEPRECADO (sombra); usado só quando `area_ids` não vem carregado. */
     area_id?: string | null;
+    /** s92 — áreas da rotina (N:N). Conjunto vazio = não executável. */
+    area_ids?: string[] | null;
     active?: boolean;
     execution_status?: ExecutionStatus;
     end_time?: string | null;
@@ -48,8 +51,9 @@ export function getOperationalStatus(
     currentMinutes: number,
     statusCtx?: StatusContext,
 ): ExecutionStatus {
-    // Invariante de domínio: sem área = incompleta
-    if (!checklist.area_id) return "incomplete";
+    // Invariante de domínio: sem nenhuma área = incompleta
+    const hasArea = (checklist.area_ids && checklist.area_ids.length > 0) || !!checklist.area_id;
+    if (!hasArea) return "incomplete";
 
     const apiStatus = (checklist.execution_status ?? "not_started") as ExecutionStatus;
 

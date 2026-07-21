@@ -88,12 +88,14 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Permissões insuficientes." }, { status: 403 });
         }
 
-        // Fetch active checklists for this area
+        // Fetch active checklists for this area.
+        // Sprint 92: a rotina pode ter várias áreas — entra na priorização de TODAS
+        // as áreas que ela inclui (embed `checklist_areas!inner` substitui o eq).
         const { data: checklists, error: fetchError } = await adminSupabase
             .from("checklists")
-            .select("id, start_time, end_time, active")
+            .select("id, start_time, end_time, active, checklist_areas!inner(area_id)")
             .eq("restaurant_id", restaurant_id)
-            .eq("area_id", area_id)
+            .eq("checklist_areas.area_id", area_id)
             .eq("active", true)
             // Sprint 54: receivings (recurring + quick) NÃO entram na priorização
             // automática — recurring tem fluxo próprio, quicks são one-shot sem

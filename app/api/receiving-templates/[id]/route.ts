@@ -2,8 +2,18 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { ReceivingTemplate } from '@/lib/types';
 import { deriveShiftEnum } from '@/lib/api/derive-shift-enum';
-import { validateShiftAssignment } from '@/lib/api/validate-shift-assignment';
+import { validateShiftAssignments } from '@/lib/api/validate-shift-assignment';
 import { normalizeShiftIds, shiftIdShadow, replaceTemplateShifts, fetchShiftIdsByTemplate } from '@/lib/api/shift-links';
+import { RECEIVING_TEMPLATE_SELECT, shapeTemplateRow } from '@/lib/services/receiving-template-view';
+import {
+    readAreaIdsFromBody,
+    readResponsibleIdsFromBody,
+    fetchAreaIdsByTemplate,
+    fetchResponsibleIdsByTemplate,
+    replaceTemplateAreas,
+    replaceTemplateResponsibles,
+    validateResponsiblesBelongToAreas,
+} from '@/lib/api/area-links';
 
 const getAdminSupabase = () =>
     createClient(
@@ -86,7 +96,7 @@ export async function GET(
 
         const { data, error } = await adminSupabase
             .from('receiving_templates')
-            .select('*, area:areas(id, name, color), role:roles(id, name, color), tasks:receiving_template_tasks(*), receiving_template_shifts ( shift_id, shifts ( id, name ) )')
+            .select(`${RECEIVING_TEMPLATE_SELECT}, tasks:receiving_template_tasks(*), receiving_template_shifts ( shift_id, shifts ( id, name ) )`)
             .eq('id', id)
             .eq('restaurant_id', restaurant_id)
             .maybeSingle();
@@ -100,7 +110,7 @@ export async function GET(
         // Sprint 67: turnos N:N → shift_ids + shifts (id,name).
         const links = ((data as { receiving_template_shifts?: Array<{ shift_id: string; shifts: { id: string; name: string } | null }> }).receiving_template_shifts) ?? [];
         const out = {
-            ...data,
+            ...shapeTemplateRow(data),
             receiving_template_shifts: undefined,
             shift_ids: links.map((l) => l.shift_id),
             shifts: links.map((l) => l.shifts).filter((s): s is { id: string; name: string } => Boolean(s)),
@@ -150,14 +160,37 @@ export async function PATCH(
         if (b.description !== undefined) {
             upd.description = typeof b.description === 'string' ? (b.description.trim() || null) : null;
         }
-        if (b.area_id !== undefined) {
-            if (typeof b.area_id !== 'string' || !b.area_id) {
-                return NextResponse.json({ error: 'area_id inválido.' }, { status: 400 });
-            }
-            upd.area_id = b.area_id;
+        // Sprint 92 — áreas e responsáveis N:N. `null` = campo ausente no payload,
+        // então preserva o que já está gravado (PATCH parcial não zera a distribuição).
+        const incomingAreaIds = readAreaIdsFromBody(b);
+        const effectiveAreaIds = incomingAreaIds
+            ?? ((await fetchAreaIdsByTemplate(adminSupabase, [id])).get(id) ?? []);
+        if (incomingAreaIds !== null && effectiveAreaIds.length === 0) {
+            return NextResponse.json({ error: 'Selecione ao menos uma área para o modelo.' }, { status: 400 });
+        }
+
+        const incomingResponsibleIds = readResponsibleIdsFromBody(b);
+        const effectiveResponsibleIds = incomingResponsibleIds
+            ?? ((await fetchResponsibleIdsByTemplate(adminSupabase, [id])).get(id) ?? []);
+        const isIndividual = b.assignment_type !== undefined
+            ? b.assignment_type === 'user'
+            : effectiveResponsibleIds.length > 0;
+        if (isIndividual && effectiveResponsibleIds.length === 0) {
+            return NextResponse.json(
+                { error: 'Selecione ao menos um responsável ou mude a atribuição para toda a equipe.' },
+                { status: 400 }
+            );
+        }
+
+        if (incomingAreaIds !== null) {
+            upd.area_id = effectiveAreaIds[0]; // sombra; o trigger reescreve a partir da junção
         }
         if (b.role_id !== undefined) upd.role_id = typeof b.role_id === 'string' && b.role_id ? b.role_id : null;
-        if (b.assigned_to_user_id !== undefined) upd.assigned_to_user_id = typeof b.assigned_to_user_id === 'string' && b.assigned_to_user_id ? b.assigned_to_user_id : null;
+        if (incomingResponsibleIds !== null || b.assignment_type !== undefined) {
+            const finalResponsibles = isIndividual ? effectiveResponsibleIds : [];
+            upd.assigned_to_user_id = finalResponsibles.length === 1 ? finalResponsibles[0] : null;
+            upd.assignment_type = isIndividual ? 'user' : 'area';
+        }
         if (b.shift !== undefined) {
             const VALID_SHIFTS = ['morning','afternoon','evening'];
             if (b.shift === null || b.shift === '' || b.shift === 'any') {
@@ -195,22 +228,22 @@ export async function PATCH(
             return NextResponse.json({ error: 'Nada para atualizar.' }, { status: 400 });
         }
 
-        // Sprint 66: atribuição direta exige interseção com os turnos do modelo.
-        // Valores efetivos: do body quando enviados; senão os atuais do registro.
-        if (('assigned_to_user_id' in b) || incomingShiftIds !== null) {
-            const { data: currentTpl } = await adminSupabase
-                .from('receiving_templates')
-                .select('assigned_to_user_id')
-                .eq('id', id)
-                .eq('restaurant_id', restaurant_id)
-                .maybeSingle<{ assigned_to_user_id: string | null }>();
-            const effAssigned = ('assigned_to_user_id' in b) ? (upd.assigned_to_user_id as string | null) : (currentTpl?.assigned_to_user_id ?? null);
+        // Sprint 66/92: cada responsável exige interseção com os turnos do modelo, e
+        // precisa pertencer a alguma das áreas. Valores efetivos: do body quando
+        // enviados; senão os atuais do registro.
+        if (incomingResponsibleIds !== null || incomingAreaIds !== null || incomingShiftIds !== null) {
             const effShiftIds = incomingShiftIds !== null
                 ? incomingShiftIds
                 : ((await fetchShiftIdsByTemplate(adminSupabase, [id])).get(id) ?? []);
-            const tplPutShiftErr = await validateShiftAssignment(adminSupabase, restaurant_id, effAssigned, effShiftIds);
+            const tplPutShiftErr = await validateShiftAssignments(adminSupabase, restaurant_id, effectiveResponsibleIds, effShiftIds);
             if (tplPutShiftErr) {
                 return NextResponse.json({ error: tplPutShiftErr, code: 'SHIFT_ASSIGNMENT_INVALID' }, { status: 422 });
+            }
+            const tplPutAreaErr = await validateResponsiblesBelongToAreas(
+                adminSupabase, restaurant_id, effectiveResponsibleIds, effectiveAreaIds,
+            );
+            if (tplPutAreaErr) {
+                return NextResponse.json({ error: tplPutAreaErr }, { status: 422 });
             }
         }
 
@@ -231,6 +264,16 @@ export async function PATCH(
             await replaceTemplateShifts(adminSupabase, restaurant_id, id, incomingShiftIds);
         }
 
+        // Sprint 92: idem para áreas e responsáveis.
+        if (incomingAreaIds !== null) {
+            await replaceTemplateAreas(adminSupabase, restaurant_id, id, effectiveAreaIds);
+        }
+        if (incomingResponsibleIds !== null || b.assignment_type !== undefined) {
+            await replaceTemplateResponsibles(
+                adminSupabase, restaurant_id, id, isIndividual ? effectiveResponsibleIds : [],
+            );
+        }
+
         if (hasTasks) {
             const normalized = normalizeTasks(b.tasks);
             if (!Array.isArray(normalized)) {
@@ -249,12 +292,12 @@ export async function PATCH(
 
         const { data: full } = await adminSupabase
             .from('receiving_templates')
-            .select('*, area:areas(id, name, color), role:roles(id, name, color), tasks:receiving_template_tasks(*)')
+            .select(`${RECEIVING_TEMPLATE_SELECT}, tasks:receiving_template_tasks(*)`)
             .eq('id', id)
             .eq('restaurant_id', restaurant_id)
             .single();
 
-        return NextResponse.json(full as ReceivingTemplate);
+        return NextResponse.json(full ? shapeTemplateRow(full) : null);
     } catch (error: unknown) {
         console.error('[PATCH /api/receiving-templates/:id] inesperado:', error);
         return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 });

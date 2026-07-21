@@ -371,12 +371,16 @@ export async function fetchAuditList(
     // Sprint 54: receivings recurring NÃO entram em relatório (painel próprio em
     // /admin/recebimentos), mas quick receivings (is_one_shot=true) entram como
     // execução operacional auditável. Predicado canônico em OPERATIONAL_PREDICATE.
+    // s92 — o embed da junção de áreas só precisa ser `!inner` quando há filtro por
+    // área (é ele que restringe as linhas); sem filtro, um embed comum evita o custo.
+    const areaJoin = filters.area_ids.length > 0 ? 'checklist_areas!inner(area_id)' : 'checklist_areas(area_id)';
+
     let query = admin
         .from('checklist_assumptions')
         .select(`
             id, restaurant_id, checklist_id, user_id, user_name,
             date_key, assumed_at, completed_at, execution_status, blocked_reason, tasks_snapshot,
-            checklists!inner(id, name, shift, recurrence, area_id, checklist_type, supplier_id, is_one_shot)
+            checklists!inner(id, name, shift, recurrence, area_id, checklist_type, supplier_id, is_one_shot, ${areaJoin})
         `, { count: 'exact' })
         .in('restaurant_id', restaurantIds)
         .eq('execution_status', 'done')
@@ -390,7 +394,8 @@ export async function fetchAuditList(
         query = query.ilike('checklists.name', `%${filters.search.trim()}%`);
     }
     if (filters.area_ids.length > 0) {
-        query = query.in('checklists.area_id', filters.area_ids);
+        // s92: a rotina pode ter várias áreas — casa por interseção via junção N:N.
+        query = query.in('checklists.checklist_areas.area_id', filters.area_ids);
     }
     if (filters.shifts.length > 0) {
         query = query.in('checklists.shift', filters.shifts);
@@ -500,22 +505,26 @@ export async function fetchAuditList(
         }
     }
 
-    // ── Áreas ───────────────────────────────────────────────────────────────
-    const areaIds = Array.from(new Set(
-        rawAssumptions
-            .map(a => a.checklists?.area_id)
-            .filter((id): id is string => !!id),
+    // ── Áreas (s92: N:N) ────────────────────────────────────────────────────
+    // O embed acima traz só as áreas que casaram com o filtro; para exibir TODAS as
+    // áreas da rotina buscamos a junção completa pelos checklist_ids da página.
+    const pageChecklistIds = Array.from(new Set(
+        rawAssumptions.map(a => a.checklists?.id ?? a.checklist_id).filter((id): id is string => !!id),
     ));
-    const areaMap: Record<string, AreaInfo> = {};
-    if (areaIds.length > 0) {
-        const { data: areas, error: aErr } = await admin
-            .from('areas')
-            .select('id, name, color')
-            .in('id', areaIds);
+    const areasByChecklist = new Map<string, AreaInfo[]>();
+    if (pageChecklistIds.length > 0) {
+        const { data: links, error: aErr } = await admin
+            .from('checklist_areas')
+            .select('checklist_id, areas(id, name, color)')
+            .in('checklist_id', pageChecklistIds);
         if (aErr) throw aErr;
-        for (const a of (areas ?? []) as Array<{ id: string; name: string; color: string | null }>) {
-            areaMap[a.id] = { id: a.id, name: a.name, color: a.color ?? null };
+        for (const l of (links ?? []) as unknown as Array<{ checklist_id: string; areas: { id: string; name: string; color: string | null } | null }>) {
+            if (!l.areas) continue;
+            const list = areasByChecklist.get(l.checklist_id) ?? [];
+            list.push({ id: l.areas.id, name: l.areas.name, color: l.areas.color ?? null });
+            areasByChecklist.set(l.checklist_id, list);
         }
+        for (const list of areasByChecklist.values()) list.sort((x, y) => x.name.localeCompare(y.name));
     }
 
     // ── Suppliers (s60) ─────────────────────────────────────────────────────
@@ -624,7 +633,8 @@ export async function fetchAuditList(
             : null;
 
         const cl = a.checklists;
-        const area = cl?.area_id ? areaMap[cl.area_id] ?? null : null;
+        const areas = areasByChecklist.get(cl?.id ?? a.checklist_id) ?? [];
+        const area = areas[0] ?? null;
         const u = userMap[a.user_id] ?? null;
 
         const entry: AuditExecution = {
@@ -643,6 +653,7 @@ export async function fetchAuditList(
                 checklist_type: cl?.checklist_type ?? null,
             },
             area,
+            areas,
             user: {
                 id: u?.id ?? a.user_id,
                 name: u?.name ?? a.user_name ?? 'Colaborador',
@@ -907,17 +918,17 @@ export async function fetchAuditDetail(
         : null;
 
     const cl = a.checklists;
-    let area: AreaInfo | null = null;
-    if (cl?.area_id) {
-        const { data: areaRow } = await admin
-            .from('areas')
-            .select('id, name, color')
-            .eq('id', cl.area_id)
-            .maybeSingle();
-        if (areaRow) {
-            area = { id: areaRow.id, name: areaRow.name, color: areaRow.color ?? null };
-        }
-    }
+    // s92: todas as áreas da rotina (N:N), ordenadas por nome.
+    const { data: areaLinks } = await admin
+        .from('checklist_areas')
+        .select('areas(id, name, color)')
+        .eq('checklist_id', cl?.id ?? a.checklist_id);
+    const areas: AreaInfo[] = ((areaLinks ?? []) as unknown as Array<{ areas: { id: string; name: string; color: string | null } | null }>)
+        .map((l) => l.areas)
+        .filter((x): x is { id: string; name: string; color: string | null } => Boolean(x))
+        .map((x) => ({ id: x.id, name: x.name, color: x.color ?? null }))
+        .sort((x, y) => x.name.localeCompare(y.name));
+    const area: AreaInfo | null = areas[0] ?? null;
 
     const detail: AuditExecutionDetail = {
         assumption_id: a.id,
@@ -935,6 +946,7 @@ export async function fetchAuditDetail(
             shift: cl?.shift ?? null,
         },
         area,
+        areas,
         user: {
             id: u?.id ?? a.user_id,
             name: u?.name ?? a.user_name ?? 'Colaborador',
@@ -993,7 +1005,7 @@ export function buildCsv(list: AuditListResponse, includeUnit: boolean): string 
             isReceiving ? 'Recebimento' : 'Rotina',
             e.checklist?.name ?? '',
             e.supplier?.name ?? '',
-            e.area?.name ?? '',
+            e.areas.map((x) => x.name).join(' / '),
             shiftLabel(e.checklist?.shift),
             e.user?.name ?? '',
             AUDIT_STATUS_LABEL[e.status] ?? '',

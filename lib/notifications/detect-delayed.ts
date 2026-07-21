@@ -170,9 +170,16 @@ export async function detectDelayedRoutines(
                         checklist_assumption_id: checklist.assumption_id ?? null,
                         date_key: now.dateKey,
                         checklist_name: checklist.name ?? "Rotina",
-                        area_name: checklist.area_id
-                            ? (areaNameById.get(checklist.area_id) ?? null)
-                            : null,
+                        // s92: a rotina pode ter várias áreas — lista todas.
+                        area_name: (() => {
+                            const ids: string[] = checklist.area_ids?.length
+                                ? checklist.area_ids
+                                : (checklist.area_id ? [checklist.area_id] : []);
+                            const names = ids
+                                .map((id: string) => areaNameById.get(id))
+                                .filter((n): n is string => Boolean(n));
+                            return names.length > 0 ? names.join(", ") : null;
+                        })(),
                     },
                 });
             }
