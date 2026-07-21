@@ -48,6 +48,9 @@ export function useRestaurantTimezoneSync() {
                     accounts: { logo_path: string | null } | null;
                 }>();
 
+            // s93c — falha de leitura é logada, não engolida em silêncio. Foi um `error`
+            // ignorado que escondeu a recursão de RLS em `accounts` por horas.
+            if (error) console.error('[SessionSync] restaurants', error.message);
             if (cancelled || error || !data) return;
 
             const fresh = data.timezone;
@@ -85,6 +88,7 @@ export function useRestaurantTimezoneSync() {
                 .eq("id", accountId)
                 .maybeSingle<{ logo_path: string | null }>();
 
+            if (error) console.error('[SessionSync] accounts', error.message);
             if (cancelled || error || !data) return;
 
             const fresh = data.logo_path ?? null;

@@ -48,11 +48,18 @@ export function useAccountLogo(accountId: string | null | undefined) {
         queryFn: async (): Promise<string | null> => {
             if (!accountId) return null;
             const supabase = createClient();
-            const { data } = await supabase
+            const { data, error } = await supabase
                 .from("accounts")
                 .select("logo_path")
                 .eq("id", accountId)
                 .maybeSingle<{ logo_path: string | null }>();
+
+            // s93c — NÃO engolir o erro. A primeira versão fazia `const { data } = ...`
+            // e devolvia null em qualquer falha; quando a RLS de `accounts` quebrou por
+            // recursão infinita, o card simplesmente aparecia vazio, como se não houvesse
+            // logo cadastrada. Um erro de leitura tem que ser visível, não virar "sem logo".
+            if (error) throw new Error(error.message);
+
             return data?.logo_path ?? null;
         },
         enabled: !!accountId,
