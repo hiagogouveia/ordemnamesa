@@ -12,6 +12,8 @@ export interface TaskRowProps {
 
     // Metadados
     area?: string | null;
+    /** s92 — todas as áreas da rotina. Mostra até 2 e resume o resto em "+N". */
+    areas?: string[];
     itemsCount?: number;
     /** Para recebimentos: fornecedor. */
     supplier?: string | null;
@@ -113,6 +115,7 @@ export function TaskRow({
     title,
     state,
     area,
+    areas,
     itemsCount,
     supplier,
     isReceivingOverdue,
@@ -198,12 +201,22 @@ export function TaskRow({
                                 <span className="truncate">{supplier}</span>
                             </span>
                         )}
-                        {area && (
-                            <span className="inline-flex items-center gap-1 truncate max-w-[140px]">
-                                <span className="material-symbols-outlined text-[12px] opacity-70">place</span>
-                                <span className="truncate">{area}</span>
-                            </span>
-                        )}
+                        {(() => {
+                            const names = areas?.length ? areas : (area ? [area] : []);
+                            if (names.length === 0) return null;
+                            return (
+                                <span
+                                    className="inline-flex items-center gap-1 truncate max-w-[180px]"
+                                    title={names.join(", ")}
+                                >
+                                    <span className="material-symbols-outlined text-[12px] opacity-70">place</span>
+                                    <span className="truncate">
+                                        {names.slice(0, 2).join(", ")}
+                                        {names.length > 2 ? ` +${names.length - 2}` : ""}
+                                    </span>
+                                </span>
+                            );
+                        })()}
                         {typeof itemsCount === "number" && itemsCount > 0 && (
                             <>
                                 <span className="text-[#325a67]">·</span>

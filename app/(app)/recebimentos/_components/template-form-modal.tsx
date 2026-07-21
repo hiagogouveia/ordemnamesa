@@ -149,16 +149,25 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
     // --- Form state ---
     const [name, setName] = useState(effectiveTemplate?.name ?? "");
     const [description, setDescription] = useState(effectiveTemplate?.description ?? "");
-    const [areaId, setAreaId] = useState(effectiveTemplate?.area_id ?? "");
+    // Sprint 92 — áreas do modelo (N:N). Todas com o mesmo peso.
+    const [areaIds, setAreaIds] = useState<string[]>(
+        effectiveTemplate?.area_ids ?? (effectiveTemplate?.area_id ? [effectiveTemplate.area_id] : []),
+    );
+    // Confirmação antes de remover área com responsáveis específicos dela.
+    const [pendingAreaRemoval, setPendingAreaRemoval] = useState<{ areaId: string; areaName: string; affected: { user_id: string; name: string }[] } | null>(null);
     // Sprint 67: shiftIds (N:N) é a fonte da verdade. Vazio = "Todos os turnos".
     const [shiftIds, setShiftIds] = useState<string[]>(
         effectiveTemplate?.shift_ids ?? (effectiveTemplate?.shift_id ? [effectiveTemplate.shift_id] : []),
     );
     const [isIndividualMode, setIsIndividualMode] = useState(
-        !!effectiveTemplate?.assigned_to_user_id,
+        effectiveTemplate?.assignment_type === "user"
+        || (effectiveTemplate?.responsible_user_ids?.length ?? 0) > 0
+        || !!effectiveTemplate?.assigned_to_user_id,
     );
-    const [assignedToUserId, setAssignedToUserId] = useState(
-        effectiveTemplate?.assigned_to_user_id ?? "",
+    // Sprint 92 — responsáveis específicos (N:N).
+    const [responsibleIds, setResponsibleIds] = useState<string[]>(
+        effectiveTemplate?.responsible_user_ids
+        ?? (effectiveTemplate?.assigned_to_user_id ? [effectiveTemplate.assigned_to_user_id] : []),
     );
 
     // Recurrence — mesmo padrão de checklist-form
@@ -186,8 +195,11 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
         setShiftIds(fullTemplate.shift_ids ?? (fullTemplate.shift_id ? [fullTemplate.shift_id] : []));
         setRecurrence(fullTemplate.recurrence ?? "daily");
         setRecurrenceConfig(fullTemplate.recurrence_config ?? null);
-        setAssignedToUserId(fullTemplate.assigned_to_user_id ?? "");
-        setIsIndividualMode(!!fullTemplate.assigned_to_user_id);
+        const loadedResponsibles = fullTemplate.responsible_user_ids
+            ?? (fullTemplate.assigned_to_user_id ? [fullTemplate.assigned_to_user_id] : []);
+        setResponsibleIds(loadedResponsibles);
+        setAreaIds(fullTemplate.area_ids ?? (fullTemplate.area_id ? [fullTemplate.area_id] : []));
+        setIsIndividualMode(fullTemplate.assignment_type === "user" || loadedResponsibles.length > 0);
         if (fullTemplate.tasks && fullTemplate.tasks.length > 0) {
             setTasks(
                 fullTemplate.tasks
@@ -203,11 +215,52 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
         [areas],
     );
 
-    // Membros da área selecionada (mesma regra do checklist-form: filtra equipe por área).
+    // Sprint 92 — membros elegíveis = UNIÃO dos membros de todas as áreas marcadas
+    // (mesma regra do checklist-form).
     const areaMembers = useMemo(() => {
-        if (!areaId) return [];
-        return equipe.filter((m) => m.areas?.some((a) => a.id === areaId));
-    }, [equipe, areaId]);
+        if (areaIds.length === 0) return [];
+        return equipe.filter((m) => m.areas?.some((a) => areaIds.includes(a.id)));
+    }, [equipe, areaIds]);
+
+    /** Nome das áreas do colaborador que estão selecionadas — rótulo "Maria · Estoque". */
+    const memberAreaLabel = (userId: string): string => {
+        const m = equipe.find((x) => x.user_id === userId);
+        return (m?.areas ?? [])
+            .filter((a) => areaIds.includes(a.id))
+            .map((a) => a.name)
+            .join(", ");
+    };
+
+    /**
+     * Marca/desmarca uma área. Ao remover uma área que tem responsáveis dela e de
+     * mais nenhuma outra selecionada, pede confirmação antes (decisão de UX s92).
+     */
+    const toggleArea = (id: string, areaName: string) => {
+        if (!areaIds.includes(id)) {
+            setAreaIds([...areaIds, id]);
+            return;
+        }
+        const remaining = areaIds.filter((x) => x !== id);
+        const affected = responsibleIds
+            .map((uid) => equipe.find((m) => m.user_id === uid))
+            .filter((m): m is NonNullable<typeof m> => Boolean(m))
+            .filter((m) => !m.areas?.some((a) => remaining.includes(a.id)))
+            .map((m) => ({ user_id: m.user_id, name: m.name }));
+
+        if (affected.length > 0) {
+            setPendingAreaRemoval({ areaId: id, areaName, affected });
+            return;
+        }
+        setAreaIds(remaining);
+    };
+
+    const confirmAreaRemoval = () => {
+        if (!pendingAreaRemoval) return;
+        const removed = new Set(pendingAreaRemoval.affected.map((a) => a.user_id));
+        setAreaIds(areaIds.filter((x) => x !== pendingAreaRemoval.areaId));
+        setResponsibleIds(responsibleIds.filter((uid) => !removed.has(uid)));
+        setPendingAreaRemoval(null);
+    };
 
     // Sprint 66 — turnos de cada colaborador, para segmentar a seleção de responsável.
     const { data: allUserShifts = [] } = useUserShifts(restaurantId);
@@ -263,13 +316,11 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                     setRecurrenceConfig({ version: 2, type: next.length > 0 ? "shift_days" : "daily" });
                     return next.length > 0 ? "shift_days" : "daily";
                 });
-                setAssignedToUserId((prevAssigned) => {
-                    if (prevAssigned && next.length > 0) {
-                        const us = userShiftIdsByUser.get(prevAssigned) ?? [];
-                        if (!next.some((sid) => us.includes(sid))) return "";
-                    }
-                    return prevAssigned;
-                });
+                // s92: remove os responsáveis cuja interseção com os turnos ficou vazia.
+                setResponsibleIds((prev) => (next.length === 0 ? prev : prev.filter((uid) => {
+                    const us = userShiftIdsByUser.get(uid) ?? [];
+                    return next.some((sid) => us.includes(sid));
+                })));
                 return next;
             });
         },
@@ -368,8 +419,12 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
             setErrorMsg("Informe um nome para o modelo.");
             return;
         }
-        if (!areaId) {
-            setErrorMsg("Selecione uma área.");
+        if (areaIds.length === 0) {
+            setErrorMsg("Selecione ao menos uma área.");
+            return;
+        }
+        if (isIndividualMode && responsibleIds.length === 0) {
+            setErrorMsg("Selecione ao menos um responsável ou mude a atribuição para toda a equipe.");
             return;
         }
         const cleanTasks = tasks
@@ -381,8 +436,7 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
         }
 
         const shiftPayload = shiftEnum === "any" ? null : shiftEnum;
-        const assignedPayload =
-            isIndividualMode && assignedToUserId ? assignedToUserId : null;
+        const responsiblesPayload = isIndividualMode ? responsibleIds : [];
 
         const tasksPayload: Array<Partial<ReceivingTemplateTask> & { title: string }> =
             cleanTasks.map((t, idx) => ({
@@ -404,8 +458,9 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                     restaurant_id: restaurantId,
                     name: cleanName,
                     description: description?.trim() || null,
-                    area_id: areaId,
-                    assigned_to_user_id: assignedPayload,
+                    area_ids: areaIds,
+                    responsible_user_ids: responsiblesPayload,
+                    assignment_type: isIndividualMode ? "user" : "area",
                     shift: shiftPayload,
                     shift_ids: shiftIds,
                     recurrence: recurrence as ReceivingTemplate["recurrence"],
@@ -417,8 +472,9 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                     restaurant_id: restaurantId,
                     name: cleanName,
                     description: description?.trim() || undefined,
-                    area_id: areaId,
-                    assigned_to_user_id: assignedPayload ?? undefined,
+                    area_ids: areaIds,
+                    responsible_user_ids: responsiblesPayload,
+                    assignment_type: isIndividualMode ? "user" : "area",
                     shift: shiftPayload,
                     shift_ids: shiftIds,
                     recurrence: recurrence as ReceivingTemplate["recurrence"],
@@ -492,45 +548,51 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
 
                                 <div>
                                     <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-1.5">
-                                        Área <span className="text-red-400">*</span>
+                                        Áreas <span className="text-red-400">*</span>
                                     </label>
-                                    <select
-                                        value={areaId}
-                                        onChange={(e) => {
-                                            const next = e.target.value;
-                                            setAreaId(next);
-                                            // Se o user atribuído não pertence à nova área, limpa.
-                                            if (assignedToUserId && next) {
-                                                const stillBelongs = equipe.some(
-                                                    (m) =>
-                                                        m.user_id === assignedToUserId &&
-                                                        m.areas?.some((a) => a.id === next),
+                                    {sortedAreas.length === 0 ? (
+                                        <p className="text-amber-400 text-xs">
+                                            Nenhuma área cadastrada. Cadastre em Configurações &gt; Áreas.
+                                        </p>
+                                    ) : (
+                                        <div className="bg-[#101d22] border border-[#233f48] rounded-lg p-2.5 space-y-1 max-h-44 overflow-y-auto">
+                                            {sortedAreas.map((a) => {
+                                                const checked = areaIds.includes(a.id);
+                                                return (
+                                                    <label key={a.id} className="flex items-center gap-2.5 cursor-pointer text-sm text-white py-1">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={checked}
+                                                            onChange={() => toggleArea(a.id, a.name)}
+                                                            className="w-4 h-4 accent-[#13b6ec]"
+                                                        />
+                                                        <span>{a.name}</span>
+                                                    </label>
                                                 );
-                                                if (!stillBelongs) setAssignedToUserId("");
-                                            }
-                                        }}
-                                        className="w-full bg-[#101d22] border border-[#233f48] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#13b6ec]"
-                                    >
-                                        <option value="">— Selecione —</option>
-                                        {sortedAreas.map((a) => (
-                                            <option key={a.id} value={a.id}>
-                                                {a.name}
-                                            </option>
-                                        ))}
-                                    </select>
+                                            })}
+                                        </div>
+                                    )}
+                                    {areaIds.length === 0 && sortedAreas.length > 0 && (
+                                        <p className="mt-1.5 text-xs text-amber-400">Selecione ao menos uma área.</p>
+                                    )}
+                                    {areaIds.length > 1 && (
+                                        <p className="mt-1.5 text-[11px] text-[#92bbc9]">
+                                            Qualquer colaborador dessas {areaIds.length} áreas poderá executar este recebimento.
+                                        </p>
+                                    )}
                                 </div>
 
                                 {/* Responsável — mesmo padrão das rotinas */}
                                 <div>
                                     <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-1.5">
-                                        Responsável
+                                        Responsáveis
                                     </label>
                                     <div className="grid grid-cols-2 gap-2">
                                         <button
                                             type="button"
                                             onClick={() => {
                                                 setIsIndividualMode(false);
-                                                setAssignedToUserId("");
+                                                setResponsibleIds([]);
                                             }}
                                             className={`px-3 py-2 rounded-lg border text-xs font-semibold transition-colors ${
                                                 !isIndividualMode
@@ -538,7 +600,7 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                                                     : "bg-[#101d22] border-[#233f48] text-[#92bbc9] hover:border-[#325a67]"
                                             }`}
                                         >
-                                            Toda a equipe da área
+                                            Toda a equipe das áreas
                                         </button>
                                         <button
                                             type="button"
@@ -549,56 +611,65 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                                                     : "bg-[#101d22] border-[#233f48] text-[#92bbc9] hover:border-[#325a67]"
                                             }`}
                                         >
-                                            Usuário específico
+                                            Usuários específicos
                                         </button>
                                     </div>
                                     {isIndividualMode && (
                                         <>
-                                            <select
-                                                value={assignedToUserId}
-                                                onChange={(e) => setAssignedToUserId(e.target.value)}
-                                                disabled={!areaId}
-                                                className="mt-2 w-full bg-[#101d22] border border-[#233f48] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#13b6ec] disabled:opacity-50"
-                                            >
-                                                <option value="">— Selecione o colaborador —</option>
-                                                {shiftIds.length === 0 && areaMembers.map((m) => {
-                                                    const tn = memberShiftNames(m.user_id);
-                                                    return (
-                                                        <option key={m.user_id} value={m.user_id}>
-                                                            {m.name}{tn.length > 0 ? ` — Turnos: ${tn.join(", ")}` : ""}
-                                                        </option>
-                                                    );
-                                                })}
-                                                {shiftIds.length > 0 && compatibleMembers.length > 0 && (
-                                                    <optgroup label="Compatíveis">
-                                                        {compatibleMembers.map((m) => (
-                                                            <option key={m.user_id} value={m.user_id}>
-                                                                {m.name} — Turnos: {memberShiftNames(m.user_id).join(", ")}
-                                                            </option>
-                                                        ))}
-                                                    </optgroup>
-                                                )}
-                                                {shiftIds.length > 0 && incompatibleMembers.length > 0 && (
-                                                    <optgroup label="Incompatíveis — não pertencem aos turnos">
-                                                        {incompatibleMembers.map((m) => {
-                                                            const tn = memberShiftNames(m.user_id);
-                                                            return (
-                                                                <option key={m.user_id} value={m.user_id} disabled>
+                                            {/* s92 — seleção múltipla sobre a união dos membros das
+                                                áreas marcadas, cada um rotulado com sua(s) área(s). */}
+                                            {areaMembers.length > 0 && (
+                                                <div className="mt-2 bg-[#101d22] border border-[#233f48] rounded-lg p-2.5 space-y-1 max-h-52 overflow-y-auto">
+                                                    {compatibleMembers.map((m) => {
+                                                        const checked = responsibleIds.includes(m.user_id);
+                                                        const tn = memberShiftNames(m.user_id);
+                                                        return (
+                                                            <label key={m.user_id} className="flex items-center gap-2.5 cursor-pointer text-sm text-white py-1">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={checked}
+                                                                    onChange={() => setResponsibleIds(checked
+                                                                        ? responsibleIds.filter((id) => id !== m.user_id)
+                                                                        : [...responsibleIds, m.user_id])}
+                                                                    className="w-4 h-4 accent-[#13b6ec] shrink-0"
+                                                                />
+                                                                <span className="truncate">
+                                                                    {m.name}
+                                                                    <span className="text-[#92bbc9]"> · {memberAreaLabel(m.user_id) || "Sem área"}</span>
+                                                                    {tn.length > 0 && <span className="text-[#557682] text-xs"> — {tn.join(", ")}</span>}
+                                                                </span>
+                                                            </label>
+                                                        );
+                                                    })}
+                                                    {incompatibleMembers.map((m) => {
+                                                        const tn = memberShiftNames(m.user_id);
+                                                        return (
+                                                            <label key={m.user_id} className="flex items-center gap-2.5 text-sm text-[#557682] py-1 cursor-not-allowed">
+                                                                <input type="checkbox" checked={false} disabled className="w-4 h-4 shrink-0" />
+                                                                <span className="truncate">
                                                                     🔒 {m.name} — {tn.length > 0 ? `Turnos: ${tn.join(", ")}` : "Sem turno vinculado"}
-                                                                </option>
-                                                            );
-                                                        })}
-                                                    </optgroup>
-                                                )}
-                                            </select>
+                                                                </span>
+                                                            </label>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                            {responsibleIds.length === 0 && (
+                                                <p className="text-xs text-amber-400 mt-1.5">Selecione ao menos um colaborador.</p>
+                                            )}
                                             {shiftIds.length > 0 && incompatibleMembers.length > 0 && (
                                                 <p className="text-xs text-amber-400 mt-1.5">
-                                                    {incompatibleMembers.length} colaborador{incompatibleMembers.length > 1 ? "es" : ""} da área não pertence{incompatibleMembers.length > 1 ? "m" : ""} aos turnos selecionados ({selectedShiftLabel}) e não pode{incompatibleMembers.length > 1 ? "m" : ""} ser atribuído{incompatibleMembers.length > 1 ? "s" : ""}.
+                                                    {incompatibleMembers.length} colaborador{incompatibleMembers.length > 1 ? "es" : ""} não pertence{incompatibleMembers.length > 1 ? "m" : ""} aos turnos selecionados ({selectedShiftLabel}) e não pode{incompatibleMembers.length > 1 ? "m" : ""} ser atribuído{incompatibleMembers.length > 1 ? "s" : ""}.
                                                 </p>
                                             )}
-                                            {areaId && shiftIds.length > 0 && areaMembers.length > 0 && compatibleMembers.length === 0 && (
+                                            {areaIds.length > 0 && areaMembers.length === 0 && (
                                                 <p className="text-xs text-amber-400 mt-1.5">
-                                                    Nenhum colaborador da área pertence aos turnos selecionados ({selectedShiftLabel}).
+                                                    Nenhum colaborador vinculado {areaIds.length > 1 ? "às áreas selecionadas" : "a esta área"}.
+                                                </p>
+                                            )}
+                                            {areaIds.length > 0 && shiftIds.length > 0 && areaMembers.length > 0 && compatibleMembers.length === 0 && (
+                                                <p className="text-xs text-amber-400 mt-1.5">
+                                                    Nenhum colaborador {areaIds.length > 1 ? "das áreas selecionadas" : "da área"} pertence aos turnos selecionados ({selectedShiftLabel}).
                                                 </p>
                                             )}
                                         </>
@@ -854,6 +925,47 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                 />
             )}
 
+            {/* Sprint 92 — remover uma área tira do escopo os responsáveis que só
+                pertenciam a ela. Confirmação explícita antes de aplicar. */}
+            {pendingAreaRemoval && (
+                <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
+                    <div className="bg-[#16262c] border border-[#233f48] rounded-2xl w-full max-w-sm p-6 shadow-2xl">
+                        <div className="flex items-center gap-3 mb-2 text-white">
+                            <span className="material-symbols-outlined text-amber-400">group_remove</span>
+                            <h3 className="text-xl font-bold tracking-tight">Remover {pendingAreaRemoval.areaName}?</h3>
+                        </div>
+                        <p className="text-[#92bbc9] text-sm mb-4 mt-2 leading-relaxed">
+                            {pendingAreaRemoval.affected.length === 1
+                                ? "Este responsável não pertence a nenhuma outra área selecionada e será removido do modelo:"
+                                : "Estes responsáveis não pertencem a nenhuma outra área selecionada e serão removidos do modelo:"}
+                        </p>
+                        <ul className="mb-6 space-y-1">
+                            {pendingAreaRemoval.affected.map((a) => (
+                                <li key={a.user_id} className="text-sm text-white flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-[16px] text-[#557682]">person</span>
+                                    {a.name}
+                                </li>
+                            ))}
+                        </ul>
+                        <div className="flex gap-3 justify-end mt-4">
+                            <button
+                                type="button"
+                                onClick={() => setPendingAreaRemoval(null)}
+                                className="px-4 py-2 rounded-lg font-bold text-sm text-[#92bbc9] hover:bg-[#1a2c32] hover:text-white transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={confirmAreaRemoval}
+                                className="px-4 py-2 rounded-lg font-bold text-sm bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500 hover:text-white transition-colors"
+                            >
+                                Remover mesmo assim
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 }

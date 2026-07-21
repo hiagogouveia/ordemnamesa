@@ -1,6 +1,7 @@
 "use client";
 
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
+import { displayAreas, areasLabel, responsibleLabel, responsiblesTitle } from "@/lib/utils/checklist-labels";
 
 interface ChecklistDrawerProps {
     checklist: ExtendedChecklist | null;
@@ -41,15 +42,16 @@ export function ChecklistDrawer({ checklist, open, onClose, onEdit }: ChecklistD
                                     {checklist.name}
                                 </h2>
                                 <div className="flex items-center flex-wrap gap-2 mt-1.5">
-                                    {checklist.area && (
-                                        <span className="flex items-center gap-1">
+                                    {/* s92 — uma rotina pode ter várias áreas. */}
+                                    {displayAreas(checklist).map((a) => (
+                                        <span key={a.id} className="flex items-center gap-1">
                                             <span
                                                 className="w-2 h-2 rounded-full"
-                                                style={{ backgroundColor: checklist.area.color || "#325a67" }}
+                                                style={{ backgroundColor: a.color || "#325a67" }}
                                             />
-                                            <span className="text-[#92bbc9] text-xs">{checklist.area.name}</span>
+                                            <span className="text-[#92bbc9] text-xs">{a.name}</span>
                                         </span>
-                                    )}
+                                    ))}
                                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                                         checklist.active
                                             ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"

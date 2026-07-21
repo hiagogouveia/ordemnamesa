@@ -149,16 +149,28 @@ export function AuditExecutionList({ entries, isLoading, onSelect, isGlobal, sel
                                         </div>
                                     </td>
                                     <td className="px-4 py-3.5 whitespace-nowrap">
-                                        {e.area ? (
+                                        {/* s92 — a rotina pode ter várias áreas: até 2 + "+N". */}
+                                        {e.areas.length > 0 ? (
                                             <span
-                                                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border"
-                                                style={{
-                                                    backgroundColor: `${e.area.color ?? '#13b6ec'}1a`,
-                                                    borderColor: `${e.area.color ?? '#13b6ec'}33`,
-                                                    color: e.area.color ?? '#13b6ec',
-                                                }}
+                                                className="inline-flex items-center gap-1 flex-wrap"
+                                                title={e.areas.map((a) => a.name).join(', ')}
                                             >
-                                                {e.area.name}
+                                                {e.areas.slice(0, 2).map((a) => (
+                                                    <span
+                                                        key={a.id}
+                                                        className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border"
+                                                        style={{
+                                                            backgroundColor: `${a.color ?? '#13b6ec'}1a`,
+                                                            borderColor: `${a.color ?? '#13b6ec'}33`,
+                                                            color: a.color ?? '#13b6ec',
+                                                        }}
+                                                    >
+                                                        {a.name}
+                                                    </span>
+                                                ))}
+                                                {e.areas.length > 2 && (
+                                                    <span className="text-[#5a8a99] text-xs">+{e.areas.length - 2}</span>
+                                                )}
                                             </span>
                                         ) : (
                                             <span className="text-[#557682] text-xs">—</span>
@@ -275,16 +287,20 @@ export function AuditExecutionList({ entries, isLoading, onSelect, isGlobal, sel
                                     </span>
                                 )}
                             </div>
-                            {e.area && (
+                            {e.areas.slice(0, 2).map((a) => (
                                 <span
+                                    key={a.id}
                                     className="px-2 py-0.5 rounded-full text-[10px] font-medium"
                                     style={{
-                                        backgroundColor: `${e.area.color ?? '#13b6ec'}1a`,
-                                        color: e.area.color ?? '#13b6ec',
+                                        backgroundColor: `${a.color ?? '#13b6ec'}1a`,
+                                        color: a.color ?? '#13b6ec',
                                     }}
                                 >
-                                    {e.area.name}
+                                    {a.name}
                                 </span>
+                            ))}
+                            {e.areas.length > 2 && (
+                                <span className="text-[#5a8a99] text-[10px]">+{e.areas.length - 2}</span>
                             )}
                             {e.unit && <UnitBadge name={e.unit.name} />}
                         </div>

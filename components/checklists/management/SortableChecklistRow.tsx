@@ -11,6 +11,7 @@ import type { ExecutionStatus } from "@/lib/types";
 import { getOperationalStatus, type StatusContext } from "@/lib/utils/get-operational-status";
 import { describeRecurrence } from "@/lib/utils/recurrence/describe";
 import { UnitBadge } from "@/components/ui/unit-badge";
+import { displayAreas, areasLabel, responsibleLabel, responsiblesTitle } from "@/lib/utils/checklist-labels";
 
 
 const EXECUTION_STATUS_CONFIG: Record<ExecutionStatus, { label: string; className: string }> = {
@@ -65,6 +66,9 @@ export function SortableChecklistRow({
     statusCtx,
     isGlobal,
 }: SortableChecklistRowProps) {
+    // s92 — áreas e responsáveis são N:N; as sombras `area`/`responsible` não bastam.
+    const areas = displayAreas(checklist);
+    const responsible = responsibleLabel(checklist);
     const [menuOpen, setMenuOpen] = useState(false);
     const buttonRef = useRef<HTMLButtonElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -167,16 +171,24 @@ export function SortableChecklistRow({
 
             {/* Área */}
             <td className="px-3 py-3">
-                {checklist.area ? (
-                    <span className="flex items-center gap-1.5">
-                        <span
-                            className="w-2 h-2 rounded-full shrink-0"
-                            style={{ backgroundColor: checklist.area.color || "#325a67" }}
-                        />
-                        <span className="text-[#92bbc9] text-sm">{checklist.area.name}</span>
+                {/* s92 — a rotina pode ter várias áreas: mostra até 2 e resume o resto. */}
+                {areas.length > 0 ? (
+                    <span className="flex items-center gap-1.5 flex-wrap" title={areasLabel(checklist)}>
+                        {areas.slice(0, 2).map((a) => (
+                            <span key={a.id} className="flex items-center gap-1.5">
+                                <span
+                                    className="w-2 h-2 rounded-full shrink-0"
+                                    style={{ backgroundColor: a.color || "#325a67" }}
+                                />
+                                <span className="text-[#92bbc9] text-sm">{a.name}</span>
+                            </span>
+                        ))}
+                        {areas.length > 2 && (
+                            <span className="text-[#5a8a99] text-xs">+{areas.length - 2}</span>
+                        )}
                     </span>
                 ) : (
-                    <span className="flex items-center gap-1 text-orange-400">
+                    <span className="flex items-center gap-1.5 text-orange-400">
                         <span className="material-symbols-outlined text-[14px]">warning</span>
                         <span className="text-sm font-medium">Sem área</span>
                     </span>
@@ -185,8 +197,11 @@ export function SortableChecklistRow({
 
             {/* Responsável */}
             <td className="px-3 py-3 hidden md:table-cell">
-                <span className={`text-sm ${checklist.responsible?.name ? "text-[#92bbc9]" : "text-[#325a67] italic"}`}>
-                    {checklist.responsible?.name ?? "Distribuído para toda a área"}
+                <span
+                    className={`text-sm ${responsible ? "text-[#92bbc9]" : "text-[#325a67] italic"}`}
+                    title={responsiblesTitle(checklist) || undefined}
+                >
+                    {responsible ?? (areas.length > 1 ? "Distribuído para todas as áreas" : "Distribuído para toda a área")}
                 </span>
             </td>
 

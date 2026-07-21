@@ -31,7 +31,10 @@ export interface RoutineCardProps {
     isRequired?: boolean;
 
     // Collaborator specific
+    /** s92 — DEPRECADO: use `areas`. Mantido para chamadores de uma área só. */
     area?: string;
+    /** s92 — todas as áreas da rotina. Renderiza até 2 chips + "+N". */
+    areas?: string[];
     progress?: number;
     flaggedCount?: number;
     assumptionName?: string;
@@ -142,6 +145,7 @@ export function RoutineCard({
     isAssignedToOther = false,
     isAssignedToMe = false,
     area,
+    areas,
     unitName,
     state,
     isSelected = false,
@@ -291,7 +295,14 @@ export function RoutineCard({
         (resolvedState.kind === "late" && resolvedState.inProgress)
     );
     const showLateInProgressHint = resolvedState.kind === "late" && resolvedState.inProgress;
-    const areaLabel = !area || area === "Qualquer Área" ? "Geral" : area;
+    // s92 — a rotina pode ter várias áreas. Mostra até 2 e resume o resto em "+N",
+    // com o `title` listando todas, para não estourar a altura do card.
+    const areaNames = (areas && areas.length > 0)
+        ? areas
+        : (area && area !== "Qualquer Área" ? [area] : []);
+    const visibleAreas = areaNames.slice(0, 2);
+    const hiddenAreaCount = areaNames.length - visibleAreas.length;
+    const areaLabel = areaNames.length === 0 ? "Geral" : areaNames.join(", ");
 
     const cardBaseCls = "bg-[#1a2c32] border border-[#233f48] shadow-sm transition-all";
     const interactionCls = isPreview
@@ -337,9 +348,22 @@ export function RoutineCard({
                     {title}
                 </h3>
                 <div className="flex items-center gap-2 text-xs text-[#92bbc9] flex-wrap">
-                    <span className="inline-flex items-center gap-1">
-                        <span className="material-symbols-outlined text-[14px] opacity-70">location_on</span>
-                        {areaLabel}
+                    <span className="inline-flex items-center gap-1 min-w-0" title={areaLabel}>
+                        <span className="material-symbols-outlined text-[14px] opacity-70 shrink-0">location_on</span>
+                        {areaNames.length === 0 ? "Geral" : (
+                            <span className="inline-flex items-center gap-1 flex-wrap min-w-0">
+                                {visibleAreas.map((n) => (
+                                    <span key={n} className="bg-[#16262c] border border-[#233f48] rounded px-1.5 py-0.5 truncate max-w-[9rem]">
+                                        {n}
+                                    </span>
+                                ))}
+                                {hiddenAreaCount > 0 && (
+                                    <span className="bg-[#16262c] border border-[#233f48] rounded px-1.5 py-0.5 shrink-0">
+                                        +{hiddenAreaCount}
+                                    </span>
+                                )}
+                            </span>
+                        )}
                     </span>
                     <span className="text-[#325a67]">·</span>
                     <span>{itemsCount} {itemsCount === 1 ? "item" : "itens"}</span>

@@ -7,6 +7,7 @@ import { UnitBadge } from "@/components/ui/unit-badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { IssueBadge } from "@/components/checklists/issues/IssueBadge";
 import { ChecklistTypeBadge } from "@/components/checklists/management/ChecklistTypeBadge";
+import { displayAreas, areasLabel, responsibleLabel, responsiblesTitle } from "@/lib/utils/checklist-labels";
 
 
 interface ChecklistBoardCardProps {
@@ -35,7 +36,9 @@ export function ChecklistBoardCard({
     // (responsible.name vindo de assigned_to_user_id). Confusão entre os dois é
     // a fonte do bug "apareceu mac teste como responsável".
     const executorName = checklist.assumed_by_name || null;
-    const assignedName = !executorName ? checklist.responsible?.name ?? null : null;
+    // s92 — responsáveis/áreas são N:N; as sombras não bastam com 2+.
+    const assignedName = !executorName ? responsibleLabel(checklist) : null;
+    const areas = displayAreas(checklist);
     const hasOpenIssues = openIssuesCount > 0;
     // 'done' é o único estado de conclusão da rotina (a API normaliza completed_at
     // / execution_status para 'done'). Quando concluída, o card mostra "Concluída
@@ -95,14 +98,19 @@ export function ChecklistBoardCard({
 
             {/* Área */}
             <div className="flex items-center gap-1.5 mt-1.5">
-                {checklist.area ? (
-                    <>
-                        <span
-                            className="w-2 h-2 rounded-full shrink-0"
-                            style={{ backgroundColor: checklist.area.color || "#325a67" }}
-                        />
-                        <span className="text-[#92bbc9] text-xs">{checklist.area.name}</span>
-                    </>
+                {areas.length > 0 ? (
+                    <span className="flex items-center gap-1.5 flex-wrap min-w-0" title={areasLabel(checklist)}>
+                        {areas.slice(0, 2).map((a) => (
+                            <span key={a.id} className="flex items-center gap-1.5">
+                                <span
+                                    className="w-2 h-2 rounded-full shrink-0"
+                                    style={{ backgroundColor: a.color || "#325a67" }}
+                                />
+                                <span className="text-[#92bbc9] text-xs">{a.name}</span>
+                            </span>
+                        ))}
+                        {areas.length > 2 && <span className="text-[#5a8a99] text-[10px]">+{areas.length - 2}</span>}
+                    </span>
                 ) : (
                     <span className="flex items-center gap-1 text-orange-400" title="Essa rotina não está vinculada a nenhuma área e não pode ser executada">
                         <span className="material-symbols-outlined text-[14px]">warning</span>

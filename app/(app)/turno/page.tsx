@@ -235,11 +235,15 @@ export default function KanbanPage() {
         if (!isGlobal || !kanbanData) return [];
         const seen = new Map<string, { id: string; name: string; unitName?: string }>();
         for (const cl of kanbanData.checklists) {
-            if (!cl.area_id || !cl.areas) continue;
             const unitName = getUnitName(cl);
-            const key = cl.area_id;
-            if (!seen.has(key)) {
-                seen.set(key, { id: cl.areas.id, name: cl.areas.name, unitName });
+            // s92: a rotina pode ter várias áreas — cada uma vira uma aba.
+            const ids = cl.area_ids?.length ? cl.area_ids : (cl.area_id ? [cl.area_id] : []);
+            for (const id of ids) {
+                if (seen.has(id)) continue;
+                const name = cl.areas_list?.find((a) => a.id === id)?.name
+                    ?? (id === cl.area_id ? cl.areas?.name : undefined);
+                if (!name) continue;
+                seen.set(id, { id, name, unitName });
             }
         }
         return Array.from(seen.values()).sort((a, b) => a.name.localeCompare(b.name));
@@ -255,9 +259,14 @@ export default function KanbanPage() {
     }, [isGlobal, userAreas, globalAreas, scopeKey, activeAreaId]);
 
     // Filtros (área + unidade).
-    const matchesFilters = useCallback(<T extends { area_id?: string | null; restaurant_id?: string }>(item: T): boolean => {
+    // s92: a rotina pertence a 1..N áreas — a aba casa por INTERSEÇÃO, então uma
+    // rotina multi-área aparece na aba de cada uma das suas áreas.
+    const matchesFilters = useCallback(<T extends { area_id?: string | null; area_ids?: string[]; restaurant_id?: string }>(item: T): boolean => {
         if (isGlobal && activeUnitId !== 'all' && item.restaurant_id !== activeUnitId) return false;
-        if (activeAreaId && item.area_id !== activeAreaId) return false;
+        if (activeAreaId) {
+            const ids = item.area_ids?.length ? item.area_ids : (item.area_id ? [item.area_id] : []);
+            if (!ids.includes(activeAreaId)) return false;
+        }
         return true;
     }, [isGlobal, activeUnitId, activeAreaId]);
 
@@ -310,6 +319,7 @@ export default function KanbanPage() {
                 done: cl.isDone,
                 meta: {
                     area: cl.roles?.name || cl.areas?.name,
+                    areas: cl.areas_list?.map((a) => a.name),
                     itemsCount: cl.taskCount,
                     progress: cl.progress,
                     flaggedCount: cl.flaggedTasksCount,
@@ -384,7 +394,11 @@ export default function KanbanPage() {
     // disponíveis hoje no contexto do usuário (área/role/usuário). Filtra por
     // área ativa quando aplicável.
     const visibleTemplates = useMemo(
-        () => availableTemplates.filter((t) => !activeAreaId || t.area_id === activeAreaId),
+        () => availableTemplates.filter((t) => {
+            if (!activeAreaId) return true;
+            const ids = t.area_ids?.length ? t.area_ids : (t.area_id ? [t.area_id] : []);
+            return ids.includes(activeAreaId);
+        }),
         [availableTemplates, activeAreaId],
     );
     // s60: 3 estados do botão "Novo recebimento"
@@ -664,6 +678,7 @@ export default function KanbanPage() {
                                         {group.items.map((item) => {
                                             const m = item.meta as {
                                                 area?: string;
+                                                areas?: string[];
                                                 itemsCount?: number;
                                                 progress?: number;
                                                 flaggedCount?: number;
@@ -688,6 +703,7 @@ export default function KanbanPage() {
                                                     end_time={item.end_time}
                                                     timeLabelOverride={m.timeLabelOverride}
                                                     area={m.area}
+                                                    areas={m.areas}
                                                     itemsCount={m.itemsCount}
                                                     supplier={m.supplier}
                                                     isReceivingOverdue={m.isReceivingOverdue}
@@ -741,7 +757,10 @@ export default function KanbanPage() {
                                                     <span className="text-white text-sm font-semibold truncate">{t.name}</span>
                                                     <span className="text-[#92bbc9] text-xs">
                                                         {t.tasks_count} {t.tasks_count === 1 ? 'tarefa' : 'tarefas'}
-                                                        {t.area && ` · ${t.area.name}`}
+                                                        {(() => {
+                                                            const names = (t.areas_list?.length ? t.areas_list : (t.area ? [t.area] : [])).map((a) => a.name);
+                                                            return names.length > 0 ? ` · ${names.join(', ')}` : '';
+                                                        })()}
                                                     </span>
                                                 </div>
                                                 <span className="material-symbols-outlined text-[#13b6ec] text-[20px]">chevron_right</span>
@@ -965,6 +984,7 @@ function ExecutandoBlock({ items }: { items: OperationItem[] }) {
                 {items.map((item) => {
                     const m = item.meta as {
                         area?: string;
+                        areas?: string[];
                         itemsCount?: number;
                         progress?: number;
                         flaggedCount?: number;
@@ -989,6 +1009,7 @@ function ExecutandoBlock({ items }: { items: OperationItem[] }) {
                             end_time={item.end_time}
                             timeLabelOverride={m.timeLabelOverride}
                             area={m.area}
+                            areas={m.areas}
                             itemsCount={m.itemsCount}
                             supplier={m.supplier}
                             isReceivingOverdue={m.isReceivingOverdue}

@@ -130,7 +130,10 @@ function PrintLayout({ detail }: { detail: AuditExecutionDetail }) {
                 </header>
 
                 <section className="print-grid-meta mt-5 grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-                    <Meta label="Área" value={detail.area?.name ?? '—'} />
+                    <Meta
+                        label={detail.areas.length > 1 ? 'Áreas' : 'Área'}
+                        value={detail.areas.length > 0 ? detail.areas.map((a) => a.name).join(', ') : '—'}
+                    />
                     <Meta label="Turno" value={detail.checklist.shift ? SHIFT_LABEL[detail.checklist.shift] : '—'} />
                     <Meta label="Responsável" value={detail.user.name} />
                     <Meta label="Duração" value={formatDuration(detail.duration_seconds)} />

@@ -142,14 +142,27 @@ export function TemplatesList({ restaurantId }: TemplatesListProps) {
                                     <tr key={t.id} className="text-sm">
                                         <td className="px-4 py-3 text-white font-medium">{t.name}</td>
                                         <td className="px-4 py-3">
-                                            {t.area ? (
-                                                <span className="inline-flex items-center gap-1.5 text-[#92bbc9]">
-                                                    <span className="size-2 rounded-full" style={{ background: t.area.color }} />
-                                                    {t.area.name}
-                                                </span>
-                                            ) : (
-                                                <span className="text-[#557682]">—</span>
-                                            )}
+                                            {/* s92 — o modelo pode ter várias áreas: até 2 + "+N". */}
+                                            {(() => {
+                                                const tplAreas = t.areas_list?.length ? t.areas_list : (t.area ? [t.area] : []);
+                                                if (tplAreas.length === 0) return <span className="text-[#557682]">—</span>;
+                                                return (
+                                                    <span
+                                                        className="inline-flex items-center gap-x-2 gap-y-1 flex-wrap text-[#92bbc9]"
+                                                        title={tplAreas.map((a) => a.name).join(", ")}
+                                                    >
+                                                        {tplAreas.slice(0, 2).map((a) => (
+                                                            <span key={a.id} className="inline-flex items-center gap-1.5">
+                                                                <span className="size-2 rounded-full" style={{ background: a.color }} />
+                                                                {a.name}
+                                                            </span>
+                                                        ))}
+                                                        {tplAreas.length > 2 && (
+                                                            <span className="text-[#5a8a99] text-xs">+{tplAreas.length - 2}</span>
+                                                        )}
+                                                    </span>
+                                                );
+                                            })()}
                                         </td>
                                         <td className="px-4 py-3 text-[#92bbc9]">{shiftLabel(t.shift)}</td>
                                         <td className="px-4 py-3 text-[#92bbc9]">

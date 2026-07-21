@@ -275,7 +275,11 @@ function ChecklistsContent() {
             if (q && !c.name.toLowerCase().includes(q)) return false;
             if (isGlobal && selectedUnitId && c.restaurant_id !== selectedUnitId) return false;
             if (selectedShift && c.shift !== selectedShift && c.shift !== "any") return false;
-            if (selectedAreaId && c.area_id !== selectedAreaId) return false;
+            // s92: a rotina pode ter várias áreas — o filtro casa por interseção.
+            if (selectedAreaId) {
+                const ids = c.area_ids?.length ? c.area_ids : (c.area_id ? [c.area_id] : []);
+                if (!ids.includes(selectedAreaId)) return false;
+            }
             // s61: filtro Tipo passou a refletir tipos operacionais explícitos
             // (regular/opening/closing). "all" mostra tudo, incluindo eventuais
             // legados com type=receiving que ainda existam — visibilidade
@@ -320,12 +324,14 @@ function ChecklistsContent() {
                     valB = SHIFT_SORT_ORDER[b.shift] ?? 99;
                     break;
                 case "area":
-                    valA = (a.area?.name || "\uffff").toLowerCase();
-                    valB = (b.area?.name || "\uffff").toLowerCase();
+                    // s92: ordena pela primeira área (as listas já vêm por nome).
+                    valA = (a.areas_list?.[0]?.name || a.area?.name || "\uffff").toLowerCase();
+                    valB = (b.areas_list?.[0]?.name || b.area?.name || "\uffff").toLowerCase();
                     break;
                 case "responsible":
-                    valA = a.responsible?.name?.toLowerCase() ?? "\uffff";
-                    valB = b.responsible?.name?.toLowerCase() ?? "\uffff";
+                    // s92: ordena pelo primeiro responsável (as listas já vêm por nome).
+                    valA = (a.responsibles?.[0]?.name ?? a.responsible?.name)?.toLowerCase() ?? "\uffff";
+                    valB = (b.responsibles?.[0]?.name ?? b.responsible?.name)?.toLowerCase() ?? "\uffff";
                     break;
                 case "status":
                     valA = !a.active ? 1 : 0;

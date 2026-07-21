@@ -193,19 +193,21 @@ function PanelContent({
                     </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                    {detail.area && (
+                    {/* s92 — todas as áreas da rotina. */}
+                    {detail.areas.map((a) => (
                         <span
+                            key={a.id}
                             className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border"
                             style={{
-                                backgroundColor: `${detail.area.color ?? '#13b6ec'}1a`,
-                                borderColor: `${detail.area.color ?? '#13b6ec'}33`,
-                                color: detail.area.color ?? '#13b6ec',
+                                backgroundColor: `${a.color ?? '#13b6ec'}1a`,
+                                borderColor: `${a.color ?? '#13b6ec'}33`,
+                                color: a.color ?? '#13b6ec',
                             }}
                         >
                             <span className="material-symbols-outlined" style={{ fontSize: 13 }}>layers</span>
-                            {detail.area.name}
+                            {a.name}
                         </span>
-                    )}
+                    ))}
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs text-[#92bbc9] bg-[#16262c] border border-[#325a67]">
                         <span className="material-symbols-outlined" style={{ fontSize: 13 }}>schedule</span>
                         {formatShift(detail.checklist.shift)}

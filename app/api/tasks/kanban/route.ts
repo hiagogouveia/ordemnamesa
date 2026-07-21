@@ -124,6 +124,21 @@ export async function GET(request: Request) {
 
         const activeChecklistsData = await filterExecutable(adminSupabase, rawActiveChecklists ?? [], visibilityCtx);
 
+        // Sprint 92 — metadados das áreas (tabela pequena) para resolver `areas_list`
+        // a partir dos ids do N:N sem N+1. Alimenta as abas de área e os chips do card.
+        const { data: areaRows } = await adminSupabase
+            .from('areas')
+            .select('id, name, color')
+            .in('restaurant_id', restaurantIds);
+        const areaMetaById = new Map(
+            (areaRows ?? []).map((a) => [a.id, { id: a.id, name: a.name, color: a.color }]),
+        );
+        const withAreaNames = <T extends { area_ids: string[] }>(rows: T[]) =>
+            rows.map((r) => ({
+                ...r,
+                areas_list: r.area_ids.map((id) => areaMetaById.get(id)).filter(Boolean),
+            }));
+
         // Sprint 73 — fuso do restaurante para todas as operações de data
         const tz = await getRestaurantTimezone(adminSupabase, restaurantIds[0]);
         const brazil = getNowInTz(tz);
@@ -348,7 +363,7 @@ export async function GET(request: Request) {
             .eq('date_key', todayKey);
 
         return NextResponse.json({
-            checklists: visibleChecklists,
+            checklists: withAreaNames(visibleChecklists),
             tasks: tasksData || [],
             executions: executions || [],
             assumptions: assumptions || [],

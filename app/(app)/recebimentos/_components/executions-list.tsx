@@ -124,12 +124,13 @@ export function ExecutionsList({ restaurantId }: ExecutionsListProps) {
                                         </div>
                                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#92bbc9] mt-1">
                                             <span>{q.supplier?.name || "Fornecedor não informado"}</span>
-                                            {q.area && (
-                                                <span className="flex items-center gap-1">
-                                                    • <span className="size-2 rounded-full" style={{ background: q.area.color }} />
-                                                    {q.area.name}
+                                            {/* s92 — o recebimento pode ter várias áreas. */}
+                                            {(q.areas?.length ? q.areas : (q.area ? [q.area] : [])).map((a) => (
+                                                <span key={a.id} className="flex items-center gap-1">
+                                                    • <span className="size-2 rounded-full" style={{ background: a.color }} />
+                                                    {a.name}
                                                 </span>
-                                            )}
+                                            ))}
                                             {q.assumed_by_user_name && <span>• Executado por {q.assumed_by_user_name}</span>}
                                         </div>
                                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#5a8a99] mt-1">

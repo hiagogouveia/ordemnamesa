@@ -6,6 +6,7 @@ import { IphoneMockup } from "@/components/ui/iphone-mockup";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
 import type { PriorityMode } from "@/lib/types";
 import { UnitBadge } from "@/components/ui/unit-badge";
+import { displayAreas } from "@/lib/utils/checklist-labels";
 
 interface ChecklistPreviewViewProps {
     checklists: ExtendedChecklist[];
@@ -128,6 +129,7 @@ export function ChecklistPreviewView({ checklists, currentMinutes, priorityMode 
                                         itemsCount={c.tasks?.length ?? 0}
                                         isRequired={c.is_required ?? false}
                                         area={c.area?.name}
+                                        areas={displayAreas(c).map((a) => a.name)}
                                         onClick={() => {}}
                                     />
                                     {isGlobal && c.unit?.name && (

@@ -121,9 +121,16 @@ interface CreateTemplateVars {
     restaurant_id: string;
     name: string;
     description?: string;
-    area_id: string;
+    /** s92 — DEPRECADO (sombra); prefira `area_ids`. */
+    area_id?: string;
+    /** s92 — áreas do modelo (N:N). Fonte da verdade. */
+    area_ids?: string[];
     role_id?: string | null;
+    /** s92 — DEPRECADO (sombra); prefira `responsible_user_ids`. */
     assigned_to_user_id?: string | null;
+    /** s92 — responsáveis específicos (N:N). Vazio = toda a equipe das áreas. */
+    responsible_user_ids?: string[];
+    assignment_type?: "area" | "user";
     shift?: "morning" | "afternoon" | "evening" | null;
     shift_id?: string | null;
     shift_ids?: string[];
@@ -160,9 +167,16 @@ interface UpdateTemplateVars {
     restaurant_id: string;
     name?: string;
     description?: string | null;
+    /** s92 — DEPRECADO (sombra); prefira `area_ids`. */
     area_id?: string;
+    /** s92 — áreas do modelo (N:N). Fonte da verdade. */
+    area_ids?: string[];
     role_id?: string | null;
+    /** s92 — DEPRECADO (sombra); prefira `responsible_user_ids`. */
     assigned_to_user_id?: string | null;
+    /** s92 — responsáveis específicos (N:N). Vazio = toda a equipe das áreas. */
+    responsible_user_ids?: string[];
+    assignment_type?: "area" | "user";
     shift?: "morning" | "afternoon" | "evening" | null;
     shift_id?: string | null;
     shift_ids?: string[];

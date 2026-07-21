@@ -152,6 +152,31 @@ function hasMeaningfulDraft(parsed: DraftData): boolean {
     return name.length > 0 || description.length > 0 || tasks.length > 0;
 }
 
+/** Sprint 92 — leitura tolerante do draft: aceita o formato antigo (id único). */
+function readDraftAreas(parsed: DraftData, checklist: ExtendedChecklist | null): string[] {
+    if (Array.isArray(parsed.areaIds)) return parsed.areaIds;
+    if (parsed.areaId) return [parsed.areaId as string];
+    return checklist ? currentAreaIds(checklist) : [];
+}
+
+function readDraftResponsibles(parsed: DraftData): string[] {
+    if (Array.isArray(parsed.responsibleIds)) return parsed.responsibleIds;
+    if (parsed.assignedToUserId) return [parsed.assignedToUserId as string];
+    return [];
+}
+
+/** Áreas efetivas da rotina carregada (N:N com fallback para a sombra). */
+function currentAreaIds(checklist: ExtendedChecklist): string[] {
+    if (checklist.area_ids?.length) return checklist.area_ids;
+    return checklist.area_id ? [checklist.area_id] : [];
+}
+
+/** Responsáveis efetivos da rotina carregada (N:N com fallback para a sombra). */
+function currentResponsibleIds(checklist: ExtendedChecklist): string[] {
+    if (checklist.responsible_user_ids?.length) return checklist.responsible_user_ids;
+    return checklist.assigned_to_user_id ? [checklist.assigned_to_user_id] : [];
+}
+
 export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = false, initialAreaId, initialTemplate }: ChecklistFormProps) {
     const restaurantId = useRestaurantStore((state) => state.restaurantId);
 
@@ -161,7 +186,8 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     // os turnos". `shift` (enum) é sombra derivada para consumidores legados.
     const [shiftIds, setShiftIds] = useState<string[]>([]);
     const [checklistType, setChecklistType] = useState("regular");
-    const [assignedToUserId, setAssignedToUserId] = useState("");
+    // Sprint 92 — responsáveis específicos (N:N). Vazio = toda a equipe das áreas.
+    const [responsibleIds, setResponsibleIds] = useState<string[]>([]);
     const [isIndividualMode, setIsIndividualMode] = useState(false);
     const [isRequired, setIsRequired] = useState(true);
     const [recurrence, setRecurrence] = useState("daily");
@@ -213,13 +239,16 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     const isSavingRef = useRef(false);
     const isPublishingRef = useRef(false);
 
-    const [areaId, setAreaId] = useState<string>("");
+    // Sprint 92 — áreas da rotina (N:N). Todas com o mesmo peso, sem área principal.
+    const [areaIds, setAreaIds] = useState<string[]>([]);
+    // Confirmação antes de remover uma área que tem responsáveis específicos dela.
+    const [pendingAreaRemoval, setPendingAreaRemoval] = useState<{ areaId: string; areaName: string; affected: { user_id: string; name: string }[] } | null>(null);
     // Draft de rotina nova encontrado em localStorage — aguardando decisão do usuário
     const [pendingDraftRestore, setPendingDraftRestore] = useState<DraftData | null>(null);
 
     // Snapshot do estado original da rotina carregada do banco
     // Usado para: (1) preservar status original no auto-save, (2) comparação de dirty state
-    const originalChecklistRef = useRef<{ status: string; area_id: string | null } | null>(null);
+    const originalChecklistRef = useRef<{ status: string; area_ids: string[] } | null>(null);
 
     const { data: equipeData } = useEquipe(restaurantId || null);
     const { data: areas = [] } = useAllAreas(restaurantId || undefined);
@@ -304,10 +333,20 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
 
     const activeEquipe = equipe.filter(m => m.active);
 
-    // Filtrar colaboradores pela área selecionada (regra de domínio: responsável ∈ área)
-    const filteredEquipe = areaId
-        ? activeEquipe.filter(m => m.areas?.some(a => a.id === areaId))
+    // Sprint 92 — colaboradores elegíveis = UNIÃO dos membros de todas as áreas
+    // selecionadas (regra de domínio: responsável ∈ alguma das áreas).
+    const filteredEquipe = areaIds.length > 0
+        ? activeEquipe.filter(m => m.areas?.some(a => areaIds.includes(a.id)))
         : activeEquipe;
+
+    /** Nome das áreas do colaborador que estão selecionadas — rótulo "Maria · Estoque". */
+    const memberAreaLabel = (userId: string): string => {
+        const m = activeEquipe.find(x => x.user_id === userId);
+        return (m?.areas ?? [])
+            .filter(a => areaIds.includes(a.id))
+            .map(a => a.name)
+            .join(', ');
+    };
 
     // Sprint 66 — turnos de cada colaborador, para segmentar a seleção de
     // responsável pelo turno da rotina.
@@ -374,8 +413,8 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 setDescription(parsed.description ?? "");
                 setShiftIds(parsed.shiftIds ?? (parsed.shiftId ? [parsed.shiftId] : []));
                 setChecklistType(parsed.checklistType ?? "regular");
-                setAssignedToUserId(parsed.assignedToUserId ?? "");
-                setIsIndividualMode(parsed.isIndividualMode ?? !!parsed.assignedToUserId);
+                setResponsibleIds(readDraftResponsibles(parsed));
+                setIsIndividualMode(parsed.isIndividualMode ?? readDraftResponsibles(parsed).length > 0);
                 setIsRequired(parsed.isRequired ?? true);
                 setRecurrence(parsed.recurrence === 'none' ? 'daily' : (parsed.recurrence ?? "daily"));
                 setStartTime(parsed.startTime ?? "");
@@ -384,7 +423,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 setRecurrenceConfig(parsed.recurrenceConfig ?? undefined);
                 setEnforceSequentialOrder(parsed.enforceSequentialOrder ?? false);
                 setAllowEarlyStart(parsed.allowEarlyStart ?? false);
-                setAreaId(parsed.areaId ?? checklist.area_id ?? "");
+                setAreaIds(readDraftAreas(parsed, checklist));
                 setTasks(parsed.tasks ?? []);
                 setSaveState("saved");
                 isFirstLoad.current = false;
@@ -393,8 +432,8 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                     description: parsed.description ?? "",
                     shiftIds: parsed.shiftIds ?? (parsed.shiftId ? [parsed.shiftId] : []),
                     checklistType: parsed.checklistType ?? "regular",
-                    assignedToUserId: parsed.assignedToUserId ?? "",
-                    isIndividualMode: parsed.isIndividualMode ?? !!parsed.assignedToUserId,
+                    responsibleIds: readDraftResponsibles(parsed),
+                    isIndividualMode: parsed.isIndividualMode ?? readDraftResponsibles(parsed).length > 0,
                     isRequired: parsed.isRequired ?? true,
                     recurrence: parsed.recurrence === 'none' ? 'daily' : (parsed.recurrence ?? "daily"),
                     startTime: parsed.startTime ?? "",
@@ -403,13 +442,13 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                     recurrenceConfig: parsed.recurrenceConfig ?? undefined,
                     enforceSequentialOrder: parsed.enforceSequentialOrder ?? false,
                     allowEarlyStart: parsed.allowEarlyStart ?? false,
-                    areaId: parsed.areaId ?? checklist.area_id ?? "",
+                    areaIds: readDraftAreas(parsed, checklist),
                     tasks: parsed.tasks ?? [],
                 };
-                // Sempre capturar status/area_id original do banco (não do draft)
+                // Sempre capturar status/áreas originais do banco (não do draft)
                 originalChecklistRef.current = {
                     status: checklist.status || 'active',
-                    area_id: checklist.area_id || null,
+                    area_ids: currentAreaIds(checklist),
                 };
                 return; // Skip setting from props since we used draft
             }
@@ -418,8 +457,8 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             const loadedDescription = checklist.description || "";
             const loadedShiftIds = checklist.shift_ids ?? (checklist.shift_id ? [checklist.shift_id] : []);
             const loadedChecklistType = checklist.checklist_type || "regular";
-            const loadedAssignedToUserId = checklist.assigned_to_user_id || "";
-            const loadedIsIndividualMode = checklist.assignment_type === 'user' || !!checklist.assigned_to_user_id;
+            const loadedResponsibleIds = currentResponsibleIds(checklist);
+            const loadedIsIndividualMode = checklist.assignment_type === 'user' || loadedResponsibleIds.length > 0;
             const loadedIsRequired = checklist.is_required ?? true;
             const loadedRecurrence = (!checklist.recurrence || (checklist.recurrence as string) === 'none') ? 'daily' : checklist.recurrence;
             // Sprint 8: time window
@@ -432,14 +471,14 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             const loadedRecurrenceConfig = checklist.recurrence_config as RecurrenceConfig | undefined;
             const loadedEnforceSequentialOrder = checklist.enforce_sequential_order ?? false;
             const loadedAllowEarlyStart = checklist.allow_early_start ?? false;
-            const loadedAreaId = checklist.area_id || "";
+            const loadedAreaIds = currentAreaIds(checklist);
             const loadedTasks = (checklist.tasks || []).map((t) => ({ ...t, tempId: t.id }));
 
             setName(loadedName);
             setDescription(loadedDescription);
             setShiftIds(loadedShiftIds);
             setChecklistType(loadedChecklistType);
-            setAssignedToUserId(loadedAssignedToUserId);
+            setResponsibleIds(loadedResponsibleIds);
             setIsIndividualMode(loadedIsIndividualMode);
             setIsRequired(loadedIsRequired);
             setRecurrence(loadedRecurrence);
@@ -449,7 +488,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             setRecurrenceConfig(loadedRecurrenceConfig);
             setEnforceSequentialOrder(loadedEnforceSequentialOrder);
             setAllowEarlyStart(loadedAllowEarlyStart);
-            setAreaId(loadedAreaId);
+            setAreaIds(loadedAreaIds);
             setTasks(loadedTasks);
 
             // FIX: Capturar snapshot IDÊNTICO ao formState que será gerado após o re-render
@@ -459,7 +498,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 description: loadedDescription,
                 shiftIds: loadedShiftIds,
                 checklistType: loadedChecklistType,
-                assignedToUserId: loadedAssignedToUserId,
+                responsibleIds: loadedResponsibleIds,
                 isIndividualMode: loadedIsIndividualMode,
                 isRequired: loadedIsRequired,
                 recurrence: loadedRecurrence,
@@ -469,7 +508,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 recurrenceConfig: loadedRecurrenceConfig,
                 enforceSequentialOrder: loadedEnforceSequentialOrder,
                 allowEarlyStart: loadedAllowEarlyStart,
-                areaId: loadedAreaId,
+                areaIds: loadedAreaIds,
                 tasks: loadedTasks,
             };
             isFirstLoad.current = false;
@@ -477,7 +516,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             // Capturar snapshot original para preservar status e proteger campos críticos
             originalChecklistRef.current = {
                 status: checklist.status || 'active',
-                area_id: checklist.area_id || null,
+                area_ids: loadedAreaIds,
             };
             setSaveState("idle");
         } else if (initialTemplate) {
@@ -487,7 +526,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             setDescription(initialTemplate.description ?? "");
             setShiftIds([]);
             setChecklistType(initialTemplate.suggested_type ?? "regular");
-            setAssignedToUserId("");
+            setResponsibleIds([]);
             setIsIndividualMode(false);
             setIsRequired(true);
             setRecurrence("daily");
@@ -497,7 +536,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             setRecurrenceConfig(undefined);
             setEnforceSequentialOrder(false);
             setAllowEarlyStart(false);
-            setAreaId(initialAreaId ?? "");
+            setAreaIds(initialAreaId ? [initialAreaId] : []);
             setTasks(mapTemplateItemsToTasks(initialTemplate));
             setErrorMsg(null);
             setShowDeleteModal(false);
@@ -510,7 +549,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             setDescription("");
             setShiftIds([]);
             setChecklistType("regular");
-            setAssignedToUserId("");
+            setResponsibleIds([]);
             setIsIndividualMode(false);
             setIsRequired(true);
             setRecurrence("daily");
@@ -520,7 +559,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             setRecurrenceConfig(undefined);
             setEnforceSequentialOrder(false);
             setAllowEarlyStart(false);
-            setAreaId(initialAreaId ?? "");
+            setAreaIds(initialAreaId ? [initialAreaId] : []);
             setTasks([]);
             setErrorMsg(null);
             setShowDeleteModal(false);
@@ -543,8 +582,8 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         const draftDescription = parsed.description ?? "";
         const draftShiftIds = parsed.shiftIds ?? (parsed.shiftId ? [parsed.shiftId] : []);
         const draftChecklistType = parsed.checklistType ?? "regular";
-        const draftAssignedToUserId = parsed.assignedToUserId ?? "";
-        const draftIsIndividualMode = parsed.isIndividualMode ?? !!parsed.assignedToUserId;
+        const draftResponsibleIds = readDraftResponsibles(parsed);
+        const draftIsIndividualMode = parsed.isIndividualMode ?? draftResponsibleIds.length > 0;
         const draftIsRequired = parsed.isRequired ?? true;
         const draftRecurrence = parsed.recurrence === 'none' ? 'daily' : (parsed.recurrence ?? "daily");
         const draftStartTime = parsed.startTime ?? "";
@@ -553,14 +592,14 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         const draftRecurrenceConfig = parsed.recurrenceConfig ?? undefined;
         const draftEnforceSequentialOrder = parsed.enforceSequentialOrder ?? false;
         const draftAllowEarlyStart = parsed.allowEarlyStart ?? false;
-        const draftAreaId = parsed.areaId ?? "";
+        const draftAreaIds = readDraftAreas(parsed, null);
         const draftTasks = parsed.tasks ?? [];
 
         setName(draftName);
         setDescription(draftDescription);
         setShiftIds(draftShiftIds);
         setChecklistType(draftChecklistType);
-        setAssignedToUserId(draftAssignedToUserId);
+        setResponsibleIds(draftResponsibleIds);
         setIsIndividualMode(draftIsIndividualMode);
         setIsRequired(draftIsRequired);
         setRecurrence(draftRecurrence);
@@ -570,19 +609,19 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         setRecurrenceConfig(draftRecurrenceConfig);
         setEnforceSequentialOrder(draftEnforceSequentialOrder);
         setAllowEarlyStart(draftAllowEarlyStart);
-        setAreaId(draftAreaId);
+        setAreaIds(draftAreaIds);
         setTasks(draftTasks);
         setSaveState("saved");
         isFirstLoad.current = false;
         previousStateRef.current = {
             name: draftName, description: draftDescription, shiftIds: draftShiftIds,
-            checklistType: draftChecklistType, assignedToUserId: draftAssignedToUserId,
+            checklistType: draftChecklistType, responsibleIds: draftResponsibleIds,
             isIndividualMode: draftIsIndividualMode, isRequired: draftIsRequired,
             recurrence: draftRecurrence, startTime: draftStartTime, endTime: draftEndTime,
             hasTimeWindow: draftHasTimeWindow, recurrenceConfig: draftRecurrenceConfig,
             enforceSequentialOrder: draftEnforceSequentialOrder,
             allowEarlyStart: draftAllowEarlyStart,
-            areaId: draftAreaId, tasks: draftTasks,
+            areaIds: draftAreaIds, tasks: draftTasks,
         };
         setPendingDraftRestore(null);
     }, [pendingDraftRestore]);
@@ -594,10 +633,10 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
 
     useEffect(() => {
         const formState = {
-            name, description, shiftIds, checklistType, assignedToUserId, isIndividualMode,
+            name, description, shiftIds, checklistType, responsibleIds, isIndividualMode,
             isRequired, recurrence, startTime, endTime, hasTimeWindow,
             recurrenceConfig, enforceSequentialOrder, allowEarlyStart,
-            areaId, tasks
+            areaIds, tasks
         };
 
         // GUARD 1: Primeira execução — apenas capturar snapshot se init não o fez
@@ -655,7 +694,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                         shift,
                         shift_ids: shiftIds,
                         checklist_type: checklistType,
-                        assigned_to_user_id: assignedToUserId || null,
+                        responsible_user_ids: isIndividualMode ? responsibleIds : [],
                         is_required: isRequired,
                         recurrence,
                         start_time: hasTimeWindow && startTime ? startTime : null,
@@ -666,9 +705,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                         recurrence_config: recurrenceConfig ?? null,
                         enforce_sequential_order: enforceSequentialOrder,
                         allow_early_start: allowEarlyStart,
-                        area_id: areaId || null,
+                        area_ids: areaIds,
                         target_role: checklist.target_role || 'all',
-                        assignment_type: (isIndividualMode && assignedToUserId) ? 'user' : (areaId ? 'area' : 'all'),
+                        assignment_type: (isIndividualMode && responsibleIds.length > 0) ? 'user' : 'area',
                         // FIX BUG 1: Preservar status original — auto-save NUNCA deve mudar o status
                         status: originalChecklistRef.current?.status || checklist.status || 'active',
                         skipInvalidation: true,
@@ -710,7 +749,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         }, 1500);
 
         return () => clearTimeout(handler);
-    }, [name, description, shift, shiftIds, checklistType, assignedToUserId, isIndividualMode, isRequired, recurrence, startTime, endTime, hasTimeWindow, recurrenceConfig, enforceSequentialOrder, allowEarlyStart, areaId, tasks, checklist, restaurantId, updateMutation, blockedByBilling, timeWindowInvalid]);
+    }, [name, description, shift, shiftIds, checklistType, responsibleIds, isIndividualMode, isRequired, recurrence, startTime, endTime, hasTimeWindow, recurrenceConfig, enforceSequentialOrder, allowEarlyStart, areaIds, tasks, checklist, restaurantId, updateMutation, blockedByBilling, timeWindowInvalid]);
 
     const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 8 } });
     const keyboardSensor = useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates });
@@ -781,6 +820,41 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         setTasks(tasks.filter((t) => t.tempId !== id));
     };
 
+    /**
+     * Sprint 92 — marca/desmarca uma área.
+     *
+     * Ao REMOVER uma área que tem responsáveis específicos dela e de mais nenhuma
+     * outra área selecionada, pede confirmação antes: tirar a área tira essas
+     * pessoas do escopo da rotina, e isso não pode acontecer em silêncio.
+     */
+    const toggleArea = (id: string, name: string) => {
+        if (!areaIds.includes(id)) {
+            setAreaIds([...areaIds, id]);
+            return;
+        }
+
+        const remaining = areaIds.filter(x => x !== id);
+        const affected = responsibleIds
+            .map(uid => activeEquipe.find(m => m.user_id === uid))
+            .filter((m): m is NonNullable<typeof m> => Boolean(m))
+            .filter(m => !m.areas?.some(a => remaining.includes(a.id)))
+            .map(m => ({ user_id: m.user_id, name: m.name }));
+
+        if (affected.length > 0) {
+            setPendingAreaRemoval({ areaId: id, areaName: name, affected });
+            return;
+        }
+        setAreaIds(remaining);
+    };
+
+    const confirmAreaRemoval = () => {
+        if (!pendingAreaRemoval) return;
+        const removedUserIds = new Set(pendingAreaRemoval.affected.map(a => a.user_id));
+        setAreaIds(areaIds.filter(x => x !== pendingAreaRemoval.areaId));
+        setResponsibleIds(responsibleIds.filter(uid => !removedUserIds.has(uid)));
+        setPendingAreaRemoval(null);
+    };
+
     const handleSave = async () => {
         if (!name.trim() || !restaurantId) return;
 
@@ -789,8 +863,13 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             return;
         }
 
-        if (!areaId) {
-            setErrorMsg('Selecione uma área para a rotina.');
+        if (areaIds.length === 0) {
+            setErrorMsg('Selecione ao menos uma área para a rotina.');
+            return;
+        }
+
+        if (isIndividualMode && responsibleIds.length === 0) {
+            setErrorMsg('Selecione ao menos um responsável ou mude a atribuição para toda a equipe.');
             return;
         }
 
@@ -823,7 +902,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             shift: shift as "morning" | "afternoon" | "evening" | "any",
             shift_ids: shiftIds,
             checklist_type: checklistType as "regular" | "opening" | "closing" | "receiving",
-            assigned_to_user_id: assignedToUserId || null,
+            responsible_user_ids: isIndividualMode ? responsibleIds : [],
             is_required: isRequired,
             recurrence,
             start_time: hasTimeWindow && startTime ? startTime : null,
@@ -832,8 +911,8 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             recurrence_config: recurrenceConfig ?? null,
             enforce_sequential_order: enforceSequentialOrder,
             allow_early_start: allowEarlyStart,
-            area_id: areaId || null,
-            assignment_type: (isIndividualMode && assignedToUserId) ? 'user' : (areaId ? 'area' : 'all'),
+            area_ids: areaIds,
+            assignment_type: (isIndividualMode && responsibleIds.length > 0) ? 'user' : 'area',
             // Em update, preserva status original (active/archived). Em criação, sempre active.
             status: (checklist?.id
                 ? (originalChecklistRef.current?.status || 'active')
@@ -1119,10 +1198,12 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                                     onChange={() => {
                                                         const next = checked ? shiftIds.filter(x => x !== s.id) : [...shiftIds, s.id];
                                                         setShiftIds(next);
-                                                        // Reset responsável se a interseção com os turnos ficar vazia
-                                                        if (assignedToUserId && next.length > 0) {
-                                                            const us = userShiftIdsByUser.get(assignedToUserId) ?? [];
-                                                            if (!next.some(id => us.includes(id))) setAssignedToUserId("");
+                                                        // Remove responsáveis cuja interseção com os turnos ficou vazia
+                                                        if (responsibleIds.length > 0 && next.length > 0) {
+                                                            setResponsibleIds(responsibleIds.filter((uid) => {
+                                                                const us = userShiftIdsByUser.get(uid) ?? [];
+                                                                return next.some(id => us.includes(id));
+                                                            }));
                                                         }
                                                     }}
                                                     className="w-4 h-4 accent-[#13b6ec]"
@@ -1181,30 +1262,39 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                             <div>
                                 <label className="block text-xs font-bold text-[#92bbc9] uppercase tracking-wider mb-2">
-                                    Área <span className="text-red-400">*</span>
+                                    Áreas <span className="text-red-400">*</span>
                                 </label>
-                                <select
-                                    value={areaId}
-                                    onChange={(e) => {
-                                        const newAreaId = e.target.value;
-                                        setAreaId(newAreaId);
-                                        // Reset responsável se não pertence à nova área
-                                        if (assignedToUserId && newAreaId) {
-                                            const userBelongsToArea = activeEquipe.some(
-                                                m => m.user_id === assignedToUserId && m.areas?.some(a => a.id === newAreaId)
+                                {areas.length === 0 ? (
+                                    <p className="text-amber-400 text-xs">
+                                        Nenhuma área cadastrada. Cadastre em Configurações &gt; Áreas.
+                                    </p>
+                                ) : (
+                                    <div className="bg-[#16262c] border border-[#233f48] rounded-xl p-3 space-y-1.5 max-h-48 overflow-y-auto">
+                                        {areas.map(a => {
+                                            const checked = areaIds.includes(a.id);
+                                            return (
+                                                <label key={a.id} className="flex items-center gap-2.5 cursor-pointer text-sm text-white py-1">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={checked}
+                                                        onChange={() => toggleArea(a.id, a.name)}
+                                                        className="w-4 h-4 accent-[#13b6ec]"
+                                                    />
+                                                    <span>{a.name}</span>
+                                                </label>
                                             );
-                                            if (!userBelongsToArea) {
-                                                setAssignedToUserId("");
-                                            }
-                                        }
-                                    }}
-                                    className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
-                                    disabled={areas.length === 0}
-                                >
-                                    <option value="">{areas.length === 0 ? "Nenhuma área cadastrada" : "Qualquer área"}</option>
-                                    {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                                </select>
-                                {!checklist && initialAreaId && areaId === initialAreaId && (
+                                        })}
+                                    </div>
+                                )}
+                                {areaIds.length === 0 && areas.length > 0 && (
+                                    <p className="mt-1.5 text-xs text-amber-400">Selecione ao menos uma área.</p>
+                                )}
+                                {areaIds.length > 1 && (
+                                    <p className="mt-1.5 text-[11px] text-[#92bbc9]">
+                                        Qualquer colaborador dessas {areaIds.length} áreas poderá executar esta rotina.
+                                    </p>
+                                )}
+                                {!checklist && initialAreaId && areaIds.length === 1 && areaIds[0] === initialAreaId && (
                                     <p className="mt-1 text-[10px] text-[#5a8a9a]">Área pré-selecionada com base no filtro atual</p>
                                 )}
                             </div>
@@ -1228,7 +1318,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                             <div className="grid grid-cols-2 gap-2 mb-3">
                                 <button
                                     type="button"
-                                    onClick={() => { setIsIndividualMode(false); setAssignedToUserId(""); }}
+                                    onClick={() => { setIsIndividualMode(false); setResponsibleIds([]); }}
                                     className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${
                                         !isIndividualMode
                                             ? 'bg-[#13b6ec]/10 border-[#13b6ec]/40 text-[#13b6ec]'
@@ -1248,76 +1338,80 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                     }`}
                                 >
                                     <span className="material-symbols-outlined text-[18px]">person</span>
-                                    Colaborador específico
+                                    Colaboradores específicos
                                 </button>
                             </div>
 
                             {isIndividualMode ? (
                                 <div>
-                                    <select
-                                        value={assignedToUserId}
-                                        onChange={(e) => setAssignedToUserId(e.target.value)}
-                                        className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
-                                    >
-                                        <option value="">Selecionar colaborador...</option>
-                                        {/* Sem turno específico: lista simples (todos compatíveis) */}
-                                        {shiftIds.length === 0 && filteredEquipe.map(m => {
-                                            const tn = memberShiftNames(m.user_id);
-                                            return (
-                                                <option key={m.user_id} value={m.user_id}>
-                                                    {m.name}{tn.length > 0 ? ` — Turnos: ${tn.join(', ')}` : ''}
-                                                </option>
-                                            );
-                                        })}
-                                        {/* Turnos específicos: separa compatíveis (interseção) de incompatíveis */}
-                                        {shiftIds.length > 0 && compatibleMembers.length > 0 && (
-                                            <optgroup label="Compatíveis">
-                                                {compatibleMembers.map(m => (
-                                                    <option key={m.user_id} value={m.user_id}>
-                                                        {m.name} — Turnos: {memberShiftNames(m.user_id).join(', ')}
-                                                    </option>
-                                                ))}
-                                            </optgroup>
-                                        )}
-                                        {shiftIds.length > 0 && incompatibleMembers.length > 0 && (
-                                            <optgroup label="Incompatíveis — não pertencem aos turnos">
-                                                {incompatibleMembers.map(m => {
-                                                    const tn = memberShiftNames(m.user_id);
-                                                    return (
-                                                        <option key={m.user_id} value={m.user_id} disabled>
+                                    {/* s92 — seleção múltipla: união dos membros de TODAS as áreas
+                                        marcadas, cada um rotulado com a(s) sua(s) área(s). */}
+                                    {filteredEquipe.length > 0 && (
+                                        <div className="bg-[#16262c] border border-[#233f48] rounded-xl p-3 space-y-1.5 max-h-56 overflow-y-auto">
+                                            {compatibleMembers.map(m => {
+                                                const checked = responsibleIds.includes(m.user_id);
+                                                const tn = memberShiftNames(m.user_id);
+                                                return (
+                                                    <label key={m.user_id} className="flex items-center gap-2.5 cursor-pointer text-sm text-white py-1">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={checked}
+                                                            onChange={() => setResponsibleIds(checked
+                                                                ? responsibleIds.filter(id => id !== m.user_id)
+                                                                : [...responsibleIds, m.user_id])}
+                                                            className="w-4 h-4 accent-[#13b6ec] shrink-0"
+                                                        />
+                                                        <span className="truncate">
+                                                            {m.name}
+                                                            <span className="text-[#92bbc9]"> · {memberAreaLabel(m.user_id) || 'Sem área'}</span>
+                                                            {tn.length > 0 && <span className="text-[#5a8a9a] text-xs"> — {tn.join(', ')}</span>}
+                                                        </span>
+                                                    </label>
+                                                );
+                                            })}
+                                            {incompatibleMembers.map(m => {
+                                                const tn = memberShiftNames(m.user_id);
+                                                return (
+                                                    <label key={m.user_id} className="flex items-center gap-2.5 text-sm text-[#5a8a9a] py-1 cursor-not-allowed">
+                                                        <input type="checkbox" checked={false} disabled className="w-4 h-4 shrink-0" />
+                                                        <span className="truncate">
                                                             🔒 {m.name} — {tn.length > 0 ? `Turnos: ${tn.join(', ')}` : 'Sem turno vinculado'}
-                                                        </option>
-                                                    );
-                                                })}
-                                            </optgroup>
-                                        )}
-                                    </select>
-                                    {/* Aviso: turnos específicos + existem incompatíveis na área */}
+                                                        </span>
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                    {/* Aviso: turnos específicos + existem incompatíveis nas áreas */}
                                     {shiftIds.length > 0 && incompatibleMembers.length > 0 && (
                                         <p className="text-xs text-amber-400 mt-1.5 flex items-start gap-1">
                                             <span className="material-symbols-outlined text-[14px] shrink-0">lock</span>
-                                            {incompatibleMembers.length} colaborador{incompatibleMembers.length > 1 ? 'es' : ''} da área não pertence{incompatibleMembers.length > 1 ? 'm' : ''} aos turnos selecionados ({selectedShiftLabel}) e não pode{incompatibleMembers.length > 1 ? 'm' : ''} ser atribuído{incompatibleMembers.length > 1 ? 's' : ''}.
+                                            {incompatibleMembers.length} colaborador{incompatibleMembers.length > 1 ? 'es' : ''} não pertence{incompatibleMembers.length > 1 ? 'm' : ''} aos turnos selecionados ({selectedShiftLabel}) e não pode{incompatibleMembers.length > 1 ? 'm' : ''} ser atribuído{incompatibleMembers.length > 1 ? 's' : ''}.
                                         </p>
                                     )}
-                                    {!assignedToUserId && (
-                                        <p className="text-xs text-amber-400 mt-1.5">Selecione um colaborador para continuar.</p>
+                                    {responsibleIds.length === 0 && (
+                                        <p className="text-xs text-amber-400 mt-1.5">Selecione ao menos um colaborador para continuar.</p>
                                     )}
-                                    {assignedToUserId && (
-                                        <p className="text-xs text-[#92bbc9] mt-1.5">Apenas este colaborador verá esta rotina no turno.</p>
-                                    )}
-                                    {areaId && filteredEquipe.length === 0 && (
-                                        <p className="text-xs text-amber-400 mt-1.5">
-                                            Nenhum colaborador vinculado a esta área. Adicione colaboradores na tela de Equipe.
+                                    {responsibleIds.length > 0 && (
+                                        <p className="text-xs text-[#92bbc9] mt-1.5">
+                                            Apenas {responsibleIds.length === 1 ? 'este colaborador verá' : `estes ${responsibleIds.length} colaboradores verão`} esta rotina no turno.
                                         </p>
                                     )}
-                                    {areaId && shiftIds.length > 0 && filteredEquipe.length > 0 && compatibleMembers.length === 0 && (
+                                    {areaIds.length > 0 && filteredEquipe.length === 0 && (
                                         <p className="text-xs text-amber-400 mt-1.5">
-                                            Nenhum colaborador da área pertence aos turnos selecionados ({selectedShiftLabel}). Vincule colaboradores a esses turnos na tela de Equipe.
+                                            Nenhum colaborador vinculado {areaIds.length > 1 ? 'às áreas selecionadas' : 'a esta área'}. Adicione colaboradores na tela de Equipe.
+                                        </p>
+                                    )}
+                                    {areaIds.length > 0 && shiftIds.length > 0 && filteredEquipe.length > 0 && compatibleMembers.length === 0 && (
+                                        <p className="text-xs text-amber-400 mt-1.5">
+                                            Nenhum colaborador {areaIds.length > 1 ? 'das áreas selecionadas' : 'da área'} pertence aos turnos selecionados ({selectedShiftLabel}). Vincule colaboradores a esses turnos na tela de Equipe.
                                         </p>
                                     )}
                                 </div>
                             ) : (
-                                <p className="text-xs text-[#92bbc9]">Todos os colaboradores da área terão acesso a esta rotina.</p>
+                                <p className="text-xs text-[#92bbc9]">
+                                    Todos os colaboradores {areaIds.length > 1 ? 'das áreas selecionadas' : 'da área'} terão acesso a esta rotina.
+                                </p>
                             )}
                         </div>
 
@@ -1705,6 +1799,46 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                 className="px-4 py-2 rounded-lg font-bold text-sm bg-red-500/10 text-red-500 border border-red-500/30 hover:bg-red-500 hover:text-white transition-colors disabled:opacity-50"
                             >
                                 {deleteMutation.isPending ? "Arquivando..." : "Confirmar Arquivamento"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Sprint 92 — remover uma área tira do escopo os responsáveis que só
+                pertenciam a ela. Confirmação explícita antes de aplicar. */}
+            {pendingAreaRemoval && (
+                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+                    <div className="bg-[#16262c] border border-[#233f48] rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-fade-in">
+                        <div className="flex items-center gap-3 mb-2 text-white">
+                            <span className="material-symbols-outlined text-amber-400">group_remove</span>
+                            <h3 className="text-xl font-bold tracking-tight">Remover {pendingAreaRemoval.areaName}?</h3>
+                        </div>
+                        <p className="text-[#92bbc9] text-sm mb-4 mt-2 leading-relaxed">
+                            {pendingAreaRemoval.affected.length === 1
+                                ? 'Este responsável não pertence a nenhuma outra área selecionada e será removido da rotina:'
+                                : 'Estes responsáveis não pertencem a nenhuma outra área selecionada e serão removidos da rotina:'}
+                        </p>
+                        <ul className="mb-6 space-y-1">
+                            {pendingAreaRemoval.affected.map((a) => (
+                                <li key={a.user_id} className="text-sm text-white flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-[16px] text-[#5a8a9a]">person</span>
+                                    {a.name}
+                                </li>
+                            ))}
+                        </ul>
+                        <div className="flex gap-3 justify-end mt-4">
+                            <button
+                                onClick={() => setPendingAreaRemoval(null)}
+                                className="px-4 py-2 rounded-lg font-bold text-sm text-[#92bbc9] hover:bg-[#1a2c32] hover:text-white transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={confirmAreaRemoval}
+                                className="px-4 py-2 rounded-lg font-bold text-sm bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500 hover:text-white transition-colors"
+                            >
+                                Remover mesmo assim
                             </button>
                         </div>
                     </div>

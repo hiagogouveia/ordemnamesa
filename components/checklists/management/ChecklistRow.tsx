@@ -12,6 +12,7 @@ import { UnitBadge } from "@/components/ui/unit-badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { IssueBadge } from "@/components/checklists/issues/IssueBadge";
 import { ChecklistTypeBadge } from "@/components/checklists/management/ChecklistTypeBadge";
+import { displayAreas, areasLabel, responsibleLabel, responsiblesTitle } from "@/lib/utils/checklist-labels";
 
 
 const EXECUTION_STATUS_CONFIG: Record<ExecutionStatus, { label: string; className: string }> = {
@@ -74,6 +75,9 @@ export function ChecklistRow({
     onCheckChange,
     openIssuesCount = 0,
 }: ChecklistRowProps) {
+    // s92 — áreas e responsáveis são N:N; as sombras `area`/`responsible` não bastam.
+    const areas = displayAreas(checklist);
+    const responsible = responsibleLabel(checklist);
     const [menuOpen, setMenuOpen] = useState(false);
     const buttonRef = useRef<HTMLButtonElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -161,13 +165,21 @@ export function ChecklistRow({
 
             {/* Área */}
             <td className="px-3 py-3" onClick={onSelect}>
-                {checklist.area ? (
-                    <span className="flex items-center gap-1.5">
-                        <span
-                            className="w-2 h-2 rounded-full shrink-0"
-                            style={{ backgroundColor: checklist.area.color || "#325a67" }}
-                        />
-                        <span className="text-[#92bbc9] text-sm">{checklist.area.name}</span>
+                {/* s92 — a rotina pode ter várias áreas: mostra até 2 e resume o resto. */}
+                {areas.length > 0 ? (
+                    <span className="flex items-center gap-1.5 flex-wrap" title={areasLabel(checklist)}>
+                        {areas.slice(0, 2).map((a) => (
+                            <span key={a.id} className="flex items-center gap-1.5">
+                                <span
+                                    className="w-2 h-2 rounded-full shrink-0"
+                                    style={{ backgroundColor: a.color || "#325a67" }}
+                                />
+                                <span className="text-[#92bbc9] text-sm">{a.name}</span>
+                            </span>
+                        ))}
+                        {areas.length > 2 && (
+                            <span className="text-[#5a8a99] text-xs">+{areas.length - 2}</span>
+                        )}
                     </span>
                 ) : (
                     <span className="flex items-center gap-1.5 text-orange-400">
@@ -185,13 +197,15 @@ export function ChecklistRow({
                         <span className="text-[#5a8a99] text-xs shrink-0">{execStatus === "done" ? "Concluída:" : "Em execução:"}</span>
                         <span className="text-white text-sm font-medium truncate">{checklist.assumed_by_name}</span>
                     </span>
-                ) : checklist.responsible?.name ? (
-                    <span className="flex items-center gap-1.5" title="Colaborador atribuído à rotina">
+                ) : responsible ? (
+                    <span className="flex items-center gap-1.5" title={responsiblesTitle(checklist) || "Colaborador atribuído à rotina"}>
                         <span className="material-symbols-outlined text-[14px] text-[#5a8a99] shrink-0">person</span>
-                        <span className="text-[#92bbc9] text-sm truncate">{checklist.responsible.name}</span>
+                        <span className="text-[#92bbc9] text-sm truncate">{responsible}</span>
                     </span>
                 ) : (
-                    <span className="text-[#325a67] text-sm italic">Distribuído para toda a área</span>
+                    <span className="text-[#325a67] text-sm italic">
+                        {areas.length > 1 ? "Distribuído para todas as áreas" : "Distribuído para toda a área"}
+                    </span>
                 )}
             </td>
 

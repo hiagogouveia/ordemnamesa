@@ -17,6 +17,7 @@ import { IssueList } from "@/components/checklists/issues/IssueList";
 import { IssueDetail } from "@/components/checklists/issues/IssueDetail";
 import { useRestaurantStore } from "@/lib/store/restaurant-store";
 import type { TaskIssue } from "@/lib/types";
+import { displayAreas, areasLabel, displayResponsibles } from "@/lib/utils/checklist-labels";
 
 
 const TYPE_LABELS: Record<string, string> = {
@@ -355,15 +356,16 @@ function ChecklistViewPanel({
                 <div className="flex-1 min-w-0 pr-3">
                     <h2 className="text-white font-bold text-base leading-snug">{checklist.name}</h2>
                     <div className="flex items-center flex-wrap gap-2 mt-1.5">
-                        {checklist.area && (
-                            <span className="flex items-center gap-1">
+                        {/* s92 — uma rotina pode ter várias áreas. */}
+                        {displayAreas(checklist).map((a) => (
+                            <span key={a.id} className="flex items-center gap-1">
                                 <span
                                     className="w-2 h-2 rounded-full"
-                                    style={{ backgroundColor: checklist.area.color || "#325a67" }}
+                                    style={{ backgroundColor: a.color || "#325a67" }}
                                 />
-                                <span className="text-[#92bbc9] text-xs">{checklist.area.name}</span>
+                                <span className="text-[#92bbc9] text-xs">{a.name}</span>
                             </span>
-                        )}
+                        ))}
                         <span
                             className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                                 checklist.active
@@ -579,23 +581,31 @@ function ChecklistViewPanel({
                                 {TYPE_LABELS[checklist.checklist_type ?? "regular"] ?? "—"}
                             </span>
                         </div>
-                        {checklist.area && (
-                            <div className="flex items-center justify-between">
-                                <span className="text-[#92bbc9] text-sm">Área</span>
-                                <span className="flex items-center gap-1.5 text-white text-sm font-medium">
-                                    <span
-                                        className="w-2 h-2 rounded-full shrink-0"
-                                        style={{ backgroundColor: checklist.area.color || "#325a67" }}
-                                    />
-                                    {checklist.area.name}
+                        {displayAreas(checklist).length > 0 && (
+                            <div className="flex items-start justify-between gap-3">
+                                <span className="text-[#92bbc9] text-sm shrink-0">
+                                    {displayAreas(checklist).length > 1 ? "Áreas" : "Área"}
+                                </span>
+                                <span className="flex items-center justify-end gap-x-2 gap-y-1 flex-wrap text-white text-sm font-medium" title={areasLabel(checklist)}>
+                                    {displayAreas(checklist).map((a) => (
+                                        <span key={a.id} className="flex items-center gap-1.5">
+                                            <span
+                                                className="w-2 h-2 rounded-full shrink-0"
+                                                style={{ backgroundColor: a.color || "#325a67" }}
+                                            />
+                                            {a.name}
+                                        </span>
+                                    ))}
                                 </span>
                             </div>
                         )}
-                        {checklist.responsible?.name && (
-                            <div className="flex items-center justify-between">
-                                <span className="text-[#92bbc9] text-sm">Responsável</span>
-                                <span className="text-white text-sm font-medium">
-                                    {checklist.responsible.name}
+                        {displayResponsibles(checklist).length > 0 && (
+                            <div className="flex items-start justify-between gap-3">
+                                <span className="text-[#92bbc9] text-sm shrink-0">
+                                    {displayResponsibles(checklist).length > 1 ? "Responsáveis" : "Responsável"}
+                                </span>
+                                <span className="text-white text-sm font-medium text-right">
+                                    {displayResponsibles(checklist).map((r) => r.name).join(", ")}
                                 </span>
                             </div>
                         )}

@@ -10,6 +10,7 @@ import {
     type ReplicationResultRow,
 } from "@/lib/hooks/use-checklists";
 import type { ExtendedChecklist } from "@/components/checklists/checklist-card";
+import { displayAreas } from "@/lib/utils/checklist-labels";
 
 interface CopyChecklistModalProps {
     isOpen: boolean;
@@ -81,16 +82,21 @@ export function CopyChecklistModal({
         const areaMap: Record<string, { name: string; count: number }> = {};
         let noAreaCount = 0;
 
+        // s92: a rotina pode ter várias áreas — todas serão mapeadas por nome na
+        // unidade destino (criadas se não existirem), então todas entram na prévia.
         for (const c of selectedChecklists) {
-            if (!c.area?.name) {
+            const areasOfChecklist = displayAreas(c);
+            if (areasOfChecklist.length === 0) {
                 noAreaCount++;
                 continue;
             }
-            const key = c.area.name.toLowerCase();
-            if (!areaMap[key]) {
-                areaMap[key] = { name: c.area.name, count: 0 };
+            for (const a of areasOfChecklist) {
+                const key = a.name.toLowerCase();
+                if (!areaMap[key]) {
+                    areaMap[key] = { name: a.name, count: 0 };
+                }
+                areaMap[key].count++;
             }
-            areaMap[key].count++;
         }
 
         const areas = Object.entries(areaMap).map(([key, { name, count }]) => ({
