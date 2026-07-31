@@ -364,6 +364,10 @@ function ChecklistsContent() {
     const canSelect = isManagerOrOwner;
     // Copiar entre unidades só faz sentido (e só é permitido) na visão global.
     const canBulkAction = isGlobal && isManagerOrOwner;
+    // A BulkActionBar é `fixed` e cobre o rodapé: o container que rola precisa
+    // reservar a altura dela. Um único booleano garante que a condição de exibir
+    // e a de reservar espaço nunca divirjam.
+    const bulkBarVisible = canSelect && selectedIds.size > 0;
 
     const selectedChecklists = useMemo(
         () => filtered.filter((c) => selectedIds.has(c.id)),
@@ -567,7 +571,7 @@ function ChecklistsContent() {
 
     if (userRole === "staff") {
         return (
-            <div className="flex flex-col items-center justify-center h-[calc(100vh-72px)] bg-[#0a1215] text-[#92bbc9] p-6 text-center">
+            <div className="flex flex-col items-center justify-center h-full bg-[#0a1215] text-[#92bbc9] p-6 text-center">
                 <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-4">
                     <span className="material-symbols-outlined text-4xl text-red-500">lock</span>
                 </div>
@@ -816,7 +820,7 @@ function ChecklistsContent() {
     // ─── MAIN RENDER ────────────────────────────────────────────────────────────
 
     return (
-        <div className="flex flex-col h-[calc(100vh-72px)] overflow-hidden bg-[#0a1215]">
+        <div className="flex flex-col h-full overflow-hidden bg-[#0a1215]">
             {/* Sprint 75 — toast transitório de exclusão (sucesso/erro) */}
             {deleteToast && (
                 <div
@@ -909,7 +913,7 @@ function ChecklistsContent() {
                         showSidePanel ? "hidden md:flex md:flex-col md:min-w-0 md:flex-1" : "flex-1"
                     } overflow-auto p-4`}
                     style={
-                        canBulkAction && selectedIds.size > 0
+                        bulkBarVisible
                             ? { paddingBottom: "calc(var(--bulk-action-bar-h, 0px) + 1rem)" }
                             : undefined
                     }
@@ -1024,7 +1028,7 @@ function ChecklistsContent() {
             )}
 
             {/* Ações em massa: exportar PDF (qualquer visão) + copiar (só global) */}
-            {canSelect && selectedIds.size > 0 && (
+            {bulkBarVisible && (
                 <BulkActionBar
                     selectedCount={selectedIds.size}
                     onExportPdf={handleExportPdf}
