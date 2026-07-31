@@ -314,7 +314,7 @@ export function TeamDrawer({ isOpen, onClose, member, onUpdated, onRequestDelete
                                     onClick={onRequestDelete}
                                     className="shrink-0 flex items-center gap-1.5 text-xs font-semibold text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-500/60 rounded-lg px-3 py-2 transition-colors"
                                 >
-                                    <span className="material-symbols-outlined text-[16px]">person_remove</span>
+                                    <span className="material-symbols-outlined text-[16px]">delete</span>
                                     Excluir
                                 </button>
                             </div>

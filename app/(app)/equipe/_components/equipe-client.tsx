@@ -561,7 +561,7 @@ export function EquipeClient({ restaurantId, accountId = null, isGlobal = false,
                                                                     {/* divisor: separa a zona destrutiva do resto */}
                                                                     <span className="w-px h-4 bg-[#233f48] mx-0.5" aria-hidden />
                                                                     <button onClick={(e) => { e.stopPropagation(); openDeleteModal(member); }} className="p-1.5 text-[#92bbc9] hover:text-red-500 hover:bg-red-500/10 rounded-md transition-colors" title="Excluir permanentemente">
-                                                                        <span className="material-symbols-outlined text-[20px]">person_remove</span>
+                                                                        <span className="material-symbols-outlined text-[20px]">delete</span>
                                                                     </button>
                                                                 </>
                                                             )}
