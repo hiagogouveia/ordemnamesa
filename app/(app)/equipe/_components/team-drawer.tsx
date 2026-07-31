@@ -26,9 +26,15 @@ interface TeamEditModalProps {
         active: boolean;
     } | null;
     onUpdated: (id: string, updates: { name?: string; role?: string; active?: boolean }) => void;
+    /**
+     * Abre o modal de exclusão permanente. Quem controla o estado do modal é o
+     * equipe-client — aqui só disparamos o pedido, para não empilhar overlays.
+     * `undefined` esconde a zona de perigo (sem permissão para este membro).
+     */
+    onRequestDelete?: () => void;
 }
 
-export function TeamDrawer({ isOpen, onClose, member, onUpdated }: TeamEditModalProps) {
+export function TeamDrawer({ isOpen, onClose, member, onUpdated, onRequestDelete }: TeamEditModalProps) {
     const restaurantId = useRestaurantStore((state) => state.restaurantId);
 
     const { data: allAreas = [] } = useAllAreas(restaurantId || undefined);
@@ -293,6 +299,26 @@ export function TeamDrawer({ isOpen, onClose, member, onUpdated }: TeamEditModal
                                 )}
                             </div>
                         </div>
+
+                        {/* Zona de perigo */}
+                        {onRequestDelete && (
+                            <div className="border border-red-500/20 bg-red-500/5 rounded-lg p-3 flex items-center justify-between gap-3">
+                                <div>
+                                    <p className="text-sm font-medium text-white">Excluir colaborador</p>
+                                    <p className="text-xs text-[#92bbc9] mt-0.5">
+                                        Remove o cadastro permanentemente. Só é possível se não houver histórico.
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={onRequestDelete}
+                                    className="shrink-0 flex items-center gap-1.5 text-xs font-semibold text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-500/60 rounded-lg px-3 py-2 transition-colors"
+                                >
+                                    <span className="material-symbols-outlined text-[16px]">person_remove</span>
+                                    Excluir
+                                </button>
+                            </div>
+                        )}
 
                     </div>
 

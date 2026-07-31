@@ -1,16 +1,19 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useEquipe, useUpdateEquipeMember, EquipeData } from '@/lib/hooks/use-equipe';
 import { useAllAreas } from '@/lib/hooks/use-areas';
 import { useShifts } from '@/lib/hooks/use-shifts';
 import { TeamDrawer } from './team-drawer';
 import { ChangePasswordModal } from './change-password-modal';
+import { DeleteMemberModal } from './delete-member-modal';
 import { Avatar } from '@/components/ui/avatar';
 import { useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { useBilling } from '@/lib/hooks/use-billing';
+import { useAuthUser } from '@/lib/hooks/use-auth-user';
+import type { DeleteMemberResponse } from '@/lib/types/equipe-deletion';
 
 // ─── Skeleton ────────────────────────────────────────────────────────────────
 
@@ -95,6 +98,25 @@ export function EquipeClient({ restaurantId, accountId = null, isGlobal = false,
     const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
     const [passwordTargetMember, setPasswordTargetMember] = useState<{ user_id: string; name: string } | null>(null);
 
+    // Modal Excluir Colaborador (sprint 95)
+    const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+    const [deleteTargetMember, setDeleteTargetMember] = useState<{
+        id: string;
+        user_id: string;
+        name: string;
+        email: string;
+    } | null>(null);
+
+    // Toast (mesmo padrão da tela de checklists — o projeto não tem lib de toast)
+    const [toast, setToast] = useState<{ kind: 'success' | 'warning' | 'error'; message: string } | null>(null);
+    useEffect(() => {
+        if (!toast) return;
+        const t = setTimeout(() => setToast(null), 4000);
+        return () => clearTimeout(t);
+    }, [toast]);
+
+    const { data: authUser } = useAuthUser();
+
     const { data: equipeData, isLoading, error } = useEquipe(
         isGlobal
             ? { restaurantId: null, accountId, mode: 'global' }
@@ -164,18 +186,60 @@ export function EquipeClient({ restaurantId, accountId = null, isGlobal = false,
         setSelectedMember(prev => prev && prev.id === id ? { ...prev, ...updates } : prev);
     };
 
-    const handleDeactivate = async (id: string, name: string) => {
-        if (confirm(`Tem certeza que deseja desativar o acesso de ${name}?`)) {
-            setLoadingAction(id);
-            try {
-                await updateMember.mutateAsync({ id, active: false });
-            } catch (err: unknown) {
-                alert((err as Error).message || 'Erro ao desativar membro');
-            } finally {
-                setLoadingAction(null);
-            }
+    const deactivateMember = async (id: string, name: string) => {
+        setLoadingAction(id);
+        try {
+            await updateMember.mutateAsync({ id, active: false });
+            setToast({ kind: 'success', message: `Acesso de ${name} desativado.` });
+        } catch (err: unknown) {
+            setToast({ kind: 'error', message: (err as Error).message || 'Erro ao desativar membro' });
+        } finally {
+            setLoadingAction(null);
         }
     };
+
+    const handleDeactivate = async (id: string, name: string) => {
+        if (confirm(`Tem certeza que deseja desativar o acesso de ${name}?`)) {
+            await deactivateMember(id, name);
+        }
+    };
+
+    const openDeleteModal = (member: typeof equipe[number]) => {
+        setDeleteTargetMember({
+            id: member.id,
+            user_id: member.user_id,
+            name: member.name,
+            email: member.email,
+        });
+        setIsDeleteOpen(true);
+    };
+
+    const handleMemberDeleted = (result: DeleteMemberResponse) => {
+        const name = result.target.name ?? 'Colaborador';
+        if (result.auth_cleanup_pending) {
+            setToast({
+                kind: 'warning',
+                message: `${name} foi excluído. A limpeza do login ficou pendente — o suporte finalizará.`,
+            });
+        } else if (result.identity_deleted) {
+            setToast({ kind: 'success', message: `${name} foi excluído permanentemente.` });
+        } else {
+            setToast({
+                kind: 'success',
+                message: `${name} foi removido desta unidade. O cadastro foi mantido.`,
+            });
+        }
+    };
+
+    /**
+     * Quem pode ver a ação de excluir. A API revalida tudo isto no banco — aqui é só
+     * para não oferecer um caminho que vai falhar.
+     */
+    const canDeleteMember = (member: { user_id: string; role: string }) =>
+        !isGlobal
+        && member.role !== 'owner'
+        && member.user_id !== authUser?.id
+        && (userRole === 'owner' || member.role === 'staff');
 
     const getToken = async () => {
         const { data: { session } } = await createClient().auth.getSession();
@@ -492,6 +556,15 @@ export function EquipeClient({ restaurantId, accountId = null, isGlobal = false,
                                                                     <span className="material-symbols-outlined text-[20px]">{loadingAction === member.id ? 'hourglass_empty' : 'block'}</span>
                                                                 </button>
                                                             )}
+                                                            {canDeleteMember(member) && (
+                                                                <>
+                                                                    {/* divisor: separa a zona destrutiva do resto */}
+                                                                    <span className="w-px h-4 bg-[#233f48] mx-0.5" aria-hidden />
+                                                                    <button onClick={(e) => { e.stopPropagation(); openDeleteModal(member); }} className="p-1.5 text-[#92bbc9] hover:text-red-500 hover:bg-red-500/10 rounded-md transition-colors" title="Excluir permanentemente">
+                                                                        <span className="material-symbols-outlined text-[20px]">person_remove</span>
+                                                                    </button>
+                                                                </>
+                                                            )}
                                                         </>
                                                     )}
                                                 </div>
@@ -611,6 +684,21 @@ export function EquipeClient({ restaurantId, accountId = null, isGlobal = false,
                 onClose={() => setIsDrawerOpen(false)}
                 member={selectedMember}
                 onUpdated={handleMemberUpdated}
+                onRequestDelete={
+                    selectedMember && canDeleteMember(selectedMember)
+                        ? () => {
+                            // fecha o drawer antes de abrir o modal: sem empilhar overlays
+                            setIsDrawerOpen(false);
+                            setDeleteTargetMember({
+                                id: selectedMember.id,
+                                user_id: selectedMember.user_id,
+                                name: selectedMember.name,
+                                email: selectedMember.email,
+                            });
+                            setIsDeleteOpen(true);
+                        }
+                        : undefined
+                }
             />
 
             {/* Modal Alterar Senha (apenas owner) */}
@@ -620,6 +708,46 @@ export function EquipeClient({ restaurantId, accountId = null, isGlobal = false,
                 member={passwordTargetMember}
                 restaurantId={restaurantId ?? ''}
             />
+
+            {/* Modal Excluir Colaborador */}
+            <DeleteMemberModal
+                isOpen={isDeleteOpen}
+                onClose={() => { setIsDeleteOpen(false); setDeleteTargetMember(null); }}
+                member={deleteTargetMember}
+                restaurantId={restaurantId}
+                accountId={accountId}
+                onDeactivate={() => {
+                    if (deleteTargetMember) {
+                        deactivateMember(deleteTargetMember.id, deleteTargetMember.name);
+                    }
+                }}
+                onDeleted={handleMemberDeleted}
+            />
+
+            {/* Toast */}
+            {toast && (
+                <div
+                    role="status"
+                    aria-live="polite"
+                    className={`fixed top-3 left-1/2 -translate-x-1/2 z-[70] flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium shadow-lg ${
+                        toast.kind === 'success' ? 'bg-emerald-500 text-[#04221a]'
+                            : toast.kind === 'warning' ? 'bg-amber-400 text-[#221a04]'
+                                : 'bg-red-500 text-white'
+                    }`}
+                >
+                    <span className="material-symbols-outlined text-[18px]">
+                        {toast.kind === 'success' ? 'check_circle' : toast.kind === 'warning' ? 'warning' : 'error'}
+                    </span>
+                    {toast.message}
+                    <button
+                        onClick={() => setToast(null)}
+                        className="ml-1 opacity-70 hover:opacity-100"
+                        aria-label="Fechar aviso"
+                    >
+                        ×
+                    </button>
+                </div>
+            )}
         </div>
     );
 }

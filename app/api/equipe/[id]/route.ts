@@ -3,6 +3,13 @@ import { createClient } from '@supabase/supabase-js';
 import { getAccountIdForRestaurant } from '@/lib/supabase/accounts';
 import { canAddManager, canAddStaff } from '@/lib/billing/plan-limits';
 import { buildAccessDeniedResponse } from '@/lib/billing/errors';
+import { rejectIfGlobal } from '@/lib/api/global-scope';
+import {
+    isDeleteMemberRpcResult,
+    DELETE_MEMBER_ERROR_STATUS,
+    type DeleteMemberErrorCode,
+    type DeleteMemberResponse,
+} from '@/lib/types/equipe-deletion';
 
 const getAdminSupabase = () =>
     createClient(
@@ -155,5 +162,107 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
     } catch (error: unknown) {
         console.error('[PUT /api/equipe/[id]] Erro inesperado:', error);
         return NextResponse.json({ error: (error as Error).message }, { status: 500 });
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE — exclusão permanente do colaborador (sprint 95)
+//
+// :id = user_id (convenção desta pasta; a rota base /api/equipe usa restaurant_users.id).
+//
+// Toda a checagem de bloqueadores E toda a escrita acontecem dentro de
+// public.delete_restaurant_member, numa única transação. A rota não decide nada sobre
+// permissão nem sobre histórico — apenas autentica, repassa e traduz o resultado.
+//
+// auth.users é removido DEPOIS da RPC. A ordem é obrigatória: a FK
+// public.users.id -> auth.users é CASCADE no NONPROD e NO ACTION no PROD; apagando
+// public.users primeiro, ambos funcionam. O inverso, em NONPROD, cascatearia por cima
+// de toda a checagem de bloqueadores.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
+    const fail = (code: DeleteMemberErrorCode, blockers?: unknown) =>
+        NextResponse.json(
+            blockers === undefined ? { error: code } : { error: code, blockers },
+            { status: DELETE_MEMBER_ERROR_STATUS[code] }
+        );
+
+    try {
+        // Visão Global colapsa N vínculos num row por usuário — não há unidade única a excluir.
+        const blocked = rejectIfGlobal(request);
+        if (blocked) return fail('GLOBAL_MODE');
+
+        const { id: targetUserId } = await context.params;
+        const restaurantId = new URL(request.url).searchParams.get('restaurant_id');
+
+        if (!restaurantId) {
+            return NextResponse.json({ error: 'restaurant_id é obrigatório' }, { status: 400 });
+        }
+
+        const authHeader = request.headers.get('Authorization');
+        if (!authHeader) return fail('SESSION_EXPIRED');
+
+        const adminSupabase = getAdminSupabase();
+        const { data: { user }, error: userError } = await adminSupabase.auth.getUser(
+            authHeader.replace('Bearer ', '')
+        );
+        if (userError || !user) return fail('SESSION_EXPIRED');
+
+        const { data, error } = await adminSupabase.rpc('delete_restaurant_member', {
+            p_restaurant_id: restaurantId,
+            p_target_user_id: targetUserId,
+            p_actor_user_id: user.id,
+            p_dry_run: false,
+        });
+
+        if (error) {
+            // 23503 (FK) e P0001 (triggers de imutabilidade do histórico) significam que o
+            // colaborador ganhou rastro entre a checagem e o commit — a transação já voltou atrás.
+            if (error.code === '23503' || error.code === 'P0001') {
+                console.warn('[DELETE /api/equipe/[id]] corrida de histórico:', error);
+                return fail('MEMBER_HAS_HISTORY', []);
+            }
+            console.error('[DELETE /api/equipe/[id]] rpc error:', error);
+            return fail('INTERNAL_ERROR');
+        }
+
+        if (!isDeleteMemberRpcResult(data)) {
+            console.error('[DELETE /api/equipe/[id]] retorno inesperado da RPC:', data);
+            return fail('INTERNAL_ERROR');
+        }
+
+        if (!data.ok) {
+            return fail(data.code as DeleteMemberErrorCode, data.blockers);
+        }
+
+        // A identidade só sai de auth.users quando public.users já foi apagado pela RPC.
+        let authCleanupPending = false;
+        if (data.identity_deleted) {
+            let authError = (await adminSupabase.auth.admin.deleteUser(targetUserId)).error;
+            if (authError) {
+                authError = (await adminSupabase.auth.admin.deleteUser(targetUserId)).error;
+            }
+            if (authError) {
+                // O vínculo já não existe, então não há acesso indevido: toda rota revalida
+                // restaurant_users. Só o e-mail segue ocupado até limpeza manual — rastreável
+                // pelo admin_audit_log com identity_deleted:true.
+                authCleanupPending = true;
+                console.error(
+                    '[DELETE /api/equipe/[id]] auth.users órfão para', targetUserId, authError
+                );
+            }
+        }
+
+        const response: DeleteMemberResponse = {
+            success: true,
+            identity_deleted: data.identity_deleted ?? false,
+            identity_kept_reason: data.identity_kept_reason ?? null,
+            auth_cleanup_pending: authCleanupPending,
+            unlinked: data.unlinked ?? { checklists: 0, receiving_templates: 0 },
+            target: { user_id: targetUserId, name: data.target?.name ?? null },
+        };
+        return NextResponse.json(response);
+    } catch (error: unknown) {
+        console.error('[DELETE /api/equipe/[id]] Erro inesperado:', error);
+        return fail('INTERNAL_ERROR');
     }
 }

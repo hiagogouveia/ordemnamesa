@@ -1,6 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import type { Scope } from '@/lib/types/scope';
+import {
+    DELETE_MEMBER_ERROR_MESSAGES,
+    type DeleteMemberErrorCode,
+    type DeleteMemberPreview,
+    type DeleteMemberResponse,
+} from '@/lib/types/equipe-deletion';
 
 export type { Scope };
 
@@ -173,5 +179,95 @@ export const useUpdateEquipeMember = (restaurantId: string | null, accountId?: s
                 queryClient.invalidateQueries({ queryKey: ['billing-status', accountId] });
             }
         }
+    });
+};
+
+// ─── Exclusão permanente (sprint 95) ─────────────────────────────────────────
+
+const translateDeleteError = (code: unknown, fallback: string) =>
+    typeof code === 'string' && code in DELETE_MEMBER_ERROR_MESSAGES
+        ? DELETE_MEMBER_ERROR_MESSAGES[code as DeleteMemberErrorCode]
+        : fallback;
+
+/**
+ * Pré-checagem consultiva: roda a mesma função da exclusão em dry run.
+ *
+ * Só dispara quando o modal abre (`enabled`) — prefetch por linha da tabela geraria
+ * 10 requests para um dado que só importa depois do clique. `staleTime: 0` porque a
+ * resposta pode mudar a qualquer momento se o colaborador começar a operar.
+ */
+export const useMemberDeletionPreview = (
+    restaurantId: string | null,
+    userId: string | null,
+    enabled: boolean
+) => {
+    return useQuery<DeleteMemberPreview>({
+        queryKey: ['equipe-deletion-preview', restaurantId, userId],
+        queryFn: async () => {
+            const token = await getAuthToken();
+            const response = await fetch(
+                `/api/equipe/${userId}/deletion-preview?restaurant_id=${restaurantId}`,
+                { headers: { 'Authorization': `Bearer ${token}` } }
+            );
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(
+                    translateDeleteError(errorData.error, 'Erro ao verificar o colaborador')
+                );
+            }
+            return response.json();
+        },
+        enabled: enabled && !!restaurantId && !!userId,
+        staleTime: 0,
+        gcTime: 0,
+        retry: false,
+    });
+};
+
+export const useDeleteEquipeMember = (restaurantId: string | null, accountId?: string | null) => {
+    const queryClient = useQueryClient();
+
+    return useMutation<DeleteMemberResponse, Error, { userId: string }>({
+        mutationFn: async ({ userId }) => {
+            const token = await getAuthToken();
+            const response = await fetch(
+                `/api/equipe/${userId}?restaurant_id=${restaurantId}`,
+                { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }
+            );
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(
+                    translateDeleteError(errorData.error, 'Erro ao excluir colaborador')
+                );
+            }
+            return response.json();
+        },
+        onSuccess: (_data, { userId }) => {
+            // Remoção otimista: a linha some antes do refetch. total_colaboradores conta
+            // TODOS os vínculos (ativos e inativos), então decrementar exatamente 1 é correto.
+            // turnos_ativos e media_desempenho não são recalculados aqui — o invalidate corrige.
+            queryClient.setQueryData(
+                ['equipe', restaurantId],
+                (old: EquipeData | undefined) => {
+                    if (!old) return old;
+                    if (!old.equipe.some((m) => m.user_id === userId)) return old;
+                    return {
+                        ...old,
+                        equipe: old.equipe.filter((m) => m.user_id !== userId),
+                        metrics: {
+                            ...old.metrics,
+                            total_colaboradores: Math.max(0, old.metrics.total_colaboradores - 1),
+                        },
+                    };
+                }
+            );
+            queryClient.invalidateQueries({ queryKey: ['equipe'] });
+            // A exclusão libera assento do plano e pode ter mexido em account_users.
+            if (accountId) {
+                queryClient.invalidateQueries({ queryKey: ['account-access', accountId] });
+                queryClient.invalidateQueries({ queryKey: ['units', accountId] });
+                queryClient.invalidateQueries({ queryKey: ['billing-status', accountId] });
+            }
+        },
     });
 };

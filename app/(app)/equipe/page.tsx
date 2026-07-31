@@ -55,6 +55,8 @@ export default function EquipePage() {
         );
     }
 
-    return <EquipeClient restaurantId={restaurantId} userRole={userRole} />;
+    // accountId também no modo single: sem ele as invalidações de account-access/units/
+    // billing-status nunca disparam (assento de plano liberado ao inativar/excluir não atualiza).
+    return <EquipeClient restaurantId={restaurantId} accountId={accountId} userRole={userRole} />;
 }
 
