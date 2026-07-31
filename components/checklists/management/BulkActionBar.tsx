@@ -40,6 +40,12 @@ export function BulkActionBar({
 
     // Publica altura real da barra como CSS var no <body>,
     // para que containers scrolláveis reservem padding-bottom sem magic numbers.
+    //
+    // `mounted` precisa estar nas deps: no primeiro commit o portal ainda não
+    // existe (`barRef.current === null`) e o efeito sai no early return. Sem ele,
+    // o efeito não re-rodaria quando `setMounted(true)` monta a barra — e a var
+    // ficaria por publicar sempre que a seleção salta de 0 para N num único passo
+    // ("selecionar todas"), fazendo o padding cair no fallback de 0px.
     useEffect(() => {
         const el = barRef.current;
         if (!el) return;
@@ -59,7 +65,7 @@ export function BulkActionBar({
             window.removeEventListener("resize", setVar);
             document.body.style.setProperty("--bulk-action-bar-h", "0px");
         };
-    }, [selectedCount]);
+    }, [selectedCount, mounted]);
 
     if (!mounted) return null;
 
