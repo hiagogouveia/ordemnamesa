@@ -13,6 +13,11 @@ interface ChecklistPreviewViewProps {
     currentMinutes: number;
     priorityMode?: PriorityMode;
     isGlobal?: boolean;
+    /**
+     * s96 — `"no-occurrence"` quando a lista está vazia por causa do filtro de
+     * ocorrência prevista (e não por falta de rotinas cadastradas).
+     */
+    emptyStateVariant?: "default" | "no-occurrence";
 }
 
 function minutesToHHMM(minutes: number): string {
@@ -28,7 +33,7 @@ interface PreviewSection {
     items: ExtendedChecklist[];
 }
 
-export function ChecklistPreviewView({ checklists, currentMinutes, priorityMode = "auto", isGlobal }: ChecklistPreviewViewProps) {
+export function ChecklistPreviewView({ checklists, currentMinutes, priorityMode = "auto", isGlobal, emptyStateVariant = "default" }: ChecklistPreviewViewProps) {
     const nowHHMM = minutesToHHMM(currentMinutes);
 
     const sections: PreviewSection[] = useMemo(() => {
@@ -88,10 +93,18 @@ export function ChecklistPreviewView({ checklists, currentMinutes, priorityMode 
             {/* Empty state */}
             {checklists.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
-                    <span className="material-symbols-outlined text-[#325a67] text-5xl">task_alt</span>
-                    <p className="text-white font-semibold">Nenhuma rotina</p>
+                    <span className="material-symbols-outlined text-[#325a67] text-5xl">
+                        {emptyStateVariant === "no-occurrence" ? "event_busy" : "task_alt"}
+                    </span>
+                    <p className="text-white font-semibold">
+                        {emptyStateVariant === "no-occurrence"
+                            ? "Não há rotinas previstas para este período."
+                            : "Nenhuma rotina"}
+                    </p>
                     <p className="text-[#92bbc9] text-sm max-w-xs">
-                        Ajuste os filtros de área e turno para ver as rotinas.
+                        {emptyStateVariant === "no-occurrence"
+                            ? "Escolha outro dia ou período na barra acima."
+                            : "Ajuste os filtros de área e turno para ver as rotinas."}
                     </p>
                 </div>
             )}

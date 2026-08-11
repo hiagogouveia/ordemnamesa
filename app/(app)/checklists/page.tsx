@@ -14,8 +14,17 @@ import type { ChecklistPanelTab } from "@/lib/notifications/navigation";
 import { DeepLinkFallback } from "@/components/checklists/management/DeepLinkFallback";
 import { useIssueCountsByChecklist } from "@/lib/hooks/use-task-issues";
 import { useShifts } from "@/lib/hooks/use-shifts";
-import { shouldChecklistAppearToday } from "@/lib/utils/should-checklist-appear-today";
 import { useRestaurantNow } from "@/lib/hooks/use-restaurant-now";
+// s96 — filtro por ocorrência prevista. A regra de "ocorre nesta data?" vive no
+// domínio (mesma engine de /turno, kanban e dashboard), não neste componente.
+import { occursInRange } from "@/lib/utils/recurrence/occurrence";
+import {
+    buildOccurrenceWindow,
+    describeOccurrenceWindow,
+    normalizeOccurrenceFilter,
+    type OccurrenceFilter,
+} from "@/lib/utils/recurrence/occurrence-window";
+import { OccurrenceFilterBar } from "@/components/checklists/management/OccurrenceFilterBar";
 import { BulkActionBar } from "@/components/checklists/management/BulkActionBar";
 // Code-splitting: modal só é montado quando aberto.
 const CopyChecklistModal = dynamic(
@@ -139,7 +148,20 @@ function ChecklistsContent() {
     const selectedAreaId = searchParams.get("area_id") ?? "";
     // Compat: URLs antigos com ?availability=draft caem em "active" (sem-op)
     const rawAvailability = searchParams.get("availability") ?? "active";
-    const selectedAvailability = rawAvailability === "draft" ? "active" : rawAvailability;
+    // s96 — o antigo `availability=today` virou o filtro de ocorrência `when=today`.
+    // A tradução é feita NA LEITURA (pura): um useEffect+router.replace geraria um
+    // render extra, um flash de conteúdo e risco de loop. URLs antigas — inclusive
+    // as que já estão em notificações e favoritos — seguem funcionando para sempre.
+    const isLegacyTodayUrl = rawAvailability === "today";
+    const selectedAvailability = isLegacyTodayUrl
+        ? "active" // o filtro legado forçava `active`; preserva o comportamento
+        : rawAvailability === "draft"
+            ? "active"
+            : rawAvailability;
+    // s96 — período de ocorrência prevista. Valor inválido cai em "" graciosamente.
+    const selectedWhen: OccurrenceFilter = isLegacyTodayUrl
+        ? "today"
+        : normalizeOccurrenceFilter(searchParams.get("when"));
     const selectedExecStatus = searchParams.get("exec_status") ?? "";
     const rawType = searchParams.get("type") ?? "all";
     // s61: filtro agora reflete tipos operacionais explícitos. URLs antigas
@@ -257,6 +279,53 @@ function ChecklistsContent() {
         return area?.priority_mode ?? "auto";
     }, [selectedAreaId, areas]);
 
+    // ─── s96: OCORRÊNCIA PREVISTA ──────────────────────────────────────────────
+    // Janela de datas do período selecionado. `tzDateKey` é o hoje no fuso do
+    // RESTAURANTE (não do navegador) — decisivo perto da meia-noite.
+    const occurrenceWindow = useMemo(
+        () => buildOccurrenceWindow(selectedWhen, tzDateKey),
+        [selectedWhen, tzDateKey],
+    );
+
+    // O conjunto de rotinas previstas é calculado em memo PRÓPRIO, fora de
+    // `filtered`. Motivo: `filtered` depende de `currentMinutes`, que muda a cada
+    // 60s — varrer até 31 dias × N rotinas a cada tick seria desperdício puro.
+    // Aqui o custo só reaparece quando dados, janela ou turnos mudam de verdade.
+    const occurringIds = useMemo(() => {
+        if (!occurrenceWindow) return null; // null = sem filtro de ocorrência
+        const ids = new Set<string>();
+        for (const c of checklists) {
+            if (occursInRange(c, occurrenceWindow.startKey, occurrenceWindow.endKey, shifts)) {
+                ids.add(c.id);
+            }
+        }
+        return ids;
+    }, [checklists, occurrenceWindow, shifts]);
+
+    const occurrencePeriodLabel = useMemo(
+        () => (occurrenceWindow ? describeOccurrenceWindow(selectedWhen, occurrenceWindow) : null),
+        [selectedWhen, occurrenceWindow],
+    );
+
+    // O status de execução é sempre o de HOJE (`getOperationalStatus` usa o
+    // contexto do dia corrente, e `execution_status` vem da assunção de hoje).
+    // Oferecê-lo junto de outro dia produziria combinações enganosas — "Sexta +
+    // Atrasada" nunca retornaria nada, porque nada é promovido a overdue fora do
+    // dia corrente. Some o dropdown em vez de deixar o gestor tirar conclusão errada.
+    const execStatusIsMeaningful = selectedWhen === "" || selectedWhen === "today";
+
+    // Vazio causado pelo filtro de ocorrência pede outra mensagem — e sem o CTA
+    // de modelos prontos, que não resolve "não há rotina prevista para sexta".
+    const emptyStateVariant = occurrenceWindow ? "no-occurrence" : "default";
+
+    // Reordenar/repriorizar sob um filtro que ESCONDE rotinas reescreveria o
+    // `order_index` global a partir de uma lista parcial — corrupção silenciosa.
+    // s96: o filtro de ocorrência esconde rotinas, então entra nesta conta.
+    const hasReducingFilters =
+        (selectedAvailability !== "all" && selectedAvailability !== "") ||
+        !!selectedExecStatus ||
+        selectedWhen !== "";
+
     // Derived: filtered + sorted list (MUST be before any conditional return)
     const filtered = useMemo(() => {
         const q = searchQuery.trim().toLowerCase();
@@ -270,10 +339,6 @@ function ChecklistsContent() {
                 selectedAssignmentOrigin
             ) as ExtendedChecklist[]
             : checklists as ExtendedChecklist[];
-
-        // "Hoje": só rotinas ativas e que devem aparecer hoje pelas regras de recorrência.
-        // Sprint 73 — usa o fuso do restaurante (não o do navegador).
-        const brazilNow = selectedAvailability === "today" ? { dayOfWeek: tzDayOfWeek, dateKey: tzDateKey } : null;
 
         const result = collaboratorFiltered.filter((c) => {
             if (q && !c.name.toLowerCase().includes(q)) return false;
@@ -295,10 +360,14 @@ function ChecklistsContent() {
             if (selectedType === "closing" && c.checklist_type !== "closing") return false;
             if (selectedAvailability === "active" && !c.active) return false;
             if (selectedAvailability === "inactive" && c.active) return false;
-            if (selectedAvailability === "today" && brazilNow) {
-                if (!c.active) return false;
-                if (!shouldChecklistAppearToday(c, brazilNow.dayOfWeek, brazilNow.dateKey, shifts)) return false;
-            }
+
+            // s96 — ocorrência prevista. Ortogonal a `availability`: este filtro
+            // responde "quais rotinas OCORREM no período", não "quais estão
+            // ligadas". Com availability=all podem aparecer rotinas inativas que
+            // ocorreriam — é o correto, mas difere do antigo `availability=today`,
+            // que forçava `active` (comportamento preservado via URL legada).
+            // O conjunto já veio pronto de `occurringIds`: aqui é O(1).
+            if (occurringIds && !occurringIds.has(c.id)) return false;
 
             // Filtro por status de execução (recorrência-aware)
             if (selectedExecStatus) {
@@ -353,7 +422,7 @@ function ChecklistsContent() {
         });
         
         return sortedResult;
-    }, [checklists, searchQuery, selectedShift, selectedAreaId, selectedAvailability, selectedExecStatus, selectedType, selectedCollaboratorId, selectedAssignmentOrigin, selectedUnitId, isGlobal, equipeData, shifts, currentMinutes, tzDayOfWeek, tzDateKey, statusCtx, sortField, sortOrder]);
+    }, [checklists, searchQuery, selectedShift, selectedAreaId, selectedAvailability, selectedExecStatus, selectedType, selectedCollaboratorId, selectedAssignmentOrigin, selectedUnitId, isGlobal, equipeData, occurringIds, currentMinutes, statusCtx, sortField, sortOrder]);
 
     // ─── BULK SELECTION (visão global) ─────────────────────────────────────────
 
@@ -523,6 +592,21 @@ function ChecklistsContent() {
         if (value) params.set("exec_status", value);
         else params.delete("exec_status");
         router.replace(`/checklists?${params.toString()}`);
+    };
+
+    /** s96 — período de ocorrência prevista. */
+    const setWhenFilter = (value: OccurrenceFilter) => {
+        const params = new URLSearchParams(searchParams.toString());
+        if (value) params.set("when", value);
+        else params.delete("when");
+        // A URL legada `availability=today` seria lida como `when=today` e
+        // sobrescreveria a escolha nova — some com ela assim que o usuário decide.
+        if (params.get("availability") === "today") params.delete("availability");
+        // O status de execução é sempre o de HOJE (`getOperationalStatus` usa o
+        // contexto do dia corrente). Combiná-lo com outro dia produziria um
+        // resultado sem sentido — ver `showExecStatus` em ChecklistFilters.
+        if (value !== "" && value !== "today") params.delete("exec_status");
+        router.replace(`/checklists?${params.toString()}`, { scroll: false });
     };
 
     const setTypeFilter = (value: "all" | "regular" | "opening" | "closing") => {
@@ -857,6 +941,17 @@ function ChecklistsContent() {
                 isRefreshing={isRefreshing}
             />
 
+            {/* s96 — seletor de ocorrência prevista. Fica ACIMA dos demais filtros:
+                é a primeira pergunta do gestor ("o que roda hoje?"), e os outros
+                filtros refinam a resposta. */}
+            <OccurrenceFilterBar
+                value={selectedWhen}
+                onChange={setWhenFilter}
+                periodLabel={occurrencePeriodLabel}
+                resultCount={occurrenceWindow ? filtered.length : undefined}
+                isGlobal={isGlobal}
+            />
+
             <ChecklistFilters
                 selectedShift={selectedShift}
                 onShiftChange={setShiftFilter}
@@ -875,6 +970,7 @@ function ChecklistsContent() {
                 onCollaboratorChange={setCollaboratorFilter}
                 selectedAssignmentOrigin={selectedAssignmentOrigin}
                 onAssignmentOriginChange={setAssignmentOriginFilter}
+                showExecStatus={execStatusIsMeaningful}
                 showUnitFilter={isGlobal}
                 units={units}
                 selectedUnitId={selectedUnitId}
@@ -924,6 +1020,7 @@ function ChecklistsContent() {
                             currentMinutes={currentMinutes}
                             priorityMode={selectedAreaPriorityMode}
                             isGlobal={isGlobal}
+                            emptyStateVariant={emptyStateVariant}
                         />
                     ) : view === "list" ? (
                         <ChecklistListView
@@ -942,7 +1039,8 @@ function ChecklistsContent() {
                                 canTemporaryTransfer ? setTemporaryTransferTarget : undefined
                             }
                             selectedAreaId={selectedAreaId}
-                            hasReducingFilters={(selectedAvailability !== "all" && selectedAvailability !== "") || !!selectedExecStatus}
+                            emptyStateVariant={emptyStateVariant}
+                            hasReducingFilters={hasReducingFilters}
                             onReorder={handleReorder}
                             onAutoReprioritize={handleAutoReprioritize}
                             currentMinutes={currentMinutes}

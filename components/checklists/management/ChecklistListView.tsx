@@ -101,6 +101,11 @@ interface ChecklistListViewProps {
     onSelectAll?: (checked: boolean) => void;
     issueCounts?: Record<string, number>;
     onExploreTemplates?: () => void;
+    /**
+     * s96 — `"no-occurrence"` quando a lista está vazia por causa do filtro de
+     * ocorrência prevista (e não por falta de rotinas cadastradas).
+     */
+    emptyStateVariant?: "default" | "no-occurrence";
 }
 
 export function ChecklistListView({
@@ -111,6 +116,7 @@ export function ChecklistListView({
     sortOrder,
     onSortChange,
     onExploreTemplates,
+    emptyStateVariant = "default",
     onSelect,
     onEdit,
     onStatusToggle,
@@ -223,14 +229,26 @@ export function ChecklistListView({
     }
 
     if (checklists.length === 0) {
+        // s96 — quando o vazio vem do filtro de ocorrência, a mensagem é outra e
+        // o CTA de modelos não faz sentido: o problema não é falta de rotina
+        // cadastrada, é não haver nenhuma PREVISTA para o período escolhido.
+        const noOccurrence = emptyStateVariant === "no-occurrence";
         return (
             <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
-                <span className="material-symbols-outlined text-[#325a67] text-5xl">search_off</span>
-                <p className="text-white font-semibold">Nenhuma lista encontrada</p>
-                <p className="text-[#92bbc9] text-sm max-w-xs">
-                    Tente ajustar os filtros ou comece com um modelo pronto.
+                <span className="material-symbols-outlined text-[#325a67] text-5xl">
+                    {noOccurrence ? "event_busy" : "search_off"}
+                </span>
+                <p className="text-white font-semibold">
+                    {noOccurrence
+                        ? "Não há rotinas previstas para este período."
+                        : "Nenhuma lista encontrada"}
                 </p>
-                {onExploreTemplates && (
+                <p className="text-[#92bbc9] text-sm max-w-xs">
+                    {noOccurrence
+                        ? "Escolha outro dia ou período na barra acima."
+                        : "Tente ajustar os filtros ou comece com um modelo pronto."}
+                </p>
+                {!noOccurrence && onExploreTemplates && (
                     <button
                         onClick={onExploreTemplates}
                         className="mt-1 inline-flex items-center gap-1.5 bg-[#13b6ec] hover:bg-[#0ea5d4] text-[#0a1215] font-bold text-sm px-4 py-2.5 rounded-lg transition-colors"

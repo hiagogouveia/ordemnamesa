@@ -13,8 +13,11 @@ const SHIFT_OPTIONS = [
     { value: "evening", label: "Noite" },
 ];
 
+// s96: "Hoje" saiu daqui e virou a barra de Ocorrência prevista
+// (OccurrenceFilterBar), que cobre hoje, amanhã, cada dia da semana, semana, mês
+// e data específica. Este dropdown voltou a ser só sobre o estado da rotina.
+// URLs antigas com ?availability=today seguem funcionando — a página traduz.
 const AVAILABILITY_OPTIONS = [
-    { value: "today", label: "Hoje" },
     { value: "active", label: "Ativas" },
     { value: "inactive", label: "Inativas" },
     { value: "all", label: "Todas" },
@@ -59,6 +62,12 @@ interface ChecklistFiltersProps {
     onAvailabilityChange: (value: string) => void;
     selectedExecStatus: string;
     onExecStatusChange: (value: string) => void;
+    /**
+     * s96 — o status de execução é sempre o do DIA CORRENTE. Quando o gestor
+     * está olhando outro dia pela barra de ocorrência, o dropdown é ocultado:
+     * combinar os dois produziria resultados enganosos. Default `true`.
+     */
+    showExecStatus?: boolean;
     selectedType: "all" | "regular" | "opening" | "closing";
     onTypeChange: (value: "all" | "regular" | "opening" | "closing") => void;
     collaborators: EquipeMember[];
@@ -84,6 +93,7 @@ export function ChecklistFilters({
     onAvailabilityChange,
     selectedExecStatus,
     onExecStatusChange,
+    showExecStatus = true,
     selectedType,
     onTypeChange,
     collaborators,
@@ -142,12 +152,14 @@ export function ChecklistFilters({
                 onChange={onAreaChange}
                 disabled={isLoadingAreas}
             />
-            <FilterDropdown
-                label="Status"
-                options={EXEC_STATUS_OPTIONS}
-                value={selectedExecStatus}
-                onChange={onExecStatusChange}
-            />
+            {showExecStatus && (
+                <FilterDropdown
+                    label="Status"
+                    options={EXEC_STATUS_OPTIONS}
+                    value={selectedExecStatus}
+                    onChange={onExecStatusChange}
+                />
+            )}
             <FilterDropdown
                 label="Colaborador"
                 options={collaboratorOptions}
