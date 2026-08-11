@@ -1,6 +1,7 @@
 import type { RecurrenceConfig, RecurrenceV2 } from "@/lib/types"
 
-const WEEKDAY_NAMES = [
+/** 0=domingo … 6=sábado — mesma convenção de `getNowInTz().dayOfWeek`. */
+export const WEEKDAY_NAMES = [
     "domingo",
     "segunda-feira",
     "terça-feira",
@@ -10,7 +11,8 @@ const WEEKDAY_NAMES = [
     "sábado",
 ]
 
-const MONTH_NAMES = [
+/** Índice 0=janeiro … 11=dezembro (subtraia 1 do mês 1-12). */
+export const MONTH_NAMES = [
     "janeiro",
     "fevereiro",
     "março",

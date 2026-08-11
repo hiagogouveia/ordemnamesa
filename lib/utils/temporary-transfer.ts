@@ -19,8 +19,16 @@
  * exatamente a classe de bug dos falsos "ATRASADO".
  */
 
-/** Data no formato Postgres DATE / `dateKey`: `YYYY-MM-DD`. */
-export type DateKey = string;
+/**
+ * Sprint 96 — a aritmética de dia civil mudou-se para `lib/utils/date-key.ts`
+ * (o filtro por ocorrência prevista das rotinas precisa da mesma). Re-exportado
+ * aqui para que todos os importadores de s94 continuem valendo sem alteração.
+ */
+export { addDays, isValidDateKey } from "./date-key";
+export type { DateKey } from "./date-key";
+
+import { addDays, isValidDateKey } from "./date-key";
+import type { DateKey } from "./date-key";
 
 export type TemporaryTransferStatus = "scheduled" | "active" | "ended";
 
@@ -66,37 +74,6 @@ export function reasonLabel(code: string | null | undefined): string | null {
 
 export function isTransferReasonCode(v: unknown): v is TransferReasonCode {
     return typeof v === "string" && REASON_LABELS.has(v);
-}
-
-/** `true` se a string é uma data `YYYY-MM-DD` sintática e calendaricamente válida. */
-export function isValidDateKey(value: unknown): value is DateKey {
-    if (typeof value !== "string") return false;
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-    if (!m) return false;
-    // Rejeita 2026-02-30: o roundtrip só bate em datas que existem.
-    const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
-    return toDateKey(d) === value;
-}
-
-/** `Date` (UTC) → `YYYY-MM-DD`. Sempre em UTC — nunca no fuso do processo. */
-function toDateKey(d: Date): DateKey {
-    const y = d.getUTCFullYear();
-    const mo = String(d.getUTCMonth() + 1).padStart(2, "0");
-    const da = String(d.getUTCDate()).padStart(2, "0");
-    return `${y}-${mo}-${da}`;
-}
-
-/**
- * Soma dias a um `dateKey`. Aritmética feita em UTC de propósito: `dateKey` é um dia
- * civil, não um instante, então DST não participa da conta (somar 1 dia é sempre
- * +1 no calendário, mesmo no dia em que o relógio muda).
- */
-export function addDays(dateKey: DateKey, days: number): DateKey {
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
-    if (!m) return dateKey;
-    const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
-    d.setUTCDate(d.getUTCDate() + days);
-    return toDateKey(d);
 }
 
 /**
