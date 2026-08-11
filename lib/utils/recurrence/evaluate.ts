@@ -150,13 +150,6 @@ function evaluateCustom(rruleString: string, dateKey: string): boolean {
     const parsed = parseDateKey(dateKey)
     if (!parsed) return false
 
-    let rule: RRule
-    try {
-        rule = RRule.fromString(rruleString)
-    } catch {
-        return false
-    }
-
     // Janela do dia em UTC: o RRule lib retorna ocorrências em UTC.
     // Tratamos o `dateKey` como dia calendário (sem hora). Buscamos qualquer
     // ocorrência que caia dentro do dia em qualquer interpretação razoável de
@@ -164,6 +157,43 @@ function evaluateCustom(rruleString: string, dateKey: string): boolean {
     const startOfDay = new Date(Date.UTC(parsed.year, parsed.month - 1, parsed.day, 0, 0, 0))
     const endOfDay = new Date(Date.UTC(parsed.year, parsed.month - 1, parsed.day, 23, 59, 59))
 
-    const occurrences = rule.between(startOfDay, endOfDay, true)
-    return occurrences.length > 0
+    return evaluateCustomRange(rruleString, startOfDay, endOfDay)
+}
+
+/**
+ * Sprint 96 — a rotina `custom` tem alguma ocorrência dentro de [start, end]?
+ *
+ * ── Por que NÃO usar `RRule.fromString` ──────────────────────────────────────
+ *
+ * `legacyConfigToV2Rrule` gera strings SEM `DTSTART` (ex.: `FREQ=WEEKLY;BYDAY=MO`).
+ * Nesse caso o `RRule.fromString` ancora o `dtstart` em `new Date()` — o instante
+ * do parse. Consequências, confirmadas em runtime:
+ *
+ *  - Nenhuma data ANTERIOR ao parse casa. Rotinas personalizadas nunca apareciam
+ *    em dias já passados (quebraria "Esta semana"/"Este mês").
+ *  - Entre 21h e 24h em São Paulo, `new Date()` já está no dia seguinte em UTC
+ *    enquanto `dateKey` ainda é o dia corrente → o `dtstart` cai FORA da janela
+ *    consultada e a rotina sumia de "Hoje" em /turno, kanban, dashboard, overdue
+ *    e notificações nas últimas 3 horas de todo dia.
+ *  - `INTERVAL=N` e `COUNT=N` ficavam não-determinísticos (âncora móvel).
+ *
+ * Ancorar o `dtstart` AUSENTE no início da janela consultada torna a avaliação
+ * determinística e nunca esconde o que hoje aparece. Um `DTSTART` explícito na
+ * string tem precedência e continua sendo respeitado, assim como `UNTIL`/`COUNT`.
+ *
+ * Limitação aceita: sem âncora real, `INTERVAL=2` (quinzenal) e `COUNT=N` passam
+ * a ser fail-open. Antes já eram fail-open — só que instáveis. A correção
+ * definitiva é ancorar em `checklists.created_at`, e depende de o campo chegar
+ * até aqui.
+ *
+ * Política fail-closed preservada: rrule inválida → `false`.
+ */
+export function evaluateCustomRange(rruleString: string, start: Date, end: Date): boolean {
+    try {
+        const options = RRule.parseString(rruleString)
+        if (!options.dtstart) options.dtstart = start
+        return new RRule(options).between(start, end, true).length > 0
+    } catch {
+        return false
+    }
 }
