@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { RecurrencePicker } from "./recurrence-picker-modal";
 import { DailyConfig } from "./recurrence/daily-config";
 import { WeeklyConfig } from "./recurrence/weekly-config";
 import { MonthlyConfig } from "./recurrence/monthly-config";
@@ -87,6 +86,15 @@ type RecurrenceDropdownOption =
     | 'yearly'
     | 'custom';
 
+// s96: "Personalizar" foi aposentado. O modal que ele abria não sabia ler uma
+// config v2 de volta — abria sempre em "1 semana / segunda / nunca" e, ao
+// confirmar, reescrevia a agenda em silêncio. Além disso, dois dos seus
+// controles (intervalo e "após N ocorrências") eram ignorados pelo motor, que
+// não tem âncora para `INTERVAL`/`COUNT`. Tudo que estava em uso era semanal
+// simples, já coberto por "Semanal".
+//
+// `custom` segue sendo LIDO normalmente (evaluator, describe, filtros): dado
+// legado não quebra. Só não é mais criável. Ver `LEGACY_CUSTOM_OPTION` abaixo.
 const RECURRENCE_DROPDOWN_OPTIONS: { value: RecurrenceDropdownOption; label: string }[] = [
     { value: 'shift_days', label: 'Dias do turno' },
     { value: 'todos_os_dias', label: 'Todos os dias' },
@@ -94,8 +102,14 @@ const RECURRENCE_DROPDOWN_OPTIONS: { value: RecurrenceDropdownOption; label: str
     { value: 'weekly', label: 'Semanal' },
     { value: 'monthly', label: 'Mensal' },
     { value: 'yearly', label: 'Anual' },
-    { value: 'custom', label: 'Personalizar' },
 ];
+
+/**
+ * Opção fantasma para rotinas legadas que JÁ são `custom`. Sem ela o `<select>`
+ * ficaria com um `value` sem `<option>` correspondente e renderizaria vazio.
+ * Só aparece quando é o valor atual, e some assim que o admin escolhe outro tipo.
+ */
+const LEGACY_CUSTOM_OPTION = { value: 'custom' as const, label: 'Personalizada (legado)' };
 
 /**
  * Deriva qual opção do dropdown deve estar selecionada a partir do estado
@@ -209,7 +223,6 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     const [enforceSequentialOrder, setEnforceSequentialOrder] = useState(false);
     // Sprint 76: permite iniciar a rotina antes do start_time (só relevante com janela de horário)
     const [allowEarlyStart, setAllowEarlyStart] = useState(false);
-    const [showRecurrencePicker, setShowRecurrencePicker] = useState(false);
     // PR 4 (UX): qual modal de configuração v2 está aberto. `null` = nenhum.
     const [activeRecurrenceModal, setActiveRecurrenceModal] = useState<
         'daily' | 'weekly' | 'monthly' | 'yearly' | null
@@ -990,7 +1003,7 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
     // - "Todos os dias" e "Dias do turno" são set diretos (sem modal)
     // - "Diário/Semanal/Mensal/Anual" abrem modal específico para o admin
     //   configurar parâmetros (dias excluídos, weekdays, dia do mês, etc.)
-    // - "Personalizar" abre o RecurrencePicker (rrule) — não foi alterado
+    // - "Personalizada (legado)" é somente-leitura: re-selecioná-la não faz nada
     //
     // Nota de promoção v1→v2: o estado `recurrenceConfig` só vira v2 se o
     // admin CONFIRMAR uma configuração no modal. Se ele cancela, o estado
@@ -1006,10 +1019,9 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
             setRecurrenceConfig({ version: 2, type: 'daily' });
             return;
         }
-        if (value === 'custom') {
-            setShowRecurrencePicker(true);
-            return;
-        }
+        // s96: `custom` não é mais criável — a opção só existe para exibir o
+        // valor de rotinas legadas. Re-selecioná-la preserva o que está salvo.
+        if (value === 'custom') return;
         // 'daily' | 'weekly' | 'monthly' | 'yearly' → modal específico
         setActiveRecurrenceModal(value);
     }, []);
@@ -1020,14 +1032,6 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
         setRecurrence(config.type);
         setActiveRecurrenceModal(null);
     }, []);
-
-    // Label legível para o admin — funciona tanto para v1 quanto para v2 via
-    // describeRecurrence. Substitui a lógica antiga que entendia apenas v1.
-    const getRecurrenceLabel = () => {
-        if (recurrence !== 'custom') return null;
-        if (!recurrenceConfig) return null;
-        return describeRecurrence({ recurrence, recurrence_config: recurrenceConfig });
-    };
 
     return (
         <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#0a1215] relative">
@@ -1227,17 +1231,17 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                                     className="w-full bg-[#16262c] border border-[#233f48] rounded-xl px-4 py-3 text-white focus:border-[#13b6ec] focus:ring-1 focus:ring-[#13b6ec] outline-none transition-all appearance-none"
                                 >
                                     {RECURRENCE_DROPDOWN_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                                    {dropdownValue === 'custom' && (
+                                        <option value={LEGACY_CUSTOM_OPTION.value}>{LEGACY_CUSTOM_OPTION.label}</option>
+                                    )}
                                 </select>
                                 <p className="text-[#92bbc9] text-xs mt-2">{describeRecurrence({ recurrence, recurrence_config: recurrenceConfig })}</p>
-                                {recurrence === 'custom' && recurrenceConfig && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowRecurrencePicker(true)}
-                                        className="mt-2 w-full text-left px-3 py-2 bg-[#13b6ec]/10 border border-[#13b6ec]/30 rounded-lg text-[#13b6ec] text-xs font-medium flex items-center justify-between gap-2 hover:bg-[#13b6ec]/20 transition-colors"
-                                    >
-                                        <span className="truncate">{getRecurrenceLabel()}</span>
-                                        <span className="material-symbols-outlined text-[14px] shrink-0">edit</span>
-                                    </button>
+                                {dropdownValue === 'custom' && (
+                                    <p className="mt-2 px-3 py-2 bg-amber-400/10 border border-amber-400/30 rounded-lg text-amber-300 text-xs">
+                                        Recorrência personalizada de um formato antigo. Ela continua valendo
+                                        normalmente — mas não é mais editável. Para alterar os dias, escolha
+                                        &quot;Semanal&quot; acima.
+                                    </p>
                                 )}
                                 {recurrence === 'shift_days' && (
                                     <div className="mt-2 px-3 py-2 bg-[#13b6ec]/10 border border-[#13b6ec]/30 rounded-lg text-xs">
@@ -1679,28 +1683,6 @@ export function ChecklistForm({ checklist, onSaved, onCancel, disableReorder = f
                 </div>
             </div>
 
-            {/* Modal de Recorrência Personalizada (rrule) — não foi alterado */}
-            {showRecurrencePicker && (
-                <RecurrencePicker
-                    // Só pré-popula se o estado atual é v1 legacy (tem `frequency`).
-                    // Configs v2 abrem o picker com defaults limpos — admin re-configura.
-                    initial={
-                        recurrenceConfig &&
-                        typeof recurrenceConfig === 'object' &&
-                        'frequency' in recurrenceConfig
-                            ? (recurrenceConfig as RecurrenceConfig)
-                            : undefined
-                    }
-                    onConfirm={(config) => {
-                        setRecurrenceConfig(config);
-                        setRecurrence('custom');
-                        setShowRecurrencePicker(false);
-                    }}
-                    onCancel={() => {
-                        setShowRecurrencePicker(false);
-                    }}
-                />
-            )}
 
             {/* PR 4: Modais de configuração v2 (daily/weekly/monthly/yearly) */}
             {activeRecurrenceModal === 'daily' && (

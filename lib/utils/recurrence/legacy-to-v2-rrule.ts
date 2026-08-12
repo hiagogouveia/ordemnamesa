@@ -3,8 +3,17 @@ import type { RecurrenceConfig, RecurrenceV2 } from "@/lib/types"
 const DAYS_RRULE = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"]
 
 /**
- * Converte o output do `RecurrencePicker` (formato v1 `RecurrenceConfig`) em
- * um payload v2 do tipo `'custom'` carregando uma string rrule (RFC 5545).
+ * @deprecated s96 — sem uso em código vivo. Era a ponte do `RecurrencePicker`
+ * (removido) para o formato v2, e é a origem de todas as recorrências `custom`
+ * do banco. NÃO usar em código novo: as strings que ela gera não têm `DTSTART`,
+ * o que torna `INTERVAL`/`COUNT` inavaliáveis (ver `evaluateCustomRange` em
+ * `evaluate.ts`). Recorrência semanal deve usar `{type:'weekly', weekdays}`.
+ *
+ * Mantida com seus testes por ser a documentação executável de como o dado
+ * `custom` legado foi produzido.
+ *
+ * Converte o formato v1 `RecurrenceConfig` em um payload v2 do tipo `'custom'`
+ * carregando uma string rrule (RFC 5545).
  *
  * Regras de mapeamento:
  *  - `frequency` → `FREQ=DAILY|WEEKLY|MONTHLY`

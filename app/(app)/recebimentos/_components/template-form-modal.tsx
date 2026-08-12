@@ -24,7 +24,6 @@ import { useAllAreas } from "@/lib/hooks/use-areas";
 import { useShifts } from "@/lib/hooks/use-shifts";
 import { useEquipe } from "@/lib/hooks/use-equipe";
 import { useUserShifts } from "@/lib/hooks/use-user-roles-shifts";
-import { RecurrencePicker } from "@/components/checklists/recurrence-picker-modal";
 import { DailyConfig } from "@/components/checklists/recurrence/daily-config";
 import { WeeklyConfig } from "@/components/checklists/recurrence/weekly-config";
 import { MonthlyConfig } from "@/components/checklists/recurrence/monthly-config";
@@ -58,6 +57,10 @@ type RecurrenceDropdownOption =
     | "yearly"
     | "custom";
 
+// s96: "Personalizar" aposentado aqui pelos mesmos motivos do formulário de
+// rotinas (ver checklist-form.tsx) — o modal não lia config v2 de volta e
+// reescrevia a agenda ao confirmar. Nenhum modelo de recebimento usava `custom`
+// em nenhum ambiente. Leitura de dado legado segue funcionando.
 const RECURRENCE_DROPDOWN_OPTIONS: { value: RecurrenceDropdownOption; label: string }[] = [
     { value: "shift_days", label: "Dias do turno" },
     { value: "todos_os_dias", label: "Todos os dias" },
@@ -65,8 +68,10 @@ const RECURRENCE_DROPDOWN_OPTIONS: { value: RecurrenceDropdownOption; label: str
     { value: "weekly", label: "Semanal" },
     { value: "monthly", label: "Mensal" },
     { value: "yearly", label: "Anual" },
-    { value: "custom", label: "Personalizar" },
 ];
+
+/** Opção fantasma para modelos legados — ver `LEGACY_CUSTOM_OPTION` em checklist-form. */
+const LEGACY_CUSTOM_OPTION = { value: "custom" as const, label: "Personalizada (legado)" };
 
 /** Mesma lógica de mapeamento usada em checklist-form. */
 function recurrenceToDropdownValue(
@@ -175,7 +180,6 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
     const [recurrenceConfig, setRecurrenceConfig] = useState<
         RecurrenceConfig | RecurrenceV2 | null
     >(effectiveTemplate?.recurrence_config ?? null);
-    const [showRecurrencePicker, setShowRecurrencePicker] = useState(false);
     const [activeRecurrenceModal, setActiveRecurrenceModal] = useState<
         "daily" | "weekly" | "monthly" | "yearly" | null
     >(null);
@@ -349,10 +353,8 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                 setRecurrenceConfig({ version: 2, type: "daily" });
                 return;
             }
-            if (value === "custom") {
-                setShowRecurrencePicker(true);
-                return;
-            }
+            // s96: `custom` não é mais criável — a opção só exibe valor legado.
+            if (value === "custom") return;
             setActiveRecurrenceModal(value);
         },
         [],
@@ -728,23 +730,21 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                                                 {r.label}
                                             </option>
                                         ))}
+                                        {dropdownValue === "custom" && (
+                                            <option value={LEGACY_CUSTOM_OPTION.value}>
+                                                {LEGACY_CUSTOM_OPTION.label}
+                                            </option>
+                                        )}
                                     </select>
                                     <div className="mt-2 flex items-center justify-between text-xs">
                                         <span className="text-[#92bbc9]">{recurrenceLabel}</span>
                                         {(dropdownValue === "daily" ||
                                             dropdownValue === "weekly" ||
                                             dropdownValue === "monthly" ||
-                                            dropdownValue === "yearly" ||
-                                            dropdownValue === "custom") && (
+                                            dropdownValue === "yearly") && (
                                             <button
                                                 type="button"
-                                                onClick={() => {
-                                                    if (dropdownValue === "custom") {
-                                                        setShowRecurrencePicker(true);
-                                                    } else {
-                                                        setActiveRecurrenceModal(dropdownValue);
-                                                    }
-                                                }}
+                                                onClick={() => setActiveRecurrenceModal(dropdownValue)}
                                                 className="text-[#13b6ec] font-semibold hover:underline inline-flex items-center gap-1"
                                             >
                                                 <span className="material-symbols-outlined text-[14px]">tune</span>
@@ -906,22 +906,6 @@ export function TemplateFormModal({ restaurantId, template, onClose }: TemplateF
                     onCancel={() => setActiveRecurrenceModal(null)}
                     shifts={shiftsData}
                     shiftLabel={shiftEnum === "any" ? null : shiftEnum}
-                />
-            )}
-            {showRecurrencePicker && (
-                <RecurrencePicker
-                    initial={
-                        recurrenceConfig &&
-                        typeof recurrenceConfig === "object" &&
-                        !("version" in (recurrenceConfig as object))
-                            ? (recurrenceConfig as RecurrenceConfig)
-                            : undefined
-                    }
-                    onConfirm={(config) => {
-                        handleModalConfirm(config);
-                        setShowRecurrencePicker(false);
-                    }}
-                    onCancel={() => setShowRecurrencePicker(false)}
                 />
             )}
 
