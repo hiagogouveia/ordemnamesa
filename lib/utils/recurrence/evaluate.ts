@@ -25,9 +25,29 @@ export interface EvaluateContext {
  * Sprint 66: resolve os dias da semana ativos para `shift_days` no modelo N:N.
  * - shiftIds com 1+ turnos → UNIÃO dos `days_of_week` de todos os turnos da rotina.
  * - sem shiftIds, enum legado presente → caminho legado por `shift_type` (compat).
- * - nenhum turno → null ("Todos os turnos" → todo dia).
+ * - "Todos os turnos" → UNIÃO dos dias de TODOS os turnos ativos (s96, vide abaixo).
  *
- * Retorna `null` quando deve aparecer todo dia (fallback defensivo).
+ * Retorna `null` quando não há informação para restringir e a rotina deve
+ * aparecer todo dia.
+ *
+ * ── Sprint 96: "Todos os turnos" deixa de significar "todo dia" ─────────────
+ *
+ * Antes, uma rotina `shift_days` marcada como "Todos os turnos" caía neste
+ * fallback e aparecia TODO DIA — inclusive em dias em que nenhum turno opera.
+ * Isso contradizia o próprio nome da recorrência e produzia incoerência dentro
+ * da mesma tela: rotinas com turno específico desapareciam no domingo enquanto
+ * as de "Todos os turnos" continuavam listadas, ambas rotuladas "Dias do turno".
+ *
+ * "Todos os turnos" agora significa o que diz: os dias em que a operação
+ * funciona, isto é, a união dos dias de todos os turnos ativos. Restaurante que
+ * não abre domingo não vê rotina de turno no domingo.
+ *
+ * O fallback permissivo é preservado onde é legítimo — quando de fato não há
+ * informação para restringir:
+ *  - `shifts` ausente ou vazio (visão global, restaurante sem turno cadastrado)
+ *  - união vazia (turnos existem mas nenhum declara dias)
+ * Nesses casos esconder seria pior que mostrar: a rotina desapareceria sem que
+ * ninguém tivesse dito em que dias ela não deveria rodar.
  */
 export function resolveShiftDays(
     shiftIds: string[] | null | undefined,
@@ -43,12 +63,25 @@ export function resolveShiftDays(
         return matching.flatMap((s) => s.days_of_week)
     }
 
-    // Caminho legado por enum (rotinas sem turnos N:N).
-    if (!shiftLabel || shiftLabel === "any") return null
     if (!shifts || shifts.length === 0) return null
+
+    // "Todos os turnos": sem vínculo específico, os dias da operação são a união
+    // de todos os turnos ativos. Os callers já filtram `active=true` — tanto no
+    // servidor (/api/my-activities, /api/tasks/kanban) quanto no cliente
+    // (/api/shifts), então a lista recebida aqui é sempre só de turnos ativos.
+    if (!shiftLabel || shiftLabel === "any") {
+        return nonEmptyOrNull(shifts.flatMap((s) => s.days_of_week))
+    }
+
+    // Caminho legado por enum (rotinas sem turnos N:N).
     const matching = shifts.filter((s) => s.shift_type === shiftLabel)
     if (matching.length === 0) return null
     return matching.flatMap((s) => s.days_of_week)
+}
+
+/** União vazia = nenhum turno declara dias → sem informação para restringir. */
+function nonEmptyOrNull(days: number[]): number[] | null {
+    return days.length > 0 ? days : null
 }
 
 /**

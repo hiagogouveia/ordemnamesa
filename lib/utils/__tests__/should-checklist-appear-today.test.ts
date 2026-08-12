@@ -88,28 +88,52 @@ describe("shouldChecklistAppearToday — v1 snapshot", () => {
 
     // ─── shift_days ───────────────────────────────────────────────────────────
     describe("recurrence='shift_days'", () => {
-        it("retorna true se shift='any' (independente dos shifts)", () => {
+        // s96 — "Todos os turnos" (shift='any' ou ausente) passou a significar
+        // "nos dias em que a operação funciona", e não mais "todo dia".
+        it("shift='any' respeita a união dos dias dos turnos ativos", () => {
+            const shifts = [{ shift_type: "morning", days_of_week: [MON] }];
+            const rotina = { recurrence: "shift_days", shift: "any" };
+            expect(shouldChecklistAppearToday(rotina, MON, ANY_DATE_KEY, shifts)).toBe(true);
+            expect(shouldChecklistAppearToday(rotina, TUE, ANY_DATE_KEY, shifts)).toBe(false);
+        });
+
+        it("shift='any' soma os dias de TODOS os turnos ativos", () => {
+            const shifts = [
+                { shift_type: "morning", days_of_week: [MON, TUE] },
+                { shift_type: "evening", days_of_week: [SAT] },
+            ];
+            const rotina = { recurrence: "shift_days", shift: "any" };
+            for (const day of [MON, TUE, SAT]) {
+                expect(shouldChecklistAppearToday(rotina, day, ANY_DATE_KEY, shifts)).toBe(true);
+            }
+            for (const day of [SUN, WED, THU, FRI]) {
+                expect(shouldChecklistAppearToday(rotina, day, ANY_DATE_KEY, shifts)).toBe(false);
+            }
+        });
+
+        it("checklist sem shift definido também respeita os dias dos turnos", () => {
             const shifts = [{ shift_type: "morning", days_of_week: [MON] }];
             expect(
-                shouldChecklistAppearToday(
-                    { recurrence: "shift_days", shift: "any" },
-                    TUE,
-                    ANY_DATE_KEY,
-                    shifts
-                )
+                shouldChecklistAppearToday({ recurrence: "shift_days" }, SAT, ANY_DATE_KEY, shifts)
+            ).toBe(false);
+            expect(
+                shouldChecklistAppearToday({ recurrence: "shift_days" }, MON, ANY_DATE_KEY, shifts)
             ).toBe(true);
         });
 
-        it("retorna true se checklist sem shift definido (fallback defensivo)", () => {
-            const shifts = [{ shift_type: "morning", days_of_week: [MON] }];
-            expect(
-                shouldChecklistAppearToday(
-                    { recurrence: "shift_days" },
-                    SAT,
-                    ANY_DATE_KEY,
-                    shifts
-                )
-            ).toBe(true);
+        it("turnos ativos sem nenhum dia declarado → fallback permissivo", () => {
+            // União vazia não é "não roda nunca": é ausência de informação.
+            const shifts = [{ shift_type: "morning", days_of_week: [] }];
+            for (const day of [SUN, MON, SAT]) {
+                expect(
+                    shouldChecklistAppearToday(
+                        { recurrence: "shift_days", shift: "any" },
+                        day,
+                        ANY_DATE_KEY,
+                        shifts
+                    )
+                ).toBe(true);
+            }
         });
 
         it("retorna true se shifts não fornecidos (fallback)", () => {

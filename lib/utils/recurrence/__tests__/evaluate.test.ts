@@ -482,7 +482,56 @@ describe("evaluateV2 — shift_days N:N (união de turnos)", () => {
     it("rotina Manhã+Noite aparece na SEG (interseção de dias)", () => {
         expect(evaluateV2(cfg, ctx(MON, "2026-06-01", { shifts: SHIFTS, shiftIds: ["manha", "noite"] }))).toBe(true)
     })
-    it('conjunto vazio (Todos os turnos) → aparece todo dia', () => {
-        expect(evaluateV2(cfg, ctx(SUN, "2026-05-31", { shifts: SHIFTS, shiftIds: [] }))).toBe(true)
+    // s96 — "Todos os turnos" passou a significar "nos dias em que a operação
+    // funciona" (união de TODOS os turnos ativos), e não mais "todo dia".
+    // SHIFTS cobre SEG..SÁB; nenhum turno opera no domingo.
+    it('conjunto vazio (Todos os turnos) NÃO aparece no domingo — nenhum turno opera', () => {
+        expect(evaluateV2(cfg, ctx(SUN, "2026-05-31", { shifts: SHIFTS, shiftIds: [] }))).toBe(false)
+    })
+
+    it('conjunto vazio (Todos os turnos) aparece nos dias cobertos por algum turno', () => {
+        // SÁB só existe no turno Noite — a união ainda o inclui.
+        expect(evaluateV2(cfg, ctx(SAT, "2026-05-30", { shifts: SHIFTS, shiftIds: [] }))).toBe(true)
+        expect(evaluateV2(cfg, ctx(MON, "2026-06-01", { shifts: SHIFTS, shiftIds: [] }))).toBe(true)
+    })
+
+    it('sem lista de turnos, "Todos os turnos" mantém o fallback permissivo', () => {
+        // Visão global / restaurante sem turno cadastrado: não há como restringir.
+        expect(evaluateV2(cfg, ctx(SUN, "2026-05-31", { shifts: [], shiftIds: [] }))).toBe(true)
+        expect(evaluateV2(cfg, ctx(SUN, "2026-05-31", { shiftIds: [] }))).toBe(true)
+    })
+
+    it('turnos ativos sem dias declarados mantêm o fallback permissivo', () => {
+        const semDias = [{ id: "x", shift_type: "morning", days_of_week: [] }]
+        expect(evaluateV2(cfg, ctx(SUN, "2026-05-31", { shifts: semDias, shiftIds: [] }))).toBe(true)
+    })
+})
+
+// Sprint 96 — regressão do caso reportado em producao: Restaurante Morumbi tem um
+// unico turno ativo cobrindo SEG..SAB. Rotinas "Dias do turno" marcadas como
+// "Todos os turnos" apareciam no domingo, enquanto as de turno especifico nao —
+// duas respostas diferentes para o mesmo rotulo, na mesma tela.
+describe("evaluateV2 — shift_days: coerência entre turno específico e Todos os turnos", () => {
+    const UM_TURNO = [{ id: "manha", shift_type: "morning", days_of_week: [MON, TUE, WED, THU, FRI, SAT] }]
+    const cfg = { version: 2 as const, type: "shift_days" as const }
+
+    it("as duas formas de configurar concordam em TODOS os dias da semana", () => {
+        const dias = [SUN, MON, TUE, WED, THU, FRI, SAT]
+        for (const dia of dias) {
+            const comTurnoEspecifico = evaluateV2(
+                cfg,
+                ctx(dia, "2026-06-01", { shifts: UM_TURNO, shiftIds: ["manha"] }),
+            )
+            const todosOsTurnos = evaluateV2(
+                cfg,
+                ctx(dia, "2026-06-01", { shifts: UM_TURNO, shiftIds: [] }),
+            )
+            expect(todosOsTurnos).toBe(comTurnoEspecifico)
+        }
+    })
+
+    it("nenhuma das duas aparece no domingo", () => {
+        expect(evaluateV2(cfg, ctx(SUN, "2026-05-31", { shifts: UM_TURNO, shiftIds: ["manha"] }))).toBe(false)
+        expect(evaluateV2(cfg, ctx(SUN, "2026-05-31", { shifts: UM_TURNO, shiftIds: [] }))).toBe(false)
     })
 })

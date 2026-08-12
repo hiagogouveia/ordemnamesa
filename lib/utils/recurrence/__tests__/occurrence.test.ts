@@ -334,6 +334,58 @@ describe("occursInRange — guardas de intervalo", () => {
     })
 })
 
+// s96 — regressão do caso reportado em producao (Restaurante Morumbi).
+// Um unico turno ativo, SEG..SAB. Ao filtrar por "Dom", rotinas "Dias do turno"
+// marcadas como "Todos os turnos" apareciam, enquanto as de turno especifico
+// nao — mesmo rotulo, respostas opostas, na mesma tela.
+describe("filtro por dia: shift_days respeita os dias do turno", () => {
+    const TURNO_MANHA: ShiftForRecurrence[] = [
+        { id: "manha", shift_type: "morning", days_of_week: [1, 2, 3, 4, 5, 6] }, // SEG..SÁB
+    ]
+    const DOMINGO = "2026-08-16"
+    const SEGUNDA = "2026-08-17"
+
+    const comTurno: ChecklistForOccurrence = {
+        ...v2({ version: 2, type: "shift_days" }),
+        shift_ids: ["manha"],
+    }
+    // "Todos os turnos": sem vinculo N:N e sem enum (ou enum 'any').
+    const todosOsTurnos: ChecklistForOccurrence = {
+        ...v2({ version: 2, type: "shift_days" }),
+        shift: "any",
+        shift_ids: [],
+    }
+
+    it("nenhuma das duas ocorre no domingo — o restaurante não abre", () => {
+        expect(occursInRange(comTurno, DOMINGO, DOMINGO, TURNO_MANHA)).toBe(false)
+        expect(occursInRange(todosOsTurnos, DOMINGO, DOMINGO, TURNO_MANHA)).toBe(false)
+    })
+
+    it("as duas ocorrem na segunda", () => {
+        expect(occursInRange(comTurno, SEGUNDA, SEGUNDA, TURNO_MANHA)).toBe(true)
+        expect(occursInRange(todosOsTurnos, SEGUNDA, SEGUNDA, TURNO_MANHA)).toBe(true)
+    })
+
+    it("as duas concordam em todos os dias da semana civil", () => {
+        for (let i = 0; i < 7; i++) {
+            const dia = `2026-08-${String(16 + i).padStart(2, "0")}`
+            expect(occursInRange(todosOsTurnos, dia, dia, TURNO_MANHA)).toBe(
+                occursInRange(comTurno, dia, dia, TURNO_MANHA),
+            )
+        }
+    })
+
+    it("ambas aparecem no filtro 'Esta semana' — a semana contém dias úteis", () => {
+        expect(occursInRange(comTurno, "2026-08-16", "2026-08-22", TURNO_MANHA)).toBe(true)
+        expect(occursInRange(todosOsTurnos, "2026-08-16", "2026-08-22", TURNO_MANHA)).toBe(true)
+    })
+
+    it("na visão global (sem turnos carregados) o fallback permissivo se mantém", () => {
+        expect(occursInRange(todosOsTurnos, DOMINGO, DOMINGO, [])).toBe(true)
+        expect(occursInRange(todosOsTurnos, DOMINGO, DOMINGO, undefined)).toBe(true)
+    })
+})
+
 describe("cenário do briefing — múltiplas rotinas com frequências diferentes", () => {
     const shifts: ShiftForRecurrence[] = []
     const rotinas: Array<{ nome: string; c: ChecklistForOccurrence }> = [
