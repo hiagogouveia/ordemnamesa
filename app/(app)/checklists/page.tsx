@@ -950,6 +950,7 @@ function ChecklistsContent() {
                 periodLabel={occurrencePeriodLabel}
                 resultCount={occurrenceWindow ? filtered.length : undefined}
                 isGlobal={isGlobal}
+                windowStartKey={occurrenceWindow?.startKey ?? null}
             />
 
             <ChecklistFilters

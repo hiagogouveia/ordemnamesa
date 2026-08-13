@@ -16,19 +16,9 @@ import { useEffect, useRef, useState } from "react";
 import {
     dateFilter,
     filterDateKey,
+    isSpecificDayFilter,
     type OccurrenceFilter,
 } from "@/lib/utils/recurrence/occurrence-window";
-
-/** Rótulos curtos dos chips de dia da semana. Índice = `dow` (0=domingo). */
-const WEEKDAY_CHIPS: ReadonlyArray<{ filter: OccurrenceFilter; label: string; full: string }> = [
-    { filter: "dow-0", label: "Dom", full: "domingo" },
-    { filter: "dow-1", label: "Seg", full: "segunda-feira" },
-    { filter: "dow-2", label: "Ter", full: "terça-feira" },
-    { filter: "dow-3", label: "Qua", full: "quarta-feira" },
-    { filter: "dow-4", label: "Qui", full: "quinta-feira" },
-    { filter: "dow-5", label: "Sex", full: "sexta-feira" },
-    { filter: "dow-6", label: "Sáb", full: "sábado" },
-];
 
 interface OccurrenceFilterBarProps {
     value: OccurrenceFilter;
@@ -42,6 +32,11 @@ interface OccurrenceFilterBarProps {
      * Paulo, então a previsão por dia é aproximada. Melhor avisar do que mentir.
      */
     isGlobal?: boolean;
+    /**
+     * Primeiro dia da janela resolvida. Usado para o botão de data exibir o dia
+     * de um filtro `dow-N` vindo de URL antiga, que não carrega a data na string.
+     */
+    windowStartKey?: string | null;
 }
 
 export function OccurrenceFilterBar({
@@ -50,8 +45,14 @@ export function OccurrenceFilterBar({
     periodLabel,
     resultCount,
     isGlobal,
+    windowStartKey,
 }: OccurrenceFilterBarProps) {
+    // Valor do `<input type="date">`: só um filtro `date:` tem data própria.
     const selectedDate = filterDateKey(value);
+    // s96 — os chips de dia da semana saíram da barra, mas `?when=dow-N` segue
+    // valendo por URL. Como ambos resolvem para um único dia, o botão de data
+    // representa os dois: assim a barra nunca fica sem refletir o estado.
+    const specificDay = isSpecificDayFilter(value) ? (selectedDate ?? windowStartKey ?? null) : null;
     const dateInputRef = useRef<HTMLInputElement>(null);
     // Só habilita o input de data depois da montagem: o calendário nativo não
     // participa do HTML do servidor e evitamos qualquer divergência de hidratação.
@@ -102,21 +103,6 @@ export function OccurrenceFilterBar({
                     Amanhã
                 </Pill>
 
-                <span aria-hidden className="shrink-0 w-px h-5 bg-[#233f48] mx-0.5" />
-
-                {WEEKDAY_CHIPS.map((d) => (
-                    <Pill
-                        key={d.filter}
-                        active={value === d.filter}
-                        onClick={() => onChange(d.filter)}
-                        label={`Rotinas previstas para a próxima ${d.full}`}
-                    >
-                        {d.label}
-                    </Pill>
-                ))}
-
-                <span aria-hidden className="shrink-0 w-px h-5 bg-[#233f48] mx-0.5" />
-
                 <Pill
                     active={value === "week"}
                     onClick={() => onChange("week")}
@@ -141,17 +127,17 @@ export function OccurrenceFilterBar({
                         type="button"
                         onClick={openDatePicker}
                         disabled={!mounted}
-                        aria-pressed={Boolean(selectedDate)}
-                        aria-label="Escolher uma data específica no calendário"
-                        title="Escolher uma data específica"
+                        aria-pressed={Boolean(specificDay)}
+                        aria-label="Escolher um dia específico no calendário"
+                        title="Escolher um dia específico"
                         className={`flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-semibold transition-colors disabled:opacity-50 ${
-                            selectedDate
+                            specificDay
                                 ? "bg-[#13b6ec] text-[#0f1b21]"
                                 : "bg-[#182a32] text-[#92bbc9] border border-[#233f48] hover:bg-[#233f48]"
                         }`}
                     >
                         <CalendarIcon />
-                        {selectedDate ? formatChipDate(selectedDate) : "Data"}
+                        {specificDay ? formatChipDate(specificDay) : "Escolher dia"}
                     </button>
                     <input
                         ref={dateInputRef}

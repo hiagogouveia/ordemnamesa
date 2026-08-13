@@ -4,6 +4,7 @@ import {
     dateFilter,
     describeOccurrenceWindow,
     filterDateKey,
+    isSpecificDayFilter,
     normalizeOccurrenceFilter,
     type OccurrenceFilter,
 } from "@/lib/utils/recurrence/occurrence-window"
@@ -70,6 +71,54 @@ describe("dateFilter / filterDateKey", () => {
         expect(filterDateKey("today")).toBeNull()
         expect(filterDateKey("week")).toBeNull()
         expect(filterDateKey("")).toBeNull()
+    })
+})
+
+// s96 — os chips de dia da semana sairam da barra por decisao de design (7 dos 13
+// controles, e o unico elemento que precisava de legenda para ser entendido).
+// A REGRA continua valendo: `?when=dow-N` em link salvo ou compartilhado nao pode
+// quebrar. Estes testes travam esse contrato.
+describe("compatibilidade: dow-N segue valido por URL apos sair da UI", () => {
+    it("normalizeOccurrenceFilter continua aceitando os sete dias", () => {
+        for (let d = 0; d <= 6; d++) {
+            expect(normalizeOccurrenceFilter(`dow-${d}`)).toBe(`dow-${d}`)
+        }
+    })
+
+    it("buildOccurrenceWindow continua resolvendo dow-N", () => {
+        expect(buildOccurrenceWindow("dow-5", TER)).toEqual({ startKey: SEX, endKey: SEX })
+    })
+
+    it("describeOccurrenceWindow continua rotulando dow-N", () => {
+        const w = buildOccurrenceWindow("dow-5", TER)!
+        expect(describeOccurrenceWindow("dow-5", w)).toBe("Rotinas de sexta-feira, 14 de agosto")
+    })
+})
+
+const TODOS_OS_DOW = [
+    "dow-0", "dow-1", "dow-2", "dow-3", "dow-4", "dow-5", "dow-6",
+] as const satisfies readonly OccurrenceFilter[]
+
+describe("isSpecificDayFilter", () => {
+    it("é verdadeiro para data do calendário e para dia da semana legado", () => {
+        expect(isSpecificDayFilter("date:2026-08-20")).toBe(true)
+        for (const f of TODOS_OS_DOW) {
+            expect(isSpecificDayFilter(f)).toBe(true)
+        }
+    })
+
+    it("é falso para os períodos e para o estado sem filtro", () => {
+        for (const f of ["", "today", "tomorrow", "week", "month"] as OccurrenceFilter[]) {
+            expect(isSpecificDayFilter(f)).toBe(false)
+        }
+    })
+
+    it("todo filtro específico produz janela de UM dia — o que a UI assume", () => {
+        for (const f of ["date:2026-08-20", "dow-0", "dow-3", "dow-6"] as OccurrenceFilter[]) {
+            const w = buildOccurrenceWindow(f, TER)
+            expect(w).not.toBeNull()
+            expect(w!.startKey).toBe(w!.endKey)
+        }
     })
 })
 

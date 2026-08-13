@@ -84,6 +84,17 @@ export function dateFilter(dateKey: string): OccurrenceFilter {
     return isValidDateKey(dateKey) ? `${DATE_PREFIX}${dateKey}` : ""
 }
 
+/**
+ * O filtro aponta para UM dia específico do calendário?
+ *
+ * Vale para `date:` (escolhido no calendário) e para `dow-N` (chips de dia da
+ * semana, aposentados da UI na s96 mas ainda válidos por URL). Ambos resolvem
+ * para uma janela de um dia só, então a UI os representa do mesmo jeito.
+ */
+export function isSpecificDayFilter(filter: OccurrenceFilter): boolean {
+    return filter.startsWith(DATE_PREFIX) || filter.startsWith("dow-")
+}
+
 /** `dateKey` embutido num filtro `date:` — `null` para qualquer outro filtro. */
 export function filterDateKey(filter: OccurrenceFilter): string | null {
     if (!filter.startsWith(DATE_PREFIX)) return null
