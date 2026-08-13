@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { FilterDropdown } from "@/components/ui/filter-dropdown";
 import type { Area } from "@/lib/types";
 import type { EquipeMember } from "@/lib/hooks/use-equipe";
@@ -106,6 +107,8 @@ export function ChecklistFilters({
     onUnitChange,
     showUnitFilter,
 }: ChecklistFiltersProps) {
+    const [mobileOpen, setMobileOpen] = useState(false);
+
     const unitOptions = [
         { value: "", label: "Todas as unidades" },
         ...(units ?? [])
@@ -125,8 +128,57 @@ export function ChecklistFilters({
             .map((m) => ({ value: m.user_id, label: m.name })),
     ];
 
+    // s96 — quantos filtros DIVERGEM do padrão. É o que o badge comunica quando o
+    // bloco está recolhido: uma lista filtrada sem explicação visível é uma
+    // armadilha, então o número precisa aparecer sem exigir que se expanda.
+    // "Disponibilidade: Ativas" é o default e não conta.
+    const activeCount =
+        (selectedType !== "all" ? 1 : 0) +
+        (selectedAvailability !== "active" ? 1 : 0) +
+        (selectedShift ? 1 : 0) +
+        (selectedAreaId ? 1 : 0) +
+        (showExecStatus && selectedExecStatus ? 1 : 0) +
+        (selectedCollaboratorId ? 1 : 0) +
+        (selectedCollaboratorId && selectedAssignmentOrigin !== "all" ? 1 : 0) +
+        (showUnitFilter && selectedUnitId ? 1 : 0);
+
     return (
-        <div className="shrink-0 px-4 py-3 border-b border-[#233f48] bg-[#0a1215] flex items-center gap-2 flex-wrap">
+        <div className="shrink-0 px-4 py-3 border-b border-[#233f48] bg-[#0a1215]">
+            {/* s96 — no celular estes 6 dropdowns quebravam em 3 linhas e empurravam
+                a lista para baixo da dobra. Recolhidos por padrão: são refinamentos
+                ocasionais, não a pergunta principal (essa é a barra de ocorrência,
+                que fica sempre visível). No desktop nada muda — há espaço de sobra. */}
+            <button
+                type="button"
+                onClick={() => setMobileOpen((v) => !v)}
+                aria-expanded={mobileOpen}
+                aria-controls="checklist-filtros-secundarios"
+                className={`md:hidden w-full flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-semibold transition-colors ${
+                    activeCount > 0
+                        ? "bg-[#13b6ec]/15 border-[#13b6ec]/40 text-[#13b6ec]"
+                        : "bg-[#16262c] border-[#233f48] text-[#92bbc9]"
+                }`}
+            >
+                <span className="material-symbols-outlined text-[18px]">tune</span>
+                Filtros
+                {activeCount > 0 && (
+                    <span className="min-w-5 h-5 px-1.5 flex items-center justify-center rounded-full bg-[#13b6ec] text-[#0a1215] text-[11px] font-bold">
+                        {activeCount}
+                    </span>
+                )}
+                <span
+                    className={`material-symbols-outlined text-[18px] ml-auto transition-transform ${
+                        mobileOpen ? "rotate-180" : ""
+                    }`}
+                >
+                    expand_more
+                </span>
+            </button>
+
+            <div
+                id="checklist-filtros-secundarios"
+                className={`${mobileOpen ? "flex mt-3" : "hidden"} md:flex md:mt-0 items-center gap-2 flex-wrap`}
+            >
             <FilterDropdown
                 label="Tipo"
                 options={TYPE_OPTIONS}
@@ -182,6 +234,7 @@ export function ChecklistFilters({
                     onChange={onUnitChange}
                 />
             )}
+            </div>
         </div>
     );
 }
