@@ -32,10 +32,14 @@ export default function RecebimentosPage() {
     return (
         <div className="flex flex-col h-full bg-[#101d22]">
             {/* Header */}
-            <div className="bg-[#16262c] border-b border-[#233f48] px-6 py-6 lg:py-8 flex flex-col gap-4">
+            <div className="bg-[#16262c] border-b border-[#233f48] px-6 py-4 sm:py-6 lg:py-8 flex flex-col gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-white mb-1 font-fraunces">Recebimentos</h1>
-                    <p className="text-sm text-[#92bbc9]">
+                    {/* s96 — a linha descritiva some no celular. É texto que se lê uma
+                        vez e ocupava mais altura que a barra de filtros inteira,
+                        empurrando a lista para baixo da dobra. O título sozinho já
+                        situa a tela, e nenhum controle é perdido. */}
+                    <p className="hidden sm:block text-sm text-[#92bbc9]">
                         Gerencie os modelos de recebimento e acompanhe as execuções do restaurante.
                     </p>
                 </div>
